@@ -228,6 +228,17 @@ export interface ViewerMessage {
      * Python module.
      */
     section?: Record<string, [number, number]> | null;
+    /**
+     * On a show: whether the object was drawn with the 3D view's "Extra details"
+     * box ticked. Absent from a PartCAD that does not know the box. See
+     * KEY_EXTRA_DETAILS in the Python module.
+     */
+    extraDetails?: boolean;
+    /**
+     * On a show of what a part's machine makes - the CAM tab's - the machine and
+     * the settings tried, as they were asked for. See KEY_CAM in the Python module.
+     */
+    cam?: { machine?: string; settings?: Record<string, string | number | null> } | null;
     /** The object itself, as the root node of its tree. */
     object?: ViewerNode | null;
     /** On an offer: the digests of the geometry the show will name. */

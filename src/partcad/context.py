@@ -626,6 +626,23 @@ class Context:
         with self.lock:
             return self._drop_packages([consts.ROOT if self.root is None else self.root.name], True)
 
+    def reload_packages(self, packages: list[str]) -> list[str]:
+        """Forget 'packages' and everything under them, to be loaded again from disk, whatever a stat says.
+
+        'reload_changed_packages' for a caller that has just written those
+        packages' 'partcad.yaml' itself, and so knows they changed: a stat may
+        not. A file's time moves in ticks -- about 16 ms on Windows -- so two
+        writes of one size inside a tick leave it looking exactly as it did
+        after the first: the CAM tab's Save and the declaration it puts back
+        when making the part fails, which left the package reading what was
+        refused. A root among them is loaded again at once, as there.
+
+        Returns the names of the packages dropped.
+        """
+        with self.lock:
+            root_changed = self.root is None or self.root.name in packages
+            return self._drop_packages(list(packages), root_changed)
+
     def _drop_packages(self, changed: list[str], root_changed: bool) -> list[str]:
         """Drop the packages 'changed' and everything under them; reload the root if it is one."""
         with self.lock:

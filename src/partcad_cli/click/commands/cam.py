@@ -70,16 +70,39 @@ from ..service import run
 @click.option(
     "-m",
     "--machine",
-    help="Which of the machines an object names to write for: 'cnc', 'laser' or 'drill'. "
+    help="Which of the machines an object names to write for: 'cnc', 'laser', 'drill' or 'fff'. "
     "Needed only by an object that names more than one, since they are alternatives",
     type=str,
+    show_envvar=True,
+)
+@click.option(
+    "--materialize",
+    help=(
+        "Also write what the machine makes by following the route into the part's own file: its 'path:', "
+        "else its name with '.brep' (or '.step', '.py' for a part that says 'type: step' or 'type: sdf'). "
+        "With no object, every part whose geometry is what its manufacturing makes"
+    ),
+    is_flag=True,
     show_envvar=True,
 )
 @exclude_option
 @param_option
 @click.argument("object", type=str, required=False)  # The object to route; all of them by default
 @click.pass_obj
-def cli(cli_ctx, package, implementation, output_dir, recursive, sketch, as_json, machine, exclude, params, object):
+def cli(
+    cli_ctx,
+    package,
+    implementation,
+    output_dir,
+    recursive,
+    sketch,
+    as_json,
+    machine,
+    materialize,
+    exclude,
+    params,
+    object,
+):
     """Produce the program a machine cuts these objects with.
 
     With no object named this is a *package-level* command, which is what
@@ -111,6 +134,7 @@ def cli(cli_ctx, package, implementation, output_dir, recursive, sketch, as_json
             "recursive": recursive,
             "sketch": sketch,
             "machine": machine,
+            "materialize": materialize,
             "json": as_json,
             **param_params(params),
             **exclude_params(exclude),

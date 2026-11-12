@@ -36,14 +36,18 @@ desc: |
 
 # What the implementation below imports. build123d does the sectioning and the
 # 2D offsetting, on the OCP build it depends on -- the one `//builtin/render`
-# names, for the reason it gives.
+# names, for the reason it gives. Clipper does the offsetting and clipping a
+# printer's route needs and OCCT's 2D offset cannot do around islands
+# (`cam_fff.py`), and the stroking of a route into what it removes or deposits
+# (`cam_product.py`).
 pythonRequirements:
   - build123d==0.11.1
   - cadquery-ocp-novtk==7.9.3.1.1
+  - pyclipper==1.4.0
 
 cam:
   gcode:
-    desc: RS-274 (G-code), what a CNC router or mill runs.
+    desc: RS-274 (G-code), what a CNC router or mill, a laser, a drill and a filament printer run.
     path: cam_gcode.py
     # `.nc` rather than `.gcode`: it is what the machine controllers and the
     # senders in this space read by default, and what the file is called on

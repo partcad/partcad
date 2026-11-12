@@ -106,6 +106,62 @@ NOMINAL_SIZE = 100.0
 # object is shown.
 DEFAULT_ANGULAR_TOLERANCE = 0.4
 
+# The two levels of detail a drawing of a tree is asked for at: what the two
+# numbers above make of it, and a finer one.
+#
+# 'low' is the preview budget: half a pixel of a thousand, 0.4 rad. It is what the
+# 3D view always asked for, and what it still asks for with the Digital Thread's
+# "Extra details" box cleared - an assembly is opened to be looked at whole, and a
+# triangle it does not need is a triangle every frame draws.
+#
+# 'high' is what the box asks for, ticked: the object looked at closely, a part
+# or a sketch (whose box starts out ticked), or an assembly somebody wants every
+# fillet of. An eighth of a pixel and 0.2 rad: a 3 mm hole drawn with 31
+# segments rather than 16, and a large curve with four times fewer millimetres of
+# chord error, which on the measured assembly above is about two and a half times
+# the triangles - affordable for one object, and not what a whole plant should be
+# opened at. Not to be confused with a file type's 'reproducible:' (see
+# 'output.REPRODUCIBLE_KEY'), which is about the same bytes on every machine and
+# has nothing to say about how finely a surface is drawn: no tessellation is
+# reproducible across architectures, so neither of these pretends to be.
+#
+# The level is part of what an entry is keyed on - the tolerances are - so the two
+# never answer for each other, and switching the box back is a cache hit.
+DETAIL_LOW = "low"
+DETAIL_HIGH = "high"
+DETAILS = (DETAIL_LOW, DETAIL_HIGH)
+
+# The 'high' level's pixel budget and angular cap: see DETAIL_HIGH.
+HIGH_PIXEL_BUDGET = 0.125
+HIGH_ANGULAR_TOLERANCE = 0.2
+
+# Each level as (what the bounding box diagonal is divided by, the angular cap).
+_BUDGETS = {
+    DETAIL_LOW: (SCREEN_DIVISOR, DEFAULT_ANGULAR_TOLERANCE),
+    DETAIL_HIGH: (SCREEN_PIXELS / HIGH_PIXEL_BUDGET, HIGH_ANGULAR_TOLERANCE),
+}
+
+
+def detail_of(value) -> str:
+    """'value' as a level of detail: one of DETAILS, None meaning 'low'.
+
+    Raises:
+        ValueError: anything else, named. A level a client misspelt is a
+            request for something this cannot draw, not a request for the
+            default.
+    """
+    if value is None:
+        return DETAIL_LOW
+    if value not in DETAILS:
+        raise ValueError("A level of detail is one of %s, not %r" % (", ".join(DETAILS), value))
+    return value
+
+
+def angular_tolerance_for(detail=None) -> float:
+    """The angular cap, in radians, a tree is tessellated with at 'detail'."""
+    return _BUDGETS[detail_of(detail)][1]
+
+
 # export_gltf is build123d's, and both are what every sandbox's own environment
 # holds (see 'runtime_python.base_requirements').
 _DEPENDENCIES = (sandbox_versions.BUILD123D, sandbox_versions.OCP)
@@ -191,17 +247,19 @@ def size_of(tree):
     return math.sqrt(sum((high[axis] - low[axis]) ** 2 for axis in range(3)))
 
 
-def tolerance_for(tree):
-    """The linear deflection to tessellate 'tree' at, in mm: the budget, applied.
+def tolerance_for(tree, detail=None):
+    """The linear deflection to tessellate 'tree' at, in mm: the budget of 'detail', applied.
 
-    The one place that turns "half a pixel of a thousand" into millimetres, so that
-    the viewer, a test and anything else asking the same question get the same
-    number. Rounded down onto 'TOLERANCE_SERIES' (see 'bucketed').
+    The one place that turns "half a pixel of a thousand" - or the eighth of one
+    'high' detail is (see DETAIL_HIGH) - into millimetres, so that the viewer, a
+    test and anything else asking the same question get the same number. Rounded
+    down onto 'TOLERANCE_SERIES' (see 'bucketed').
     """
     size = size_of(tree)
     if not size:
         size = NOMINAL_SIZE
-    return bucketed(min(max(size / SCREEN_DIVISOR, MIN_TOLERANCE), MAX_TOLERANCE))
+    divisor = _BUDGETS[detail_of(detail)][0]
+    return bucketed(min(max(size / divisor, MIN_TOLERANCE), MAX_TOLERANCE))
 
 
 def bucketed(tolerance: float) -> float:
@@ -230,7 +288,9 @@ def bucketed(tolerance: float) -> float:
     return float("%re%d" % (step, exponent))
 
 
-async def in_form_async(ctx, tree, form, cacheable: bool = True, section=None):
+async def in_form_async(
+    ctx, tree, form, cacheable: bool = True, section=None, detail=None, hidden_stripped: bool = False
+):
     """'tree' with its geometry in 'form', whatever form it arrived in.
 
     The one place that decides what a form means, so that every kind of subject -
@@ -243,10 +303,18 @@ async def in_form_async(ctx, tree, form, cacheable: bool = True, section=None):
     'section' cuts the geometry by a box first (see 'shape_section'), in a
     sandbox of its own and cached as its own answer, and the glTF form is then
     the cut tree tessellated a shape at a time (see 'convert_async').
+
+    'detail' is the level of detail the glTF form is tessellated at (DETAILS;
+    None is 'low'), and means nothing to the BREP form, which is exact.
+
+    'hidden_stripped' leaves out of the glTF form every face of a print that
+    nothing can see, once the section has been cut (see 'shape_visible'): for
+    a caller drawing a part whose geometry is what a printer deposits.
     """
     from . import shape_section
 
     section = shape_section.normalize(section)
+    detail = detail_of(detail)
     if form == shape_envelope.FORM_BREP:
         if section is None:
             return tree
@@ -254,16 +322,28 @@ async def in_form_async(ctx, tree, form, cacheable: bool = True, section=None):
     shape_envelope.geometry_key(form)
     if tree is None:
         return None
-    return await convert_async(ctx, tree, cacheable=cacheable, section=section)
+    return await convert_async(
+        ctx, tree, cacheable=cacheable, section=section, detail=detail, hidden_stripped=hidden_stripped
+    )
 
 
-async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cacheable: bool = True, section=None):
+async def convert_async(
+    ctx,
+    tree,
+    tolerance=None,
+    angular_tolerance=None,
+    cacheable: bool = True,
+    section=None,
+    detail=None,
+    hidden_stripped: bool = False,
+):
     """'tree' with its geometry tessellated into glTF, one copy per distinct shape.
 
     'tolerance' is the linear deflection in mm. Left at None - which is how the
     viewer asks - it is worked out here from what the tree records about its own
-    size (see 'tolerance_for'). Passing one overrides that outright, for a caller
-    that knows what it wants in millimetres.
+    size, at the level of detail 'detail' names (see 'tolerance_for'); and so is
+    'angular_tolerance' ('angular_tolerance_for'). Passing one overrides that
+    outright, for a caller that knows what it wants in millimetres.
 
     What comes back carries the geometry on the root, in KEY_GEOMETRY, with every
     node naming its entry: a hundred instances of one bolt are one entry named a
@@ -299,6 +379,15 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cache
     tolerance is still the whole tree's: what the nodes record about their size
     is the object's and not the cut's, so a cut is drawn as finely as the object
     it was cut from.
+
+    'hidden_stripped' takes the faces nobody can see out of every print in the
+    tree once it is cut, and before it is tessellated (see 'shape_visible'):
+    cut and stripped in one sandbox, and cached as one answer. Only the nodes
+    whose geometry is a print's deposit change; the rest are what the cut left.
+    Which nodes those are is read off their geometry alone -- prisms, one height
+    to another -- so a caller asks for it only for a tree that is a print's
+    deposit ('cam_view.representation'): another tree of prismatic solids would
+    lose the faces nobody sees, and the colour each face was given.
     """
     if ctx is None:
         raise ValueError("A context is required to tessellate a shape tree")
@@ -309,10 +398,14 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cache
     # than a policy because the size it would be worked out from is already known
     # here: asking the geometry again, in the one process that has a kernel, would
     # be a second answer to "how big is it" (see 'size_of').
-    tolerance = tolerance_for(tree) if tolerance is None else float(tolerance)
-    angular_tolerance = DEFAULT_ANGULAR_TOLERANCE if angular_tolerance is None else float(angular_tolerance)
+    tolerance = tolerance_for(tree, detail) if tolerance is None else float(tolerance)
+    angular_tolerance = angular_tolerance_for(detail) if angular_tolerance is None else float(angular_tolerance)
 
-    if section:
+    if hidden_stripped:
+        from . import shape_visible
+
+        tree = await shape_visible.visible_async(ctx, tree, section, cacheable=cacheable)
+    elif section:
         from . import shape_section
 
         tree = await shape_section.section_async(ctx, tree, section, cacheable=cacheable, keep_empty=False)

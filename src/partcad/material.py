@@ -56,6 +56,19 @@ from . import cmf, telemetry
 # beats the substance it is made of.
 PHYSICS_FROM_MATERIAL = {"mu": "friction", "density": "density"}
 
+# What a material contributes to an analysis of a shape made of it: the
+# 'Material' attribute, and the parameter of an analysis implementation it
+# fills in where neither the package, nor the object, nor the run states one
+# (see 'partcad.cae_material'). In SI, as every physical quantity here is: a
+# stiffness and a strength in Pa, which is what '//pub/feature/cae/calculix'
+# takes them in.
+ANALYSIS_FROM_MATERIAL = {
+    "youngs_modulus": "youngs_modulus",
+    "poissons_ratio": "poissons_ratio",
+    "yield_strength": "yield_strength",
+    "density": "density",
+}
+
 
 @telemetry.instrument()
 class Material(cmf.Declaration):
@@ -105,6 +118,34 @@ class Material(cmf.Declaration):
     def density(self) -> typing.Optional[float]:
         """Density in kg/m^3, or None if the package did not state one."""
         value = self.config.get("density")
+        return None if value is None else float(value)
+
+    @property
+    def youngs_modulus(self) -> typing.Optional[float]:
+        """Young's modulus in Pa, or None if the package did not state one.
+
+        How stiff the substance is in tension: what an analysis of a part made
+        of it deflects by. In Pa rather than the GPa a datasheet prints, for the
+        reason a density is in kg/m^3: one unit, so that no number is off by a
+        factor nobody notices (PLA is about 3.5e9, steel about 2.0e11).
+        """
+        value = self.config.get("youngsModulus")
+        return None if value is None else float(value)
+
+    @property
+    def poissons_ratio(self) -> typing.Optional[float]:
+        """Poisson's ratio, dimensionless, or None if the package did not state one."""
+        value = self.config.get("poissonsRatio")
+        return None if value is None else float(value)
+
+    @property
+    def yield_strength(self) -> typing.Optional[float]:
+        """The stress in Pa past which the substance stops springing back, or None if none was stated.
+
+        What an analysis holds a part made of it to: a part whose peak stress
+        exceeds it is one that bends for good, or breaks.
+        """
+        value = self.config.get("yieldStrength")
         return None if value is None else float(value)
 
     @property
@@ -200,6 +241,12 @@ class Material(cmf.Declaration):
             info["Density"] = "%g kg/m^3" % self.density
         if self.viscosity is not None:
             info["Viscosity"] = "%g Pa*s" % self.viscosity
+        if self.youngs_modulus is not None:
+            info["Youngs modulus"] = "%g Pa" % self.youngs_modulus
+        if self.poissons_ratio is not None:
+            info["Poissons ratio"] = "%g" % self.poissons_ratio
+        if self.yield_strength is not None:
+            info["Yield strength"] = "%g Pa" % self.yield_strength
         if self.mu is not None:
             info["Mu"] = "%g" % self.mu
         if self.tags:
@@ -236,6 +283,16 @@ def lookup(ctx, ref: str, quiet: bool = False):
         package_name, _name = cmf._split(ref, "")
         return (ctx.get_project(package_name) if ctx is not None else None), None
     return ctx.get_project(found.project_name), found
+
+
+def analysis_of(material) -> dict:
+    """What a material says about an analysis of anything made of it, under the implementation's names."""
+    facts = {}
+    for field, parameter in ANALYSIS_FROM_MATERIAL.items():
+        value = getattr(material, field, None)
+        if value is not None:
+            facts[parameter] = value
+    return facts
 
 
 def physics_of(material) -> dict:

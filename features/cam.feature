@@ -42,6 +42,17 @@ Feature: `pc cam` command
         spacer:
           type: build123d
           path: panel.py
+        # A print with no geometry of its own: what the printer makes of the
+        # design, until '--materialize' writes it down.
+        knob:
+          type: basic
+          cuboid: [12, 12, 4]
+        knob-printed:
+          manufacturing:
+            method: additive
+            source: knob
+            fff:
+              infill: 20%
       """
     And a file named "panel.py" with content:
       """
@@ -95,6 +106,19 @@ Feature: `pc cam` command
     When I run "pc --no-ansi cam :nosuchpart"
     Then the command should exit with a status code of "1"
     And STDERR should contain "No route was produced for"
+    # A printer is routed like a router, layer by layer, with the filament each
+    # move feeds; and '--materialize' writes what following the route makes --
+    # the print, empty inside but for its infill -- into the part's own file,
+    # which is from then on what the part is.
+    When I run "pc --no-ansi cam --materialize :knob-printed"
+    Then the command should exit with a status code of "0"
+    And a file named "knob-printed.nc" should contain "M83"
+    And a file named "knob-printed.brep" should be created
+    And STDERR should contain "Materialized"
+    And STDERR should contain "knob-printed.brep"
+    # And it is checked against what the printer makes, which it is.
+    When I run "pc --no-ansi qual test -f materialize :knob-printed"
+    Then the command should exit with a status code of "0"
 
   # ------------------------------------------------------------------------ #
   # Everything below is settled by the declaration alone                      #

@@ -276,7 +276,9 @@ class Qualification(ABC):
         if result == cls.TEST_PASSED:
             # A pass is one byte, unless it left something behind to be read --
             # a report of an 'other' check, which is what such a check is for
-            # whatever its verdict. What it said in words is a failure's alone.
+            # whatever its verdict, the pieces a finding points at, or the
+            # finding itself where it is said as a warning ('warned'). What a
+            # failure said in words is a failure's alone.
             kept = [reason for reason in reasons if isinstance(reason, dict)]
             if not kept:
                 return bytes([result])
@@ -318,6 +320,11 @@ class Qualification(ABC):
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
+            warning = entry.get("warning")
+            if isinstance(warning, str) and warning:
+                self.warned(
+                    shape, "%s (remembered from an earlier run; 'pc --cache-bypass qual test' checks again)", warning
+                )
             artifact = entry.get("artifact")
             if isinstance(artifact, dict) and await self.restore_artifact_async(ctx, shape, artifact):
                 self.artifact(shape, artifact)
@@ -395,6 +402,13 @@ class Qualification(ABC):
         message = self._log_message_prepare(*args)
         pc_logging.warning(f"Qualification: {shape.project_name}:{shape.name}: {self.name}{message}")
         self._note(shape, "warning", message)
+        # Kept with the verdict, a pass as it is, and said again when it is read
+        # back (see '_replay_async'): the finding is the point of such a check,
+        # and a remembered pass that kept only the pieces it pointed at read as
+        # a clean one.
+        collecting = _reasons.get()
+        if collecting is not None and collecting[0] is self and collecting[1] is shape and message:
+            collecting[2].append({"warning": message[2:]})
         return self.TEST_PASSED
 
     def failed(self, shape, *args) -> bool:

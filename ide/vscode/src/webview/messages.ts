@@ -49,6 +49,7 @@ export type TabId =
     | '2d'
     | 'draft'
     | 'cmf'
+    | 'cam'
     | 'bvb'
     | 'build'
     | 'bom'
@@ -89,7 +90,7 @@ export function isQualTestTab(tab: TabId | string): boolean {
 export type AnalysisTabId = Extract<TabId, 'fea' | 'dynamic' | 'thermal' | 'cfd'>;
 
 /** The Design tab's own tabs. */
-export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft', 'cmf'];
+export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft', 'cmf', 'cam'];
 
 /**
  * The kinds of CMF declaration the explorer lists beside the objects: a
@@ -436,6 +437,20 @@ export interface ShowMessage {
      * ('ShowSectionMessage'), and this is how the panel learns what is on screen.
      */
     section?: ViewSection | null;
+    /**
+     * Whether the object was drawn with the 3D view's "Extra details" box ticked:
+     * as it is, finely, rather than each part in it drawn as its visual
+     * ('partcad.cam_view.representation'). A PartCAD that knows the box says it
+     * on every show, so the first show of an object says what the box starts out
+     * as for it - ticked for a part or a sketch. Absent from an older one, which
+     * always drew visuals; the box is then offered disabled.
+     */
+    extraDetails?: boolean;
+    /**
+     * Present when what is drawn is what a part's machine makes rather than the
+     * part - the CAM tab's drawing - as the request that asked for it said it.
+     */
+    cam?: CamRequest | null;
     /** The object itself, as the root node of its tree, or null when it is empty. */
     object: ShowNode | null;
     /**
@@ -558,11 +573,22 @@ export interface SectionShownMessage {
     type: 'sectionShown';
     token: number;
     error?: string;
+    /** For the CAM tab's drawing: what the product came to ('Shape.materialize_async''s 'stats'). */
+    stats?: CamStats | null;
+}
+
+/** Host to renderer: the CAM tab's Save has been done, or could not be, and 'error' is why. */
+export interface CamSavedMessage {
+    type: 'camSaved';
+    token: number;
+    data?: CamSavedData | null;
+    error?: string;
 }
 
 export type HostMessage =
     | StateRequestMessage
     | SectionShownMessage
+    | CamSavedMessage
     | ShowMessage
     | ClearMessage
     | TabDataMessage
@@ -728,6 +754,24 @@ export interface ShowSectionMessage {
     type: 'showSection';
     token: number;
     section: ViewSection | null;
+    /**
+     * The 3D view's "Extra details" box, as it is now: the object as it is,
+     * finely, or each part drawn as its visual. Left out, PartCAD draws it the way
+     * the box starts out for its kind.
+     */
+    extraDetails?: boolean;
+    /** The CAM tab's drawing: what the part's machine makes, with these settings tried. */
+    cam?: CamRequest | null;
+    /** What is being asked for, in a few words, for the notification that says it is loading. */
+    what?: string;
+}
+
+/** Renderer to host: write the CAM tab's settings into the part's declaration ('cam.save'). */
+export interface SaveCamMessage {
+    type: 'saveCam';
+    token: number;
+    machine?: string;
+    settings: CamSettings;
 }
 
 /**
@@ -1574,4 +1618,61 @@ export interface TestData {
     /** The subtypes asked for. */
     subtypes?: string[];
     tests: TestResult[];
+}
+
+/**
+ * The CAM tab's settings, by key: what was typed - '20%', '0.2 mm', 3 - or null to
+ * take a setting the part states out, back to what is taken where it states none.
+ */
+export type CamSettings = Record<string, string | number | null>;
+
+/** What the CAM tab asks to be drawn: what the part's machine makes, with 'settings' tried in place of the part's own. */
+export interface CamRequest {
+    machine?: string;
+    settings: CamSettings;
+}
+
+/** How one setting of a machine is edited, as its schema says it ('partcad.cam_view.settings'). */
+export interface CamControl {
+    key: string;
+    /** 'length', 'feed', 'count', 'fraction', 'number', 'axis', 'choice' or 'text'. */
+    type: string;
+    description?: string;
+    choices?: string[];
+    minimum?: number;
+    maximum?: number;
+    /** What the part states, as it is written; null where it states nothing. */
+    value?: string | number | null;
+    /** What is taken where the part states nothing, where PartCAD knows; null where the implementation decides. */
+    default?: string | number | null;
+}
+
+/** The CAM tab's answer, 'cam.settings': how the part is made, and every setting of its machine. */
+export interface CamSettingsData {
+    object: string;
+    method?: string | null;
+    description?: string | null;
+    /** Why there is no CAM tab for this object; nothing else is said then. */
+    refused?: string | null;
+    machine?: string;
+    machines?: string[];
+    declared?: boolean;
+    design?: string | null;
+    instructions?: string | null;
+    /** What is wrong with the machine as the part declares it, where something is. */
+    error?: string | null;
+    controls?: CamControl[];
+    /** For a part whose geometry is what its machine makes: where it is kept, and whether it has been written. */
+    materialized?: { path: string; exists: boolean } | null;
+}
+
+/** What a product came to: a printer's layers, how much it deposits, how much filament that is. */
+export type CamStats = Record<string, unknown>;
+
+/** What the CAM tab's Save did: the file written, and where the product was written again, if it was. */
+export interface CamSavedData {
+    object: string;
+    config: string;
+    materialized?: string | null;
+    stats?: CamStats | null;
 }

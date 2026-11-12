@@ -488,6 +488,64 @@ suite('The Digital Thread host, and the view panel', () => {
         }
     });
 
+    test('how it is drawn goes with a section: the Extra details box, and what the CAM tab tries', async () => {
+        const asked: Record<string, unknown>[] = [];
+        const registration = vscode.commands.registerCommand('partcad.showSection', (args: Record<string, unknown>) => {
+            asked.push(args);
+            return args.cam ? { stats: { layers: 25 } } : null;
+        });
+        try {
+            const { viewer, host, posted } = bracket();
+            const draw = host as unknown as {
+                showSection(token: number, section: unknown, drawing: Record<string, unknown>): Promise<void>;
+            };
+            await draw.showSection(9, null, { extraDetails: false, what: 'drawing bracket' });
+            assert.strictEqual(asked[0].extraDetails, false);
+            assert.ok(!('cam' in asked[0]));
+            const cam = { machine: 'fff', settings: { infill: '40%' } };
+            await draw.showSection(10, { z: [0, 2] }, { cam });
+            assert.deepStrictEqual(asked[1].cam, cam);
+            assert.ok(!('extraDetails' in asked[1]));
+            // What the product came to goes back with the answer.
+            assert.deepStrictEqual(posted[posted.length - 1], {
+                type: 'sectionShown',
+                token: 10,
+                stats: { layers: 25 },
+            });
+            viewer.dispose();
+        } finally {
+            registration.dispose();
+        }
+    });
+
+    test("the CAM tab's Save is the daemon's, and its answer goes back", async () => {
+        const asked: Record<string, unknown>[] = [];
+        const registration = vscode.commands.registerCommand('partcad.camSave', (args: Record<string, unknown>) => {
+            asked.push(args);
+            return { object: '//pkg:bracket', config: '/w/partcad.yaml', materialized: null };
+        });
+        try {
+            const { viewer, host, posted } = bracket();
+            const save = host as unknown as {
+                saveCam(token: number, machine: string | undefined, settings: unknown): Promise<void>;
+            };
+            await save.saveCam(11, 'fff', { infill: '30%', walls: null });
+            assert.deepStrictEqual(asked[0], {
+                pkg: '//pkg',
+                name: 'bracket;length=10',
+                machine: 'fff',
+                settings: { infill: '30%', walls: null },
+            });
+            const answer = posted[posted.length - 1];
+            assert.strictEqual(answer.type, 'camSaved');
+            assert.strictEqual(answer.token, 11);
+            assert.deepStrictEqual((answer.data as Record<string, unknown>).config, '/w/partcad.yaml');
+            viewer.dispose();
+        } finally {
+            registration.dispose();
+        }
+    });
+
     test('a show says what it was cut to - absent from a PartCAD that cannot cut - as it came', () => {
         const { viewer, posted } = bracket();
         viewer.handle({ type: 'show', name: 'bracket', kind: 'part', package: '//pkg', object: null, section: null });

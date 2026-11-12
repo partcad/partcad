@@ -172,9 +172,9 @@ def test_a_kerf_is_a_length_like_every_other():
     assert _manufacturing(laser={"kerf": "wide"}).machine is None
 
 
-def test_the_machine_is_only_read_for_a_subtractive_part():
-    """A machine is what takes material away, and nothing else here does."""
-    assert PartConfigManufacturing({"manufacturing": {"method": "additive"}}).machine is None
+def test_a_cutting_machine_is_only_read_for_a_subtractive_part():
+    """A cutter is what takes material away, and nothing else here does: a print's machine is its printer."""
+    assert PartConfigManufacturing({"manufacturing": {"method": "additive"}}).machine.kind == "fff"
     assert PartConfigManufacturing({"manufacturing": {"method": "sheet_metal"}}).machine is None
 
 

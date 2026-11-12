@@ -26,6 +26,7 @@ product development process.**
    intro.rst
    installation.rst
    tutorial.rst
+   tutorial_printed_stand.rst
    public_repository.rst
 
 .. toctree::

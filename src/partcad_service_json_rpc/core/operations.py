@@ -2460,6 +2460,21 @@ def inspect_object(session, params):
     to be shown again. The viewer is told what it was cut to with the show
     itself ('partcad_ide_client.protocol.KEY_SECTION'). An interface is ports and
     has no geometry to cut, so a section of one is refused.
+
+    ``extra_details`` (a bool) is the 3D view's "Extra details" box: the object as
+    it is, finely, rather than each part in it drawn as its visual; left out, it
+    is what the box starts out as for the object's kind -- ticked for a part or a
+    sketch. ``detail`` (``"low"`` or ``"high"``) is a level of detail that outranks
+    the one the box chooses. See `partcad.cam_view.representation`, which decides
+    both; the show says which way the box was (``KEY_EXTRA_DETAILS``).
+
+    ``cam`` -- ``{"machine": <its kind, or absent for the part's own>,
+    "settings": {<key>: <value, or null to take it out>}}`` -- shows instead what
+    a part's machine makes with those settings tried in place of what the part
+    states: the CAM tab's drawing (`partcad.cam_view.product_async`). Only of a
+    part made by following a route; nothing is written. Answered with what the
+    product came to, ``{"stats": ...}``, and a setting the machine does not take
+    is refused with the sentence that says why. Every other show answers null.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -2472,6 +2487,8 @@ def inspect_object(session, params):
     tab = _viewer_tab(params)
     scenario = _viewer_scenario(params, tab)
     section = _section(params)
+    drawn = _drawn_as(params)
+    cam = _cam_request(params)
     package = ctx.resolve_package_path(params.get("package"))
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -2508,6 +2525,11 @@ def inspect_object(session, params):
             return None
         if section is not None and kind == "interface":
             raise JsonRpcError(USAGE_ERROR, "%s is an interface: it is ports, and there is nothing to cut" % path)
+        if cam is not None:
+            from partcad import cam_view
+
+            if not cam_view.made_by_machine(obj):
+                raise JsonRpcError(USAGE_ERROR, cam_view.settings(ctx, obj).get("refused") or "%s is not a part" % path)
         if params.get("verbal"):
             # The object's own package. 'obj' having been found means it is
             # loaded, so this never comes back None.
@@ -2523,12 +2545,68 @@ def inspect_object(session, params):
         # which of its scenarios to select ('--scenario'). Both ride on the show
         # itself -- see 'partcad_ide_client.protocol.KEY_TAB'. So does the
         # section, which is passed only when there is one: a show of the whole
-        # object is the call it always was.
+        # object is the call it always was. So are how it is drawn and what of
+        # it, each only when the request says.
+        options = dict(drawn)
         if section is not None:
-            obj.show(ctx, tab=tab, scenario=scenario, section=section)
-        else:
-            obj.show(ctx, tab=tab, scenario=scenario)
-    return None
+            options["section"] = section
+        if cam is not None:
+            options["cam"] = cam
+        try:
+            shown = obj.show(ctx, tab=tab, scenario=scenario, **options)
+        except (pc.cam.CamConfigError, pc.cam.CamFailed) as e:
+            # The CAM tab's answer: the settings tried, or the part, say why
+            # there is nothing to draw.
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+        except pc.runtime.SandboxUnavailable as e:
+            raise JsonRpcError(
+                ANALYSIS_FAILED,
+                pc.cam.dysfunction_report(path, "the configured implementation", e, remedy=pc.cam.NO_RUNTIME_REMEDY),
+            ) from e
+    return shown if cam is not None else None
+
+
+def _drawn_as(params) -> dict:
+    """How 'inspect.object' is asked to draw: '{extra_details, detail}', each only where the request says; refused when not one."""
+    from partcad import shape_gltf
+
+    drawn = {}
+    extra_details = params.get("extra_details")
+    if extra_details is not None:
+        if not isinstance(extra_details, bool):
+            raise JsonRpcError(USAGE_ERROR, "'extra_details' is true or false, not %r" % (extra_details,))
+        drawn["extra_details"] = extra_details
+    detail = params.get("detail")
+    if detail is not None:
+        try:
+            drawn["detail"] = shape_gltf.detail_of(detail)
+        except ValueError as e:
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    return drawn
+
+
+def _cam_request(params):
+    """What of a part's machine 'inspect.object' is asked to draw, '{machine, settings}', or None; refused when not one."""
+    cam = params.get("cam")
+    if cam is None:
+        return None
+    if not isinstance(cam, dict):
+        raise JsonRpcError(USAGE_ERROR, '\'cam\' is {"machine": ..., "settings": {...}}, not %r' % (cam,))
+    machine = cam.get("machine")
+    settings = cam.get("settings")
+    if settings is None:
+        settings = {}
+    if machine is not None and not isinstance(machine, str):
+        raise JsonRpcError(USAGE_ERROR, "'cam: machine' is the name of a machine, not %r" % (machine,))
+    if not isinstance(settings, dict) or not all(isinstance(key, str) for key in settings):
+        raise JsonRpcError(USAGE_ERROR, "'cam: settings' maps a setting to its value, not %r" % (settings,))
+    for key, value in settings.items():
+        if isinstance(value, bool) or (value is not None and not isinstance(value, (str, int, float))):
+            raise JsonRpcError(USAGE_ERROR, "'cam: settings: %s' is a number or a string, not %r" % (key, value))
+    request = {"settings": dict(settings)}
+    if machine:
+        request["machine"] = machine
+    return request
 
 
 def _viewer_tab(params):
@@ -2803,7 +2881,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.10.13"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.10.14"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -4337,6 +4415,12 @@ def cam_route(session, params):
     failed, rather than stopping at the first. A route is a file: an object
     whose section is wrong must not cost the other nineteen theirs, and a user
     who ran this over a package wants the list rather than the first line of it.
+
+    ``materialize`` also writes what each machine makes by following its route
+    into the part's own file (``Shape.materialize_async``): its ``path:``, else
+    its name with the extension of the format it is kept in. With no
+    ``object`` it is every part of the package whose geometry is what its
+    manufacturing makes (``part_config_manufacturing.implied_type``).
     """
     import asyncio
 
@@ -4391,12 +4475,16 @@ def cam_route(session, params):
                 machine=machine,
                 output_dir=params.get("output_dir") or None,
                 quiet_misses=bool(recursive and object_name),
+                materialize=bool(params.get("materialize")),
             )
         )
 
     if not params.get("json"):
         for result in results:
-            pc.logging.info(pc.cam.route_report(result["object"], result))
+            if result.get("filepath"):
+                pc.logging.info(pc.cam.route_report(result["object"], result))
+            if result.get("written"):
+                pc.logging.info("Materialized %s into %s" % (result["object"], result["written"]))
         if not results and not failures and not object_name:
             # Nothing was wrong and nothing was produced, which is a real answer
             # and one a user acting on an empty command line needs said out
@@ -4434,7 +4522,16 @@ def _routed_kind(params):
 
 
 async def _route_packages_async(
-    pc, ctx, packages, object_name, kind, implementation, output_dir, machine=None, quiet_misses=False
+    pc,
+    ctx,
+    packages,
+    object_name,
+    kind,
+    implementation,
+    output_dir,
+    machine=None,
+    quiet_misses=False,
+    materialize=False,
 ):
     """Route the objects of every package named, reporting each as it lands.
 
@@ -4489,11 +4586,18 @@ async def _route_packages_async(
             continue
         if obj is None:
             # The whole package: every sketch and part of it that says how it
-            # is made, under 'manufacturing:'.
-            shapes.extend(await prj.routable_shapes_async())
+            # is made, under 'manufacturing:' -- or, materializing, every part
+            # whose geometry is what its manufacturing makes.
+            if materialize:
+                shapes.extend(await _materializable_shapes_async(prj))
+            else:
+                shapes.extend(await prj.routable_shapes_async())
             continue
 
-        if await _kind_of_async(ctx, target, obj, kind, _ROUTED) == "sketch":
+        if materialize:
+            found = await prj.get_part_async(obj, quiet=True)
+            named = [found] if found is not None else []
+        elif await _kind_of_async(ctx, target, obj, kind, _ROUTED) == "sketch":
             named = await prj.routable_shapes_async(sketches=[obj])
         else:
             named = await prj.routable_shapes_async(parts=[obj])
@@ -4519,6 +4623,24 @@ async def _route_packages_async(
         async with at_once:
             # A safe point (see 'cancellation'): this object's turn has come.
             cancellation.check()
+            if materialize:
+                made = await shape.materialize_async(
+                    ctx,
+                    machine=machine,
+                    implementation=implementation,
+                    write=True,
+                    output_dir=output_dir,
+                    discard_route=False,
+                )
+                # What travels back is what was written and what it came to:
+                # the product itself is the file.
+                return {
+                    "object": "%s:%s" % (shape.project_name, shape.name),
+                    "filepath": made.get("route"),
+                    "written": made.get("written"),
+                    "stats": made.get("stats") or {},
+                    "warnings": [],
+                }
             return await shape.route_async(ctx, implementation=implementation, output_dir=output_dir, machine=machine)
 
     produced = await asyncio.gather(*[route(shape) for shape in shapes], return_exceptions=True)
@@ -4551,6 +4673,156 @@ async def _route_packages_async(
             raise result
         failures.append((name, result))
     return results, failures
+
+
+async def _materializable_shapes_async(prj):
+    """The parts of a package whose geometry is what their manufacturing makes, in a stable order."""
+    from partcad.part_config_manufacturing import IMPLIED_TYPE_KEY, implied_type
+
+    shapes = []
+    for name, config in sorted((prj.object_configs("part") or {}).items()):
+        if not isinstance(config, dict):
+            continue
+        if not config.get(IMPLIED_TYPE_KEY) and not implied_type(config):
+            continue
+        part = await prj.get_part_async(name, quiet=True)
+        if part is not None:
+            shapes.append(part)
+    return shapes
+
+
+def _cam_part(ctx, pc, params):
+    """The part a CAM tab request names, and its full name; refused when it names no part."""
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None, None
+    package, object_name = resolved
+    path = _qualified(package, object_name)
+    part = ctx.get_part(path)
+    if part is None:
+        raise JsonRpcError(USAGE_ERROR, "Part %s is not found" % path)
+    return part, path
+
+
+def cam_settings(session, params):
+    """What the Digital Thread's CAM tab shows of a part: how it is made, and every setting of its machine.
+
+    Not a CLI command. ``package`` and ``object`` name the part. Read off its
+    declaration and the configuration schema -- nothing is built or run -- which
+    is what makes it cheap enough to ask on every show of a part, the way
+    ``cae.list`` is for the Analysis tabs; the tab is enabled by its answer.
+
+    Answers ``{object, method, description, machine, machines, declared, design,
+    instructions, error, controls, materialized}`` (`partcad.cam_view.settings`):
+    ``controls`` is a row per setting the machine takes, in the order the schema
+    states them -- ``key``, ``type`` (``length``, ``feed``, ``count``,
+    ``fraction``, ``number``, ``axis``, ``choice`` or ``text``), ``choices``,
+    ``minimum``/``maximum``, ``description``, the ``value`` the part states as
+    it is written, and the ``default`` taken where it states none -- and
+    ``materialized`` is ``{path, exists}`` for a part whose geometry is what its
+    machine makes. For a part that is not made by following a route the answer
+    is ``{object, method, description, refused}``, ``refused`` saying why.
+    """
+    from partcad import cam_view
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    part, _ = _cam_part(ctx, session.partcad, params)
+    if part is None:
+        return None
+    return cam_view.settings(ctx, part)
+
+
+def cam_save(session, params):
+    """Write the CAM tab's settings into a part's declaration, and its product again where it was materialized.
+
+    Not a CLI command: the CAM tab's Save. ``package`` and ``object`` name the
+    part; ``machine`` is which of its machines the settings are of (absent: the
+    one it names, else its method's usual one); ``settings`` maps each setting to
+    its value as typed -- ``"20%"``, ``"0.2 mm"``, ``3`` -- or to null to take it
+    out. They are written into the part's ``manufacturing: <machine>:`` section of
+    its package's ``partcad.yaml``, the rest of the file kept as it was
+    (`partcad.cam_view.save_settings`), and refused, with nothing written, when
+    the machine does not take them.
+
+    A daemon method because it writes a declaration, like every other
+    package-mutating command; the package is then read again, and where the
+    part's geometry was materialized -- its file is there -- what the machine
+    makes with the saved settings is written over it
+    (``Shape.materialize_async(write=True)``), so that the declaration and the
+    file cannot come to disagree.
+
+    Where the product cannot be made again, the declaration is put back as it was
+    and the Save refused, saying why: the file still holds what the earlier
+    settings made, and a declaration that file does not match is the disagreement
+    this is here to prevent.
+
+    Answers ``{object, config, materialized, stats}``: the file written, where the
+    product went (or null), and what it came to.
+    """
+    import asyncio
+
+    from partcad import cam_view
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    part, path = _cam_part(ctx, pc, params)
+    if part is None:
+        return None
+    if not cam_view.made_by_machine(part):
+        raise JsonRpcError(USAGE_ERROR, cam_view.settings(ctx, part).get("refused"))
+    settings = params.get("settings")
+    if settings is None:
+        settings = {}
+    machine = params.get("machine") or None
+    checked = _cam_request({"cam": {"machine": machine, "settings": settings}})
+    project = ctx.get_project(part.project_name)
+    config_path = getattr(project, "config_path", None)
+    before = None
+    if config_path and os.path.isfile(config_path):
+        with open(config_path, "rb") as f:
+            before = f.read()
+    try:
+        written = cam_view.save_settings(ctx, part, machine=checked.get("machine"), values=checked["settings"])
+    except pc.cam.CamConfigError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    pc.logging.info("Saved the settings of %s into %s" % (path, written))
+    # The package as it now reads: what is materialized is what the saved
+    # declaration makes, and what the next request about it sees. Reloaded
+    # because it was written here, not because a stat says so: one inside the
+    # same tick as the file's last write, at the same size, says nothing
+    # changed (see 'Context.reload_packages').
+    ctx.reload_packages([part.project_name])
+    fresh = ctx.get_part(path) or part
+    answer = {"object": path, "config": written, "materialized": None, "stats": None}
+    try:
+        made = asyncio.run(cam_view.rematerialize_async(ctx, fresh, machine=checked.get("machine")))
+    except Exception as e:  # pylint: disable=broad-except
+        # Whatever went wrong, the materialized file is what the old settings
+        # made: so the old settings are what the declaration says again.
+        if before is not None:
+            with open(config_path, "wb") as f:
+                f.write(before)
+            ctx.reload_packages([part.project_name])
+            cam_view.forget_products()
+            pc.logging.info("Put the settings of %s back as they were in %s" % (path, config_path))
+        if isinstance(e, (pc.cam.CamConfigError, pc.cam.CamFailed)):
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "What the machine makes with these settings could not be written over the part's file, so the"
+                " settings are as they were: %s" % e,
+            ) from e
+        raise
+    if made is not None:
+        answer["materialized"] = made["written"]
+        answer["stats"] = made["stats"]
+        pc.logging.info("Materialized %s into %s" % (path, made["written"]))
+    return answer
 
 
 def supply_quote(session, params):

@@ -90,6 +90,7 @@ import { BuildView } from './build';
 import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
 import { CaeResult } from './cae';
+import { CamView, sameSettings } from './cam';
 import type { CmfChoice } from './choice';
 import { CmfView } from './cmf';
 import { el, empty, placeholder } from './dom';
@@ -105,6 +106,7 @@ import {
     ready,
     reportError,
     reportFailure,
+    saveCam,
     saveChoices,
     saveRendered,
     sendState,
@@ -120,6 +122,10 @@ import {
     CMF_KINDS,
     CaeListData,
     CaeRunData,
+    CamRequest,
+    CamSavedMessage,
+    CamSettings,
+    CamSettingsData,
     Choices,
     CmfData,
     DESIGN_TABS,
@@ -156,7 +162,18 @@ import {
 } from './messages';
 import { Choice, RenderView } from './render';
 import { RequirementsView } from './requirements';
-import { Bounds, Section, boundsOf, describeSection, sameSection, sectionFrom, sectionRequest } from './section';
+import {
+    Bounds,
+    Range,
+    SECTION_AXES,
+    Section,
+    SectionAxis,
+    boundsOf,
+    describeSection,
+    sameSection,
+    sectionFrom,
+    sectionRequest,
+} from './section';
 import { onToggle } from './sidePanel';
 import { SimulationView } from './simulation';
 import { createVideoPlayer } from './videoPlayer';
@@ -183,6 +200,7 @@ const panes: Record<TabId, HTMLElement> = {
     '2d': byId('pane-2d'),
     draft: byId('pane-draft'),
     cmf: byId('pane-cmf'),
+    cam: byId('pane-cam'),
     bvb: byId('pane-bvb'),
     build: byId('pane-build'),
     bom: byId('pane-bom'),
@@ -204,6 +222,17 @@ const DATA_TABS: TabId[] = ['bom', 'supply'];
 
 const supplyView = new SupplyView(panes.supply);
 const cmfView = new CmfView(panes.cmf, (choice) => showInDesign(choice));
+
+/**
+ * The CAM tab's control pane, down its left where the 3D view has its tree:
+ * how the part is made, and a field per setting of its machine (see 'cam.ts').
+ * A field changed is a setting tried - the part made again with it once the
+ * fields have settled - and Save writes what is tried into the declaration.
+ */
+const camView = new CamView(panes.cam.querySelector('.controls') as HTMLElement, {
+    onChange: (settings) => tryCamSettings(settings),
+    onSave: (settings) => saveCamSettings(settings),
+});
 
 /**
  * What the CMF tab singled out in the 3D view, said over the view with a way to
@@ -370,8 +399,10 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
         if (module.onCpu) {
             // Drawn by the CPU, the model does not turn on its own: a frame
             // every 16 ms is what the CPU cannot afford. The box
-            // says so, and ticking it turns it on regardless.
+            // says so, and ticking it turns it on regardless - on the CAM
+            // tab's panel too, which is the same view.
             view3d.setAnimate(false);
+            viewCam.setAnimate(false);
         }
         // Where the camera is, said in the view panel as it moves - however it
         // was moved: a drag, the damping after it, Animate, a SpaceMouse.
@@ -786,9 +817,14 @@ const view3d = new ViewPanel(
         // corner comes as a viewpoint, which holds the model still there.
         onProjection: (projection) => scene?.setPerspective(projection === 'perspective'),
         onSection: (section) => onSectionChanged(section),
-        onAnimate: (animate) => scene?.setAutoRotate(animate),
+        onSectionPreview: (ranges) => previewSection(view3d, ranges),
+        onAnimate: (animate) => turn(animate),
         onAutoFit: (autoFit) => scene?.setAutoFit(autoFit),
         onOpacity: (opacity) => scene?.setOpacity(opacity),
+        onExtraDetails: (on) => {
+            extraDetails = on;
+            redraw();
+        },
     },
     // The ids the screenshot script drives these by.
     {
@@ -796,6 +832,7 @@ const view3d = new ViewPanel(
         animate: true,
         autoFit: true,
         projection: 'perspective',
+        extraDetails: true,
         ids: {
             animate: 'animate-checkbox',
             autoFit: 'autofit-checkbox',
@@ -803,10 +840,35 @@ const view3d = new ViewPanel(
             opacityValue: 'opacity-value',
             reset: 'view-reset-button',
             projection: 'projection-select',
+            extraDetails: 'extra-details-checkbox',
         },
     },
 );
 viewPanels['3d'] = view3d;
+
+/**
+ * The CAM tab's: the same panel as the 3D tab's, over the same view, without
+ * "Extra details" - what is drawn there is what the machine makes, finely,
+ * whatever the box says.
+ */
+const viewCam = new ViewPanel(
+    {
+        onViewpoint: (viewpoint) => {
+            holdStill();
+            scene?.setViewpoint(viewpoint);
+        },
+        onResetView: () => scene?.resetView(),
+        onFit: () => scene?.fit(),
+        onProjection: (projection) => scene?.setPerspective(projection === 'perspective'),
+        onSection: (section) => onSectionChanged(section),
+        onSectionPreview: (ranges) => previewSection(viewCam, ranges),
+        onAnimate: (animate) => turn(animate),
+        onAutoFit: (autoFit) => scene?.setAutoFit(autoFit),
+        onOpacity: (opacity) => scene?.setOpacity(opacity),
+    },
+    { target: true, animate: true, autoFit: true, projection: 'perspective' },
+);
+viewPanels.cam = viewCam;
 
 /**
  * Where the 2D tab's picture is to be looked at from, as its view panel set it;
@@ -883,6 +945,7 @@ for (const [tab, panel] of Object.entries(viewPanels) as [TabId, ViewPanel][]) {
 onToggle((side, expanded) => {
     if (side === 'right' && expanded) {
         view3d.setViewpoint(scene?.viewpoint());
+        viewCam.setViewpoint(scene?.viewpoint());
         ANALYSIS_TABS.forEach((tab) => updateAnalysisPanel(tab));
     }
 });
@@ -899,9 +962,6 @@ let shownSection: Section | null = null;
 
 /** Whether the PartCAD that sent the object can cut it at all: a show from one that cannot says nothing about a section. */
 let sectionSupported = false;
-
-/** The cut the 3D view asked the daemon for and has not heard back about, by its token. */
-let askedSection: { token: number; section: Section | null } | undefined;
 
 /** How big the object is, which is what the section sliders span; undefined when nothing says. */
 let designBounds: Bounds | undefined;
@@ -932,8 +992,19 @@ function throttled(run: () => void): () => void {
 const follow3dCamera = throttled(() => {
     if (view3d.side.expanded) {
         view3d.setViewpoint(scene?.viewpoint());
+        viewCam.setViewpoint(scene?.viewpoint());
     }
 });
+
+/**
+ * Animate, ticked or cleared on the 3D or the CAM tab: one view turns or does
+ * not, whichever tab it is on, so the box of the other says the same.
+ */
+function turn(animate: boolean): void {
+    view3d.setAnimate(animate);
+    viewCam.setAnimate(animate);
+    scene?.setAutoRotate(animate);
+}
 
 /**
  * A viewpoint chosen in the 3D view's panel holds still: Animate would turn the
@@ -941,8 +1012,9 @@ const follow3dCamera = throttled(() => {
  * the model does.
  */
 function holdStill(): void {
-    if (view3d.animating) {
+    if (view3d.animating || viewCam.animating) {
         view3d.setAnimate(false);
+        viewCam.setAnimate(false);
         scene?.setAutoRotate(false);
     }
 }
@@ -990,14 +1062,32 @@ function capabilitiesOf(tab: TabId): ViewCapabilities {
         section = 'This PartCAD cannot cut a section: update PartCAD to cut one';
     }
 
-    if (tab === '3d') {
+    if (tab === '3d' || tab === 'cam') {
         const failed = sceneFailed ? 'The 3D view could not start' : undefined;
         const viewing: Capability =
             failed ?? (scene === undefined ? 'The 3D view is starting' : shown ? true : nothing);
         // Drawn with or without perspective whether or not anything is shown:
         // the next object is drawn the way it says.
         const projection: Capability = failed ?? (scene === undefined ? 'The 3D view is starting' : true);
-        return { viewpoint: viewing, projection, section, animate: failed ?? true, opacity: failed ?? true };
+        // Ticked or cleared only where PartCAD said how what is on screen was
+        // drawn: one that does not know the box draws every part as its visual.
+        const extra: Capability =
+            failed ??
+            (shown === undefined || isDeclaration(shown.kind)
+                ? nothing
+                : !shown.package
+                  ? 'PartCAD did not say which package this belongs to, so it cannot be drawn again'
+                  : shown.extraDetails === undefined
+                    ? 'This PartCAD draws every part as its visual: update PartCAD to draw the object as it is'
+                    : true);
+        return {
+            viewpoint: viewing,
+            projection,
+            section,
+            animate: failed ?? true,
+            opacity: failed ?? true,
+            extraDetails: tab === '3d' ? extra : undefined,
+        };
     }
     if (tab === '2d') {
         return {
@@ -1059,7 +1149,9 @@ function updateViewPanels(): void {
 
 /** The Design group's panels, which share one section. */
 function designPanels(): ViewPanel[] {
-    return (['3d', '2d', 'draft'] as TabId[]).map((tab) => viewPanels[tab]).filter((panel) => panel !== undefined);
+    return (['3d', '2d', 'draft', 'cam'] as TabId[])
+        .map((tab) => viewPanels[tab])
+        .filter((panel) => panel !== undefined);
 }
 
 /**
@@ -1081,54 +1173,329 @@ function onSectionChanged(section: Section | null): void {
             awaiting.delete(tab);
         }
     }
-    if (open === '3d') {
-        cut3d();
+    if (open !== undefined && isDrawnTab(open)) {
+        redraw();
+        if (asked === undefined) {
+            // Nothing to ask for after all: the preview is all there is to end.
+            scene?.previewSection(null);
+        }
     } else if (open !== undefined && isRenderTab(open)) {
         rerender(open);
     }
 }
 
+/** The two Design tabs that draw the object on the stage: the 3D view, and the CAM tab's drawing of what its machine makes. */
+function isDrawnTab(tab: TabId | undefined): boolean {
+    return tab === '3d' || tab === 'cam';
+}
+
+/** The Design tab on screen, if it is one of 'isDrawnTab''s. */
+function drawnTab(): '3d' | 'cam' | undefined {
+    const open = tabs.current === 'design' ? designTabs.current : undefined;
+    return open === '3d' || open === 'cam' ? open : undefined;
+}
+
 /**
- * Ask for the 3D view to be shown cut as the panel says, unless it already is.
- *
- * Through the daemon - a cut is a CAD operation - which shows the object again,
- * with the section on the show; the camera stays, since it is the same object.
- * A request superseded by a newer one is simply not waited for.
+ * What the stage holds or is to hold: the section the object is cut to, and how
+ * it is drawn - the "Extra details" box, which is undefined from a PartCAD that
+ * does not say, or what of the part's machine for the CAM tab.
  */
-function cut3d(): void {
-    if (shown === undefined || !shown.package || !sectionSupported || shown.kind === 'interface') {
+interface Drawing {
+    section: Section | null;
+    extraDetails?: boolean;
+    cam?: CamRequest;
+}
+
+/** Whether two drawings are of the same thing. */
+function sameDrawing(a: Drawing, b: Drawing): boolean {
+    if (!sameSection(a.section, b.section)) {
+        return false;
+    }
+    if (Boolean(a.cam) !== Boolean(b.cam)) {
+        return false;
+    }
+    if (a.cam !== undefined && b.cam !== undefined) {
+        return (a.cam.machine ?? '') === (b.cam.machine ?? '') && sameSettings(a.cam.settings, b.cam.settings);
+    }
+    // A PartCAD that does not know the box draws one way, whatever is asked.
+    return a.extraDetails === undefined || b.extraDetails === undefined || a.extraDetails === b.extraDetails;
+}
+
+/** What the show on the stage was drawn as. */
+let shownDrawing: Drawing = { section: null };
+
+/** The drawing asked of the daemon and not heard back about, by its token. */
+let asked: { token: number; drawing: Drawing } | undefined;
+
+/** What the "Extra details" box says for the object on screen: undefined until a show says what it starts out as. */
+let extraDetails: boolean | undefined;
+
+/**
+ * What the CAM tab said of the part on screen ('cam.settings'), 'failed' where
+ * it could not say, or undefined until it has.
+ */
+let camData: CamSettingsData | 'failed' | undefined;
+
+/** The settings the CAM tab's fields are trying, in place of what the part states. */
+let camTried: CamSettings = {};
+
+/** Whether the CAM tab's next answer is the part as it was just saved, which the fields start again from. */
+let camFresh = false;
+
+/** What the tab on screen wants drawn, or undefined for a tab that draws nothing on the stage. */
+function wantedDrawing(): Drawing | undefined {
+    const tab = drawnTab();
+    if (tab === undefined || shown === undefined) {
+        return undefined;
+    }
+    const section = sectionSupported && shown.kind !== 'interface' ? designSection : null;
+    if (tab === 'cam') {
+        const data = camData !== undefined && camData !== 'failed' && !camData.refused ? camData : undefined;
+        if (data === undefined) {
+            return undefined;
+        }
+        return { section, cam: { ...(data.machine ? { machine: data.machine } : {}), settings: { ...camTried } } };
+    }
+    return { section, extraDetails: shown.extraDetails === undefined ? undefined : extraDetails };
+}
+
+/** Say that something is being asked for - a busy cursor over the panel - or that it no longer is. */
+function busy(on: boolean): void {
+    document.body.classList.toggle('busy', on);
+}
+
+/** What a drawing is, in a few words, for the notification the host shows while it loads. */
+function describeDrawing(drawing: Drawing): string {
+    const name = shown?.name ?? 'the object';
+    const cut = drawing.section ? `, cut (${describeSection(drawing.section)})` : '';
+    if (drawing.cam !== undefined) {
+        const tried = Object.keys(drawing.cam.settings);
+        const settings = tried.length > 0 ? ` with ${tried.join(', ')} tried` : '';
+        return `making ${name} as its machine makes it${settings}${cut}`;
+    }
+    const how = drawing.extraDetails === true ? ' with extra details' : drawing.extraDetails === false ? '' : '';
+    return `drawing ${name}${how}${cut}`;
+}
+
+/**
+ * Ask for the stage to be drawn as the tab on screen says, unless it already is:
+ * cut as the sliders say, with or without extra details on the 3D tab, and as
+ * its machine makes it with the settings tried on the CAM tab.
+ *
+ * Through the daemon - a cut is a CAD operation, and so is making a part again
+ * - which shows the object again, with what it was drawn as on the show; the
+ * camera stays, since it is the same object. While the answer is out the cursor
+ * says so, and the host says it in a notification; a request superseded by a
+ * newer one is simply not waited for.
+ */
+function redraw(): void {
+    if (shown === undefined || !shown.package) {
         return;
     }
-    if (askedSection === undefined && sameSection(shownSection, designSection)) {
+    const drawing = wantedDrawing();
+    if (drawing === undefined) {
         return;
     }
-    if (askedSection !== undefined && sameSection(askedSection.section, designSection)) {
+    if (asked === undefined && sameDrawing(shownDrawing, drawing)) {
+        return;
+    }
+    if (asked !== undefined && sameDrawing(asked.drawing, drawing)) {
         return;
     }
     lastToken += 1;
-    askedSection = { token: lastToken, section: designSection };
-    view3d.setSectionNote(
-        designSection
-            ? `Cutting (${describeSection(designSection)})… PartCAD cuts the object and draws it again.`
-            : 'Drawing the whole object again…',
+    asked = { token: lastToken, drawing };
+    busy(true);
+    const panel = drawnTab() === 'cam' ? viewCam : view3d;
+    panel.setSectionNote(
+        drawing.section
+            ? `Cutting (${describeSection(drawing.section)})… PartCAD cuts the object and draws it again.`
+            : drawing.cam !== undefined
+              ? 'Making it as its machine makes it…'
+              : 'Drawing the object again…',
     );
-    showSection({ type: 'showSection', token: lastToken, section: sectionRequest(designSection) });
+    showSection({
+        type: 'showSection',
+        token: lastToken,
+        section: sectionRequest(drawing.section),
+        ...(drawing.extraDetails !== undefined ? { extraDetails: drawing.extraDetails } : {}),
+        ...(drawing.cam !== undefined ? { cam: drawing.cam } : {}),
+        what: describeDrawing(drawing),
+    });
 }
 
-/** The daemon has answered a cut: it is on screen by now, or it could not be made. */
+/** The daemon has answered a drawing: it is on screen by now, or it could not be made. */
 function onSectionShown(message: SectionShownMessage): void {
-    if (askedSection?.token !== message.token) {
+    if (asked?.token !== message.token) {
         return;
     }
-    askedSection = undefined;
+    const drawing = asked.drawing;
+    asked = undefined;
+    busy(false);
+    const panel = drawing.cam !== undefined ? viewCam : view3d;
     if (message.error !== undefined) {
-        view3d.setSectionNote(`PartCAD could not cut this: ${message.error}`, true);
+        // What was previewed was not made: the stage shows what it holds.
+        scene?.previewSection(null);
+        panel.setSectionNote(`PartCAD could not draw this: ${message.error}`, true);
+        if (drawing.cam !== undefined) {
+            camView.setNote(message.error, true);
+        }
         return;
     }
-    view3d.setSectionNote(undefined);
-    if (tabs.current === 'design' && designTabs.current === '3d') {
-        // The panel was moved again while that one was being cut.
-        cut3d();
+    panel.setSectionNote(undefined);
+    if (drawing.cam !== undefined) {
+        camView.setNote(undefined);
+        camView.setStats(message.stats ?? undefined);
+    }
+    // The panel was moved again, or the box ticked, while that one was made.
+    redraw();
+}
+
+/**
+ * A section slider is being moved: the stage clipped to what it says, while the
+ * daemon is not asked - that waits for it to be let go - or the preview ended
+ * (null). A view that cannot clip what it has says so instead.
+ */
+function previewSection(panel: ViewPanel, ranges: Partial<Record<SectionAxis, Range>> | null): void {
+    if (scene === undefined) {
+        return;
+    }
+    if (ranges === null) {
+        scene.previewSection(null);
+        return;
+    }
+    const min = [0, 0, 0] as [number, number, number];
+    const max = [0, 0, 0] as [number, number, number];
+    SECTION_AXES.forEach((axis, index) => {
+        const range = ranges[axis];
+        min[index] = range === undefined ? -Infinity : Math.min(range[0], range[1]);
+        max[index] = range === undefined ? Infinity : Math.max(range[0], range[1]);
+    });
+    if (!scene.previewSection({ min, max })) {
+        panel.setSectionNote('Let go of the slider to cut: this view draws what it has without cutting it.');
+    }
+}
+
+/** The tried settings changed: the part made again with them, once the fields have settled. */
+let camSettling: ReturnType<typeof setTimeout> | undefined;
+
+function tryCamSettings(settings: CamSettings): void {
+    camTried = settings;
+    if (camSettling !== undefined) {
+        clearTimeout(camSettling);
+    }
+    camSettling = setTimeout(() => {
+        camSettling = undefined;
+        redraw();
+    }, CAM_SETTLE_MS);
+}
+
+/**
+ * How long the CAM tab's fields settle before the part is made again, in
+ * milliseconds: a setting is typed a character at a time, and making a print is
+ * seconds of daemon time.
+ */
+const CAM_SETTLE_MS = 700;
+
+/** The Save the CAM tab is waiting for, by its token. */
+let camSaving: number | undefined;
+
+/** Save: what the CAM tab's fields say, written into the part's declaration. */
+function saveCamSettings(settings: CamSettings): void {
+    if (shown === undefined || camData === undefined || camData === 'failed') {
+        return;
+    }
+    lastToken += 1;
+    camSaving = lastToken;
+    camView.setSaving(true);
+    camView.setNote('Saving…');
+    saveCam({
+        type: 'saveCam',
+        token: lastToken,
+        ...(camData.machine ? { machine: camData.machine } : {}),
+        settings,
+    });
+}
+
+/**
+ * Another object is shown, or none: a Save still under way is the object's it was pressed on, so its answer is not
+ * this one's to show. It goes on and finishes -- nothing is taken back -- and is no longer waited for here.
+ */
+function releaseCamSave(): void {
+    if (camSaving !== undefined || camFresh) {
+        camSaving = undefined;
+        camFresh = false;
+        camView.setSaving(false);
+    }
+}
+
+/** The Save is done, or could not be: what the part states is asked for again, and the fields follow it. */
+function onCamSaved(message: CamSavedMessage): void {
+    if (camSaving !== message.token) {
+        return;
+    }
+    camSaving = undefined;
+    if (message.error !== undefined) {
+        camView.setSaving(false);
+        camView.setNote(`Not saved: ${message.error}`, true);
+        return;
+    }
+    camView.saved(message.data ?? undefined);
+    // What is tried is what the part states now, and the fields start from it.
+    camTried = {};
+    camFresh = true;
+    requested.add('cam');
+    request('cam');
+}
+
+/** What the CAM tab said of the part on screen has arrived: drawn, and the Design strip rebuilt by it. */
+function onCamSettings(data: CamSettingsData | undefined, error: string | undefined): void {
+    const before = camData === undefined || camData === 'failed' ? undefined : camData.object;
+    const fresh = camFresh;
+    camFresh = false;
+    if (error !== undefined || data === undefined || data === null) {
+        camData = 'failed';
+        camView.showError(error ?? 'PartCAD had nothing to say about how this is made.');
+    } else {
+        camData = data;
+        // The same part again keeps what was typed into the fields; another, or
+        // the part as it was saved, starts from what it states.
+        camView.show(data, before === data.object && !fresh);
+        camTried = camView.edits();
+    }
+    if (fresh) {
+        // The part as it was saved is in the fields: the Save is over.
+        camView.setSaving(false);
+    }
+    if (shown === undefined) {
+        return;
+    }
+    designTabs.setTabs(designTabsFor(shown));
+    if (drawnTab() === 'cam') {
+        redraw();
+    }
+}
+
+/**
+ * Put the 3D view's canvas in the pane of the tab that draws on it: the 3D tab,
+ * or the CAM tab, which is the same view of what the machine makes. One canvas,
+ * moved rather than made twice - a window has few GPU contexts to give - with
+ * what it says over it (the CMF chip, a finding's card) going with it.
+ */
+function placeStage(tab: '3d' | 'cam'): void {
+    const stage = byId('viewer');
+    const pane = panes[tab];
+    if (stage.parentElement !== pane) {
+        pane.insertBefore(stage, viewPanels[tab]?.element ?? null);
+    }
+    // The panel beside it is what the view does now: its projection, its
+    // fitting and its opacity, which the other tab's may have left otherwise.
+    // Not whether it turns, which the two boxes say together ('turn').
+    const panel = viewPanels[tab];
+    if (panel !== undefined && scene !== undefined) {
+        scene.setPerspective(panel.projection === 'perspective');
+        scene.setAutoFit(panel.autoFitting);
+        scene.setOpacity(panel.opacityFraction);
+        panel.setViewpoint(scene.viewpoint());
     }
 }
 
@@ -1519,6 +1886,22 @@ function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
     if (isDeclaration(kind)) {
         return [cmf];
     }
+    const cam = camData !== undefined && camData !== 'failed' && !camData.refused ? camData : undefined;
+    const camTab: TabSpec = {
+        id: 'cam',
+        label: 'CAM',
+        pane: panes.cam,
+        disabled: !(known && kind === 'part' && cam !== undefined),
+        hint: !known
+            ? 'PartCAD did not say which package this belongs to'
+            : kind !== 'part'
+              ? 'Only a part is made by a machine following a route'
+              : camData === undefined
+                ? 'Asking PartCAD how this is made…'
+                : camData === 'failed'
+                  ? 'PartCAD could not say how this is made'
+                  : (camData.refused ?? undefined),
+    };
     return [
         { id: '3d', label: '3D', pane: panes['3d'] },
         {
@@ -1534,6 +1917,7 @@ function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
             disabled: !(known && (kind === 'part' || kind === 'assembly')),
         },
         cmf,
+        camTab,
     ];
 }
 
@@ -1579,6 +1963,26 @@ async function show(message: ShowMessage): Promise<void> {
     cmfView.setBusy('Select this tab to see what this is in.');
     resetManufacturing('Asking PartCAD what this is made of…');
     resetSimulations('Asking PartCAD what this declares under qual: sim:…');
+    if (!message.keepCamera) {
+        // Another object: what the box starts out as is what it was drawn with,
+        // and nothing is being tried on its CAM tab.
+        extraDetails = message.extraDetails;
+        camData = undefined;
+        camTried = {};
+        releaseCamSave();
+        camView.setBusy(
+            message.kind === 'part' ? 'Asking PartCAD how this is made…' : 'Only a part is made by a machine.',
+        );
+        camView.setStats(undefined);
+    } else if (extraDetails === undefined) {
+        extraDetails = message.extraDetails;
+    }
+    shownDrawing = {
+        section: sectionFrom(message.section ?? null),
+        extraDetails: message.extraDetails,
+        ...(message.cam ? { cam: { ...message.cam, settings: { ...(message.cam.settings ?? {}) } } } : {}),
+    };
+    view3d.setExtraDetails(extraDetails ?? false);
     showView(message);
     // Which scenario a tab asked for with the show is to select ('pc ide view
     // --analysis-fea --scenario loaded'), said to the panes before their lists
@@ -1622,6 +2026,12 @@ async function show(message: ShowMessage): Promise<void> {
     if (isAnalysed(message)) {
         requested.add('analysis');
         request('analysis');
+    }
+    // And how a part is made - a read of its declaration, nothing built - which
+    // is what the CAM tab is enabled by.
+    if (message.package && message.kind === 'part') {
+        requested.add('cam');
+        request('cam');
     }
 
     // Set up viewer configuration on the window object for access by scene.ts
@@ -1702,10 +2112,12 @@ async function show(message: ShowMessage): Promise<void> {
             }
         }
         view3d.setViewpoint(view.viewpoint());
-        // The same object again, cut otherwise than the panel says - an edit
-        // saved shows it whole - and the 3D view on screen: cut it again.
-        if (tabs.current === 'design' && designTabs.current === '3d') {
-            cut3d();
+        viewCam.setViewpoint(view.viewpoint());
+        // The same object again, drawn otherwise than the tab on screen says -
+        // an edit saved shows it whole, as the box starts out - and the tab on
+        // screen draws it: draw it as it says.
+        if (drawnTab() !== undefined) {
+            redraw();
         }
     }
     // A tab asked for with the show ('pc ide view --analysis-fea'): the group's
@@ -1762,10 +2174,14 @@ function showView(message: ShowMessage): void {
     shownSection = sectionFrom(message.section ?? null);
     if (!message.keepCamera) {
         designSection = null;
-        askedSection = undefined;
+        if (asked !== undefined) {
+            asked = undefined;
+            busy(false);
+        }
         viewpoint2d = undefined;
         simulationView.setViewpoint(undefined);
         view3d.setSectionNote(undefined);
+        viewCam.setSectionNote(undefined);
     }
     // The object's size, as its tree records it. A cut records the object's own
     // size too, so this is the same box whether or not it is cut; only a tree
@@ -1793,7 +2209,15 @@ function clear(): void {
     sectionSupported = false;
     shownSection = null;
     designSection = null;
-    askedSection = undefined;
+    asked = undefined;
+    busy(false);
+    shownDrawing = { section: null };
+    extraDetails = undefined;
+    camData = undefined;
+    camTried = {};
+    releaseCamSave();
+    camView.setBusy('Nothing to show.');
+    camView.setStats(undefined);
     designBounds = undefined;
     viewpoint2d = undefined;
     awaiting.clear();
@@ -2192,16 +2616,21 @@ function onInnerSelected(group: TabId, tab: TabId): void {
 
 /** A tab with contents came on screen: draw it, asking for it if need be. */
 function onLeafSelected(tab: TabId): void {
-    if (tab === '3d') {
+    if (tab === '3d' || tab === 'cam') {
+        // One canvas for both: in the pane on screen, with that pane's panel.
+        placeStage(tab);
         // The canvas had no size at all while the tab was hidden, and a WebGL
         // renderer does not find out on its own that it has one again.
         scene?.resizeCanvas();
-        // A section chosen on the 2D or Draft tab is this tab's too.
-        cut3d();
-        // What the components cost, and where each material is, if the boxes
-        // ask and this show has not.
-        askPrices();
-        askMaterials();
+        // A section chosen on the 2D or Draft tab is this tab's too, and each
+        // of the two draws the object its own way.
+        redraw();
+        if (tab === '3d') {
+            // What the components cost, and where each material is, if the
+            // boxes ask and this show has not.
+            askPrices();
+            askMaterials();
+        }
         return;
     }
     if (isAnalysisTab(tab)) {
@@ -2372,6 +2801,10 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
     }
     if (tab === 'analysis') {
         onAnalyses(data as CaeListData | undefined, error);
+        return;
+    }
+    if (tab === 'cam') {
+        onCamSettings(data as CamSettingsData | undefined, error);
         return;
     }
     if (tab === 'design') {
@@ -2721,6 +3154,14 @@ function collectState(): Record<string, unknown> {
                     section: DESIGN_TABS.includes(id) ? designSection : null,
                 };
             }
+            if (id === '3d') {
+                // How the object is drawn: what the "Extra details" box says.
+                selections.extraDetails = extraDetails ?? null;
+            }
+            if (id === 'cam') {
+                // What the CAM tab is trying in place of what the part states.
+                selections.cam = { machine: camData && camData !== 'failed' ? camData.machine : null, tried: camTried };
+            }
             if (id === 'simulation') {
                 // Which simulation is on screen and how each run went, which
                 // no control in the pane holds: the list is rows, not a select.
@@ -2783,6 +3224,8 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
         void answerState(message.token);
     } else if (message.type === 'sectionShown') {
         onSectionShown(message);
+    } else if (message.type === 'camSaved') {
+        onCamSaved(message);
     } else if (message.type === 'clear') {
         clear();
     } else if (message.type === 'show') {

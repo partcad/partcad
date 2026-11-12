@@ -8,7 +8,7 @@
 #
 
 from .config import Configuration
-from .part_config_manufacturing import PartConfigManufacturing
+from .part_config_manufacturing import PartConfigManufacturing, implied_type
 from .shape_config import ShapeConfiguration
 
 
@@ -21,6 +21,13 @@ class PartConfiguration(Configuration, ShapeConfiguration):
         if isinstance(config, str):
             # This is a short form alias
             config = {"type": "alias", "source": config}
+
+        # A printed part that names its design and no geometry of its own is
+        # that design, printed: drawn, placed and exported as its visual (see
+        # 'part_config_manufacturing.implied_type').
+        implied = implied_type(config)
+        if implied:
+            config.update(implied)
 
         config = Configuration.normalize(name, config, object_name, user_config)
         return ShapeConfiguration.normalize(name, config)

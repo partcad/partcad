@@ -38,6 +38,7 @@ from .part_factory_enrich import PartFactoryEnrich
 from .part_factory_extrude import PartFactoryExtrude
 from .part_factory_gltf import PartFactoryGltf
 from .part_factory_kicad import PartFactoryKicad
+from .part_factory_manufactured import create as create_manufactured_part
 from .part_factory_obj import PartFactoryObj
 from .part_factory_scad import PartFactoryScad
 from .part_factory_sdf import PartFactorySdf
@@ -102,6 +103,10 @@ factory.register("part", "extrude", PartFactoryExtrude)
 factory.register("part", "sweep", PartFactorySweep)
 # Two other parts, combined: see 'part_factory_boolean'.
 factory.register("part", "boolean", PartFactoryBoolean)
+# What a part whose geometry is what its manufacturing makes is given as its
+# type (see 'part_config_manufacturing.implied_type'): its materialized file's
+# own type where there is one, made by following its manufacturing otherwise.
+factory.register("part", "manufactured", create_manufactured_part)
 # A surface a room is drawn with, not a body: see 'partcad.surface'.
 factory.register("part", "wall", PartFactoryWall)
 factory.register("part", "alias", PartFactoryAlias)

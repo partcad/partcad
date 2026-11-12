@@ -588,6 +588,42 @@ def test_a_part_that_is_not_cached_is_analysed_every_time(analysed, monkeypatch)
     assert len(runs) == 2
 
 
+def test_a_print_meshed_as_its_design_is_analysed_again_when_the_design_changes(analysed, monkeypatch):
+    """A print kept in its own file keeps its key when its design is edited; what is meshed does not."""
+    from partcad import cae_material
+
+    ctx, part, runs, _root = analysed
+    design = types.SimpleNamespace(key="design-1")
+
+    async def design_wrapped(_ctx):
+        return {"brep": str(design.key).encode()}
+
+    async def design_key():
+        return design.key
+
+    design.get_wrapped = design_wrapped
+    design.get_artifact_key_async = design_key
+
+    async def subject(_ctx, _shape):
+        return cae_material.Subject(design, 0.4, "analysed as its design")
+
+    monkeypatch.setattr(cae_material, "subject_async", subject)
+
+    _run(part.analyze_async(ctx, cae.FEA))
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 1
+
+    design.key = "design-2"
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 2
+
+    # A design with no key leaves nothing to tell an edit of it by.
+    design.key = None
+    _run(part.analyze_async(ctx, cae.FEA))
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 4
+
+
 # --------------------------------------------------------------------------- #
 # `pc qual test --simulation`                                                                    #
 # --------------------------------------------------------------------------- #
@@ -1337,6 +1373,36 @@ def test_a_view_is_keyed_as_the_links_it_keeps(exported, tmp_path):
     _run(once(view("{base:*}")))
     _run(once(None))
     assert len(runs) == 3
+
+
+def test_a_scene_whose_prints_collide_as_their_designs_is_not_an_export(exported, tmp_path):
+    """A simulation's scene puts a print's design where the print is ('outsides'): another file than the export."""
+    from partcad import visual
+
+    ctx, part, runs, _root = exported
+    project = ctx.get_project("//export-cache")
+    impl, path = part.output_getopts(ctx, "toy", project, filepath=str(tmp_path / "out" / "bracket.toy"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # A scene goes to a file of its own, as a simulation's does. The key has no
+    # path in it, so this is still the export's question asked again, and a
+    # second run into the export's file could be the same size, the same file
+    # and, on Windows, the same 16 ms tick: the run would look as though it had
+    # written nothing, and its answer would not be kept ('_written_besides').
+    scene = str(tmp_path / "out" / "scene.toy")
+
+    async def once(outsides):
+        script = await part._materialize_output_script(ctx, impl)
+        request = {"wrapped": {"brep": b"scene"}, "shape_name": part.name}
+        where = path if outsides is None else scene
+        return await part._output_run_async(ctx, impl, script, request, where, outsides=outsides)
+
+    _run(once(None))
+    _run(once(visual.Substitution({}, [["//export-cache:design", "key-of-the-design"]])))
+    _run(once(visual.Substitution({}, [["//export-cache:design", "key-of-the-design"]])))
+    # A design that keeps no key keeps no scene either.
+    _run(once(visual.Substitution({}, [["//export-cache:design", None]])))
+    _run(once(visual.Substitution({}, [["//export-cache:design", None]])))
+    assert len(runs) == 4
 
 
 def test_a_part_painted_another_colour_is_drawn_again(exported, tmp_path, monkeypatch):

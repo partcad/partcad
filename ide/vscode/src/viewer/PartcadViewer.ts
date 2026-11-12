@@ -102,6 +102,9 @@ const TAB_COMMANDS: Record<string, string> = {
     // 'pc info' says them and the 'cmf' check judges them - or, for a colour, a
     // material or a finish the explorer opened, what that declaration is.
     cmf: 'partcad.cmfInfo',
+    // What a part's machine is and every setting it takes, read rather than
+    // made: what the CAM tab lists, and is enabled by (see 'cam.settings').
+    cam: 'partcad.camSettings',
     // What the object declares under 'qual: sim:', read rather than run; a
     // request naming one of them runs it instead (see 'SIMULATION_RUN').
     simulation: 'partcad.simulateList',
@@ -110,8 +113,23 @@ const TAB_COMMANDS: Record<string, string> = {
 /** What the Simulation tab asks when it names a simulation: run it, 'pc qual test --simulation -f <name>'. */
 const SIMULATION_RUN = 'partcad.simulateRun';
 
-/** What the view panel's section sliders ask, on the 3D tab: show the object again, cut. */
+/**
+ * What the view panel's section sliders ask, on the 3D and CAM tabs - and the 3D
+ * tab's "Extra details" box, and the CAM tab's settings: show the object again,
+ * cut, drawn finely or not, or what its machine makes.
+ */
 const SHOW_SECTION = 'partcad.showSection';
+
+/** The CAM tab's Save: write its settings into the part's declaration ('cam.save'). */
+const SAVE_CAM = 'partcad.camSave';
+
+/** What the host is told of a reshow besides its section: how it is drawn, and what of it. */
+interface DrawingRequest {
+    extraDetails?: boolean;
+    cam?: { machine?: string; settings?: Record<string, string | number | null> } | null;
+    /** What is being asked for, in a few words, for the notification that says it is loading. */
+    what?: string;
+}
 
 /** The tabs that render the object to a file, which is then kept and can be saved. */
 const RENDER_TABS = new Set(['2d', 'draft']);
@@ -404,6 +422,11 @@ export class PartcadViewer implements vscode.Disposable {
             // as it came, absent included: a PartCAD that does not send it
             // cannot cut, and the view panel offers it no section sliders.
             section: message.section === undefined ? undefined : (message.section ?? null),
+            // How it was drawn - the "Extra details" box - and, for the CAM
+            // tab's drawing, what of the part's machine: each as it came, absent
+            // from a PartCAD that does not say.
+            extraDetails: typeof message.extraDetails === 'boolean' ? message.extraDetails : undefined,
+            cam: message.cam ?? undefined,
             // The object as it arrived, geometry aside: the hierarchy, the
             // placements, the ports and the interfaces are PartCAD's account of
             // what is on screen, and this side knows nothing about assemblies,
@@ -645,35 +668,97 @@ export class PartcadViewer implements vscode.Disposable {
 
     /**
      * Show the object on screen again, cut to 'section' or whole (null): the 3D
-     * tab's section sliders.
+     * and CAM tabs' section sliders - drawn as 'drawing' says, the 3D tab's
+     * "Extra details" box, or the CAM tab's settings tried.
      *
      * Through the daemon, which cuts the object and shows it the way it shows
      * anything - over the viewer protocol, into 'handle' - with the section it
      * was cut to on the show. What is answered here is only whether the daemon
-     * could, so that the panel stops saying it is cutting.
+     * could, so that the panel stops saying it is cutting, and what a product
+     * came to for the CAM tab ('stats').
+     *
+     * It can take a while - a print made again by its machine, a cut through a
+     * print's infill - so a notification says it is loading until the answer
+     * is in, and an error is said in one too: the panel says it under its
+     * sliders as well, but a notification is what is seen from another tab.
      */
-    private async showSection(token: number, section: unknown): Promise<void> {
-        const post = (error?: string) =>
-            void this.panel?.webview.postMessage({ type: 'sectionShown', token, ...(error ? { error } : {}) });
+    private async showSection(token: number, section: unknown, drawing: DrawingRequest = {}): Promise<void> {
+        const post = (payload: { error?: string; stats?: unknown }) =>
+            void this.panel?.webview.postMessage({ type: 'sectionShown', token, ...payload });
         const target = this.lastShow;
         if (!target?.package || !target.name) {
-            post('PartCAD did not say which package this object belongs to.');
+            post({ error: 'PartCAD did not say which package this object belongs to.' });
             return;
         }
         try {
             if (!(await vscode.commands.getCommands(true)).includes(SHOW_SECTION)) {
                 throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
             }
-            await vscode.commands.executeCommand(SHOW_SECTION, {
-                pkg: target.package,
-                name: target.name,
-                kind: target.kind ?? undefined,
-                section: section ?? null,
-            });
-            post();
+            const answer = (await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: `PartCAD: ${drawing.what || 'loading'}…`,
+                },
+                () =>
+                    Promise.resolve(
+                        vscode.commands.executeCommand(SHOW_SECTION, {
+                            pkg: target.package,
+                            name: target.name,
+                            kind: target.kind ?? undefined,
+                            section: section ?? null,
+                            // Each only when the panel said: a reshow of a
+                            // section alone is the request it always was.
+                            ...(drawing.extraDetails !== undefined ? { extraDetails: drawing.extraDetails } : {}),
+                            ...(drawing.cam ? { cam: drawing.cam } : {}),
+                        }),
+                    ),
+            )) as { stats?: unknown } | null | undefined;
+            // What a product came to, for the CAM tab; nothing for any other drawing.
+            post(answer?.stats !== undefined && answer?.stats !== null ? { stats: answer.stats } : {});
         } catch (error: any) {
-            traceError(`Digital Thread: failed to cut the object: ${error?.message ?? error}`);
-            post(`${error?.message ?? error}`);
+            traceError(`Digital Thread: failed to draw the object again: ${error?.message ?? error}`);
+            void vscode.window.showErrorMessage(`PartCAD could not draw ${target.name}: ${error?.message ?? error}`);
+            post({ error: `${error?.message ?? error}` });
+        }
+    }
+
+    /**
+     * The CAM tab's Save: write the settings into the part's declaration, and its
+     * product again where it was materialized ('cam.save'). Said in a
+     * notification while it runs, since making a print again is not instant.
+     */
+    private async saveCam(token: number, machine: string | undefined, settings: unknown): Promise<void> {
+        const post = (payload: { data?: unknown; error?: string }) =>
+            void this.panel?.webview.postMessage({ type: 'camSaved', token, ...payload });
+        const target = this.lastShow;
+        if (!target?.package || !target.name) {
+            post({ error: 'PartCAD did not say which package this object belongs to.' });
+            return;
+        }
+        try {
+            if (!(await vscode.commands.getCommands(true)).includes(SAVE_CAM)) {
+                throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
+            }
+            const data = await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: `PartCAD: saving the settings of ${target.name}…`,
+                },
+                () =>
+                    Promise.resolve(
+                        vscode.commands.executeCommand(SAVE_CAM, {
+                            pkg: target.package,
+                            name: target.name,
+                            machine,
+                            settings,
+                        }),
+                    ),
+            );
+            post({ data });
+        } catch (error: any) {
+            traceError(`Digital Thread: failed to save the CAM settings: ${error?.message ?? error}`);
+            void vscode.window.showErrorMessage(`PartCAD could not save the settings: ${error?.message ?? error}`);
+            post({ error: `${error?.message ?? error}` });
         }
     }
 
@@ -965,6 +1050,11 @@ export class PartcadViewer implements vscode.Disposable {
                     height?: number;
                     digests?: string[];
                     on?: boolean;
+                    extraDetails?: boolean;
+                    cam?: DrawingRequest['cam'];
+                    what?: string;
+                    machine?: string;
+                    settings?: unknown;
                 } & Partial<ViewerStateReply>,
             ) => {
                 if (message.type === 'state') {
@@ -1020,7 +1110,13 @@ export class PartcadViewer implements vscode.Disposable {
                 } else if (message.type === 'showObject') {
                     void this.showObject(message.package, message.name, message.kind);
                 } else if (message.type === 'showSection') {
-                    void this.showSection(message.token ?? 0, message.section);
+                    void this.showSection(message.token ?? 0, message.section, {
+                        extraDetails: message.extraDetails,
+                        cam: message.cam,
+                        what: message.what,
+                    });
+                } else if (message.type === 'saveCam') {
+                    void this.saveCam(message.token ?? 0, message.machine, message.settings);
                 } else if (message.type === 'videoFullscreen') {
                     void this.videoFullscreen(message.on === true);
                 } else {
@@ -1225,6 +1321,9 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="pane-2d" class="pane" hidden></div>
 						<div id="pane-draft" class="pane" hidden></div>
 						<div id="pane-cmf" class="pane" hidden></div>
+						<div id="pane-cam" class="pane pane-3d pane-cam" hidden>
+							<div class="controls cam-controls"></div>
+						</div>
 						</div>
 						</div>
 						<div id="pane-analysis" class="pane pane-group" hidden>

@@ -62,3 +62,7 @@ test-results/
 # is a package.
 /core
 /core.*
+
+# Claude Code keeps the checkout of an agent running in a worktree of its own
+# here: a whole second copy of the repository, never a part of it.
+.claude/worktrees/

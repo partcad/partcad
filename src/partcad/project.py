@@ -14,6 +14,7 @@ import copy
 import inspect
 import os
 import re
+import shutil
 import tempfile
 import threading
 import typing
@@ -3400,6 +3401,86 @@ class Project(project_config.Configuration):
         with open(self.config_path, "w") as fp:
             yaml.dump(config, fp)
         return True
+
+    def set_machine_settings(self, part_name: str, machine: str, values: dict) -> None:
+        """Write settings of one machine into a part's 'manufacturing:' section of this package's 'partcad.yaml'.
+
+        '<part>.manufacturing.<machine>.<key>' becomes each value of 'values', and
+        one that is None is taken out - what the Digital Thread's CAM tab saves
+        (see 'partcad.cam_view'). The section and the machine's subsection are
+        made where the part has none; everything else in the file - the other
+        settings, the order, the comments - is kept as its author wrote it, which
+        is what 'ruamel' round-trips. An axis written or taken out under one of its
+        two spellings ('toolAxis:', 'along:') takes the other out.
+
+        The file is replaced only once the new one is written in full, beside it:
+        opening it for writing would empty the package's declaration before the
+        dump, and a dump that fails then leaves nothing.
+
+        Raises:
+            ValueError: the part is not declared in this file - one a plugin
+                supplies, or one another file holds - so there is nowhere here to
+                write it; or the file is a Jinja2 template, which is not the
+                document PartCAD reads until it is rendered.
+        """
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        yaml.width = 4096
+        with open(self.config_path) as fp:
+            text = fp.read()
+        if any(opening in text for opening in ("{{", "{%", "{#")):
+            # What PartCAD reads is the rendered document, and what would be
+            # edited is the source: read as YAML, 'width: {{ w }}' is a mapping
+            # in a mapping, and would be written back as one. So nothing is
+            # written into a template.
+            raise ValueError(
+                "'%s' is a Jinja2 template, so the settings of '%s' cannot be written into it without changing what"
+                " it renders to: write them under the part's 'manufacturing: %s:' by hand"
+                % (self.config_path, part_name, machine)
+            )
+        config = yaml.load(text)
+        parts = config.get("parts") if isinstance(config, dict) else None
+        declaration = parts.get(part_name) if isinstance(parts, dict) else None
+        if not isinstance(declaration, dict):
+            raise ValueError(
+                "The part '%s' is not declared in '%s', so there is nowhere to write its settings"
+                % (part_name, self.config_path)
+            )
+        section = declaration.get("manufacturing")
+        if not isinstance(section, dict):
+            section = ruamel.yaml.comments.CommentedMap()
+            declaration["manufacturing"] = section
+        settings = section.get(machine)
+        created = not isinstance(settings, dict)
+        if created:
+            settings = ruamel.yaml.comments.CommentedMap()
+            section[machine] = settings
+        for key, value in values.items():
+            if key in ("toolAxis", "along"):
+                # One axis, two spellings: written or taken out, the other goes.
+                settings.pop("along" if key == "toolAxis" else "toolAxis", None)
+            if value is None:
+                settings.pop(key, None)
+                continue
+            settings[key] = value
+        if created and not settings:
+            # Nothing to say: a machine named with no settings is a machine the
+            # part now says it is made on, which saving defaults did not ask for.
+            del section[machine]
+            if not section:
+                del declaration["manufacturing"]
+        target = os.path.realpath(self.config_path)
+        temporary = "%s.%d.%d.tmp" % (target, os.getpid(), threading.get_ident())
+        try:
+            with open(temporary, "w") as fp:
+                yaml.dump(config, fp)
+            with contextlib.suppress(OSError):
+                shutil.copymode(target, temporary)
+            os.replace(temporary, target)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.remove(temporary)
+            raise
 
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))

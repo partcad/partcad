@@ -102,6 +102,10 @@ PART_TYPE_IS_MESH: Dict[str, bool] = {
     # they point at, a mesh application still gets there through a conversion.
     "alias": False,
     "enrich": False,
+    # A part that is what its machine makes, until 'pc cam --materialize' writes
+    # it into a file -- after which it is read as that file's type ('brep',
+    # 'step' or 'sdf'). Made of solids: a print's layers, a cut's remainder.
+    "manufactured": False,
     # A part whose type is a package-defined 'partType' (see PartFactoryWrapper).
     # What the wrapper writes is not knowable from here, so it takes the same
     # route everything unknown does.

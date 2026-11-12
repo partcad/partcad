@@ -244,14 +244,20 @@ def _boundary(buffer):
     nothing. Which of the three comes first is what decides how the next stretch
     is read - a quote inside a comment is not a string, and a '/*' inside a
     string is not a comment.
+
+    The next quote and the next comment are looked for again only once the walk
+    has passed them: a block of geometry holds neither, and looking for them
+    afresh after every record read the rest of the block once per record -- a
+    STEP file of tens of megabytes then took longer to inspect than to build.
     """
     cut = 0
     i = 0
     length = len(buffer)
+    quote = comment = -2
     while i < length:
-        quote = buffer.find(b"'", i)
+        quote = _next(buffer, b"'", i, quote)
+        comment = _next(buffer, b"/*", i, comment)
         semicolon = buffer.find(b";", i)
-        comment = buffer.find(b"/*", i)
         if semicolon < 0:
             break
         if 0 <= quote < semicolon and (comment < 0 or quote < comment):
@@ -269,6 +275,13 @@ def _boundary(buffer):
         cut = semicolon + 1
         i = semicolon + 1
     return cut
+
+
+def _next(buffer, needle, i, found):
+    """Where 'needle' next occurs at or after 'i', given where it was last found (-1: nowhere after)."""
+    if found == -1 or found >= i:
+        return found
+    return buffer.find(needle, i)
 
 
 def _without_comments(block):
@@ -290,9 +303,10 @@ def _without_comments(block):
     start = 0
     i = 0
     length = len(block)
+    quote = comment = -2
     while i < length:
-        quote = block.find(b"'", i)
-        comment = block.find(b"/*", i)
+        quote = _next(block, b"'", i, quote)
+        comment = _next(block, b"/*", i, comment)
         if comment < 0:
             break
         if 0 <= quote < comment:

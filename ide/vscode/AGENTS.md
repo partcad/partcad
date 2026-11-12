@@ -326,11 +326,16 @@ mesh per node rather than an `InstancedMesh`.
 `viewport_origin`/`viewport_up`/target with the projection (Orthographic, Isometric, Perspective) right after its
 title and Fit (the 3D tab only) and Reset beside it, a section slider per axis, and Animate, Auto-fit (the 3D tab
 only) and Opacity, which used to be at the bottom of the 3D view's tree. One widget for every tab; what a tab cannot do with it is disabled and says why
-(`capabilitiesOf`), and only `cameraView.ts` crosses between PartCAD's frame and a stage's. A section is never a
-clipping plane here: PartCAD cuts the exact geometry (`partcad/shape_section.py`), the 3D view by asking the daemon
+(`capabilitiesOf`), and only `cameraView.ts` crosses between PartCAD's frame and a stage's. A section is cut by
+PartCAD, never by a clipping plane: the exact geometry (`partcad/shape_section.py`), the 3D view by asking the daemon
 to show the object again (`partcad.showSection` -> `inspect.object` with `section`) and the render tabs by sending
 it with `render.inline`, and the show says what it was cut to (`KEY_SECTION`, absent from a PartCAD that cannot
-cut). A view drawn without perspective is drawn by an orthographic copy of the orbit camera (`matchOrthographic`), never
+cut). The one clip is a **preview, while a slider is being dragged** (`onSectionPreview`, `scene.previewSection`):
+the geometry on the stage clipped to the box - WebGL by the renderer's own planes (`Surface.setClippingPlanes`),
+WebGPU by the group the model sits in, which says it is a `ClippingGroup` (three's own is in its WebGPU build only)
+- with what the clip opens drawn as an unlit back face of each mesh's colour, so a part reads as solid; the painter
+cannot clip, and the panel says so. Let go, the daemon is asked as before, and the preview ends when its show is on
+the stage (or the ask fails). A view drawn without perspective is drawn by an orthographic copy of the orbit camera (`matchOrthographic`), never
 by moving the controls onto another camera: navigation, Fit and the SpaceMouse go on moving and reading the
 perspective one, so nothing about them has two versions. The panel starts folded, and the screenshot script drives
 Animate, Opacity and Reset by the ids the 3D tab's panel keeps (`animate-checkbox`, `opacity-slider`,
@@ -343,6 +348,33 @@ it, no margin on top), over one second (`fit`/`stepFit` in `scene.ts`, the arith
 object always, the same one again while the Auto-fit box after Animate is ticked (the default), and a cut never. Only
 the first show of a panel, and Reset, place the camera at the opening view outright. See
 "The first show places the camera" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+
+**What the stage holds is a drawing, and `redraw` asks for the one the tab on screen wants** (`viewer.ts`). A
+drawing is the section, and either the 3D tab's **Extra details** box - the last row of its view panel, ticked
+from the start for a part or a sketch: the object as it is and at the finer level of tessellation, rather than
+each part as its `visual:` at the preview's - or the CAM tab's settings tried. Both are asked of the daemon by the
+one request the sliders always used (`showSection` -> `partcad.showSection` -> `inspect.object` with `section`,
+`extra_details`, `cam`), and the show says what it is (`extraDetails`, `cam`; `KEY_EXTRA_DETAILS`, `KEY_CAM` in
+`partcad_ide_client.protocol`), which is what `redraw` compares against. Which level, and that a part a machine
+makes is drawn as what it makes (its hidden faces left out) -- at the box's level for a cut or molded part, and at
+the preview's for a print, every face of which is flat -- is `partcad.cam_view.representation`'s to decide: nothing
+here knows what a print is. While a drawing is out the body
+carries `busy` (a progress cursor everywhere) and the host shows a notification (`withProgress`), and an error is
+said in one too and under the sliders. The box starts as the first show of an object says, so a PartCAD that does
+not send `extraDetails` leaves it disabled; it is kept, like the section, across shows of the same object.
+
+**The CAM tab is the 3D view of what a part's machine makes** (`cam.ts`, `CamView`; `docs/source/digital_thread/lifecycle/design_cam.rst`).
+One canvas: `placeStage` moves `#viewer` into whichever of the 3D and CAM panes is on screen, and hands the scene
+that pane's own view panel's projection, animation and opacity - the CAM tab's panel is the 3D one's without Extra
+details. The tab is enabled by `cam.settings` (`partcad.camSettings`), asked on every show of a part as `cae.list`
+is: how the part is made and a row per setting its machine takes, read by the daemon off the configuration schema,
+so no list of settings lives here. A field changed is tried: once the fields settle (`CAM_SETTLE_MS`) the part is
+drawn again with `cam: {machine, settings}`, nothing written, and the answer's `stats` are shown under the fields.
+Save posts `saveCam` -> `partcad.camSave` (`cam.save`), which writes the settings into the part's `partcad.yaml`
+and its materialized file again where it has one; the settings are then asked for afresh and the fields start
+from them. The fields are disabled until those settings are in them -- an edit typed before would be lost to them -- and
+a Save still under way when another object is shown is left to finish without a word on the new object's tab. The form is not rebuilt for an answer equal to the one on screen, because every show re-asks it and
+somebody may be typing.
 
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
 `qual.simulate` (with `cae.list` and `qual.simulations`, which read what they would run) are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart

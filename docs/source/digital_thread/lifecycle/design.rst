@@ -9,6 +9,7 @@ Design
    design_2d.rst
    design_draft.rst
    design_cmf.rst
+   design_cam.rst
 
 
 Design is what the object *is*: its geometry, the numbers it is built from, and
@@ -65,9 +66,9 @@ exactly which bytes it was built from (see :ref:`reproducibility`).
 In the UI
 =========
 
-**Design** is what the Digital Thread opens on, and it is four tabs over one
-object -- the same geometry asked for three different ways, and what it is in.
-Each has a chapter of its own:
+**Design** is what the Digital Thread opens on, and it is five tabs over one
+object -- the same geometry asked for three different ways, what it is in, and
+what its machine makes of it. Each has a chapter of its own:
 
 :doc:`3D </digital_thread/lifecycle/design_3d>`
   The shape to turn, with a tree of what it is made of -- its links, its ports
@@ -90,6 +91,12 @@ Each has a chapter of its own:
   of, the ones that are not specified first. A colour, a material or a finish
   opened from the PartCAD Explorer is shown on this tab alone.
 
+:doc:`CAM </digital_thread/lifecycle/design_cam>`
+  What the machine a part is made on makes of it -- a print, a cut, a molding --
+  drawn beside every setting of that machine, to try out, look into with a
+  section, and save into the part's ``partcad.yaml``. Only for a part made by
+  following a route: ``additive``, ``subtractive`` or ``forming``.
+
 .. image:: /images/dt-design.png
   :width: 100%
   :align: center
@@ -98,8 +105,8 @@ Each has a chapter of its own:
 The panel is driven by whatever is selected in the PartCAD Explorer, and the
 :ref:`view panel <dt-design-3d>` down its right -- the orientation gizmo, the
 axis views, the viewpoint and its projection, and the sections -- is shared by
-the three that draw the object: a section set on the 3D tab is the section the 2D and Draft tabs
-draw.
+the four that draw the object: a section set on the 3D tab is the section the 2D, Draft and CAM
+tabs draw.
 
 The editing loop runs through this group. **Edit** in the Explorer opens the
 file an object *is* -- the script a part is written in, an ASSY file, a

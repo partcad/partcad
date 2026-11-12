@@ -29,6 +29,7 @@ import {
     FetchFormatsMessage,
     FetchTabMessage,
     GeometryMissingMessage,
+    SaveCamMessage,
     SaveChoicesMessage,
     ShowObjectMessage,
     ShowSectionMessage,
@@ -83,6 +84,11 @@ export function showObject(message: ShowObjectMessage): void {
 
 /** Ask the host to show the object on screen again, cut; it answers with 'sectionShown'. */
 export function showSection(message: ShowSectionMessage): void {
+    vscode.postMessage(message);
+}
+
+/** Ask the host to write the CAM tab's settings into the part's declaration ('cam.save'). */
+export function saveCam(message: SaveCamMessage): void {
     vscode.postMessage(message);
 }
 

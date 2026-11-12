@@ -68,6 +68,7 @@ def shown(monkeypatch):
         ("--design-2d", "2d"),
         ("--design-draft", "draft"),
         ("--design-cmf", "cmf"),
+        ("--design-cam", "cam"),
         ("--analysis-fea", "fea"),
         ("--analysis-cfd", "cfd"),
         ("--manufacturing-bvb", "bvb"),

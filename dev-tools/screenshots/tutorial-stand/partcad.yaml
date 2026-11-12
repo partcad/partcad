@@ -1,0 +1,131 @@
+# The package docs/source/tutorial_printed_stand.rst builds, as it stands at its
+# step 11: printed at 10% infill, with the FEA scenario of steps 9 and 10.
+# dev-tools/screenshots/shoot.mjs ('tutorial-stand') takes the tutorial's
+# pictures of it, and the tutorial includes this file whole at its end.
+desc: A printed stand holding a steel block.
+partcad: ">=0.10.9"
+
+dependencies:
+  pub:
+    type: git
+    url: https://github.com/partcad/partcad-index.git
+    track: main
+
+materials:
+  pla:
+    formal: PLA
+    density: 1240
+    mu: 0.5
+    youngsModulus: 3.5e+9
+    poissonsRatio: 0.36
+    yieldStrength: 5.0e+7
+  steel:
+    formal: Steel
+    density: 7850
+    mu: 0.6
+
+interfaces:
+  foot:
+    desc: The bottom of a leg, standing on the floor.
+    ports:
+      foot:
+  pad:
+    desc: Where the block sits on the top.
+    ports:
+      pad:
+
+parts:
+  top:
+    type: basic
+    cuboid: [120, 80, 4]
+    offset: [[0, 0, 62], [0, 0, 1], 0]
+  leg-1:
+    type: basic
+    cuboid: [8, 8, 60]
+    offset: [[-52, -32, 30], [0, 0, 1], 0]
+  leg-2:
+    type: basic
+    cuboid: [8, 8, 60]
+    offset: [[52, -32, 30], [0, 0, 1], 0]
+  leg-3:
+    type: basic
+    cuboid: [8, 8, 60]
+    offset: [[52, 32, 30], [0, 0, 1], 0]
+  leg-4:
+    type: basic
+    cuboid: [8, 8, 60]
+    offset: [[-52, 32, 30], [0, 0, 1], 0]
+  legs-front:
+    type: boolean
+    operation: or
+    parts: [leg-1, leg-2]
+  legs-back:
+    type: boolean
+    operation: or
+    parts: [leg-3, leg-4]
+  legs:
+    type: boolean
+    operation: or
+    parts: [legs-front, legs-back]
+  stand-design:
+    type: boolean
+    operation: or
+    parts: [top, legs]
+    manufacturable: false
+    parameters:
+      material: {type: string, default: ":pla"}
+    implements:
+      foot:
+        fl: [[-52, -32, 0], [0, 0, 1], 0]
+        fr: [[52, -32, 0], [0, 0, 1], 0]
+        br: [[52, 32, 0], [0, 0, 1], 0]
+        bl: [[-52, 32, 0], [0, 0, 1], 0]
+      pad: [[0, 0, 64], [0, 0, 1], 0]
+  stand:
+    desc: The stand, printed
+    parameters:
+      tolerance: {type: float, default: 0.2}
+    manufacturing:
+      method: additive
+      source: stand-design
+      fff:
+        layerHeight: 0.2 mm
+        walls: 2
+        infill: 10%
+    fea:
+      stands:
+        desc: At rest at the end of 'stands', holding the block on its top
+        implementation: //pub/feature/cae/calculix:fea
+        # Where the load leaves it: the floor, under its four feet.
+        fix: [foot]
+        load:
+          # Where it enters: the block's weight, 77.31 N on the floor less the
+          # stand's own 0.30 N.
+          pad: [0 N, 0 N, -77.01 N]
+        # Its own weight.
+        gravity: [0, 0, -9.81]
+        params:
+          # The top may not sag more than this, in millimetres.
+          max_displacement: 1.0
+  block:
+    type: basic
+    cuboid: 100
+    parameters:
+      material: {type: string, default: ":steel"}
+
+assemblies:
+  stand-with-block:
+    type: assy
+    path: stand-with-block.assy
+    qual:
+      sim:
+        stands:
+          desc: The stand holds the block, and nothing moves
+          path: //pub/feature/simulate/mujoco:mujoco
+          params:
+            duration: 2.0
+          validation: |
+            max(
+                sum((a - b) ** 2 for a, b in zip(after["bodies"][name]["pos"], before["bodies"][name]["pos"])) ** 0.5
+                for name in before["bodies"]
+            ) < 2.0

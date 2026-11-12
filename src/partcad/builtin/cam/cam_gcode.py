@@ -480,6 +480,14 @@ def _cnc(request, obj, units):
     box = obj.bounding_box()
     top = box.max.Z
     height = box.max.Z - box.min.Z
+    on_stock = request.get(STOCK_BOX_KEY)
+    if height <= TOLERANCE and on_stock:
+        # A drawing followed on the stock it is cut from: the cut starts at the
+        # top of the stock and, unless the part says, goes through it.
+        top = on_stock[1]
+        if request.get("depth") is None:
+            request = dict(request)
+            request["depth"] = on_stock[1] - on_stock[0]
 
     warnings = []
     depth = request.get("depth")
@@ -594,11 +602,26 @@ def _cnc(request, obj, units):
             "passes": passes,
             "depth": depth,
             "cut_length": program.cut_length,
+            # What the tool takes away, for the product ('cam_product.removal');
+            # taken out of the stats before they are reported.
+            REMOVAL_KEY: {
+                "paths": [(points, bool(inside)) for points, inside, _group in paths],
+                "radius": radius,
+                "bottom": top - depth,
+                "top": top,
+                "operation": operation,
+            },
         },
     )
 
 
 def _orient(obj, tool_axis_vector):
+    """'obj' turned into the machine's frame (see '_orientation')."""
+    rotation = _orientation(tool_axis_vector)
+    return obj if rotation is None else rotation * obj
+
+
+def _orientation(tool_axis_vector):
     """The shape as it sits on the machine, with the tool axis pointing down.
 
     Everything below this line works in the machine's own frame: Z is the tool
@@ -613,7 +636,7 @@ def _orient(obj, tool_axis_vector):
     exactly the bytes it produced before any of this existed.
     """
     if not tool_axis_vector:
-        return obj
+        return None
     x, y, z = (float(component) for component in tool_axis_vector)
     length = math.sqrt(x * x + y * y + z * z)
     if length <= TOLERANCE:
@@ -622,7 +645,7 @@ def _orient(obj, tool_axis_vector):
 
     # Already pointing down: nothing to do, and nothing to perturb.
     if abs(x) <= TOLERANCE and abs(y) <= TOLERANCE and z < 0:
-        return obj
+        return None
 
     # The rotation that takes the declared axis onto -Z. Written as the six
     # axis cases rather than as a general rotation because these are the only
@@ -642,7 +665,7 @@ def _orient(obj, tool_axis_vector):
         rotation = b3d.Rotation(0, 90, 0) if x > 0 else b3d.Rotation(0, -90, 0)
     else:
         rotation = b3d.Rotation(-90, 0, 0) if y > 0 else b3d.Rotation(90, 0, 0)
-    return rotation * obj
+    return rotation
 
 
 def _laser(request, obj, units):
@@ -677,9 +700,15 @@ def _laser(request, obj, units):
     box = obj.bounding_box()
     top = box.max.Z
     height = box.max.Z - box.min.Z
+    bottom = box.min.Z
+    on_stock = request.get(STOCK_BOX_KEY)
+    if height <= TOLERANCE and on_stock:
+        # A drawing cut out of the stock it is on: through the stock.
+        bottom, top = on_stock
+        height = top - bottom
 
     warnings = []
-    if height <= TOLERANCE:
+    if box.max.Z - box.min.Z <= TOLERANCE:
         faces = _planar_faces(obj)
     else:
         # The outline halfway down. A laser's beam is very nearly parallel, so
@@ -757,6 +786,13 @@ def _laser(request, obj, units):
             "passes": 1,
             "depth": height,
             "cut_length": program.cut_length,
+            REMOVAL_KEY: {
+                "paths": [(points, bool(inside)) for points, inside, _group in paths],
+                "radius": kerf / 2.0,
+                "bottom": bottom,
+                "top": top,
+                "operation": "profile",
+            },
         },
     )
 
@@ -988,19 +1024,116 @@ def _drilling(request, obj, units):
             "passes": 1,
             "depth": deepest,
             "cut_length": program.cut_length,
+            REMOVAL_KEY: {
+                "holes": [(x, y, hole_top, hole_bottom) for x, y, _diameter, hole_top, hole_bottom in holes],
+                "diameter": tool,
+            },
         },
     )
+
+
+def _fff(request, obj, units):
+    """The route a filament printer follows: walls, skins and infill, layer by layer (see 'cam_fff').
+
+    The section, the polylines and the program are this file's own; what a
+    printer adds is Clipper's offsets and clipping, and the extrusion per move.
+    """
+    import cam_fff
+
+    helpers = type("Helpers", (), {})()
+    helpers.faces_at = _faces_at
+    helpers.wire_points = _wire_points
+    helpers.Program = Program
+    program, warnings, stats, paths = cam_fff.route(request, obj, units, helpers)
+    stats[REMOVAL_KEY] = {"paths": paths, "settings": cam_fff.Settings(request)}
+    return program, warnings, stats
 
 
 # Which emitter writes the program, by the machine the part says it is made on.
 # A part that says nothing is a CNC part: that is what every object routed
 # before machines existed meant, and it is the machine that can make anything
-# the other two can.
+# the other two can. A printer is the additive method's machine, and writes
+# its route the way the others do.
 MACHINES = {
     "cnc": _cnc,
     "laser": _laser,
     "drill": _drilling,
+    "fff": _fff,
 }
+
+# The key an emitter records what its tool removes (or deposits) under, in the
+# stats it returns, for the product; taken out before the stats are reported.
+REMOVAL_KEY = "_removal"
+
+# The machines that run no program and still make something: a saw cutting
+# stock to length and a mold. Asked only for the product ('materialize').
+PRODUCT_ONLY = ("cut", "mold")
+
+# The request key that asks for the product beside the route: what the machine
+# makes by following it, as the part's own geometry (see 'cam_product').
+MATERIALIZE_KEY = "materialize"
+
+# The request key the stock a subtractive part is cut from travels under.
+STOCK_KEY = "stock"
+
+# Where the stock lies along the tool axis, (bottom, top) in the machine's
+# frame: what a route that follows a flat drawing starts from.
+STOCK_BOX_KEY = "_stock_box"
+
+# The request key that says what the product is wanted as besides a shape:
+# 'step' for its STEP text, 'sdf' for a print's distance field as a script.
+REPRESENTATION_KEY = "representation"
+
+
+def _step_text(shape):
+    """A shape as STEP text: what a part materialized as 'step' is kept in."""
+    import tempfile
+
+    from OCP.IFSelect import IFSelect_RetDone
+    from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
+
+    writer = STEPControl_Writer()
+    writer.Transfer(shape, STEPControl_AsIs)
+    with tempfile.TemporaryDirectory() as directory:
+        path = os.path.join(directory, "product.step")
+        if writer.Write(path) != IFSelect_RetDone:
+            raise Exception("the product could not be written as STEP")
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+
+
+def _product(machine, request, obj, removed, rotation):
+    """What 'machine' makes by following the route it was given, in the part's own frame."""
+    import cam_fff
+    import cam_product
+
+    tolerance = float(request.get("tolerance") or 0.01)
+    if machine == "fff":
+        made = cam_fff.deposit(removed["paths"], removed["settings"])
+    else:
+        stock = request.get(STOCK_KEY)
+        if stock is None:
+            raise Exception("No stock to cut: a subtractive part names it in 'manufacturing: source:'")
+        stock = _orient(_shape(stock), request.get("tool_axis_vector")).wrapped
+        if machine == "drill":
+            made = cam_product.drilled(stock, removed["holes"], float(removed["diameter"]))
+        else:
+            made = cam_product.removal(stock, removed, tolerance)
+    if rotation is None:
+        return made
+    return (rotation.inverse() * _shape(made)).wrapped
+
+
+def _made_without_route(machine, request):
+    """What a machine that runs no program makes: a saw's cuts in the stock, a mold's shrunk cavity."""
+    import cam_product
+
+    if machine == "cut":
+        stock = request.get(STOCK_KEY)
+        if stock is None:
+            raise Exception("No stock to cut: a part cut to size names it in 'manufacturing: source:'")
+        return cam_product.sawn(stock, request.get("cuts") or [])
+    return cam_product.molded(request["wrapped"], float(request.get("shrinkage") or 0.0))
 
 
 def process(path, request):
@@ -1029,20 +1162,56 @@ def process(path, request):
             raise Exception("'units' is 'mm' or 'in', not %r" % request.get("units"))
 
         machine = str(request.get("machine") or "cnc").lower()
+        materialize = bool(request.get(MATERIALIZE_KEY))
+        if machine in PRODUCT_ONLY:
+            if not materialize:
+                raise Exception("a '%s' runs no program, so there is no route to write for it" % machine)
+            product = _made_without_route(machine, request)
+            result = {"success": True, "exception": None, "product": product}
+            if request.get(REPRESENTATION_KEY) == "step":
+                result["product_step"] = _step_text(product)
+            return result
         if machine not in MACHINES:
             raise Exception("'machine' is one of %s, not %r" % (", ".join(sorted(MACHINES)), request.get("machine")))
 
         obj = _shape(request["wrapped"])
         # Into the machine's frame, where the tool axis is Z, before anything
         # measures the object. The default is the identity (see '_orient').
-        obj = _orient(obj, request.get("tool_axis_vector"))
+        rotation = _orientation(request.get("tool_axis_vector"))
+        if rotation is not None:
+            obj = rotation * obj
+
+        if request.get(STOCK_KEY) is not None:
+            stock = _shape(request[STOCK_KEY])
+            if rotation is not None:
+                stock = rotation * stock
+            stock_box = stock.bounding_box()
+            request[STOCK_BOX_KEY] = (stock_box.min.Z, stock_box.max.Z)
 
         program, warnings, stats = MACHINES[machine](request, obj, units)
+        removed = stats.pop(REMOVAL_KEY, None)
 
         with open(path, "w", newline="\n") as f:
             f.write(program.text())
 
-        return {"success": True, "exception": None, "warnings": warnings, "stats": stats}
+        result = {"success": True, "exception": None, "warnings": warnings, "stats": stats}
+        if materialize:
+            if request.get(REPRESENTATION_KEY) == "sdf":
+                if machine != "fff":
+                    raise Exception("Only a print is kept as an SDF: a '%s' makes a solid" % machine)
+                import cam_fff
+
+                result["sdf_script"] = cam_fff.sdf_script(
+                    removed["paths"],
+                    removed["settings"],
+                    request.get("shape_name"),
+                    request.get("tool_axis_vector"),
+                )
+            else:
+                result["product"] = _product(machine, request, obj, removed, rotation)
+                if request.get(REPRESENTATION_KEY) == "step":
+                    result["product_step"] = _step_text(result["product"])
+        return result
 
     except Exception as e:
         wrapper_common.handle_exception(e)

@@ -197,8 +197,9 @@ not kept in ``cacheFiles`` -- but their minimum sizes do not, because no
 solver's answer is too small to be worth keeping.
 
 ``pc qual test`` also remembers each check's verdict on each object, and a failure it
-remembers keeps what the check said about it: read back, it repeats the reason
-and says that it was remembered from an earlier run. ``pc --cache-bypass qual test``
+remembers keeps what the check said about it, as does a pass that warned of
+something (``defects``' faces and edges): read back, it repeats the reason or the
+warning and says that it was remembered from an earlier run. ``pc --cache-bypass qual test``
 works every verdict out again.
 
 ``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or ``cacheBypass: True``)
