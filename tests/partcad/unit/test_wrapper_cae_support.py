@@ -245,7 +245,8 @@ def test_write_glb_is_a_valid_binary_gltf(tmp_path):
     """The header, the two chunks, and accessors that agree with the data."""
     path = tmp_path / "result.glb"
     points = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
-    cae_support.write_glb(str(path), points, [(0, 1, 2), (0, 1, 3)], [0, 1, 2, 3])
+    # Values inside one stretch of the ramp, so that no triangle is cut.
+    cae_support.write_glb(str(path), points, [(0, 1, 2), (0, 1, 3)], [0, 0.1, 0.2, 0.3], low=0, high=3)
     blob = path.read_bytes()
     magic, version, length = struct.unpack("<4sII", blob[:12])
     assert (magic, version, length) == (b"glTF", 2, len(blob))
@@ -256,6 +257,98 @@ def test_write_glb_is_a_valid_binary_gltf(tmp_path):
     assert position["count"] == 4 and colour["count"] == 4 and index["count"] == 6
     # Z-up in, Y-up out: (0, 0, 1) becomes (0, 1, 0).
     assert position["max"] == [1, 1, 0] and position["min"] == [0, 0, -1]
+
+
+def _glb(path):
+    """The points, triangles and colours of a result 'write_glb' wrote."""
+    blob = path.read_bytes()
+    json_length = struct.unpack("<I", blob[12:16])[0]
+    document = json.loads(blob[20 : 20 + json_length])
+    binary = blob[20 + json_length + 8 :]
+    views = document["bufferViews"]
+    position, colour, index = document["accessors"]
+
+    def read(accessor, fmt, width):
+        start = views[accessor["bufferView"]]["byteOffset"]
+        size = struct.calcsize(fmt)
+        return [struct.unpack_from(fmt, binary, start + k * size) for k in range(accessor["count"])][
+            : accessor["count"]
+        ]
+
+    points = read(position, "<3f", 3)
+    colours = [c[:3] for c in read(colour, "<4B", 4)]
+    indices = [i[0] for i in read(index, "<I", 1)]
+    return points, [tuple(indices[k : k + 3]) for k in range(0, len(indices), 3)], colours
+
+
+def test_split_at_levels_leaves_every_piece_inside_one_stretch_of_the_ramp():
+    """What makes blending the corners' colours the colour of the blended value."""
+    points = [(0, 0, 0), (2, 0, 0), (0, 2, 0)]
+    values = [0.0, 8.0, 3.0]
+    levels = [0, 1, 2, 3, 4]
+    out_points, out_triangles, out_values = cae_support.split_at_levels(points, [(0, 1, 2)], values, levels)
+    assert out_points[:3] == [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 2.0, 0.0)]
+    area = 0.0
+    for triangle in out_triangles:
+        corner = [out_values[k] for k in triangle]
+        # Each piece lies between two adjacent levels, or wholly past the last.
+        assert max(corner) - min(corner) <= 1 + 1e-9 or min(corner) >= levels[-1] - 1e-9, corner
+        (ax, ay, _), (bx, by, _), (cx, cy, _) = (out_points[k] for k in triangle)
+        signed = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay)
+        # The winding is the original's: the IDE draws a result front-side only.
+        assert signed >= -1e-12
+        area += signed / 2
+    # Cut into pieces, not shrunk or grown.
+    assert area == pytest.approx(2.0)
+    # Every new point is on a level, where the field is exactly that level.
+    for point, value in zip(out_points[3:], out_values[3:]):
+        assert value in levels
+        x, y, _ = point
+        assert 4.0 * x + 1.5 * y == pytest.approx(value)
+
+
+def test_two_triangles_sharing_an_edge_share_the_points_cut_on_it():
+    """Otherwise the surface opens a crack along every cut."""
+    points = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 0)]
+    values = [0.0, 2.0, 0.0, 2.0]
+    _, triangles, out_values = cae_support.split_at_levels(points, [(0, 1, 2), (1, 3, 2)], values, [1.0])
+    # One point on each of the three edges the level crosses: 0-1, 1-2 (shared) and 2-3.
+    assert len(out_values) == 4 + 3
+    assert len(triangles) > 2
+
+
+def test_an_overloaded_region_is_drawn_red_out_to_where_it_is_overloaded(tmp_path):
+    """The case a straight blend got wrong: an edge from nothing to twice the top of the scale.
+
+    Halfway along, the field is at the top of the scale. Blended between a blue
+    corner and a red one, that point was the middle of the ramp; drawn now, the
+    edge is cut there, and everything past it is red.
+    """
+    path = tmp_path / "result.glb"
+    points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    cae_support.write_glb(str(path), points, [(0, 1, 2)], [0.0, 2.0, 0.0], low=0.0, high=1.0)
+    out_points, out_triangles, colours = _glb(path)
+    red = tuple(round(c * 255) for c in cae_support._RAMP[-1])
+    # glTF is Y-up: a point (x, y, z) here is (x, z, -y) there, so x is still x.
+    halfway = [k for k, (x, _, _) in enumerate(out_points) if abs(x - 0.5) < 1e-6 and abs(out_points[k][2]) < 1e-6]
+    assert halfway and all(colours[k] == red for k in halfway)
+    # Every triangle beyond the halfway point is red at every corner.
+    beyond = [t for t in out_triangles if min(out_points[k][0] for k in t) >= 0.5 - 1e-6]
+    assert beyond and all(colours[k] == red for t in beyond for k in t)
+    # And every triangle's corners are in one stretch of the ramp, or all past
+    # its top. The field is 2x across this triangle.
+    stretch = 1.0 / (len(cae_support._RAMP) - 1)
+    for t in out_triangles:
+        corner = [2 * out_points[k][0] for k in t]
+        assert max(corner) - min(corner) <= stretch + 1e-6 or min(corner) >= 1.0 - 1e-6, corner
+
+
+def test_a_uniform_field_is_drawn_uncut(tmp_path):
+    path = tmp_path / "result.glb"
+    points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    cae_support.write_glb(str(path), points, [(0, 1, 2)], [5.0, 5.0, 5.0])
+    out_points, out_triangles, colours = _glb(path)
+    assert len(out_points) == 3 and len(out_triangles) == 1 and len(set(colours)) == 1
 
 
 def test_mesh_names_the_groups_it_was_given_and_the_rest(tmp_path):

@@ -882,6 +882,81 @@ def colours_for(values, low=None, high=None):
     return colours
 
 
+def _range(values, low, high):
+    """The 'low' and 'high' 'colours_for' colours 'values' between."""
+    finite = [value for value in values if math.isfinite(value)]
+    low = min(finite, default=0.0) if low is None else float(low)
+    high = max(finite, default=0.0) if high is None else float(high)
+    return low, high
+
+
+def split_at_levels(points, triangles, values, levels):
+    """The same surface, its triangles cut wherever the field crosses one of 'levels'.
+
+    A viewer blends the colours of a triangle's corners across it, which is the
+    colour of the blended value only while the ramp is a straight line between
+    the corners' values. It is not where the corners straddle a stop of the ramp,
+    nor where they straddle 'low' or 'high', past which the colour stops changing:
+    an edge from nothing to twice the top of the scale is red only at its far
+    end, where the value it stands for is past the top for half its length. Cut
+    at every level a triangle spans, each piece is inside one straight stretch of
+    the ramp (or past one end of it, one colour), and the blend is exact.
+
+    The field is linear across a triangle, so each cut is a straight line and
+    each piece a convex polygon, fanned into triangles. A point on an edge is
+    made once, for that edge and that level, so the two triangles sharing an
+    edge share its points and the surface stays closed. Returns new 'points',
+    'triangles' and 'values'; the points given are kept, in order, at the front.
+    """
+    points = [tuple(float(c) for c in point) for point in points]
+    values = [float(value) for value in values]
+    levels = sorted({float(level) for level in levels})
+    made = {}
+
+    def cut(i, j, level):
+        key = (min(i, j), max(i, j), level)
+        if key not in made:
+            a, b = key[0], key[1]
+            t = (level - values[a]) / (values[b] - values[a])
+            points.append(tuple(pa + (pb - pa) * t for pa, pb in zip(points[a], points[b])))
+            values.append(level)
+            made[key] = len(points) - 1
+        return made[key]
+
+    def side(polygon, level, below):
+        """The part of a convex polygon on one side of a level, as point indices."""
+        kept = []
+        for k, i in enumerate(polygon):
+            j = polygon[(k + 1) % len(polygon)]
+            inside_i = values[i] <= level if below else values[i] >= level
+            inside_j = values[j] <= level if below else values[j] >= level
+            if inside_i:
+                kept.append(i)
+            if inside_i != inside_j and values[i] != level and values[j] != level:
+                kept.append(cut(i, j, level))
+        return kept
+
+    result = []
+    for triangle in triangles:
+        polygon = [int(k) for k in triangle]
+        corner = [values[k] for k in polygon]
+        spanned = [level for level in levels if min(corner) < level < max(corner)]
+        pieces = []
+        for level in spanned:
+            below = side(polygon, level, below=True)
+            if len(below) >= 3:
+                pieces.append(below)
+            polygon = side(polygon, level, below=False)
+        pieces.append(polygon)
+        for piece in pieces:
+            # Cutting on an edge's own end can repeat a point; a piece is drawn
+            # by its distinct corners.
+            distinct = [k for n, k in enumerate(piece) if k != piece[n - 1]]
+            for n in range(1, len(distinct) - 1):
+                result.append((distinct[0], distinct[n], distinct[n + 1]))
+    return points, result, values
+
+
 def write_glb(path, points, triangles, values, low=None, high=None):
     """A surface coloured by a field, as a binary glTF.
 
@@ -891,7 +966,22 @@ def write_glb(path, points, triangles, values, low=None, high=None):
     Written by hand rather than through a library: a glTF of one coloured mesh
     is three arrays and a page of JSON, and a dependency for it is one more
     thing a sandbox has to install on every platform.
+
+    The colours are per point, which every viewer draws -- the Digital Thread's
+    painter included, which has no textures -- and the triangles are cut at
+    each stop of the ramp first ('split_at_levels'), so that blending them
+    across a triangle is the colour of the value there and not an average of
+    two colours: a region past 'high' is drawn wholly in the top colour, out to
+    where the field crosses it.
     """
+    values = [float(value) for value in values]
+    low, high = _range(values, low, high)
+    # What 'colours_for' draws a value it cannot place in: the bottom colour.
+    values = [value if math.isfinite(value) else low for value in values]
+    if high > low:
+        stops = len(_RAMP) - 1
+        levels = [low + (high - low) * k / stops for k in range(stops + 1)]
+        points, triangles, values = split_at_levels(points, triangles, values, levels)
     positions = [(float(x), float(z), -float(y)) for x, y, z in points]
     colours = colours_for(values, low, high)
     indices = [int(k) for triangle in triangles for k in triangle]
