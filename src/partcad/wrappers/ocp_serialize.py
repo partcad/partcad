@@ -612,7 +612,7 @@ def cmf_section_for(shape, faces=None, solids=None, own=None):
         if parents is not None:
             face = face_map.FindKey(index)
             if parents.Contains(face):
-                for solid in parents.FindFromKey(face):
+                for solid in members(parents.FindFromKey(face)):
                     lent = by_solid.get(solid_map.FindIndex(solid))
                     if lent is not None:
                         cmf_set = cmf_set.filled_from(lent) if cmf_set is not None else lent
@@ -669,6 +669,44 @@ def shape_from_payload(value):
     'wrapper_gltf.py' and 'wrapper_interference.py'.
     """
     return _shape_from_b64(value)
+
+
+# How long an OCCT list has to be before iterating it is cheaper than taking
+# it apart (see 'members'), as measured: a copy taken apart costs 0.7
+# microseconds an element, an iteration 0.4 and about 200 to begin.
+_ITERATE_FROM = 500
+
+
+def members(items) -> list:
+    """What an OCCT list holds ('TopTools_ListOfShape', 'BRepCheck_ListOfStatus', ...), as a Python list, in order.
+
+    Iterating any OCCT collection from Python - a list, a sequence, an array, a
+    map - costs about 200 microseconds before the first element, however short
+    it is, in the OCP this runs on. That is nothing once, and everything once an
+    element: a list of the faces an edge bounds, asked for every edge of a 3D
+    print of 364,000 edges, was 95 of the 150 seconds the 'defects' check took.
+    So a list is read with 'First' and 'Last' when it has one or two elements,
+    which is nearly always - an edge bounds two faces, a face is in one solid -
+    and taken apart from a copy with 'RemoveFirst' when it is short, which costs
+    a microsecond or so an element; only a long one is iterated. A sequence or
+    an array has 'Value(i)' for the same purpose.
+    """
+    size = items.Size()
+    if size == 0:
+        return []
+    if size == 1:
+        return [items.First()]
+    if size == 2:
+        return [items.First(), items.Last()]
+    if size >= _ITERATE_FROM:
+        return list(items)
+    copy = type(items)()
+    copy.Assign(items)
+    found = []
+    while copy.Size():
+        found.append(copy.First())
+        copy.RemoveFirst()
+    return found
 
 
 def compound_of(shapes):

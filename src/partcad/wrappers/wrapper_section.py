@@ -223,7 +223,7 @@ def _carried(section, shape, result, boolean):
             if boolean.IsDeleted(sub):
                 continue
             modified = boolean.Modified(sub)
-            for became in modified if modified.Size() else [sub]:
+            for became in ocp_serialize.members(modified) or [sub]:
                 found[kind][became] = section.sets[palette]
     return ocp_serialize.cmf_section_for(
         result, faces=found[TopAbs_FACE], solids=found[TopAbs_SOLID], own=section.own()

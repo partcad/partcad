@@ -104,7 +104,7 @@ class Operand:
             TopExp.MapShapesAndAncestors_s(self.shape, TopAbs_FACE, TopAbs_SOLID, self._parents)
         if not self._parents.Contains(face):
             return None
-        for solid in self._parents.FindFromKey(face):
+        for solid in ocp_serialize.members(self._parents.FindFromKey(face)):
             cmf_set = self.set_of(solid, solid=True)
             if cmf_set is not None:
                 return cmf_set
@@ -233,7 +233,7 @@ class Carried:
     @staticmethod
     def _images(operation, sub) -> list:
         """What 'sub' became in the result: itself, kept; what 'Modified' says, split or trimmed; nothing, removed."""
-        images = list(operation.Modified(sub))
+        images = ocp_serialize.members(operation.Modified(sub))
         if not images and not operation.IsDeleted(sub):
             images = [sub]
         return images
@@ -254,7 +254,7 @@ class Carried:
         for face, rank, cmf_set in self._lent:
             if not parents.Contains(face):
                 continue
-            for solid in parents.FindFromKey(face):
+            for solid in ocp_serialize.members(parents.FindFromKey(face)):
                 if self._seen[True].Contains(solid):
                     continue
                 offers.setdefault(pending.Add(solid), (solid, []))[1].append((rank, cmf_set))

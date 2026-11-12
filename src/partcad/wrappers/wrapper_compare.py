@@ -220,7 +220,7 @@ def _with_faces(shape, what):
     result = []
     for i in range(1, found.Extent() + 1):
         faces = []
-        for face in found.FindFromIndex(i):
+        for face in ocp_serialize.members(found.FindFromIndex(i)):
             face = TopoDS.Face_s(face)
             # A seam edge is in its face twice, once in each direction.
             if not any(face.IsSame(other) for other in faces):

@@ -140,7 +140,7 @@ def face_materials(leaf, memo=None) -> list:
         face = faces.FindKey(index + 1)
         material = None
         if bounding.Contains(face):
-            for solid in bounding.FindFromKey(face):
+            for solid in ocp_serialize.members(bounding.FindFromKey(face)):
                 position = solids.FindIndex(solid)
                 if 0 < position <= len(solid_sets) and solid_sets[position - 1].material:
                     material = solid_sets[position - 1].material
@@ -162,7 +162,7 @@ def _joined(shape, materials) -> list:
     sharing = TopTools_IndexedDataMapOfShapeListOfShape()
     TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, sharing)
     for edge in range(1, sharing.Extent() + 1):
-        indices = [faces.FindIndex(face) - 1 for face in sharing.FindFromIndex(edge)]
+        indices = [faces.FindIndex(face) - 1 for face in ocp_serialize.members(sharing.FindFromIndex(edge))]
         indices = [index for index in indices if 0 <= index < len(materials) and materials[index]]
         for a, b in zip(indices, indices[1:]):
             if materials[a] == materials[b]:

@@ -38,6 +38,7 @@ import sys
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
+import ocp_serialize
 import wrapper_common
 
 # Raised to 2 when the verdict made of it stopped drawing a finding that is the
@@ -54,25 +55,6 @@ MAX_TUBES = 400
 
 # Two sizes are the same size within this share of the larger.
 _SAME_SIZE = 1e-4
-
-
-def members(shapes):
-    """The shapes of an OCCT list of them ('TopTools_ListOfShape'), as a Python list, in order.
-
-    Iterating such a list from Python costs about a quarter of a millisecond
-    however short the list is, and an edge's list of faces is asked for once
-    per edge: on a 3D print of 364,000 edges that was 95 of the 150 seconds the
-    'defects' check took. 'Size', 'First' and 'Last' cost microseconds, and an
-    edge of a solid bounds two faces, so only a longer list is iterated.
-    """
-    size = shapes.Size()
-    if size == 0:
-        return []
-    if size == 1:
-        return [shapes.First()]
-    if size == 2:
-        return [shapes.First(), shapes.Last()]
-    return list(shapes)
 
 
 def _features(shape, kind):
@@ -121,7 +103,7 @@ def edges_between(found, ancestors, first: int, end: int):
         if degenerated(edge):
             continue
         place = find_index(edge)
-        faces = [as_face(face) for face in members(find_list(place))] if place else []
+        faces = [as_face(face) for face in ocp_serialize.members(find_list(place))] if place else []
         seam = False
         for face in faces:
             if closed(edge, face):

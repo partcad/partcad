@@ -47,6 +47,7 @@ import sys
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
+import ocp_serialize
 import wrapper_common
 import wrapper_tolerance
 
@@ -77,7 +78,7 @@ def _result_statuses(result):
         return found
 
     def take(statuses):
-        for status in wrapper_tolerance.members(statuses):
+        for status in ocp_serialize.members(statuses):
             if status != BRepCheck_Status.BRepCheck_NoError:
                 name = getattr(status, "name", str(status)).rsplit(".", 1)[-1].replace("BRepCheck_", "")
                 if name not in found:
@@ -305,7 +306,7 @@ def _whole_shard(shape, shard: int, count: int):
         """The solids 'shell' is a shell of, by their places among the solids, in the analyzer's order."""
         if not of_shell.Contains(shell):
             return []
-        return sorted(solids.FindIndex(solid) - 1 for solid in wrapper_tolerance.members(of_shell.FindFromKey(shell)))
+        return sorted(solids.FindIndex(solid) - 1 for solid in ocp_serialize.members(of_shell.FindFromKey(shell)))
 
     results = {}
 
@@ -354,8 +355,7 @@ def _whole_shard(shape, shard: int, count: int):
             if not check.MoreShapeInContext():
                 break
             if any(
-                status != BRepCheck_Status.BRepCheck_NoError
-                for status in wrapper_tolerance.members(check.StatusOnShape())
+                status != BRepCheck_Status.BRepCheck_NoError for status in ocp_serialize.members(check.StatusOnShape())
             ):
                 valid = False
             explorer.Next()

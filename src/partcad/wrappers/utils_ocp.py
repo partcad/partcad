@@ -102,7 +102,9 @@ def tessellate(
                     t.Value(3) + offset - 1,
                 )
             )
-            for t in poly.Triangles()
+            # By index: iterating an OCCT array from Python costs 200us to begin
+            # (see 'ocp_serialize.members'), and this is once a face.
+            for t in (poly.Triangle(i) for i in range(1, poly.NbTriangles() + 1))
         ]
 
         offset += poly.NbNodes()

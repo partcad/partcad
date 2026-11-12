@@ -805,7 +805,9 @@ def _face_sets(shape, section):
         TopExp.MapShapesAndAncestors_s(shape, TopAbs_FACE, TopAbs_SOLID, ancestors)
         for index in range(faces.Extent()):
             owners = (
-                ancestors.FindFromKey(faces.FindKey(index + 1)) if ancestors.Contains(faces.FindKey(index + 1)) else []
+                ocp_serialize.members(ancestors.FindFromKey(faces.FindKey(index + 1)))
+                if ancestors.Contains(faces.FindKey(index + 1))
+                else []
             )
             for owner in owners:
                 solid = solids.FindIndex(owner) - 1

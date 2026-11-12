@@ -215,6 +215,12 @@ at all).
   a command that failed asks `containers.stopped` whether the *container* stopped, and if it did, says how
   and lets go of it, so the next command starts it again (`DockerPythonRuntime._ended`, `Runtime._ended` /
   `_endpoint_ended` for KiCad's and a plugin's container, `ContainerPool.discard` for the remote pool).
+- **A wrapper never iterates an OCCT collection from Python once per face or edge.** In the OCP PartCAD runs on,
+  `for x in` a `TopTools_ListOfShape` -- or any list, sequence, array or map of OCCT's -- costs about 200 µs before
+  its first element, however short it is. A list per edge (the faces it bounds, from
+  `MapShapesAndAncestors`) made a loop over a 3D print's 364,000 edges 72-95 s, where it is 2-4 s read with
+  `ocp_serialize.members`, which takes a list apart with `First`/`Last`/`RemoveFirst`; a sequence or an array is
+  read by index (`Value(i)`, `Triangle(i)`). Iterating one collection once is fine.
 - **A wrapper is forked from a zygote, not started afresh** (`sandbox_zygote.py`, `wrappers/zygote.py`,
   `pythonSandboxZygote` / `PC_PYTHON_SANDBOX_ZYGOTE`): a fresh interpreter is most of what a small call costs --
   28 ms bare, 1.45 s with OCP, 5 s and more with build123d, against 13 ms for the request and the answer of a
