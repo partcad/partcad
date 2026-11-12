@@ -66,8 +66,9 @@ none -- say so and pass. Each verdict is one of:
 - **not applicable**: the test has nothing to ask of this object, and says why.
 
 A verdict is cached under everything it depends on, so asking again about an
-object that has not changed costs a lookup; a failure read from the cache is said
-again as "remembered from an earlier run", and ``pc --cache-bypass qual test`` asks
+object that has not changed costs a lookup; a failure, or a finding reported and
+not failed (a **warning**, such as ``defects``'), read from the cache is said again
+as "remembered from an earlier run", and ``pc --cache-bypass qual test`` asks
 afresh. Asked about one object by name, a test may be stricter than when it is
 walked to as part of a package -- ``sim`` fails a simulation with no condition to
 check rather than skipping it.
@@ -148,12 +149,12 @@ Settings
 
 .. _test-manufacturability-additive:
 
-``manufacturability-additive``: Additive: a closed solid
---------------------------------------------------------
+``manufacturability-additive``: Additive: a closed solid to print
+-----------------------------------------------------------------
 
 **Applies to** a part with ``manufacturing: method: additive``. ``pc qual test -f manufacturability-additive <object>`` runs it alone.
 
-Whether a part to be printed is a closed solid: a body with no open edges, which is what a slicer needs to know what is inside it.
+Whether a part to be printed can be: its declaration can be read, and what is printed is a closed solid - a body with no open edges, which is what a slicer needs to know what is inside it. What is printed is the design the part names under ``manufacturing: source:``, or the part itself where it names none.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -163,8 +164,15 @@ Anything but a part, and a part made by any other method.
 When it fails
 ^^^^^^^^^^^^^
 
-* ``The shape is not solid``: the part has open edges - faces that do not meet. Close the model in the tool it comes from, or export it as a solid rather than as a surface.
+* ``The additive declaration says ...``: the ``fff:`` printer has a key it does not take or a value it cannot read, a printer's setting is written directly under ``manufacturing:`` instead of under ``fff:``, a cut's key is written on a printed part, or a ``visual:`` is written there rather than on the part itself; the sentence names which.
+* ``The design '...' it is printed from is not found``: fix the name under ``manufacturing: source:``.
+* ``The design '...' is not solid`` / ``The shape is not solid``: what is printed has open edges - faces that do not meet. Close the model in the tool it comes from, or export it as a solid rather than as a surface.
 * ``Failed to get the shape``: it did not build; see ``cad``.
+
+Settings
+^^^^^^^^
+
+``manufacturing:`` - ``source:`` (the design) and ``fff:`` (the printer: ``toolAxis`` or ``along``, ``nozzle``, ``filament``, ``layerHeight``, ``lineWidth``, ``walls``, ``topLayers``, ``bottomLayers``, ``infill``, ``infillPattern``, ``feed``).
 
 .. _test-manufacturability-subtractive:
 
@@ -306,6 +314,34 @@ Settings
 ^^^^^^^^
 
 ``manufacturing: cut:`` - ``toolAxis:`` (or ``along:``) and ``cuts:``, each a ``length`` and an optional axis of its own.
+
+.. _test-materialize:
+
+``materialize``: Made as it says it is
+--------------------------------------
+
+**Applies to** a part with ``manufacturing: method: additive``, ``subtractive`` or ``forming`` that names a ``source:`` and has a geometry of its own. ``pc qual test -f materialize <object>`` runs it alone.
+
+Whether a part is what its machine makes by following its instructions: the print its design's route deposits, what a router, a laser, a drill or a saw leaves of its stock, what a mold gives back of its cavity. ``pc cam --materialize`` writes that into the part's own file; this asks whether the file - or a model somebody drew, or an as-printed scan - still is it. Compared by volume and extent, within the part's tolerance; a print may also match its outside (its sections stacked up), which is what a part modelled solid is. A cut part or a molding that is the right size is compared by shape as well, since a hole moved across a plate changes neither: what either has that the other has not may be no deeper than the tolerance anywhere.
+
+A part that names several machines is held to what each of them makes, since each is a claim that it could be made that way.
+
+When it does not apply
+^^^^^^^^^^^^^^^^^^^^^^
+
+Anything but a part; a part made some other way or naming nothing it is made from; and a part with no geometry of its own - no ``type:``, no file yet - which \*is\* what its machine makes. Nor a cut part that names no machine and no job, which no machine makes anything of; or a router, a laser or a drill cutting a part along its own geometry (no ``instructions:``), which is then the design the machine follows rather than a claim about what it leaves - a pocket leaves the stock with the part taken out of it, and a profile leaves the part less what a 2.5-axis route cannot cut, which ``pc cam`` warns about as it routes it.
+
+When it fails
+^^^^^^^^^^^^^
+
+* ``It is not the size its machine makes it`` / ``It is not what its machine makes`` / ``It is not the shape its machine makes``: the file is from other settings, another design or another stock. The last says where the first difference found is, and how deep. Run ``pc cam --materialize`` to write what the machine makes now, or fix the manufacturing settings.
+* ``It could not be compared with what its machine makes``: the boolean between the two failed; the sentence says why.
+* ``What its machine makes could not be worked out``: see ``pc cam`` for the route; the sentence says why.
+
+Settings
+^^^^^^^^
+
+``manufacturing:`` - ``source:``, ``instructions:`` and the machine's subsection; the part's ``tolerance``.
 
 .. _test-connect:
 
@@ -500,14 +536,14 @@ It does not fail. When it says ``the geometry is a solid but not a well formed o
 ``cam``: A machine route can be produced
 ----------------------------------------
 
-**Applies to** parts and sketches that name a machine to be cut on. ``pc qual test -f cam <object>`` runs it alone.
+**Applies to** parts and sketches that name a machine to be cut or printed on. ``pc qual test -f cam <object>`` runs it alone.
 
-Whether the program a machine cuts the object with can be produced: for every ``cnc:``, ``laser:`` or ``drill:`` machine it names, the post-processor that machine uses writes a route, and the route is thrown away. The same code as ``pc cam``.
+Whether the program a machine makes the object with can be produced: for every ``cnc:``, ``laser:``, ``drill:`` or ``fff:`` machine it names, the post-processor that machine uses writes a route, and the route is thrown away. The same code as ``pc cam``.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 
-An object that names no machine to be routed on - nothing under ``manufacturing:`` asks for one, or only a ``cut:`` machine, which needs no program.
+An object that names no machine to be routed on - nothing under ``manufacturing:`` asks for one, or only a ``cut:`` or a ``mold:``, neither of which runs a program.
 
 When it fails
 ^^^^^^^^^^^^^

@@ -964,6 +964,68 @@ at all).
   manufacturing pages repeat each part's instructions as text (`manufacturing_instructions.py`) and draw its
   route from above where one can be produced (`cam_preview.py`).
 
+- **A printed part names its design, not its stock, and its printer is a machine** (`part_config_manufacturing.py`,
+  `qual/basic/manufacturability_additive_solid.py`, `visual.py`; design record `docs/design/additive.md`):
+  `additive`'s `source:` is the *design* -- what is printed, what the tolerance is measured against, what a print
+  service is sent -- and never stock, so `procurement.stock_name` is None for a printed part whatever it names.
+  Optional: a part naming none is its own design, as every printed part was before. The part itself is the
+  *print*: the design as the printer makes it, which is what it weighs.
+
+  **The design is the part's default visual** (`visual.design`): a printed or molded part that names a design and
+  no `visual:` of its own is drawn as the design wherever a picture is drawn, by devel's one substitution path
+  (`visual_of_async`) -- with a geometry of its own or without one. A reference inherits as before.
+  `manufacturing: visual:` is refused with a sentence pointing at the part-level key.
+
+  **`fff:` is a machine** (`MACHINE_FFF`, `PRINTERS`), read by `MachineConfig` and `_read_machine` like `laser:`:
+  its own keys are the axis (`toolAxis`/`along` -- the build orientation, oriented by `pc cam` the way a cut is),
+  `nozzle` and `filament` (a laser's `kerf`'s kind); its job keys are `pc cam`'s `feed` and the printer's own
+  names where a cut has no word (`layerHeight` ~ `depth_per_pass`, `lineWidth` ~ the width the path leaves,
+  `walls` ~ repeated `profile`, `infill` ~ a pocket's `stepover` inverted, `infillPattern` ~ `operation`,
+  `topLayers`/`bottomLayers`). An error in it is `machine_error`, so `pc cam` visits it as it visits a broken
+  `laser:`. It is in `ROUTED_MACHINES`: `//builtin/cam/cam_fff.py` writes its route (sections by `_faces_at`,
+  island-safe offsets and hatching by Clipper -- `pyclipper`, because OCCT's face offset drops a hole at
+  tangency), and `cam.declared_config` hands it `PRINT_KEYS` over `settings()`'s defaults. A printed part that
+  names no printer gets an undeclared one (`declared=False`), as a cut part naming no machine gets CNC: `pc cam`
+  over a package passes it over and `-m fff` routes it. Nothing is shared directly under `manufacturing:` for a
+  print: a printer's key there is reported as "write it under 'fff:'". The forming method's machine is `mold:`
+  (`FORMERS`), whose one key is `shrinkage`; it and `cut:` are `_UNROUTED` -- `unrouted_reason` says why -- and
+  are asked for their product alone (`Shape._product_run_async`).
+
+- **A part with no geometry of its own is what its machine makes** (`part_config_manufacturing.implied_type`,
+  `part_factory_manufactured.py`, `builtin/cam/cam_product.py`, `Shape.materialize_async`,
+  `qual/basic/materialize.py`): a print or a molding naming its `source:`, or a cut naming its stock and its
+  `instructions:`, with no `type:` -- or `type: brep|step|sdf`, which says only what its file is kept in -- is
+  normalized to `type: manufactured` with `implied_type` holding the format. Its factory (`create`) hands the
+  part to that format's own factory when the file (`path:`, else `<name>.<ext>`) exists, and otherwise makes it
+  on demand: `PartFactoryManufactured` calls `materialize_async`, which asks the same `pc cam` implementation
+  for the route with `materialize: true` and gets back the product beside it -- `cam_fff.deposit` (the route's
+  footprints stroked at the line spacing, extruded per layer, a compound never fused), `cam_product.removal`
+  (stock minus the swept tool, keeping what lies inside the outline by bounding box), `drilled`, `sawn`,
+  `molded` -- in the part's frame. `type: sdf` asks for `sdf_script` instead, a script whose field is the
+  route's beads, meshed by `PartFactoryManufacturedSdf` (a `PartFactorySdf`) at half a layer. The part's key
+  is seeded with its `manufacturing:` section and its references' keys (it is left out of every shape's hash
+  otherwise), and it borrows the design's or the stock's CMF (`LENT_CMF`) where it states none.
+  `pc cam --materialize` (`cam.route` with `materialize`) writes the product into the file; the `materialize`
+  check compares a part that has a geometry of its own with the product by recorded volume and bounding box,
+  never a boolean -- a print is tens of thousands of prisms. A part with a `fileUrl:`, or a cut with no
+  `instructions:`, keeps its own file. A print or an unshrunk molding has its design's ports (`_lend_ports`, an
+  alias's `_SourcePorts`) unless it declares its own.
+
+  **An analysis meshes a print's design, at the print's density** (`cae_material.py`): `subject_async` swaps the
+  design in for a part that is what its printer makes, with the fraction of the design it deposits (the two
+  recorded volumes) -- worked out *before* `_analysis_run_async` takes the part's lock, because building the print
+  routes it and the route takes that lock from another task. `fill` hands the implementation the part's material
+  (`Material.youngs_modulus`/`poissons_ratio`/`yield_strength`/`density`, `material.ANALYSIS_FROM_MATERIAL`) for
+  every parameter of that name it takes and nothing above its own layer states (`Shape._analysis_stated`), and
+  scales stiffness, strength and density by the fraction.
+
+  `PRINT_DEFAULTS` (`MachineConfig.settings`) is for working something out; instructions and the cart carry only
+  what the part states (`PartConfigManufacturing.print_data`, sent as the cart item's `manufacturing`).
+
+  Material stays CMF: the manufacturing section takes none. A type-less printed part is lent its design's
+  material by its factory (`_lend_cmf`); the manufacturer provider is sent the design's STEP, not the part's own
+  geometry.
+
 - **Build vs Buy decides the build plan, and the plan decides the instruction book** (`build_plan.py`): the
   tree of an object's line items says what each can be (bought, built, both, neither); `effective_choice` is
   the user's choice where both are possible and "buy" until they make one, the same default `procurement`
@@ -1722,6 +1784,26 @@ at all).
   that grows by a washer keeps its deflection, and every shape in it stays a hit. Down, so a preview is at most
   a step (about a fifth) finer than the budget and never coarser; written from its digits, so it is the same
   float -- and the same key -- on every machine.
+
+  **There are two budgets, and the Digital Thread's "Extra details" box picks one** (`shape_gltf.DETAILS`:
+  `low` is the half pixel and 0.4 rad above, what a preview always was; `high` an eighth of a pixel and 0.2
+  rad). Which one, and whether the parts in a tree are drawn as their visuals, is `cam_view.representation`:
+  the box ticked (the default for a part or a sketch) is the object as it is, finely; cleared (the default for an
+  assembly, a scene, an interface) it is visuals at the preview's budget. A part made by following a route
+  (`cam_view.MADE_METHODS`) is the exception: ticked, it is what its machine makes -- planar beads a finer budget
+  makes no finer -- so it stays at `low`, and its hidden faces are left out (`shape_visible`, below). The level
+  is part of every tessellation's key through the tolerances, so the two never answer for each other.
+
+  **A print is drawn with only the faces something can see** (`shape_visible.visible_async` →
+  `wrappers/wrapper_visible.py`, asked by `get_representation(hidden_stripped=True)` for such a part, and by the
+  CAM tab). A deposit is tens of thousands of planar prisms, never fused; drawn whole, it is every layer lying on
+  the next and all of the infill, which nothing can see. The wrapper cuts it by the section solid by solid (a
+  box misses most of them, so only the ones it passes through go through a boolean), follows the empty space
+  layer by layer on a grid, and keeps a face only where what lies in front of it is open space with a way in
+  from outside -- the outside, a ring the cut opened, a layer with nothing over it. The wrapper's description
+  says exactly what that approximation keeps and drops; a shape that is not a deposit is cut as
+  `wrapper_section` cuts it. Cached on what it was handed, the section included; its glTF is then cached like
+  any other, per shape and per level of detail.
 
   **That size is read, not measured** (`shape_gltf.size_of`). Every shape a wrapper returned carries the box it
   was measured in as it was built (`metadata.measurements.bbox`), so sizing a tree is arithmetic over numbers

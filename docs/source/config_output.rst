@@ -853,6 +853,18 @@ it, saying which implementation and what to do about it:
       extension: glb
       reads: [force, gravity]   # a load's direction, and the part's own gravity
 
+**What the part is made of** fills the parameters of the substance. A parameter
+the implementation takes -- ``youngs_modulus``, ``poissons_ratio``,
+``yield_strength``, ``density`` -- that neither this section's layers nor the
+scenario's ``params:`` nor the run states is the part's material's, where it
+states it (``youngsModulus``, ``poissonsRatio``, ``yieldStrength`` and
+``density``; see :ref:`materials`); the implementation's own default is what is
+left when neither says. A statement here is about this analysis, and the
+material is a statement about everything made of it, so the narrower one wins.
+A part that is what its printer makes is analysed as its design, with the three
+of those that are per unit of volume scaled by the fraction of the design the
+printer deposits (see :ref:`additive`).
+
 ``wrapped`` is the part with every port's sketch imprinted on it, which is what
 makes an inlet smaller than its face a face of its own; ``faces`` index it in the
 order OCCT maps a shape's faces. ``cae_support``, beside the meta-wrapper and

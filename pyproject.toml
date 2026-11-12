@@ -651,6 +651,12 @@ sphinx-autobuild = [
 # can come to own one path.
 ocpsvg = "0.6.0"
 build123d = "0.11.1"
+# What '//builtin/cam' offsets and clips a printer's route with, and strokes a
+# route into what it removes or deposits ('cam_fff.py', 'cam_product.py'). Like
+# build123d, not a wheel dependency: the implementation runs in a sandbox that
+# installs it from the file type's 'pythonRequirements'. Here for the tests that
+# load those modules in process.
+pyclipper = "1.4.0"
 pyyaml = ">=6.0.1"
 # Pinned to match partcad/requirements.txt, which explains why. 1.18.2 is the
 # last pygit2 line that supports Python 3.10; 1.19 and later require 3.11.

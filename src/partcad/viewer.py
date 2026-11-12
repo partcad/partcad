@@ -70,7 +70,9 @@ def context(ctx, name=None):
     return _partcad_context
 
 
-async def show(ctx, tree, name=None, kind=None, package=None, tab=None, scenario=None, section=None):
+async def show(
+    ctx, tree, name=None, kind=None, package=None, tab=None, scenario=None, section=None, extra_details=None, cam=None
+):
     """Display one shape tree in the IDE's Digital Thread.
 
     'tree' is the object as 'Shape.get_representation(ctx, "gltf")' returns it:
@@ -89,6 +91,12 @@ async def show(ctx, tree, name=None, kind=None, package=None, tab=None, scenario
 
     'section' is the cross-section 'tree' was cut to ('partcad.shape_section'),
     or None for the whole object; the viewer keeps its sliders by it.
+
+    'extra_details' is what the 3D view's "Extra details" box said when 'tree'
+    was drawn ('partcad_ide_client.protocol.KEY_EXTRA_DETAILS'), and 'cam' the
+    machine and settings it is the product of, for the CAM tab
+    ('protocol.KEY_CAM'): see 'cam_view'. Both are passed on as they are, so
+    that the viewer knows what is on screen.
 
     Never raises: a show is a side effect of browsing a package, and neither a
     missing IDE nor a shape that will not tessellate should fail the command
@@ -122,6 +130,8 @@ async def show(ctx, tree, name=None, kind=None, package=None, tab=None, scenario
             tab=tab,
             scenario=scenario,
             section=section,
+            extra_details=extra_details,
+            cam=cam,
         )
         return True
     except client.ViewerNotAvailable as e:

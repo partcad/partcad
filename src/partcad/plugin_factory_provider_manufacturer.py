@@ -22,6 +22,39 @@ from .plugin_request_provider_order import ProviderRequestOrder
 from .plugin_request_provider_quote import ProviderRequestQuote
 
 
+async def _sent_geometry(ctx, object):
+    """What a manufacturer is sent the geometry of: a printed part's design, else the object itself.
+
+    A printed part's own geometry is the print -- or, until PartCAD works the
+    print out, whatever stands in for it, an as-printed mesh included -- and a
+    mesh is nothing anybody would hand to a slicer; what is printed is its
+    design, and that is what a print service slices (see
+    'part_config_manufacturing.ADDITIVE_REQUIRED'). A design that cannot be
+    found is reported by 'pc qual test', and the part's own geometry is sent
+    meanwhile rather than nothing.
+    """
+    from .part import Part
+    from .part_config import PartConfiguration
+    from .part_config_manufacturing import METHOD_ADDITIVE
+    from .qual.basic.manufacturability_reference import resolve_reference
+
+    if not isinstance(object, Part):
+        return object
+    try:
+        data = PartConfiguration.get_manufacturing_data(object)
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("No design for %s: %s" % (object.name, e))
+        return object
+    # Only a print: a molding's 'source:' is the cavity, which a mold that
+    # shrinks the part makes bigger than the part, and the part is what a
+    # molder quotes and makes. Its own geometry is that part.
+    design = data.design if data is not None and data.method == METHOD_ADDITIVE else None
+    if not design:
+        return object
+    found = await resolve_reference(ctx, object, design, "part")
+    return found if found is not None else object
+
+
 @telemetry.instrument()
 class PluginFactoryProviderManufacturer(PluginFactoryProvider):
     def __init__(self, ctx, source_project, target_project, config):
@@ -87,6 +120,7 @@ class PluginFactoryProviderManufacturer(PluginFactoryProvider):
             if object is None:
                 pc_logging.error(f"Part or assembly '{cart_item.name}' not found")
                 return
+            object = await _sent_geometry(self.ctx, object)
             with tempfile.TemporaryDirectory() as tmp_dir:
                 filepath = os.path.join(tmp_dir, "cart_item.step")
                 await object.render_async(self.ctx, format_name="step", filepath=filepath)

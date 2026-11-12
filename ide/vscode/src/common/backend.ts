@@ -541,6 +541,11 @@ class JsonRpcBackend implements PartcadBackend {
         // which the daemon sends over the viewer protocol like any show. The
         // name is the one it was shown under, parameter values and all, and the
         // kind is said rather than looked up, as the panel knows it.
+        //
+        // And how it is drawn: the 3D tab's "Extra details" box ('extra_details'),
+        // and the CAM tab's drawing of what the part's machine makes with the
+        // settings it is trying ('cam'). Each is sent only when the panel says:
+        // left out, the daemon draws the object as the box starts out for it.
         reg('partcad.showSection', (a) =>
             this.send(
                 'inspect.object',
@@ -549,7 +554,24 @@ class JsonRpcBackend implements PartcadBackend {
                     object: a.name,
                     ...(a.kind && a.kind !== 'part' ? { [a.kind]: true } : {}),
                     section: a.section ?? null,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    ...(typeof a.extraDetails === 'boolean' ? { extra_details: a.extraDetails } : {}),
+                    ...(a.cam ? { cam: a.cam } : {}),
                 },
+                a.cancellation,
+            ),
+        );
+        // The Digital Thread's CAM tab: what a part's machine is and every setting
+        // it takes ('cam.settings', a read of the declaration and the schema), and
+        // its Save, which writes them into the part's 'partcad.yaml' and makes the
+        // part's materialized file again where it has one ('cam.save').
+        reg('partcad.camSettings', (a) =>
+            this.send('cam.settings', { package: a.pkg, object: a.name }, a.cancellation),
+        );
+        reg('partcad.camSave', (a) =>
+            this.send(
+                'cam.save',
+                { package: a.pkg, object: a.name, machine: a.machine, settings: a.settings ?? {} },
                 a.cancellation,
             ),
         );

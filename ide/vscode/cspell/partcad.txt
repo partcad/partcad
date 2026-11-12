@@ -28,6 +28,7 @@ binaries
 binary
 bool
 boolean
+bottom
 brep
 build
 cache
@@ -133,6 +134,8 @@ feature
 features
 feed
 feedback
+fff
+filament
 file
 filter
 finish
@@ -183,6 +186,7 @@ imports
 in
 include
 inertia
+infill
 inherits
 inner
 instance
@@ -211,10 +215,13 @@ kind
 kinds
 km
 laser
+layer
+layers
 ldraw
 lead
 length
 limits
+line
 links
 load
 local
@@ -245,6 +252,8 @@ min
 mjcf
 mm
 model
+modulus
+mold
 motion
 move
 mu
@@ -254,6 +263,7 @@ name
 nm
 node
 noun
+nozzle
 obj
 object
 of
@@ -284,6 +294,7 @@ pass
 patch
 path
 paths
+pattern
 pc
 pcb
 peck
@@ -295,6 +306,7 @@ plunge
 png
 poc
 pocket
+poissons
 port
 ports
 position
@@ -346,6 +358,7 @@ self
 shared
 sheet
 show
+shrinkage
 side
 sided
 sim
@@ -375,6 +388,7 @@ stiffness
 stl
 stop
 store
+strength
 strict
 string
 subfolder
@@ -398,6 +412,7 @@ to
 tojson
 tolerance
 tool
+top
 topology
 torque
 track
@@ -438,3 +453,5 @@ with
 wrapper
 xor
 yd
+yield
+youngs

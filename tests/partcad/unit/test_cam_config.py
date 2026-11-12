@@ -351,21 +351,21 @@ def test_what_describes_the_file_is_not_an_object_key():
     "stray",
     [
         {"diameter": 6},
-        {"feed": 1200},
         {"cnc": {"diameter": 6}},
         {"laser": {"kerf": 0.1}},
-        {"implementation": "p:gcode"},
     ],
 )
 def test_a_method_that_describes_no_cut_refuses_the_keys_that_do(stray):
-    """`additive` takes no machine and no job, and says so rather than ignoring it.
+    """`additive` takes no cutting machine and no cut, and says so rather than ignoring it.
+
+    Its machine is a printer, `fff:`, which takes the keys a printer reads -- a
+    `feed:` among them, under `fff:` rather than shared (see `test_additive.py`).
 
     Nothing reads a cut from a printed part, so a `diameter:` written on one is
     a number somebody chose and nothing acts on -- which is the failure the move
     out of the object's `cam:` section was for, reappearing one level down. A
-    printer has feeds and speeds of its own; the day PartCAD writes a program
-    for one they will be a printer's keys in a printer's subsection rather than
-    a router's read by accident.
+    printer has feeds and speeds of its own, and they are a printer's keys in a
+    printer's subsection rather than a router's read by accident.
     """
     section = {"method": "additive"}
     section.update(stray)
@@ -378,6 +378,15 @@ def test_a_method_that_describes_no_cut_refuses_the_keys_that_do(stray):
         cam.declared_config(shape)
     assert "'method: additive' describes no cut" in str(raised.value)
     assert list(stray)[0] in str(raised.value)
+
+
+def test_a_key_a_printer_takes_is_sent_to_its_subsection():
+    """`implementation:` names who writes a printer's route too, and is written under `fff:` like its other keys."""
+    shape = _Shape({"manufacturing": {"method": "additive", "implementation": "p:gcode"}})
+    assert cam.declares_job(shape) is True
+    with pytest.raises(cam.CamConfigError) as raised:
+        cam.declared_config(shape)
+    assert "write it under 'fff:'" in str(raised.value)
 
 
 def test_the_same_keys_are_read_where_something_does_cut():

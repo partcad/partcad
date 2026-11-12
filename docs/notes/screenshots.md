@@ -24,6 +24,8 @@ up to date.
 | `dt-design-3d.png` | The same object's **3D** tab with the **view panel** out: the gizmo, the axis views, the viewpoint with its projection, and the sections | `docs/source/digital_thread/lifecycle/design_3d.rst` | `shoot.mjs dt-design-3d` |
 | `dt-design-2d.png` | Its **Design > 2D** tab: the object rendered to a picture, with the format chooser and **Save…** | `docs/source/digital_thread/lifecycle/design_2d.rst` | `shoot.mjs dt-design-2d` |
 | `dt-design-draft.png` | Its **Design > Draft** tab for `feature_interface:example-bracket`: a dimensioned drawing, with **Drawn by** above it | `docs/source/digital_thread/lifecycle/design_draft.rst` | `shoot.mjs dt-design-draft` |
+| `dt-design-3d-extra-details.png` | The **3D** tab with **Extra details** ticked, of a printed part cut through along Y: its walls, skins and the infill the cut opens. Of a package of two parts, below - not of one in the repository | `docs/source/digital_thread/lifecycle/design_3d.rst` | by hand, see below |
+| `dt-design-cam.png` | The **CAM** tab of the same part with `infill` tried at 35%: how it is made, the printer's settings, and the print cut through | `docs/source/digital_thread/lifecycle/design_cam.rst` | by hand, see below |
 | `dt-analysis.png` | Its **Analysis > FEA** tab for `feature_cae:cantilever`, which declares `fea:` scenarios | `docs/source/digital_thread/lifecycle/analysis.rst`, `analysis_fea.rst` | `shoot.mjs dt-analysis` |
 | `dt-analysis-dynamic.png` | Its **Analysis > Dynamic FEA** tab for the same part's `clamped` scenario | `docs/source/digital_thread/lifecycle/analysis_dynamic.rst` | `shoot.mjs dt-analysis-dynamic` |
 | `dt-analysis-thermal.png` | Its **Analysis > Heat Transfer** tab for the same part's `tip-heated` scenario | `docs/source/digital_thread/lifecycle/analysis_thermal.rst` | `shoot.mjs dt-analysis-thermal` |
@@ -39,6 +41,19 @@ up to date.
 | `sim-example-arm.png` | The same tab for `feature_simulate_fea:arm`, the run an FEA scenario is written from | `docs/source/digital_thread/lifecycle/simulation.rst` | `shoot.mjs sim-example-arm` |
 | `plugin-part-type.png` | `produce_part_wrapper:demo`, a part built by a `partTypes:` plugin | `docs/source/plugins/part_types.rst` | `shoot.mjs plugin-part-type` |
 | `plugin-repository.png` | `plugin_repository_basic`'s `example:bolt`, a part served by a `repositories:` plugin rather than by a file | `docs/source/plugins/repositories.rst` | `shoot.mjs plugin-repository` |
+| `tutorial-stand-01-package.png` | The package `pc init` writes, open in the PartCAD IDE. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-01-package` |
+| `tutorial-stand-02-design.png` | The stand's design, `stand-design`, in the **3D** tab. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-02-design` |
+| `tutorial-stand-03-print.png` | The printed `stand` in section on its **3D** tab, its infill showing. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-03-print` |
+| `tutorial-stand-04-assembly.png` | `stand-with-block` in the **3D** tab. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-04-assembly` |
+| `tutorial-stand-05-simulation.png` | Its **Qualification > Simulation** tab: `stands` passed, **After** unfolded with its loads. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-05-simulation` |
+| `tutorial-stand-06-cli-simulation.png` | The same simulation in the IDE's terminal, and the `after.yaml` it wrote. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-06-cli-simulation` |
+| `tutorial-stand-07-scenario.png` | `partcad.yaml` at the stand's FEA scenario, as `sim-assembly-fea` writes it. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-07-scenario` |
+| `tutorial-stand-08-yaml.png` | The same scenario with `params: {max_displacement: 1.0}` added by hand. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-08-yaml` |
+| `tutorial-stand-09-fea-fails.png` | The stand's **Analysis > FEA** tab at 10% infill: failed, sagging past 1 mm. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-09-fea-fails` |
+| `tutorial-stand-10-cli-fails.png` | `pc qual test -f fea :stand` failing in the terminal. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-10-cli-fails` |
+| `tutorial-stand-11-cam.png` | The stand's **Design > CAM** tab with the infill raised to 40%, in section. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-11-cam` |
+| `tutorial-stand-12-cli-passes.png` | The same check passing at 40%. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-12-cli-passes` |
+| `tutorial-stand-13-fea-passes.png` | The **FEA** tab at 40%: passed. Of the tutorial's package, `dev-tools/screenshots/tutorial-stand/`, as it stands at that step | `docs/source/tutorial_printed_stand.rst` | `shoot.mjs tutorial-stand-13-fea-passes` |
 | `docker-for-desktop.png` | Docker Desktop's "Containers" page, with a dev container running | `docs/source/contributing.rst` | by hand, see below |
 
 `architecture.png` and `logo.png` are drawings, not screenshots.
@@ -82,6 +97,34 @@ They are written straight into `docs/source/images/`; `PC_SCREENSHOT_OUT` writes
 extensions go. All of them together take about six minutes once PartCAD's caches are warm - longer on a first
 run, which fetches `//pub` and provisions the sandboxes.
 When one fails, the script leaves `failed.png` in the work directory: what the window looked like at the time.
+
+### With the PartCAD IDE, under Xvfb
+
+The tutorial's pictures (`tutorial-stand-*`) are of the PartCAD IDE, the standalone application, and they were
+taken on a machine with no desktop at all: a cloud container, under `Xvfb`. What that takes, beyond the above:
+
+1. **The IDE**, from the release (`partcad-ide-<version>-linux-x86_64.tar.gz`), unpacked anywhere.
+2. **The checkout's extension inside it.** The IDE carries the extension as a *built-in* one, and refuses to have a
+   built-in replaced (`--install-extension` says so), so replace the directory instead: unzip
+   `ide/vscode/partcad.vsix` and put its `extension/` folder where
+   `resources/app/extensions/partcad.partcad-official-<version>` is. Then `PC_SCREENSHOT_VSIX=builtin` tells the
+   script not to install anything.
+3. **A display**: `Xvfb :98 -screen 0 1920x1200x24 -nolisten tcp &` and `DISPLAY=:98`.
+4. **A short work directory.** The IDE's IPC socket lives in its profile, and a socket path longer than 107
+   characters fails with `listen EINVAL`. The script's default, `partcad-screenshots` in the temporary directory,
+   is short enough; a symbolic link from a short path to a long one is not a way round it, since the IDE resolves
+   it -- and the terminal pictures then show the long path.
+5. **Ports of its own**, if anything else on the machine drives an editor the same way:
+   `PC_SCREENSHOT_DEVTOOLS_PORT` and `PC_SCREENSHOT_IDE_PORT`.
+
+```bash
+export DISPLAY=:98 PC_SCREENSHOT_CODE=/opt/partcad-ide/partcad-ide PC_SCREENSHOT_VSIX=builtin \
+    PC_SCREENSHOT_SERVICE=$PWD/../../.venv/bin/partcad-json-rpc
+PATH=$PWD/../../.venv/bin:$PATH node shoot.mjs tutorial-stand-01-package   # and the rest of them
+```
+
+`pc` has to be on the `PATH`: the tutorial's terminal pictures run it. The editor runs as root in a container,
+and says `[Superuser]` in its title bar, so the pictures of the whole window are cut to below it.
 
 Look at every picture before committing it. They are PNGs, so they go through Git LFS: commit from a machine that
 has `git lfs install`ed (see the root `AGENTS.md`).
@@ -281,3 +324,30 @@ like it.
    is the one row.
 3. Size the window to 1920 x 1080, the size of the picture there now, and capture the window alone, without the
    desktop around it.
+
+## The printed part
+
+`dt-design-3d-extra-details.png` and `dt-design-cam.png` are of a package of two parts that is in no repository - a
+design, and a print of it with no geometry of its own:
+
+```yaml
+name: //camdemo
+parts:
+  block:
+    type: basic
+    cuboid: [20, 10, 5]
+  print:
+    desc: The block, printed
+    manufacturing:
+      method: additive
+      source: block
+      fff:
+        infill: 20%
+```
+
+They were taken with the helpers of `dev-tools/screenshots/vscode.mjs`, in the VS Code `npm test` downloads, under
+`Xvfb` with WebGL drawn by SwiftShader (`--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`, so
+that the view is lit as it is on a graphics card rather than painted flat): `print` selected and shown, Animate
+cleared and the view reset as `showStill` does, the view panel out, the low end of the **Y** section slider moved to
+the middle and let go; then the **CAM** tab, `35%` typed into **Infill**, and the picture taken once the panel was no
+longer busy.

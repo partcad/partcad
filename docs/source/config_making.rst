@@ -11,11 +11,12 @@ The ``manufacturing.method`` field says how a part is made:
 +------------------+-----------------------------------------------------------+
 | Method           | Meaning                                                   |
 +==================+===========================================================+
-| ``additive``     | Built up, e.g. 3D printed                                 |
+| ``additive``     | Built up, e.g. 3D printed -- see :ref:`additive`          |
 +------------------+-----------------------------------------------------------+
 | ``subtractive``  | Cut away from stock -- see :ref:`subtractive`             |
 +------------------+-----------------------------------------------------------+
-| ``forming``      | Shaped without adding or removing material                |
+| ``forming``      | Shaped without adding or removing material -- see         |
+|                  | :ref:`forming`                                            |
 +------------------+-----------------------------------------------------------+
 | ``sheet_metal``  | A flat piece bent to shape -- see :ref:`sheet-metal`      |
 +------------------+-----------------------------------------------------------+
@@ -28,6 +29,274 @@ together rather than made, and has a single method of its own -- see
 
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
+
+.. _manufactured-parts:
+
+A part that is what its machine makes
+-------------------------------------
+
+Three methods say what a part is made *from* and *how*, completely enough that
+the part itself follows: a print from the design it is a print of
+(:ref:`additive`), a molding from its mold's cavity (:ref:`forming`), a cut part
+from its stock and the drawing the machine goes round (:ref:`subtractive`). Such a
+part needs no geometry of its own. Leave ``type:`` out and it **is** what the
+machine makes by following its instructions -- the route ``pc cam`` writes for
+it, followed:
+
+.. code-block:: yaml
+
+  parts:
+    bracket-printed:
+      manufacturing:
+        method: additive
+        source: bracket          # the design
+        fff: {infill: 15%}       # what it is printed with
+
+    plate-cut:
+      manufacturing:
+        method: subtractive
+        source: sheet            # the stock
+        instructions: outline    # the drawing the router goes round
+        cnc: {diameter: 3 mm}
+
+    knob-molded:
+      manufacturing:
+        method: forming
+        source: knob-cavity      # the mold's cavity
+        mold: {shrinkage: 1.5%}
+
++-------------------+-----------------------------------------------------------+
+| Machine           | What the part is                                          |
++===================+===========================================================+
+| ``fff:``          | What the printer deposits along its route, bead by bead:  |
+|                   | its walls, its solid skins and its infill, empty between  |
+|                   | them. It weighs what is deposited, not what the design    |
+|                   | would.                                                    |
++-------------------+-----------------------------------------------------------+
+| ``cnc:``,         | What the tool leaves of the stock: the volume it sweeps   |
+| ``laser:``        | along its route taken away, and what a profile cut        |
+|                   | separates -- the offcut around the part, the slug in a    |
+|                   | hole -- left on the bed.                                  |
++-------------------+-----------------------------------------------------------+
+| ``drill:``        | The stock with every hole the drill's own cylinder.       |
++-------------------+-----------------------------------------------------------+
+| ``cut:``          | The stock with everything beyond each of its cuts taken   |
+|                   | off.                                                      |
++-------------------+-----------------------------------------------------------+
+| ``mold:``         | The cavity, shrunk by ``shrinkage`` as the material cools |
+|                   | (about the part's origin).                                |
++-------------------+-----------------------------------------------------------+
+
+Until it is written down, PartCAD works it out on demand: the same ``pc cam``
+implementation that writes the route is asked what following it makes, in a
+sandbox, and the answer is cached like any other part's, under a key that covers
+the design, the stock and every setting of the machine. A print or a molding is
+**drawn** as its design -- what the designer had in mind -- unless it names a
+:ref:`visual <part-visual>` of its own; what a section through it shows is the
+part. A molding whose mold shrinks it is the exception: its cavity is bigger
+than it by what it shrinks, so it is drawn as itself.
+
+**Materializing it.** ``pc cam --materialize`` (see :ref:`cam`) writes what the
+machine makes into the part's own file, and from then on that file is the part:
+read like any other, and not worked out again.
+
+- The file is the part's ``path:`` where it states one, and its name with the
+  format's extension where it does not: ``bracket-printed.brep``.
+- ``brep`` is what a part that says nothing is kept as. ``type: step`` keeps it
+  as STEP instead, and ``type: brep`` says the default out loud; either way the
+  part is still worked out on demand until the file is there.
+- ``type: sdf`` keeps a print as a **signed distance field** rather than a
+  B-rep: a script whose field is the route's beads, each the stadium a nozzle
+  lays, meshed by the ``sdf`` part type at half a layer (its ``step``
+  parameter). Its surface is smoother where beads meet, and its mesh grows with
+  the length of the route -- a print of any size is far heavier as a mesh than
+  as the B-rep of its layers. Only a print has one; a cut or a molding is a
+  solid.
+
+A part that writes any other ``type:`` -- an as-printed model from a slicer or a
+scan, a part somebody drew -- has a geometry of its own and keeps it, and so
+does a part fetched from a ``fileUrl:``. Either way, ``pc qual test`` holds a
+part that has one to what its machine makes (the ``materialize`` check): the
+same extent within the part's tolerance, and the same volume within that
+tolerance over its surface. A part modelled solid and printed with infill
+passes on its outside -- the print's layers stacked up -- since that is what it
+looks like, if not what it weighs. A cut part or a molding is compared by shape
+as well, since a hole moved across a plate changes neither its extent nor its
+volume: what either has that the other has not may be no deeper than the
+tolerance anywhere. A part with no geometry of its own *is* the product, and
+has nothing to compare.
+
+.. _additive:
+
+Additive
+--------
+
+``additive`` is the method that builds a part up, layer by layer, out of nothing
+but its material: a 3D printer. It is the one method whose ``source`` is not
+something that goes into the machine. A brake is handed a blank and a router a
+piece of stock, but a printer is handed a **design** -- the solid the designer
+had in mind -- and what comes out is that design as the process can make it: a
+skin a few lines thick, a top and a bottom a few layers deep, and the inside
+filled at the density the print says. So a printed part may name the design
+apart from itself, and say how it is filled:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:                  # the design: what the designer had in mind
+      type: build123d
+      path: bracket.py
+      manufacturable: false   # a design is not made on its own: its prints are
+      parameters:
+        material:
+          type: string
+          default: //pub/std/manufacturing/material/plastic:petg
+        tolerance:
+          type: float
+          default: 0.2
+
+    bracket-printed:          # the bracket, printed
+      manufacturing:
+        method: additive
+        source: bracket       # the design; also what a picture of it draws
+        fff:                  # the printer: a machine, as cnc: and laser: are
+          toolAxis: -Z        # the nozzle comes down along -Z: printed as modelled
+          layerHeight: 0.2 mm
+          walls: 3
+          topLayers: 5
+          bottomLayers: 4
+          infill: 20%
+          infillPattern: grid
+
+- ``source`` -- *optional*. The design the part is a print of. It is what the
+  print is measured against (the tolerance is the design's), what a print
+  service is sent to slice, and what a picture of the part draws, unless the
+  part names a :ref:`visual <part-visual>` of its own. The part itself is the
+  *print*: the design as the process makes it, which is what it weighs and what
+  a section through it shows. A part that names none **is its own design**,
+  which is what every ``additive`` part written before this meant:
+
+  .. code-block:: yaml
+
+    knob:
+      type: cadquery
+      manufacturing:
+        method: additive      # printed, and the design is the knob itself
+
+- **No** ``type``. A part that names a ``source`` design needs no geometry of its
+  own -- it is what the printer makes of the design -- so it may leave ``type:``
+  out (see :ref:`manufactured-parts`): it is then the print, bead by bead, with
+  the walls, the skins and the infill its ``fff:`` section says, and it weighs
+  what the printer deposits. ``pc cam --materialize`` writes it into
+  ``bracket-printed.brep``, or into a ``step`` or ``sdf`` file where ``type:``
+  says so. The design may be named with parameters, as any reference may
+  (``source: bracket;color=:orange``). A part that does write another ``type:``
+  -- an as-printed model imported from a slicer or a scan -- is that geometry,
+  is still drawn as its design unless it names a ``visual:``, and is held to what
+  the printer makes by the ``materialize`` check.
+- ``fff`` -- the **printer**, *optional*: a filament printer (fused filament
+  fabrication; ISO/ASTM 52900 "material extrusion", what most people call FDM).
+  It is the additive method's **machine**, named by adding its subsection
+  exactly as a subtractive part names ``cnc:`` or ``laser:``, and read the same
+  way: a printer follows a route layer by layer as a router does, laying a bead
+  along it where a router cuts one. So it takes a router's keys where they mean
+  the same thing and has its own where nothing in a cut does. Every setting is
+  optional; one left out is the printer's default:
+
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | Key               | What it is                                   | In ``pc cam``'s terms        | PrusaSlicer / Cura                  |
+  +===================+==============================================+==============================+=====================================+
+  | ``toolAxis``      | The axis the nozzle comes down along, in the | the same key, the same axis: | the orientation on the bed          |
+  | (or ``along``)    | design's frame: ``-Z`` (the default) prints  | ``pc cam`` orients a print   |                                     |
+  |                   | it as modelled, ``-Y`` on its back           | the way it orients a cut     |                                     |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``nozzle``,       | The nozzle's diameter and the filament's: the| a laser's ``kerf``: the      | ``nozzle_diameter``,                |
+  | ``filament``      | machine's own                                | machine's own property       | ``filament_diameter``               |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``layerHeight``   | How thick each layer is                      | ``depth_per_pass``, built up | ``layer_height``                    |
+  |                   |                                              | rather than cut down         |                                     |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``lineWidth``     | How wide each extruded line is               | the width the path leaves:   | ``extrusion_width`` /               |
+  |                   |                                              | a ``diameter``, a ``kerf``   | ``line_width``                      |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``walls``         | How many lines thick the sides are           | a ``profile`` around every   | ``perimeters`` /                    |
+  |                   |                                              | outline and hole, repeated   | ``wall_line_count``                 |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``infill``        | How full the inside is: ``20%`` or ``0.2``;  | a ``pocket`` whose           | ``fill_density`` /                  |
+  |                   | a bare number above 1 is refused             | ``stepover`` is one line     | ``infill_sparse_density``           |
+  |                   |                                              | over this                    |                                     |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``infillPattern`` | What the inside is filled with:              | ``operation``: concentric is | ``fill_pattern`` /                  |
+  |                   | ``concentric``, ``rectilinear``, ``grid``... | a pocket's rings             | ``infill_pattern``                  |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``topLayers``,    | How many layers under a top and over a       | nothing: a cut never asks    | ``top_solid_layers`` /              |
+  | ``bottomLayers``  | bottom are solid                             | what is above it             | ``top_layers`` (and ``bottom_``)    |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``feed``          | How fast the head moves while it extrudes    | ``feed``, the same key       | the print speeds                    |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+
+  Settings are the printer's and are written under it: an ``infill:`` or a
+  ``feed:`` directly under ``manufacturing:`` is an error that says where it
+  goes, and a cut's keys (``diameter:``, ``cnc:``...) are refused on a printed
+  part as on every method that makes no cut. Speeds other than the feed,
+  temperatures and cooling decide whether a print succeeds rather than what
+  shape it is, and are left to whoever prints it.
+
+  ``pc cam`` writes a printer's route as it writes a router's: ``<part>.nc``, in
+  G-code with relative extrusion (``M83``), one layer at a time from the bottom.
+  Each layer is the design's section half way up it, laid as its walls -- around
+  every outline and every hole, outermost first -- then a solid skin wherever a
+  top or a bottom is within ``topLayers`` or ``bottomLayers``, then the infill,
+  turning a quarter turn every layer. The built-in implementation draws
+  ``rectilinear``, ``grid``, ``lines`` and ``concentric`` infill and refuses any
+  other pattern rather than drawing a different one; a slicer package named by
+  ``implementation:`` can draw the rest. ``pc cam --json`` reports the layers,
+  the filament the route feeds, and the volume it deposits -- which, at the
+  material's density, is what the print weighs. A part that names no printer is
+  printed with the usual settings when it is asked for by name (``pc cam -m fff
+  :knob``), and passed over by ``pc cam`` over a package, as a part only a saw
+  cuts is.
+
+**What it is made of is its CMF, not its manufacturing section.** The filament
+is the part's ``material`` -- the CMF parameter every part type takes, stated on
+the design or passed to it with ``with:`` -- and its colour is the part's
+``color``. A ``manufacturing:`` section says how the part is made, and takes no
+``material:`` of its own: two places to say one thing are two answers that can
+disagree, and the material is what the rest of PartCAD -- weights, the CMF
+check, the exports, a supplier's cart -- already reads (see
+:ref:`colour, material and finish <cmf>`).
+
+**A design is not stock.** Nothing of it goes into the printer, so it is never
+procured: the bill of materials and ``pc supply`` count a printed part as made,
+from nothing it names, as before. A print service is sent the design's geometry
+and the print settings the part states (``request["cart"]`` item
+``manufacturing``), never the part's own geometry.
+
+``pc qual test`` checks that the declaration can be read and that the design is a
+closed solid (``manufacturability-additive``), and that a part with a geometry
+of its own is what the printer makes of the design (``materialize``).
+
+**An analysis of a print is an analysis of its design, at the print's density.**
+The print itself -- tens of thousands of beads that touch without sharing a node
+-- is nothing a mesher can mesh, so ``pc cae`` meshes the design and hands the
+solver the part's material scaled by the fraction of the design the printer
+deposits: walls, skins and infill together. Its stiffness, its strength and its
+density are each that fraction of the material's (see :ref:`cae-section`); the
+log says which fraction (``analysed as its design, 'bracket', at the 46% of it
+the printer deposits``). More infill is a stiffer, stronger, heavier part. The
+average credits a print's walls with less of a bending load than they carry, so
+it errs on the side of the part failing. A print has its design's ports, so
+the design's ``fix:`` and ``load:`` land where they would on the design.
+
+**In a simulation, a print collides as its design and weighs what it deposits.**
+A rigid body is its outside -- MuJoCo collides with a mesh's convex hull in any
+case -- and a print's tens of thousands of beads are more triangles than an
+engine reads from one mesh. So the scene a simulation is handed holds the
+design's geometry where the print is, with the print's own name, placement,
+mass, centre of mass and inertia.
+``docs/design/additive.md`` in the repository has how the print is worked out
+from the route, how far its volume is from what a real printer lays, and what
+each way of keeping it costs.
 
 .. _subtractive:
 
@@ -131,15 +400,16 @@ other rather than one overwriting the other. A part that really is machined in
 *stages* is not this: it is a chain of parts, each naming the previous one as
 its ``source``.
 
-**Only ``subtractive`` has a machine at all**, and the keys that describe a cut
-are refused everywhere else rather than accepted and never read. A ``diameter:``
-on a part that says ``method: additive`` is a number somebody chose and nothing
-acts on, which is the whole reason the job moved out of a section of its own --
-a printer has feeds and speeds too, and the day PartCAD writes a program for one
-they will be a printer's keys under a printer's subsection rather than a
-router's read by accident. A *sketch* is the one section with no ``method:`` in
-it: a drawing is not made out of anything, so it names the machine and the job
-and nothing else.
+**A machine belongs to the method that makes the part with it**: ``cnc:``,
+``laser:``, ``drill:`` and ``cut:`` to ``subtractive``, ``fff:`` to
+:ref:`additive <additive>`, ``mold:`` to :ref:`forming <forming>`. The keys that
+describe a cut are refused everywhere else rather than accepted and never read.
+A ``diameter:`` on a part that says ``method: additive`` is a number somebody
+chose and nothing acts on, which is the whole reason the job moved out of a
+section of its own -- a printer has feeds and speeds too, and they are a
+printer's keys under ``fff:`` rather than a router's read by accident. A
+*sketch* is the one section with no ``method:`` in it: a drawing is not made out
+of anything, so it names the machine and the job and nothing else.
 
 Every machine takes a ``toolAxis``, which is the axis the tool, the beam, the
 drill or the saw approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
@@ -201,6 +471,9 @@ would be a route written for a machine nobody owns.
 | Drilling       | A rapid to each round feature's centre, a plunge and a     |
 |                | retract, broken into steps where ``peck:`` says.           |
 +----------------+------------------------------------------------------------+
+| Printer        | Every layer's walls, skins and infill, with the filament   |
+|                | each move feeds (see :ref:`additive`).                     |
++----------------+------------------------------------------------------------+
 
 A ``cut:`` gets no program: a saw cutting stock to size is told where to cut
 and nothing else, and the part's declaration already says that. ``pc cam``
@@ -210,6 +483,30 @@ passes over a part that is only cut, and refuses ``-m cut``.
 the swarf) join the other :ref:`cam job keys <cam-section>`. A part declaring a
 ``toolAxis`` other than ``-Z`` is rotated into the machine's frame before the
 route is written, so the program is in the coordinates the part is fixtured in.
+
+**A part that is what the machine leaves of its stock.** ``instructions:`` names
+the drawing -- a sketch, or a part -- that the machine goes round instead of the
+part's own geometry, and a part that names one needs no geometry of its own:
+with no ``type:``, it is what the router, the laser or the drill leaves of its
+``source:`` stock along the route ``pc cam`` writes from that drawing (see
+:ref:`manufactured-parts`). A flat drawing is cut through the stock it lies on,
+from its top down, unless ``depth:`` says otherwise:
+
+.. code-block:: yaml
+
+  parts:
+    plate-cut:
+      manufacturing:
+        method: subtractive
+        source: sheet             # the stock, 6 mm
+        instructions: outline     # a sketch: the plate and its two holes
+        cnc:
+          operation: profile
+          diameter: 3 mm
+
+A cut that names no instructions is routed along its own file, and so has to
+have one. So does one that names a drawing and says nothing about how it is cut
+-- no machine and no tool: there is no route to make it by.
 
 ``examples/produce_part_subtractive`` is the whole of the above in one package:
 two stocks, a laser-cut blank and gasket, a routed block whose chamfer is the
@@ -274,6 +571,43 @@ that the part does not is a notch, a hole or a cut in the wrong place; and a cut
 that takes nothing off the stock is one that misses it -- usually a length
 longer than the board, or an axis pointing the wrong way. Each of the three is a
 failure that says which plane it was about.
+
+.. _forming:
+
+Forming
+-------
+
+``forming`` shapes a part without adding or taking away material: it is molded,
+cast, pressed or forged. What it can say is the cavity it is formed in, and the
+mold that forms it:
+
+.. code-block:: yaml
+
+  parts:
+    knob-cavity:              # the mold's cavity: the part as designed
+      type: build123d
+      path: knob.py
+      manufacturable: false
+
+    knob:
+      manufacturing:
+        method: forming
+        source: knob-cavity
+        mold:
+          shrinkage: 1.5%     # how much smaller it comes out, along every axis
+
+- ``source`` -- *optional*. The cavity the part is formed in: like a print's
+  design, what the designer had in mind and what a picture of the part draws
+  unless it names a ``visual:`` -- as long as the mold does not shrink it. A
+  molding that shrinks is smaller than its cavity, so a picture draws the part
+  itself, and the part connects where it says rather than where the cavity's
+  ports are. A part that names a cavity needs no ``type:`` of its own (see
+  :ref:`manufactured-parts`): it is the cavity, shrunk.
+- ``mold`` -- *optional*. The mold. It runs no program, so ``pc cam`` writes
+  nothing for it and refuses ``-m mold``; what it says is ``shrinkage``, the
+  fraction the material shrinks by as it cools (``1.5%`` or ``0.015``, applied
+  about the part's origin). A mold that says nothing gives back its cavity as it
+  is.
 
 .. _sheet-metal:
 
@@ -486,7 +820,8 @@ to be procured is what it is made *from*: the ``source:`` of its
 ``manufacturing:`` section, which is procured by the same rule in turn -- a
 bracket bent from a blank that is cut from a sheet is procured as the sheet. A
 part made from nothing it names (``additive``, ``forming``) needs nothing
-procured at all.
+procured at all -- and a printed part's ``source:`` is its design, which is not
+stock (see :ref:`additive`).
 
 - **The bills of materials** list every part that goes into the assembly, and
   beside them a **Stock** section: what the made parts are made from, one piece
@@ -645,6 +980,9 @@ can do applies to it. What it is, is a set of facts about a substance:
       url: <(optional) where to read about it>
       density: <(optional) density in kg/m^3>
       viscosity: <(optional) dynamic viscosity in Pa*s>
+      youngsModulus: <(optional) Young's modulus in Pa>
+      poissonsRatio: <(optional) Poisson's ratio, dimensionless>
+      yieldStrength: <(optional) yield strength in Pa>
       mu: <(optional) coefficient of sliding friction, dimensionless>
       tags: <(optional) a list of free-form tags, or a single tag>
 
@@ -691,6 +1029,16 @@ coefficients of a contact is in :ref:`sim-engines`.
   declare ``partcad: ">=..."`` for the first release that reads kg/m³, so an
   older PartCAD refuses them rather than weighing anything wrong, and a
   catalogue of your own should say the same.
+
+``youngsModulus``, ``poissonsRatio`` and ``yieldStrength`` are what an
+:ref:`analysis <cae-section>` of a part made of the material is handed: how
+stiff it is, how it narrows as it stretches, and the stress past which it does
+not spring back -- PLA is about ``3.5e+9``, ``0.36`` and ``5.0e+7``. In ``Pa``,
+not the ``GPa`` and ``MPa`` a datasheet prints, for the reason a density is in
+``kg/m^3``. Each fills the analysis parameter of the same name in
+``snake_case`` -- ``youngs_modulus``, ``poissons_ratio``, ``yield_strength``,
+and ``density`` -- where the implementation takes one and neither the package,
+the part, the scenario nor the run states it.
 
 ``viscosity`` is what a *fluid* states: how hard it resists being sheared, which
 is what a simulator drags a body moving through it with. It is the **dynamic**

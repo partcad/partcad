@@ -1135,7 +1135,7 @@ class Interface:
                 components.append(place_components(sketch_components, port_location(port)))
         return components
 
-    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP):
+    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP, detail=None):
         """This interface as a tree of nodes, with the geometry at each in 'form'.
 
         An interface is its ports, and each of those is drawn with a sketch that
@@ -1148,12 +1148,13 @@ class Interface:
 
         The same tree, and the same two forms, as any other shape - an interface is
         not a special kind of subject to whatever draws it. See
-        'Shape.get_representation'.
+        'Shape.get_representation', and so is 'detail', the level of detail of
+        the glTF form.
         """
         from . import port_sketches, shape_gltf
 
         tree = await port_sketches.attach_async(ctx, await self._tree_async(ctx))
-        return await shape_gltf.in_form_async(ctx, tree, form)
+        return await shape_gltf.in_form_async(ctx, tree, form, detail=detail)
 
     async def _tree_async(self, ctx, seen: set = None):
         """The BREP tree of this interface, built once and converted at the top.
@@ -1188,23 +1189,37 @@ class Interface:
         node.update(shape_ports.connection_metadata(self))
         return node
 
-    async def show_async(self, ctx=None, tab=None, scenario=None):
-        from . import viewer
+    async def show_async(self, ctx=None, tab=None, scenario=None, extra_details=None, detail=None):
+        """Show this interface in the Digital Thread: its ports, drawn with their sketches.
+
+        'extra_details' is the 3D view's "Extra details" box, which for an
+        interface only decides how finely its sketches are drawn; None is what
+        the box starts out as for one (see 'cam_view.representation').
+        """
+        from . import cam_view, viewer
 
         ctx = viewer.context(ctx, self.name)
         if ctx is None:
             return
 
+        drawn = cam_view.representation(self, extra_details, detail)
         tree = None
         try:
-            tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF)
+            tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF, detail=drawn.detail)
         except Exception as e:
             pc_logging.error(e)
 
         if tree is not None:
             await viewer.show(
-                ctx, tree, name=self.name, kind="interface", package=self.project.name, tab=tab, scenario=scenario
+                ctx,
+                tree,
+                name=self.name,
+                kind="interface",
+                package=self.project.name,
+                tab=tab,
+                scenario=scenario,
+                extra_details=drawn.extra_details,
             )
 
-    def show(self, ctx=None, tab=None, scenario=None):
-        asyncio.run(self.show_async(ctx, tab=tab, scenario=scenario))
+    def show(self, ctx=None, tab=None, scenario=None, extra_details=None, detail=None):
+        asyncio.run(self.show_async(ctx, tab=tab, scenario=scenario, extra_details=extra_details, detail=detail))

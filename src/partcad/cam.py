@@ -150,6 +150,24 @@ FEED_KEYS = ("feed", "plunge")
 NUMBER_KEYS = ("speed", "stepover", "power")
 KEYS = LENGTH_KEYS + FEED_KEYS + NUMBER_KEYS + ("operation", "direction", "implementation", "desc")
 
+# What a printer's job holds besides a router's 'feed': the settings that decide
+# what it deposits (see 'part_config_manufacturing.MACHINE_JOB_KEYS'), and the
+# filament its extrusion is counted in, which is the printer's own. Read and
+# converted by the printer's own subsection ('MachineConfig'), so they arrive
+# here as numbers and travel to the implementation as they are.
+PRINT_KEYS = ("layerHeight", "lineWidth", "walls", "topLayers", "bottomLayers", "infill", "infillPattern", "filament")
+
+# The request keys that ask an implementation for what the machine makes by
+# following the route, beside the route (see 'Shape.materialize_async'): the
+# flag, the stock a cut part is cut from, and the form wanted besides a shape.
+MATERIALIZE_KEY = "materialize"
+STOCK_KEY = "stock"
+REPRESENTATION_KEY = "representation"
+
+# What an implementation answers with, asked to materialize: the product as a
+# shape, as STEP text, and a print as an SDF script.
+PRODUCT_KEYS = ("product", "product_step", "sdf_script")
+
 
 def value_parsers() -> dict:
     """Which parser reads each key, for whoever holds a section of these.
@@ -404,12 +422,16 @@ class CamConfig:
         if not isinstance(config, dict):
             raise CamConfigError("'manufacturing:' is not a section: %r" % (config,))
 
-        unknown = [key for key in config if key not in KEYS]
+        unknown = [key for key in config if key not in KEYS and key not in PRINT_KEYS]
         if unknown:
             raise CamConfigError(
                 "'manufacturing:' does not take %s; it takes %s"
                 % (", ".join(sorted(unknown)), ", ".join("'%s:'" % key for key in KEYS))
             )
+        # A printer's settings: already read by its subsection, so as they are.
+        for key in PRINT_KEYS:
+            if config.get(key) is not None:
+                self.values[key] = config[key]
         if not config:
             # An object that declares the section and says nothing in it has
             # opted in to being routed and then described no route. The file
@@ -651,10 +673,9 @@ def declared_config(shape, machine: Optional[str] = None) -> Optional[dict]:
                 % (machine, ", ".join("'%s'" % kind for kind in data.machine_choices()) or "no machine")
             )
         if machine not in ROUTED_MACHINES:
-            raise CamConfigError(
-                "a '%s' runs no program: where it cuts is the whole of what it is told, and the part's own"
-                " declaration already says so" % machine
-            )
+            from .part_config_manufacturing import unrouted_reason
+
+            raise CamConfigError(unrouted_reason(machine))
     elif len(routed) > 1:
         raise CamConfigError(
             "it could be made on %s, so one of them has to be chosen" % " or ".join("'%s'" % kind for kind in routed)
@@ -669,6 +690,19 @@ def declared_config(shape, machine: Optional[str] = None) -> Optional[dict]:
     # cut, either by naming a machine or by declaring a job parameter. A
     # `subtractive` part that names neither has described what it is made from
     # and nothing about the making, so there is no route to write.
+    from .part_config_manufacturing import PRINTERS
+
+    if chosen is not None and chosen.kind in PRINTERS and (chosen.declared or machine is not None):
+        # A printer's job is every setting that decides what it deposits, the
+        # usual ones filling what the part leaves out: a printer told nothing
+        # still prints. One the part did not name is printed on only when it is
+        # asked for by name ('pc cam -m fff', 'pc cam --materialize').
+        # The machine's own settings -- its nozzle, its filament -- travel with
+        # the machine ('Shape._route_machine_data'), not with the job.
+        merged = {key: value for key, value in chosen.settings().items() if key in PRINT_KEYS}
+        merged.update(chosen.job_options())
+        return merged
+
     declared_machine = chosen is not None and chosen.declared
     if not declared_machine and not data.job:
         return None

@@ -20,11 +20,13 @@ from .part_config_manufacturing import (
     MACHINE_CNC,
     MACHINE_CUT,
     MACHINE_DRILL,
+    MACHINE_FFF,
     MACHINE_LASER,
     METHOD_ADDITIVE,
     METHOD_FORMING,
     METHOD_SHEET_METAL,
     METHOD_SUBTRACTIVE,
+    PRINTERS,
     PartConfigManufacturing,
 )
 
@@ -117,6 +119,8 @@ def _settings(options: dict) -> str | None:
 def _machine_lines(data: PartConfigManufacturing, kind: str) -> list:
     """How the part is made on one machine."""
     machine = data.machines[kind]
+    if kind in PRINTERS:
+        return _print_lines(machine)
     phrase = _MACHINE_PHRASES.get(kind, "on a '%s'" % kind)
     lines = []
     if kind == MACHINE_CUT:
@@ -138,6 +142,57 @@ def _machine_lines(data: PartConfigManufacturing, kind: str) -> list:
     return lines
 
 
+# The printer, as the sentence introducing it names it.
+_PRINTER_PHRASES = {
+    MACHINE_FFF: "on a filament printer (FFF)",
+}
+
+
+def _print_lines(machine) -> list:
+    """How the part is printed on one printer: what was said, and nothing assumed.
+
+    Only the settings the part states. What it leaves out is the printer's
+    default, and whoever prints it knows their printer's defaults better than
+    PartCAD's guess at them (see 'PRINT_DEFAULTS', which is for working
+    something out, not for telling somebody what to do). The axis only where it
+    is not the one every printer prints along: then it is how the part is laid
+    on the bed, which nobody can be left to guess.
+    """
+    said = machine.options
+    parts = []
+    for key, name in (
+        ("nozzle", "nozzle"),
+        ("filament", "filament"),
+        ("layerHeight", "layer height"),
+        ("lineWidth", "line width"),
+    ):
+        if said.get(key) is not None:
+            parts.append("%s %s mm" % (name, _number(said[key])))
+    for key, one, many in (
+        ("walls", "wall", "walls"),
+        ("topLayers", "top layer", "top layers"),
+        ("bottomLayers", "bottom layer", "bottom layers"),
+    ):
+        if said.get(key) is not None:
+            parts.append("%d %s" % (said[key], one if said[key] == 1 else many))
+    if said.get("infill") is not None:
+        infill = "infill %s%%" % _number(said["infill"] * 100.0)
+        if said.get("infillPattern"):
+            infill += " %s" % said["infillPattern"]
+        parts.append(infill)
+    elif said.get("infillPattern"):
+        parts.append("%s infill" % said["infillPattern"])
+    if said.get("feed") is not None:
+        parts.append("feed %s mm/min" % _number(said["feed"]))
+    sentence = "Print it %s" % _PRINTER_PHRASES.get(machine.kind, "on a '%s'" % machine.kind)
+    if machine.tool_axis and machine.tool_axis.strip().lower() not in ("-z",):
+        sentence += ", the nozzle working along the part's %s" % machine.tool_axis
+    lines = [sentence + ("; %s." % ", ".join(parts) if parts else ".")]
+    if said.get("desc"):
+        lines.append(str(said["desc"]).strip())
+    return lines
+
+
 def describe(data: PartConfigManufacturing, stock: str | None = None) -> list:
     """The manufacturing instructions of a part, one paragraph per entry.
 
@@ -154,7 +209,10 @@ def describe(data: PartConfigManufacturing, stock: str | None = None) -> list:
             sentence += ", along the bends drawn in `%s`" % data.instructions
         lines.append(sentence + ".")
     elif data.method == METHOD_ADDITIVE:
-        lines.append("Made additively (3D printed).")
+        if data.design:
+            lines.append("Printed from the design `%s`." % data.design)
+        else:
+            lines.append("Made additively (3D printed).")
     elif data.method == METHOD_FORMING:
         lines.append("Formed: molded, cast or pressed.")
 

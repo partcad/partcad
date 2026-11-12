@@ -47,6 +47,7 @@ import {
     trimmed,
     viewer,
     viewPanel,
+    webviewFrame,
     zoom,
 } from './vscode.mjs';
 
@@ -177,6 +178,315 @@ async function openViewer(page) {
 }
 
 const FEATURE_INTERFACE = ['feature_interface'];
+
+// The package docs/source/tutorial_printed_stand.rst builds, as it stands at its
+// step 11. Each picture is of a copy of it in the work directory, changed the
+// way the tutorial has changed it by then.
+const TUTORIAL_STAND = path.join(REPO, 'dev-tools', 'screenshots', 'tutorial-stand');
+
+/**
+ * The window below its title bar, as a rectangle to cut a screenshot to.
+ *
+ * The title bar names the folder, and -- where the editor runs as root, as it
+ * does in a container -- says '[Superuser]' after it, which is about the machine
+ * the picture was taken on and not about anything the picture shows.
+ */
+async function belowTitle(page) {
+    const title = await page.locator('.part.titlebar').first().boundingBox();
+    const size = page.viewportSize() ?? (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })));
+    const top = title ? title.y + title.height : 0;
+    return { x: 0, y: top, width: size.width, height: size.height - top };
+}
+
+/** A fresh copy of the tutorial's package, its 'partcad.yaml' put through 'change'. */
+function tutorialStand(change = (text) => text) {
+    const folder = path.join(WORK, 'printed-stand');
+    fs.rmSync(folder, { recursive: true, force: true });
+    fs.mkdirSync(folder, { recursive: true });
+    const yaml = fs.readFileSync(path.join(TUTORIAL_STAND, 'partcad.yaml'), 'utf8');
+    fs.writeFileSync(path.join(folder, 'partcad.yaml'), change(yaml));
+    fs.copyFileSync(path.join(TUTORIAL_STAND, 'stand-with-block.assy'), path.join(folder, 'stand-with-block.assy'));
+    return folder;
+}
+
+// Step 9 is the scenario as the skill writes it, which says nothing about how far
+// the stand may move; step 10 adds that by hand.
+const withoutParams = (text) => text.replace(/\n {8}params:\n(?: {10}.*\n)+/, '\n');
+// Step 13: printed denser.
+const denser = (text) => text.replace('infill: 10%', 'infill: 40%');
+
+/** The Digital Thread on 'object' of the tutorial's package, on the tab 'group'/'sub'. */
+async function tutorialObject(page, object, group, sub, { assembly = false, editor = 640 } = {}) {
+    await partcadView(page, ['Explorer']);
+    if (assembly) {
+        // An assembly's row opens its ASSY file in the editor group the
+        // Digital Thread would open in: selected first, the file goes there
+        // and the Digital Thread beside it.
+        await select(page, object, 1);
+    }
+    await openViewer(page);
+    await layout(page, { sidebar: 300, editor });
+    await showStill(page, object, 1);
+    if (group) {
+        await tab(page, group, sub, 8000);
+    }
+}
+
+/** Run 'line' in a terminal of its own, maximized, and wait for 'pattern'. */
+async function tutorialTerminal(page, line, pattern) {
+    await command(page, 'View: Close Primary Side Bar');
+    await command(page, 'Terminal: Create New Terminal');
+    await sleep(2000);
+    await command(page, 'View: Toggle Maximized Panel');
+    // Cleared first, on its own: a 'clear' on the same line would clear the
+    // command off the picture with everything else.
+    await terminal(page, 'clear');
+    await sleep(1000);
+    await terminal(page, line);
+    await terminalShows(page, pattern);
+    await sleep(2000);
+}
+
+// Where the stand's top is cut to show its inside: 62 mm up its 64, half way
+// through the top's 4 mm, between its solid skins. In the view panel's steps,
+// a thousand from the bottom of the object to its top.
+const THROUGH_THE_TOP = Math.round((62 / 64) * 1000);
+
+/**
+ * Cut the shown object with the Z slider of the view panel of 'pane' -- every tab that draws in 3D has a panel of
+ * its own -- and wait for the cut geometry to arrive.
+ */
+async function tutorialSection(page, pane = '3d') {
+    await viewPanel(page, true);
+    const frame = await viewer(page);
+    await slide(frame, `#pane-${pane} input[aria-label="Z to"]`, THROUGH_THE_TOP);
+    // The panel says it is cutting while the daemon works; the preview is up at
+    // once and the cut geometry replaces it when it comes.
+    const deadline = Date.now() + 900000;
+    for (;;) {
+        await sleep(3000);
+        const { busy, failed } = await frame.evaluate((id) => {
+            const notes = [...document.querySelectorAll(`#pane-${id} .view-note`)];
+            const error = notes.find((note) => note.classList.contains('error') && note.textContent.trim());
+            return {
+                busy: notes.some((note) => /cutting|loading/i.test(note.textContent)),
+                failed: error ? error.textContent.trim() : undefined,
+            };
+        }, pane);
+        // A cut that failed leaves what was drawn before on the stage: a picture
+        // of that is not a picture of the section.
+        if (failed) {
+            throw new Error(`the section could not be drawn: ${failed}`);
+        }
+        if (!busy) {
+            break;
+        }
+        if (Date.now() > deadline) {
+            throw new Error('the section never arrived');
+        }
+    }
+    await sleep(3000);
+    // Looked at more from above and closer, once the cut has arrived (a new
+    // geometry is fitted to the view): a line of infill is a millimetre wide,
+    // and the whole stand is 120.
+    await orbit(page, { up: 35 });
+    await zoom(page, 1.25);
+}
+
+/** The FEA tab of the stand, once it has run its scenario. */
+async function tutorialFea(page) {
+    await tutorialObject(page, 'stand', 'analysis', 'fea');
+    // Opening the tab runs the scenario: the print first, then the solver.
+    await filled(page, '.cae-model canvas');
+    await sleep(3000);
+}
+
+function tutorialStandShots() {
+    const name = (step) => `tutorial-stand-${step}`;
+    return {
+        // Step 1: the package 'pc init' writes, open in the IDE.
+        async [name('01-package')]() {
+            const folder = path.join(WORK, 'printed-stand-new');
+            fs.rmSync(folder, { recursive: true, force: true });
+            fs.mkdirSync(folder, { recursive: true });
+            spawnSync(PC, ['--no-ansi', 'init'], { cwd: folder, stdio: 'ignore' });
+            await inVSCode(folder, async (page) => {
+                await partcadView(page, ['Explorer']);
+                await openFile(page, path.join(folder, 'partcad.yaml'));
+                await layout(page, { sidebar: 300 });
+                await tidy(page);
+                await shot(page, out(name('01-package')), await belowTitle(page));
+            });
+        },
+
+        // Step 3: the design, solid, in the 3D view.
+        async [name('02-design')]() {
+            await inVSCode(tutorialStand(), async (page) => {
+                await tutorialObject(page, 'stand-design');
+                await tidy(page);
+                await shot(page, out(name('02-design')), await panel(page));
+            });
+        },
+
+        // Step 4: the print, cut through its top: walls, skins and the sparse
+        // infill between them.
+        async [name('03-print')]() {
+            await inVSCode(tutorialStand(), async (page) => {
+                await tutorialObject(page, 'stand');
+                // The names of its feet and its pad, which step 2 was about, are
+                // in the way of its inside, which this step is about.
+                const frame = await viewer(page);
+                await frame.evaluate(() => {
+                    for (const label of document.querySelectorAll('#pane-3d label.control-label')) {
+                        const box = label.querySelector('input[type="checkbox"]');
+                        if (box?.checked && /^(Port|Interface) names$/.test(label.textContent.trim())) {
+                            box.click();
+                        }
+                    }
+                });
+                await sleep(2000);
+                await tutorialSection(page);
+                await tidy(page);
+                await shot(page, out(name('03-print')), await panel(page));
+            });
+        },
+
+        // Step 6: the block on the stand.
+        async [name('04-assembly')]() {
+            await inVSCode(tutorialStand(), async (page) => {
+                await tutorialObject(page, 'stand-with-block', null, null, { assembly: true });
+                await tidy(page);
+                await shot(page, out(name('04-assembly')), await panel(page));
+            });
+        },
+
+        // Step 7: the simulation, passed, with what holds the assembly up.
+        async [name('05-simulation')]() {
+            await inVSCode(tutorialStand(), async (page) => {
+                await tutorialObject(page, 'stand-with-block', 'qualification', 'simulation', {
+                    assembly: true,
+                    editor: 260,
+                });
+                await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
+                const frame = await webviewFrame(page, 'button.simulation-detail-tab[data-detail="after"]');
+                await frame.locator('button.simulation-detail-tab[data-detail="after"]').first().evaluate((b) => b.click());
+                await sleep(1500);
+                // What the step is about is the loads, further down the state
+                // than the panel is tall: scrolled to, in whatever scrolls them.
+                await frame.evaluate(() => {
+                    const shown = [...document.querySelectorAll('pre, code')].find((e) => e.textContent.includes('"loads"'));
+                    if (!shown) {
+                        return;
+                    }
+                    const lines = shown.textContent.split('\n');
+                    const at = lines.findIndex((line) => line.includes('"loads"'));
+                    for (let box = shown; box; box = box.parentElement) {
+                        if (box.scrollHeight > box.clientHeight + 4) {
+                            box.scrollTop = (shown.scrollHeight / lines.length) * Math.max(at - 3, 0);
+                            break;
+                        }
+                    }
+                });
+                await sleep(500);
+                await tidy(page);
+                await shot(page, out(name('05-simulation')), await panel(page));
+            });
+        },
+
+        // Step 8: the same simulation in the terminal, and what it ended in.
+        async [name('06-cli-simulation')]() {
+            await inVSCode(tutorialStand(), async (page) => {
+                await tutorialTerminal(
+                    page,
+                    'pc --no-ansi qual test --simulation -a stand-with-block -f stands --after after.yaml 2>&1 | tail -3; cat after.yaml',
+                    /joints:/,
+                );
+                await tidy(page);
+                await shot(page, out(name('06-cli-simulation')), await belowTitle(page));
+            });
+        },
+
+        // Step 9: the scenario the skill adds, in the editor.
+        async [name('07-scenario')]() {
+            const folder = tutorialStand(withoutParams);
+            await inVSCode(folder, async (page) => {
+                await partcadView(page, ['Explorer']);
+                await openFile(page, path.join(folder, 'partcad.yaml'));
+                await lineOf(page, path.join(folder, 'partcad.yaml'), /^ {4}fea:/, /^ {8}gravity:/);
+                await tidy(page);
+                await shot(page, out(name('07-scenario')), await belowTitle(page));
+            });
+        },
+
+        // Step 10: the same, with how far it may move said by hand.
+        async [name('08-yaml')]() {
+            const folder = tutorialStand();
+            await inVSCode(folder, async (page) => {
+                await partcadView(page, ['Explorer']);
+                await openFile(page, path.join(folder, 'partcad.yaml'));
+                await lineOf(page, path.join(folder, 'partcad.yaml'), /^ {8}params:/, /max_displacement:/);
+                await tidy(page);
+                await shot(page, out(name('08-yaml')), await belowTitle(page));
+            });
+        },
+
+        // Step 11: the analysis, failed.
+        async [name('09-fea-fails')]() {
+            await inVSCode(tutorialStand(), async (page) => {
+                await tutorialFea(page);
+                await filled(page, '.cae-finding');
+                await tidy(page);
+                await shot(page, out(name('09-fea-fails')), await panel(page));
+            });
+        },
+
+        // Step 12: the check, failed, in the terminal.
+        async [name('10-cli-fails')]() {
+            await inVSCode(tutorialStand(), async (page) => {
+                await tutorialTerminal(page, 'pc --no-ansi qual test -f fea :stand; echo "exit status $?"', /exit status \d/);
+                await tidy(page);
+                await shot(page, out(name('10-cli-fails')), await belowTitle(page));
+            });
+        },
+
+        // Step 13: the CAM tab, the infill raised to 40% and not saved yet, cut
+        // through the top as in step 4.
+        async [name('11-cam')]() {
+            await inVSCode(tutorialStand(), async (page) => {
+                await tutorialObject(page, 'stand', 'design', 'cam');
+                await filled(page, '.cam-field');
+                const frame = await webviewFrame(page, 'input.cam-field[aria-label="Infill"]');
+                await frame.locator('input.cam-field[aria-label="Infill"]').evaluate((input) => {
+                    input.value = '40%';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+                // The print is made again with the new infill before anything is cut.
+                await sleep(5000);
+                await tutorialSection(page, 'cam');
+                await tidy(page);
+                await shot(page, out(name('11-cam')), await panel(page));
+            });
+        },
+
+        // Step 13: the check again, printed denser.
+        async [name('12-cli-passes')]() {
+            await inVSCode(tutorialStand(denser), async (page) => {
+                await tutorialTerminal(page, 'pc --no-ansi qual test -f fea :stand; echo "exit status $?"', /exit status \d/);
+                await tidy(page);
+                await shot(page, out(name('12-cli-passes')), await belowTitle(page));
+            });
+        },
+
+        // Step 14: the analysis, passed.
+        async [name('13-fea-passes')]() {
+            await inVSCode(tutorialStand(denser), async (page) => {
+                await tutorialFea(page);
+                await tidy(page);
+                await shot(page, out(name('13-fea-passes')), await panel(page));
+            });
+        },
+    };
+}
 
 const SHOTS = {
     // The README's picture of the extension: a package's assembly open in the
@@ -674,6 +984,10 @@ const SHOTS = {
 
     // Running the integration tests in the dev container, from VS Code's
     // terminal: docs/source/contributing.rst.
+    // The tutorial "A printed stand under load", a picture per step: see
+    // TUTORIAL_STAND below.
+    ...tutorialStandShots(),
+
     async 'vs-code-behave'() {
         await inVSCode(REPO, async (page) => {
             await command(page, 'View: Close Primary Side Bar');
@@ -690,13 +1004,41 @@ const SHOTS = {
     },
 };
 
-const vsix = process.env.PC_SCREENSHOT_VSIX ?? path.join(REPO, 'ide', 'vscode', 'partcad.vsix');
-if (!fs.existsSync(vsix)) {
-    throw new Error(`No ${vsix}: run 'npm run vsce-package' in ide/vscode first`);
+// 'builtin' for an application that carries the extension already -- the
+// PartCAD IDE, which refuses to have a built-in extension replaced: swap the
+// one under its 'resources/app/extensions' for the checkout's instead (see
+// docs/notes/screenshots.md).
+/**
+ * Select the lines of the editor's file from the first that matches 'pattern' to the first after it that
+ * matches 'until' (or that one line alone), so that the picture points at them.
+ */
+async function lineOf(page, file, pattern, until = null) {
+    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    const index = lines.findIndex((line) => pattern.test(line));
+    if (index < 0) {
+        throw new Error(`no line of ${file} matches ${pattern}`);
+    }
+    const last = until ? lines.findIndex((line, at) => at > index && until.test(line)) : index;
+    await command(page, 'Go to Line/Column...');
+    await page.keyboard.type(String(index + 1), { delay: 10 });
+    await page.keyboard.press('Enter');
+    await sleep(500);
+    await command(page, 'View: Scroll Line Up');
+    for (let at = index; at <= Math.max(last, index); at++) {
+        await page.keyboard.press('Control+L');
+    }
+    await sleep(800);
 }
+
+const vsix = process.env.PC_SCREENSHOT_VSIX ?? path.join(REPO, 'ide', 'vscode', 'partcad.vsix');
 fs.mkdirSync(WORK, { recursive: true });
 fs.rmSync(EXTENSIONS, { recursive: true, force: true });
-installExtension(CODE, PROFILE, EXTENSIONS, vsix);
+if (vsix !== 'builtin') {
+    if (!fs.existsSync(vsix)) {
+        throw new Error(`No ${vsix}: run 'npm run vsce-package' in ide/vscode first`);
+    }
+    installExtension(CODE, PROFILE, EXTENSIONS, vsix);
+}
 
 const wanted = process.argv.slice(2);
 for (const name of wanted.length ? wanted : Object.keys(SHOTS)) {

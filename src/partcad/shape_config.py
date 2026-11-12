@@ -155,10 +155,10 @@ def object_type_parameter(config: dict, accepted: dict, name: str, kind: str = "
     which is how 'PartConfigManufacturing' treats a manufacturing method it does
     not recognize.
 
-    Reads the configuration it is handed rather than the resolved final one, the
-    same as 'get_mcft()' does, so an alias reports what the alias itself
-    declares. That is a pre-existing property of that reader, not something
-    decided here.
+    Reads the configuration it is handed rather than the resolved final one, so
+    an alias reports what the alias itself declares. 'get_mcft()' used to read
+    the same way, and now falls back to what a reference points at for a value
+    the reference does not state; this reader was not changed with it.
     """
     if name not in accepted:
         # Not a parameter this type contributes at all.
@@ -263,13 +263,25 @@ class ShapeConfiguration:
         return ShapeConfigStore(final_config)
 
     async def get_mcft(self, property: str):
-        """Get the material, color, finish or tolerance of the object."""
+        """Get the material, color, finish or tolerance of the object.
+
+        What the object declares itself, else -- for a reference, which declares
+        none of these -- what the object it points at declares. A reference is
+        that object's geometry and its CMF (see 'Shape._with_source_cmf'), so a
+        cart that asked only the reference's own parameters ordered an alias of
+        a PLA part as made of nothing. (A part that is what its machine makes is
+        lent its design's CMF as it is declared: see 'part_factory_manufactured'.)
+        """
 
         store_data = self.get_store_data()
 
-        if not store_data.is_purchasable and (
-            "parameters" not in self.config or property not in self.config["parameters"]
-        ):
+        config = self.config
+        if "parameters" not in config or property not in config["parameters"]:
+            resolved = final_config(self)
+            if isinstance(resolved, dict) and property in (resolved.get("parameters") or {}):
+                config = resolved
+
+        if not store_data.is_purchasable and ("parameters" not in config or property not in config["parameters"]):
             # shape = await self.get_wrapped()
             # TODO(clairbee): derive the property from the model
 
@@ -304,13 +316,10 @@ class ShapeConfiguration:
             # nobody had re-declared.
             return value
 
-        if (
-            "parameters" not in self.config
-            or property not in self.config["parameters"]
-            or "default" not in self.config["parameters"][property]
-        ):
+        declared = (config.get("parameters") or {}).get(property)
+        if not isinstance(declared, dict) or "default" not in declared:
             return None
-        return self.config["parameters"][property]["default"]
+        return declared["default"]
 
     async def get_tolerance(self):
         """How precisely this object has to be made, or None if it cannot say.
