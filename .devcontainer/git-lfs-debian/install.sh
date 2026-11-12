@@ -58,9 +58,15 @@ fi
 # The guard has had two forms, 'echo >&2 "..."' (to 3.5) and
 # 'printf >&2 "\n%s\n\n" "..."' (from 3.6), each version wording the
 # message differently. Only those two commands are accepted, and only a
-# message that cannot end its quotes or run a substitution (no '"', '$' or
-# backquote in it), so no other command can hide in the line.
-guard='command -v git-lfs >/dev/null 2>&1 \|\| \{ (echo >&2|printf >&2 "\\n%s\\n\\n") "[^"$`]*"; exit 2; \}'
+# message the shell reads as plain text: no '"', '$' or backquote, and a
+# backslash only before some other character, like the echo form's '\n'.
+# (Inside double quotes, a backslash is special only before '"', '$', a
+# backquote, another backslash or the end of the line.) So the message's
+# quotes close where the guard's do, nothing in it is run, and no other
+# command can hide in the line or carry over into the next one.
+# A pattern, so its '$' and backquotes are characters to match, not to expand:
+# shellcheck disable=SC2016
+guard='command -v git-lfs >/dev/null 2>&1 \|\| \{ (echo >&2|printf >&2 "\\n%s\\n\\n") "([^"$`\\]|\\[^"$`\\])*"; exit 2; \}'
 git lfs install --skip-repo
 if ! git lfs update; then
     hooks="$(git rev-parse --git-path hooks)"
