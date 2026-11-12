@@ -43,13 +43,14 @@ fi
 # The filter for this user, and then the repository's hooks. The workspace
 # is usually a checkout made outside the container, whose hooks a newer Git
 # LFS may have written, and this older one refuses to replace hooks worded
-# differently from its own ("Hook already exists", exit 2). Hooks that run
-# 'git lfs pre-push' work whichever version wrote them, so they are kept;
-# anything else in their place still fails, since without that hook a push
-# from the container would leave its LFS objects behind.
+# differently from its own ("Hook already exists", exit 2). A pre-push hook
+# with a line that runs 'git lfs pre-push' works whichever version wrote it,
+# so it is kept. Anything else in its place still fails, a hook that only
+# mentions the command in a comment included, since without that line a
+# push from the container would leave its LFS objects behind.
 git lfs install --skip-repo
 if ! git lfs update; then
-    if grep -qs "git lfs pre-push" "$(git rev-parse --git-path hooks)/pre-push"; then
+    if grep -qsE '^[[:space:]]*git lfs pre-push( |$)' "$(git rev-parse --git-path hooks)/pre-push"; then
         echo "(!) Keeping the Git LFS hooks this repository already has"
     else
         exit 1
