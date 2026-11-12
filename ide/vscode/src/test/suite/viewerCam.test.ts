@@ -16,7 +16,7 @@
 
 import * as assert from 'assert';
 
-import { editsOf, keptOf, labelOf, makingOf, stated, statsLines } from '../../webview/cam';
+import { editsOf, keptOf, labelOf, makingOf, sameSettings, stated, statsLines } from '../../webview/cam';
 import { CamControl, CamSettingsData } from '../../webview/messages';
 
 const CONTROLS: CamControl[] = [
@@ -51,6 +51,14 @@ suite('The CAM tab: its fields', () => {
             toolAxis: '-Z',
         });
         assert.deepStrictEqual(editsOf(CONTROLS, { walls: '' }), { walls: null });
+    });
+
+    test('a setting taken out is not a setting left as the part states it', () => {
+        assert.ok(sameSettings({}, {}));
+        assert.ok(sameSettings({ infill: '40%', walls: null }, { walls: null, infill: '40%' }));
+        assert.ok(!sameSettings({ infill: null }, {}));
+        assert.ok(!sameSettings({}, { infill: null }));
+        assert.ok(!sameSettings({ infill: '40%' }, { infill: '30%' }));
     });
 
     test('a key reads as the words it is made of', () => {

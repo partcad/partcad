@@ -322,17 +322,20 @@ Settings
 
 **Applies to** a part with ``manufacturing: method: additive``, ``subtractive`` or ``forming`` that names a ``source:`` and has a geometry of its own. ``pc qual test -f materialize <object>`` runs it alone.
 
-Whether a part is what its machine makes by following its instructions: the print its design's route deposits, what a router, a laser, a drill or a saw leaves of its stock, what a mold gives back of its cavity. ``pc cam --materialize`` writes that into the part's own file; this asks whether the file - or a model somebody drew, or an as-printed scan - still is it. Compared by volume and extent, within the part's tolerance; a print may also match its outside (its sections stacked up), which is what a part modelled solid is.
+Whether a part is what its machine makes by following its instructions: the print its design's route deposits, what a router, a laser, a drill or a saw leaves of its stock, what a mold gives back of its cavity. ``pc cam --materialize`` writes that into the part's own file; this asks whether the file - or a model somebody drew, or an as-printed scan - still is it. Compared by volume and extent, within the part's tolerance; a print may also match its outside (its sections stacked up), which is what a part modelled solid is. A cut part or a molding that is the right size is compared by shape as well, since a hole moved across a plate changes neither: what either has that the other has not may be no deeper than the tolerance anywhere.
+
+A part that names several machines is held to what each of them makes, since each is a claim that it could be made that way.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Anything but a part; a part made some other way or naming nothing it is made from; and a part with no geometry of its own - no ``type:``, no file yet - which \*is\* what its machine makes.
+Anything but a part; a part made some other way or naming nothing it is made from; and a part with no geometry of its own - no ``type:``, no file yet - which \*is\* what its machine makes. Nor a cut part that names no machine and no job, which no machine makes anything of; or a router, a laser or a drill cutting a part along its own geometry (no ``instructions:``), which is then the design the machine follows rather than a claim about what it leaves - a pocket leaves the stock with the part taken out of it, and a profile leaves the part less what a 2.5-axis route cannot cut, which ``pc cam`` warns about as it routes it.
 
 When it fails
 ^^^^^^^^^^^^^
 
-* ``It is not the size its machine makes it`` / ``It is not what its machine makes``: the file is from other settings, another design or another stock. Run ``pc cam --materialize`` to write what the machine makes now, or fix the manufacturing settings.
+* ``It is not the size its machine makes it`` / ``It is not what its machine makes`` / ``It is not the shape its machine makes``: the file is from other settings, another design or another stock. The last says where the first difference found is, and how deep. Run ``pc cam --materialize`` to write what the machine makes now, or fix the manufacturing settings.
+* ``It could not be compared with what its machine makes``: the boolean between the two failed; the sentence says why.
 * ``What its machine makes could not be worked out``: see ``pc cam`` for the route; the sentence says why.
 
 Settings
@@ -533,14 +536,14 @@ It does not fail. When it says ``the geometry is a solid but not a well formed o
 ``cam``: A machine route can be produced
 ----------------------------------------
 
-**Applies to** parts and sketches that name a machine to be cut on. ``pc qual test -f cam <object>`` runs it alone.
+**Applies to** parts and sketches that name a machine to be cut or printed on. ``pc qual test -f cam <object>`` runs it alone.
 
-Whether the program a machine cuts the object with can be produced: for every ``cnc:``, ``laser:`` or ``drill:`` machine it names, the post-processor that machine uses writes a route, and the route is thrown away. The same code as ``pc cam``.
+Whether the program a machine makes the object with can be produced: for every ``cnc:``, ``laser:``, ``drill:`` or ``fff:`` machine it names, the post-processor that machine uses writes a route, and the route is thrown away. The same code as ``pc cam``.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 
-An object that names no machine to be routed on - nothing under ``manufacturing:`` asks for one, or only a ``cut:`` machine, which needs no program.
+An object that names no machine to be routed on - nothing under ``manufacturing:`` asks for one, or only a ``cut:`` or a ``mold:``, neither of which runs a program.
 
 When it fails
 ^^^^^^^^^^^^^

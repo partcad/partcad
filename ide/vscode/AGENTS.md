@@ -372,7 +372,8 @@ so no list of settings lives here. A field changed is tried: once the fields set
 drawn again with `cam: {machine, settings}`, nothing written, and the answer's `stats` are shown under the fields.
 Save posts `saveCam` -> `partcad.camSave` (`cam.save`), which writes the settings into the part's `partcad.yaml`
 and its materialized file again where it has one; the settings are then asked for afresh and the fields start
-from them. The form is not rebuilt for an answer equal to the one on screen, because every show re-asks it and
+from them. The fields are disabled until those settings are in them -- an edit typed before would be lost to them -- and
+a Save still under way when another object is shown is left to finish without a word on the new object's tab. The form is not rebuilt for an answer equal to the one on screen, because every show re-asks it and
 somebody may be typing.
 
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and

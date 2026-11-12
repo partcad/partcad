@@ -1174,16 +1174,17 @@ async def _export_scene_async(ctx, scene, impl, directory: str) -> str:
     format_name, export_impl, scene_project = _scene_export(ctx, scene, impl, directory)
     path = os.path.join(directory, "scene." + export_impl.extension(format_name))
 
-    options = impl.config.get("formatOptions") or {}
+    options = dict(impl.config.get("formatOptions") or {})
+    # A print collides as its design and weighs what it deposits: see
+    # 'partcad.visual'. The simulation's to say rather than a plugin's: it is
+    # what makes the scene one a physics engine can run.
+    options["outsides"] = True
     await scene.render_async(
         ctx,
         format_name,
         project=scene_project,
         options_project=impl.project,
         filepath=path,
-        # A print collides as its design and weighs what it deposits: see
-        # 'partcad.visual'.
-        outsides=True,
         **options,
     )
     if not os.path.isfile(path):

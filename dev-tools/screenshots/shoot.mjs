@@ -265,13 +265,19 @@ async function tutorialSection(page, pane = '3d') {
     const deadline = Date.now() + 900000;
     for (;;) {
         await sleep(3000);
-        const busy = await frame.evaluate(
-            (id) =>
-                [...document.querySelectorAll(`#pane-${id} .view-note`)].some((note) =>
-                    /cutting|loading/i.test(note.textContent),
-                ),
-            pane,
-        );
+        const { busy, failed } = await frame.evaluate((id) => {
+            const notes = [...document.querySelectorAll(`#pane-${id} .view-note`)];
+            const error = notes.find((note) => note.classList.contains('error') && note.textContent.trim());
+            return {
+                busy: notes.some((note) => /cutting|loading/i.test(note.textContent)),
+                failed: error ? error.textContent.trim() : undefined,
+            };
+        }, pane);
+        // A cut that failed leaves what was drawn before on the stage: a picture
+        // of that is not a picture of the section.
+        if (failed) {
+            throw new Error(`the section could not be drawn: ${failed}`);
+        }
         if (!busy) {
             break;
         }

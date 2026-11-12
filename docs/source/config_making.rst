@@ -93,7 +93,8 @@ sandbox, and the answer is cached like any other part's, under a key that covers
 the design, the stock and every setting of the machine. A print or a molding is
 **drawn** as its design -- what the designer had in mind -- unless it names a
 :ref:`visual <part-visual>` of its own; what a section through it shows is the
-part.
+part. A molding whose mold shrinks it is the exception: its cavity is bigger
+than it by what it shrinks, so it is drawn as itself.
 
 **Materializing it.** ``pc cam --materialize`` (see :ref:`cam`) writes what the
 machine makes into the part's own file, and from then on that file is the part:
@@ -119,8 +120,11 @@ part that has one to what its machine makes (the ``materialize`` check): the
 same extent within the part's tolerance, and the same volume within that
 tolerance over its surface. A part modelled solid and printed with infill
 passes on its outside -- the print's layers stacked up -- since that is what it
-looks like, if not what it weighs. A part with no geometry of its own *is* the
-product, and has nothing to compare.
+looks like, if not what it weighs. A cut part or a molding is compared by shape
+as well, since a hole moved across a plate changes neither its extent nor its
+volume: what either has that the other has not may be no deeper than the
+tolerance anywhere. A part with no geometry of its own *is* the product, and
+has nothing to compare.
 
 .. _additive:
 
@@ -162,7 +166,7 @@ apart from itself, and say how it is filled:
           topLayers: 5
           bottomLayers: 4
           infill: 20%
-          infillPattern: gyroid
+          infillPattern: grid
 
 - ``source`` -- *optional*. The design the part is a print of. It is what the
   print is measured against (the tolerance is the design's), what a print
@@ -396,15 +400,16 @@ other rather than one overwriting the other. A part that really is machined in
 *stages* is not this: it is a chain of parts, each naming the previous one as
 its ``source``.
 
-**Only ``subtractive`` has a machine at all**, and the keys that describe a cut
-are refused everywhere else rather than accepted and never read. A ``diameter:``
-on a part that says ``method: additive`` is a number somebody chose and nothing
-acts on, which is the whole reason the job moved out of a section of its own --
-a printer has feeds and speeds too, and the day PartCAD writes a program for one
-they will be a printer's keys under a printer's subsection rather than a
-router's read by accident. A *sketch* is the one section with no ``method:`` in
-it: a drawing is not made out of anything, so it names the machine and the job
-and nothing else.
+**A machine belongs to the method that makes the part with it**: ``cnc:``,
+``laser:``, ``drill:`` and ``cut:`` to ``subtractive``, ``fff:`` to
+:ref:`additive <additive>`, ``mold:`` to :ref:`forming <forming>`. The keys that
+describe a cut are refused everywhere else rather than accepted and never read.
+A ``diameter:`` on a part that says ``method: additive`` is a number somebody
+chose and nothing acts on, which is the whole reason the job moved out of a
+section of its own -- a printer has feeds and speeds too, and they are a
+printer's keys under ``fff:`` rather than a router's read by accident. A
+*sketch* is the one section with no ``method:`` in it: a drawing is not made out
+of anything, so it names the machine and the job and nothing else.
 
 Every machine takes a ``toolAxis``, which is the axis the tool, the beam, the
 drill or the saw approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
@@ -500,7 +505,8 @@ from its top down, unless ``depth:`` says otherwise:
           diameter: 3 mm
 
 A cut that names no instructions is routed along its own file, and so has to
-have one.
+have one. So does one that names a drawing and says nothing about how it is cut
+-- no machine and no tool: there is no route to make it by.
 
 ``examples/produce_part_subtractive`` is the whole of the above in one package:
 two stocks, a laser-cut blank and gasket, a routed block whose chamfer is the
@@ -578,7 +584,7 @@ mold that forms it:
 .. code-block:: yaml
 
   parts:
-    knob-cavity:              # the mold's cavity: the part as it is drawn
+    knob-cavity:              # the mold's cavity: the part as designed
       type: build123d
       path: knob.py
       manufacturable: false
@@ -592,8 +598,11 @@ mold that forms it:
 
 - ``source`` -- *optional*. The cavity the part is formed in: like a print's
   design, what the designer had in mind and what a picture of the part draws
-  unless it names a ``visual:``. A part that names one needs no ``type:`` of its
-  own (see :ref:`manufactured-parts`): it is the cavity, shrunk.
+  unless it names a ``visual:`` -- as long as the mold does not shrink it. A
+  molding that shrinks is smaller than its cavity, so a picture draws the part
+  itself, and the part connects where it says rather than where the cavity's
+  ports are. A part that names a cavity needs no ``type:`` of its own (see
+  :ref:`manufactured-parts`): it is the cavity, shrunk.
 - ``mold`` -- *optional*. The mold. It runs no program, so ``pc cam`` writes
   nothing for it and refuses ``-m mold``; what it says is ``shrinkage``, the
   fraction the material shrinks by as it cools (``1.5%`` or ``0.015``, applied

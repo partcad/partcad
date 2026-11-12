@@ -35,15 +35,20 @@ async def _sent_geometry(ctx, object):
     """
     from .part import Part
     from .part_config import PartConfiguration
+    from .part_config_manufacturing import METHOD_ADDITIVE
     from .qual.basic.manufacturability_reference import resolve_reference
 
     if not isinstance(object, Part):
         return object
     try:
-        design = PartConfiguration.get_manufacturing_data(object).design
+        data = PartConfiguration.get_manufacturing_data(object)
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("No design for %s: %s" % (object.name, e))
         return object
+    # Only a print: a molding's 'source:' is the cavity, which a mold that
+    # shrinks the part makes bigger than the part, and the part is what a
+    # molder quotes and makes. Its own geometry is that part.
+    design = data.design if data is not None and data.method == METHOD_ADDITIVE else None
     if not design:
         return object
     found = await resolve_reference(ctx, object, design, "part")

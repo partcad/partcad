@@ -2593,7 +2593,9 @@ def _cam_request(params):
     if not isinstance(cam, dict):
         raise JsonRpcError(USAGE_ERROR, '\'cam\' is {"machine": ..., "settings": {...}}, not %r' % (cam,))
     machine = cam.get("machine")
-    settings = cam.get("settings") or {}
+    settings = cam.get("settings")
+    if settings is None:
+        settings = {}
     if machine is not None and not isinstance(machine, str):
         raise JsonRpcError(USAGE_ERROR, "'cam: machine' is the name of a machine, not %r" % (machine,))
     if not isinstance(settings, dict) or not all(isinstance(key, str) for key in settings):
@@ -2879,7 +2881,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.10.12"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.10.15"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -4751,6 +4753,11 @@ def cam_save(session, params):
     (``Shape.materialize_async(write=True)``), so that the declaration and the
     file cannot come to disagree.
 
+    Where the product cannot be made again, the declaration is put back as it was
+    and the Save refused, saying why: the file still holds what the earlier
+    settings made, and a declaration that file does not match is the disagreement
+    this is here to prevent.
+
     Answers ``{object, config, materialized, stats}``: the file written, where the
     product went (or null), and what it came to.
     """
@@ -4767,9 +4774,17 @@ def cam_save(session, params):
         return None
     if not cam_view.made_by_machine(part):
         raise JsonRpcError(USAGE_ERROR, cam_view.settings(ctx, part).get("refused"))
-    settings = params.get("settings") or {}
+    settings = params.get("settings")
+    if settings is None:
+        settings = {}
     machine = params.get("machine") or None
     checked = _cam_request({"cam": {"machine": machine, "settings": settings}})
+    project = ctx.get_project(part.project_name)
+    config_path = getattr(project, "config_path", None)
+    before = None
+    if config_path and os.path.isfile(config_path):
+        with open(config_path, "rb") as f:
+            before = f.read()
     try:
         written = cam_view.save_settings(ctx, part, machine=checked.get("machine"), values=checked["settings"])
     except pc.cam.CamConfigError as e:
@@ -4778,14 +4793,31 @@ def cam_save(session, params):
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
     pc.logging.info("Saved the settings of %s into %s" % (path, written))
     # The package as it now reads: what is materialized is what the saved
-    # declaration makes, and what the next request about it sees.
-    ctx.reload_changed_packages([part.project_name])
+    # declaration makes, and what the next request about it sees. Reloaded
+    # because it was written here, not because a stat says so: one inside the
+    # same tick as the file's last write, at the same size, says nothing
+    # changed (see 'Context.reload_packages').
+    ctx.reload_packages([part.project_name])
     fresh = ctx.get_part(path) or part
     answer = {"object": path, "config": written, "materialized": None, "stats": None}
     try:
         made = asyncio.run(cam_view.rematerialize_async(ctx, fresh, machine=checked.get("machine")))
-    except (pc.cam.CamConfigError, pc.cam.CamFailed) as e:
-        raise JsonRpcError(USAGE_ERROR, "Saved, but not materialized again: %s" % e) from e
+    except Exception as e:  # pylint: disable=broad-except
+        # Whatever went wrong, the materialized file is what the old settings
+        # made: so the old settings are what the declaration says again.
+        if before is not None:
+            with open(config_path, "wb") as f:
+                f.write(before)
+            ctx.reload_packages([part.project_name])
+            cam_view.forget_products()
+            pc.logging.info("Put the settings of %s back as they were in %s" % (path, config_path))
+        if isinstance(e, (pc.cam.CamConfigError, pc.cam.CamFailed)):
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "What the machine makes with these settings could not be written over the part's file, so the"
+                " settings are as they were: %s" % e,
+            ) from e
+        raise
     if made is not None:
         answer["materialized"] = made["written"]
         answer["stats"] = made["stats"]

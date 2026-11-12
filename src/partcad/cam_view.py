@@ -105,6 +105,14 @@ def method_of(shape) -> typing.Optional[str]:
     return method if isinstance(method, str) else None
 
 
+def deposited(shape) -> bool:
+    """Whether a part's own geometry is what its machine makes ('part_config_manufacturing.implied_type')."""
+    from .part_config_manufacturing import IMPLIED_TYPE_KEY
+
+    config = getattr(shape, "config", None)
+    return getattr(shape, "kind", None) == "part" and isinstance(config, dict) and bool(config.get(IMPLIED_TYPE_KEY))
+
+
 def made_by_machine(shape) -> bool:
     """Whether a shape is a part made by following a route, and so has a CAM tab."""
     return method_of(shape) in MADE_METHODS
@@ -134,10 +142,10 @@ def representation(shape, extra_details=None, detail=None, cam=False) -> Represe
     if extra_details is None:
         extra_details = default_extra_details(kind)
     extra_details = bool(extra_details)
-    made = made_by_machine(shape)
+    printed = method_of(shape) == PRINTED
     if cam:
         chosen = shape_gltf.DETAIL_HIGH
-    elif method_of(shape) == PRINTED:
+    elif printed:
         # A print is flat faces, which no level draws any finer: see the module.
         chosen = shape_gltf.DETAIL_LOW
     else:
@@ -146,7 +154,12 @@ def representation(shape, extra_details=None, detail=None, cam=False) -> Represe
         extra_details=extra_details,
         visuals=not extra_details and not cam,
         detail=shape_gltf.detail_of(detail if detail is not None else chosen),
-        stripped=made and (extra_details or cam),
+        # Only what a printer deposits is prisms, most of them out of sight: a
+        # cut part or a molding is a solid like any other, its faces each its
+        # own, and so is a print with a geometry of its own (a scan, a model
+        # somebody drew), which is drawn as it is. The CAM tab always draws
+        # what the printer deposits.
+        stripped=printed and (cam or deposited(shape)) and (extra_details or cam),
     )
 
 
@@ -301,12 +314,17 @@ def _machine_of(part, machine=None) -> str:
     return PRINTERS[0] if method == "additive" else FORMERS[0] if method == "forming" else "cnc"
 
 
+# The two spellings of a machine's axis, each to the other ('toolAxis:' and 'along:').
+AXIS_SPELLINGS = {"toolAxis": "along", "along": "toolAxis"}
+
+
 def with_settings(config: dict, machine: str, values: dict) -> dict:
     """A copy of a part's declaration with 'values' written into its 'manufacturing: <machine>:' section.
 
     A value of None takes that setting out, back to whatever is taken where the
-    part states nothing. An axis written under one spelling takes the other one
-    out, since a section that says both is refused.
+    part states nothing. An axis written or taken out under one spelling takes
+    the other one out too: a section that says both is refused, and one that
+    keeps the other states the axis it did.
     """
     config = copy.deepcopy(config)
     section = config.get("manufacturing")
@@ -314,14 +332,14 @@ def with_settings(config: dict, machine: str, values: dict) -> dict:
     machine_section = section.get(machine)
     machine_section = dict(machine_section) if isinstance(machine_section, dict) else {}
     for key, value in (values or {}).items():
+        if key in AXIS_SPELLINGS:
+            # One axis, two spellings: whichever is written or taken out, the
+            # other goes, or the part goes on stating the axis it did.
+            machine_section.pop(AXIS_SPELLINGS[key], None)
         if value is None or value == "":
             machine_section.pop(key, None)
             continue
         machine_section[key] = value
-        if key == "toolAxis":
-            machine_section.pop("along", None)
-        elif key == "along":
-            machine_section.pop("toolAxis", None)
     section[machine] = machine_section
     config["manufacturing"] = section
     return config
@@ -342,7 +360,8 @@ def _tried(part, machine: str, values: dict):
 
 # What the CAM tab asked for last, kept: a section moved, the box ticked, the tab
 # opened again ask for the same product, which is a route run in a sandbox. Keyed
-# by the part's key and the settings tried, a handful at a time.
+# by the part's key, what its product is made from and the settings tried, a
+# handful at a time.
 _PRODUCTS: "collections.OrderedDict[str, dict]" = collections.OrderedDict()
 _PRODUCTS_KEPT = 8
 _products_lock = threading.Lock()
@@ -393,11 +412,18 @@ async def product_async(ctx, part, machine=None, values=None) -> dict:
     key = None
     try:
         if part.get_cacheable():
-            key = json.dumps(
-                [await part.get_cache_key_async(), kind, values, part.config.get("manufacturing")],
-                sort_keys=True,
-                default=str,
-            )
+            from .part_factory_manufactured import product_key_async
+
+            # The part's own key, and what its product is made from: a part with
+            # a geometry of its own keeps its key when its design is edited. Not
+            # kept at all where either has none.
+            own, made_from = await part.get_cache_key_async(), await product_key_async(ctx, part)
+            if own is not None and made_from is not None:
+                key = json.dumps(
+                    [own, made_from, kind, values, part.config.get("manufacturing")],
+                    sort_keys=True,
+                    default=str,
+                )
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("%s:%s: what its machine makes is not kept: %s" % (part.project_name, part.name, e))
     if key is not None:

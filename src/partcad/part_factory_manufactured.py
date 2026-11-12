@@ -30,8 +30,10 @@ meshes it (`PartFactoryManufacturedSdf`).
 """
 
 import copy
+import hashlib
 import json
 import os
+import typing
 
 from . import cmf
 from . import logging as pc_logging
@@ -260,8 +262,8 @@ class PartFactoryMaterializedStep(PartFactoryHomogen, PartFactoryStep):
 _MATERIALIZED = {"brep": PartFactoryMaterializedBrep, "step": PartFactoryMaterializedStep, "sdf": PartFactorySdf}
 
 
-def _add_maker_key(ctx, part, config) -> bool:
-    """Fold in the code that makes the part, as a route's cached answer is keyed on its implementation.
+def maker_parts(ctx, config) -> list:
+    """The code that makes the part, as the strings a cache key is made of.
 
     The part is what that code makes, so a change to it is another part: a print
     built by an older route is not this route's print. Keyed without loading any
@@ -273,17 +275,129 @@ def _add_maker_key(ctx, part, config) -> bool:
     run them. Another package's code is keyed by its name, and moves with the
     revision its dependency is pinned at.
     """
+    data = PartConfigManufacturing(config)
+    return _maker_parts_of(ctx, data.machine.get("implementation") if data.machine is not None else None)
+
+
+def _maker_parts_of(ctx, declared) -> list:
+    """'maker_parts' for a machine declaring 'declared' as its implementation (None: it declares none)."""
     from . import source_key
 
-    data = PartConfigManufacturing(config)
-    declared = data.machine.get("implementation") if data.machine is not None else None
     implementation = str(declared or ctx.user_config.cam_implementation or "").strip()
-    part.hash.add_string("maker:%s" % implementation)
+    parts = ["maker:%s" % implementation]
     if implementation.split(":")[0] in ("", "//builtin/cam") or implementation.startswith("//builtin/cam:"):
         directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin", "cam")
-        part.hash.add_string("maker-sources:%s" % source_key.directory_key(directory))
-    part.hash.add_string("wrappers:%s" % source_key.wrappers_key())
+        parts.append("maker-sources:%s" % source_key.directory_key(directory))
+    parts.append("wrappers:%s" % source_key.wrappers_key())
+    return parts
+
+
+def _add_maker_key(ctx, part, config) -> bool:
+    """Fold in the code that makes the part ('maker_parts'), as a route's cached answer is keyed on its implementation."""
+    for piece in maker_parts(ctx, config):
+        part.hash.add_string(piece)
     return True
+
+
+async def _referenced_key(ctx, part, reference, kind) -> typing.Optional[str]:
+    """What a reference the product is made from contributes to its key; None where that object keeps no key.
+
+    One that resolves to nothing keys as missing ('kind:name@'), which is an
+    answer like any other and stops being one the moment the object is added.
+    One that resolves to an object with no key -- 'cache: false', say -- leaves
+    nothing to tell an edit of it by, so nothing made from it may be kept.
+    """
+    from .qual.basic.manufacturability_reference import resolve_reference
+
+    if not reference:
+        return "%s@" % kind
+    found = await resolve_reference(ctx, part, reference, kind)
+    if found is None:
+        return "%s:%s@" % (kind, reference)
+    try:
+        key = await found.get_cache_key_async()
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("No key for '%s', which %s:%s is made from: %s" % (reference, part.project_name, part.name, e))
+        key = None
+    if key is None:
+        return None
+    return "%s:%s@%s" % (kind, reference, key)
+
+
+async def product_key_async(ctx, part) -> typing.Optional[str]:
+    """What a part's product is made from and how, as one key: everything about it the part's own key leaves out.
+
+    The keys of what it is made from -- its 'source:', and its 'instructions:',
+    a part or a drawing, resolved the way the route resolves them
+    ('Shape._route_subject_async') -- every machine's subsection as written and
+    the job they share, the implementation's options as every layer of them
+    reaches the route and the code of the package it comes from
+    ('_layered_options'), and the code that makes it ('maker_parts'). None of
+    those moves the key of a part with a geometry of its own: 'manufacturing:'
+    is left out of a shape's hash, and an edited design is another object. So
+    whatever keeps an answer about the product of such a part -- the
+    'materialize' check's verdict, the CAM tab's drawing -- keys on this too.
+
+    None where something it is made from keeps no key ('_referenced_key'): an
+    answer about it is not to be kept at all.
+    """
+    from .part_config import PartConfiguration
+    from .qual.basic.manufacturability_reference import resolve_reference
+
+    data = PartConfiguration.get_manufacturing_data(part)
+    declared = [await _referenced_key(ctx, part, data.source, "part")]
+    if data.instructions:
+        found = await resolve_reference(ctx, part, data.instructions, "part")
+        kind = "part" if found is not None else "sketch"
+        declared.append(await _referenced_key(ctx, part, data.instructions, kind))
+    if any(key is None for key in declared):
+        return None
+    for kind in data.machine_choices():
+        machine = data.machines[kind]
+        declared.append("%s:%s:%s" % (kind, machine.key(), json.dumps(machine.options, sort_keys=True, default=str)))
+    declared.append("job:%s" % json.dumps(data.job, sort_keys=True, default=str))
+    declared.append("error:%s" % (data.machine_error or ""))
+    # Every machine the part could be made on, each with the implementation it
+    # declares: which of them a run is asked for is the caller's to say, and a
+    # key covering all of them is right for whichever it is.
+    for kind in data.machine_choices() or [None]:
+        implementation = data.machines[kind].get("implementation") if kind is not None else None
+        declared.append("%s:%s" % (kind, _layered_options(ctx, part, implementation)))
+        declared += _maker_parts_of(ctx, implementation)
+    return hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
+
+
+def _layered_options(ctx, part, declared) -> str:
+    """The options of the 'pc cam' implementation a machine declaring 'declared' routes with, every layer of them.
+
+    What the part does not state is filled from the package's 'cam:' section
+    and the implementing package's defaults ('Shape._output_getopts') -- a
+    tool's diameter, say -- and those move what the machine makes as much as
+    the part's own settings do. Keyed as the 'cam' check keys them.
+
+    With them goes the implementing package's code ('source_key.package_key'),
+    as a route's own cached answer is keyed on it. '_maker_parts_of' keys a
+    package other than PartCAD's by its name alone, because a part's own key is
+    worked out where no package may be loaded; this one is loaded by now, and a
+    post-processor edited in place is another machine.
+    """
+    from . import output, source_key
+
+    try:
+        options_project, format_name = part._route_implementation(ctx, declared=declared)
+        options, _output_dir = part._output_getopts(
+            ctx, format_name, output.CAM, ctx.get_project(part.project_name), options_project
+        )
+        return "options:%s:%s:%s:%s" % (
+            options_project.name,
+            format_name,
+            json.dumps(options, sort_keys=True, default=str),
+            source_key.package_key(options_project),
+        )
+    except Exception as e:  # pylint: disable=broad-except
+        # Not resolved: an answer of its own (the product cannot be made), and
+        # keyed as one rather than as a run that did resolve.
+        return "options-unresolved:%s" % e
 
 
 @telemetry.instrument()

@@ -287,7 +287,7 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   building nothing, so it is asked on every show of a part, as `cae.list` is. The second writes settings into the
   part's `manufacturing: <machine>:` section of its `partcad.yaml` (`Project.set_machine_settings`, ruamel, so
   the file keeps its comments), reloads the package, and where the part was materialized writes its product
-  again with what was saved. What the tab *draws* is `inspect.object` with `cam` -- `{machine, settings}` tried
+  again with what was saved -- or, where that fails, puts the file back as it was and refuses. What the tab *draws* is `inspect.object` with `cam` -- `{machine, settings}` tried
   in place of what the part states, nothing written -- which answers `{stats}`; the same method takes
   `extra_details`, the 3D tab's "Extra details" box, and `detail`, a level of tessellation
   (`partcad.cam_view.representation` decides both), and the show says which way the box was (`extraDetails`).

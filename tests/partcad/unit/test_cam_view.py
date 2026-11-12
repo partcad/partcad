@@ -55,10 +55,18 @@ def test_the_high_level_is_finer_on_both_counts(size):
 #
 
 
-def _shape(kind, manufacturing=None):
+def _shape(kind, manufacturing=None, own=False):
+    """A shape for 'representation' to look at: a part made by its machine unless 'own' gives it a geometry of its own."""
+    from partcad.part_config_manufacturing import IMPLIED_TYPE_KEY, implied_type
+
     config = {"name": "thing"}
     if manufacturing is not None:
         config["manufacturing"] = manufacturing
+        if not own:
+            config.update(implied_type(dict(config)) or {})
+    if own:
+        config["type"] = "step"
+        config.pop(IMPLIED_TYPE_KEY, None)
     return types.SimpleNamespace(kind=kind, config=config, get_final_config=lambda: config)
 
 
@@ -99,16 +107,29 @@ def test_a_part_a_machine_makes_is_drawn_as_it_is_made_at_the_previews_level():
     assert cam == cam_view.Representation(extra_details=True, visuals=False, detail="high", stripped=True)
 
 
+def test_a_print_with_a_geometry_of_its_own_is_drawn_as_it_is():
+    """A scan or a model somebody drew is not a deposit: no face of it is left out, and none loses its colour."""
+    scanned = _shape("part", PRINT, own=True)
+    ticked = cam_view.representation(scanned)
+    assert ticked == cam_view.Representation(extra_details=True, visuals=False, detail="low", stripped=False)
+    # Its CAM tab draws what the printer deposits, which is.
+    assert cam_view.representation(scanned, cam=True).stripped
+
+
 @pytest.mark.parametrize("method", ["subtractive", "forming"])
 def test_a_cut_or_molded_part_is_drawn_as_finely_as_the_box_says(method):
     """What a router or a mold makes has curved faces -- a drilled hole, a molded knob -- as any part does."""
     made = _shape("part", {"method": method, "source": "stock"})
     assert cam_view.made_by_machine(made)
+    # And it is a solid, not a print's prisms: no face of it is left out, so
+    # none loses the colour it was given.
     ticked = cam_view.representation(made)
-    assert ticked == cam_view.Representation(extra_details=True, visuals=False, detail="high", stripped=True)
+    assert ticked == cam_view.Representation(extra_details=True, visuals=False, detail="high", stripped=False)
     cleared = cam_view.representation(made, extra_details=False)
     assert cleared == cam_view.Representation(extra_details=False, visuals=True, detail="low", stripped=False)
-    assert cam_view.representation(made, cam=True).detail == "high"
+    assert cam_view.representation(made, cam=True) == cam_view.Representation(
+        extra_details=True, visuals=False, detail="high", stripped=False
+    )
 
 
 def test_only_a_part_made_by_following_a_route_is_made_by_a_machine():
@@ -168,6 +189,19 @@ def test_settings_tried_are_written_over_a_copy_of_the_declaration():
     assert config["manufacturing"]["fff"] == {"infill": "20%", "along": "-Y"}
     taken = cam_view.with_settings(config, "fff", {"infill": None})
     assert taken["manufacturing"]["fff"] == {"along": "-Y"}
+    # The axis taken out under either spelling is taken out, whichever the part wrote.
+    assert cam_view.with_settings(config, "fff", {"toolAxis": None})["manufacturing"]["fff"] == {"infill": "20%"}
+    assert cam_view.with_settings(config, "fff", {"along": None})["manufacturing"]["fff"] == {"infill": "20%"}
+
+
+def test_saving_an_axis_taken_out_takes_out_the_one_the_part_wrote(package):
+    (package / "partcad.yaml").write_text(
+        PACKAGE.replace("infill: 20%   # sparse, to see inside", "infill: 20%\n        along: -Y")
+    )
+    ctx = pc.Context(str(package))
+    cam_view.save_settings(ctx, ctx.get_part("//camdemo:print"), values={"toolAxis": None})
+    text = (package / "partcad.yaml").read_text()
+    assert "along" not in text and "toolAxis" not in text
 
 
 @pytest.mark.parametrize(
@@ -263,6 +297,56 @@ def test_a_part_another_file_declares_has_nowhere_to_be_written(package):
         project.set_machine_settings("elsewhere", "fff", {"infill": "30%"})
 
 
+def test_a_declaration_that_cannot_be_written_is_left_as_it_was(package, monkeypatch):
+    """A dump that fails halfway leaves the package's file whole, and nothing beside it."""
+    import ruamel.yaml
+
+    ctx = pc.Context(str(package))
+    before = (package / "partcad.yaml").read_bytes()
+
+    def dump(self, data, stream, **kwargs):
+        stream.write("name: //camdemo\nparts:\n")
+        raise ruamel.yaml.representer.RepresenterError("cannot represent an object")
+
+    monkeypatch.setattr(ruamel.yaml.YAML, "dump", dump)
+    with pytest.raises(ruamel.yaml.representer.RepresenterError):
+        ctx.get_project("//camdemo").set_machine_settings("print", "fff", {"infill": "30%"})
+
+    assert (package / "partcad.yaml").read_bytes() == before
+    assert sorted(p.name for p in package.iterdir()) == ["partcad.yaml"]
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "{% set infill = '20%' %}\n",
+        "{# printed sparse #}\n",
+    ],
+)
+def test_a_declaration_that_is_a_template_is_not_written_into(package, template):
+    """What PartCAD reads is what the template renders to, so the source is not edited as if it were that."""
+    (package / "partcad.yaml").write_text(template + PACKAGE)
+    ctx = pc.Context(str(package))
+    before = (package / "partcad.yaml").read_bytes()
+
+    with pytest.raises(ValueError, match="Jinja2 template.*by hand"):
+        ctx.get_project("//camdemo").set_machine_settings("print", "fff", {"infill": "30%"})
+
+    assert (package / "partcad.yaml").read_bytes() == before
+
+
+def test_an_expression_where_a_value_goes_is_not_read_as_a_mapping_and_written_back(package):
+    """'{{ w }}' unquoted is a mapping in a mapping to a YAML reader; written back, the template would be broken."""
+    (package / "partcad.yaml").write_text(PACKAGE.replace("cuboid: [20, 10, 5]", "cuboid: [20, 10, {{ 2 + 3 }}]"))
+    ctx = pc.Context(str(package))
+    before = (package / "partcad.yaml").read_bytes()
+
+    with pytest.raises(ValueError, match="Jinja2 template"):
+        ctx.get_project("//camdemo").set_machine_settings("print", "fff", {"infill": "30%"})
+
+    assert (package / "partcad.yaml").read_bytes() == before
+
+
 def test_saving_nothing_new_names_no_machine(package):
     (package / "partcad.yaml").write_text(
         PACKAGE.replace("      fff:\n        infill: 20%   # sparse, to see inside\n", "")
@@ -294,6 +378,57 @@ def test_settings_tried_make_the_part_again_once_each(package, monkeypatch):
     assert part.config["manufacturing"]["fff"] == {"infill": "20%"}
     with pytest.raises(pc_cam.CamConfigError, match="infill"):
         asyncio.run(cam_view.product_async(ctx, part, values={"infill": "two"}))
+    assert len(made) == 2
+
+
+def test_a_product_is_made_again_when_the_design_it_is_made_after_changes(tmp_path, monkeypatch):
+    """A part with a geometry of its own keeps its key when its design is edited; what it makes does not."""
+    made = []
+
+    async def materialize(self, ctx, machine=None, **kwargs):
+        design = ctx.get_part("//camdemo:block").config["cuboid"]
+        made.append(design)
+        return {"product": {"brep": ("made after %s" % design).encode()}, "stats": {}}
+
+    monkeypatch.setattr(Shape, "materialize_async", materialize)
+    cam_view.forget_products()
+
+    def product(width):
+        root = tmp_path / str(width)
+        root.mkdir()
+        (root / "partcad.yaml").write_text(
+            PACKAGE.replace("cuboid: [20, 10, 5]", "cuboid: [%d, 10, 5]" % width)
+            # The print, scanned: a geometry of its own, the same in both.
+            .replace("    desc: The block, printed\n", "    type: basic\n    cuboid: [19, 9, 4]\n")
+        )
+        ctx = pc.Context(str(root))
+        return asyncio.run(cam_view.product_async(ctx, ctx.get_part("//camdemo:print")))
+
+    assert product(20)["product"]["brep"] == b"made after [20, 10, 5]"
+    assert product(30)["product"]["brep"] == b"made after [30, 10, 5]"
+    assert made == [[20, 10, 5], [30, 10, 5]]
+
+
+def test_a_product_made_from_a_design_that_keeps_no_key_is_not_kept(package, monkeypatch):
+    """A scan keeps its own key, and nothing tells an edit of a 'cache: false' design apart: made every time."""
+    made = []
+
+    async def materialize(self, ctx, machine=None, **kwargs):
+        made.append(machine)
+        return {"product": {"brep": b"product"}, "stats": {}}
+
+    monkeypatch.setattr(Shape, "materialize_async", materialize)
+    cam_view.forget_products()
+    declared = PACKAGE.replace("    cuboid: [20, 10, 5]\n", "    cuboid: [20, 10, 5]\n    cache: false\n", 1)
+    declared += (
+        "  scanned:\n    type: basic\n    cuboid: [19, 9, 4]\n    manufacturing: {method: additive, source: block}\n"
+    )
+    (package / "partcad.yaml").write_text(declared)
+    ctx = pc.Context(str(package))
+    part = ctx.get_part("//camdemo:scanned")
+    assert asyncio.run(part.get_cache_key_async()) is not None
+    asyncio.run(cam_view.product_async(ctx, part))
+    asyncio.run(cam_view.product_async(ctx, part))
     assert len(made) == 2
 
 

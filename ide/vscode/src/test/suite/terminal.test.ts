@@ -405,13 +405,40 @@ suite('PartCAD terminal: views', () => {
         const [made] = shells();
         const [first] = views();
 
-        // What VS Code does after a reload, late: a shell of the same name.
-        const restored = vscode.window.createTerminal({ name: shellName });
-        await waitFor(() => !isAlive(made) && !vscode.window.terminals.includes(first), 'the new pair to close');
-        await waitFor(() => views().length === 1, 'a view beside the restored shell');
-        assert.deepStrictEqual(shells(), [restored]);
-        const output = new Output(views()[0]);
-        await waitFor(() => output.text.includes('INFO: before the shell came back'), 'the history, replayed');
+        // The view beside the restored shell is made by the extension's own poll,
+        // not by anything here, so this test has no moment of its own to start
+        // listening before that view opens, which is what `Output` needs: the
+        // history is written once, by `open()`, and nothing after it. And the
+        // open is a round trip to the workbench that runs alongside closing the
+        // pair it replaces, so listening only once the waits below had seen that
+        // pair close lost the race whenever the open came first -- on a Linux
+        // runner, now and then, by a few milliseconds -- and then waited out its
+        // fifteen seconds for text that had already gone by.
+        //
+        // `onDidOpenTerminal` is the earliest a test can listen to a terminal it
+        // did not create, and it is early enough: VS Code does not call a
+        // pseudoterminal's `open()` until it has fired that event for its
+        // terminal (`$startExtensionTerminal` waits for it).
+        let replacement: vscode.Terminal | undefined;
+        let output: Output | undefined;
+        const opening = vscode.window.onDidOpenTerminal((terminal) => {
+            if (!replacement && terminal !== first && named(terminal, viewName) && isPty(terminal)) {
+                replacement = terminal;
+                output = new Output(terminal);
+            }
+        });
+        try {
+            // What VS Code does after a reload, late: a shell of the same name.
+            const restored = vscode.window.createTerminal({ name: shellName });
+            await waitFor(() => !isAlive(made) && !vscode.window.terminals.includes(first), 'the new pair to close');
+            await waitFor(() => views().length === 1, 'a view beside the restored shell');
+            assert.deepStrictEqual(shells(), [restored]);
+            await waitFor(() => replacement !== undefined, 'the view beside the restored shell to open');
+            assert.strictEqual(replacement, views()[0]);
+            await waitFor(() => output!.text.includes('INFO: before the shell came back'), 'the history, replayed');
+        } finally {
+            opening.dispose();
+        }
     });
 
     test('a view from the "+" menu does not stand in for the one beside a restored shell', async () => {

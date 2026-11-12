@@ -1,6 +1,6 @@
 {
   "name": "PartCAD Development Environment",
-  "image": "ghcr.io/partcad/partcad-devcontainer:0.10.12",
+  "image": "ghcr.io/partcad/partcad-devcontainer:0.10.15",
   "remoteEnv": {
     // TODO: @alexanderilyin do not patch PATH here but make `mamba` discoverable.
     "PATH": "${containerEnv:PATH}:/home/vscode/miniforge3/bin",
@@ -111,10 +111,12 @@
       "xqVersion": "none",
       "jaqVersion": "none"
     },
-    "ghcr.io/devcontainers/features/git-lfs:1": {
-      "autoPull": true,
-      "installDirectlyFromGitHubRelease": true,
-      "version": "3.7.1"
+    // Git LFS from Debian's own archive, by a feature of this repository's:
+    // the published ghcr.io/devcontainers/features/git-lfs has no apt path on
+    // bookworm and checks its download against keyservers, so the image fails
+    // to build whenever none of them answers. See git-lfs-debian/install.sh.
+    "./git-lfs-debian": {
+      "autoPull": true
     },
     // "ghcr.io/devcontainers/features/node:1": {
     //   "version": "1.6.1",

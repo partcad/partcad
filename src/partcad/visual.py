@@ -149,8 +149,10 @@ def design(config) -> typing.Optional[str]:
     see 'part_config_manufacturing.implied_type'): a print is drawn as its
     design, and its own geometry, bead by bead, only where that is asked for.
     A cut part is drawn as itself, since its 'source:' is the stock it is cut
-    from. None for a reference: what it is drawn as is what the part it stands
-    for is drawn as ('_inherited_async').
+    from. So is a molding whose mold shrinks it: the cavity is bigger than the
+    part, by what it shrinks, as its ports are elsewhere
+    ('part_factory_manufactured.design_of'). None for a reference: what it is
+    drawn as is what the part it stands for is drawn as ('_inherited_async').
     """
     if not isinstance(config, dict) or config.get("type") in _REFERENCE_TYPES:
         return None
@@ -160,6 +162,11 @@ def design(config) -> typing.Optional[str]:
     value = section.get("source")
     if not isinstance(value, str) or not value.strip():
         return None
+    if section.get("method") == "forming":
+        from .part_factory_manufactured import design_of
+
+        if design_of(config) is None:
+            return None
     return value.strip()
 
 

@@ -506,7 +506,14 @@ def deposit():
         j = np.clip(np.floor(fy).astype(int), 0, NY - 2)
         tx = np.clip(fx - i, 0.0, 1.0)
         ty = np.clip(fy - j, 0.0, 1.0)
-        nearest = np.rint((p[:, 2] - ZS[0]) / H).astype(int)
+        # The layer nearest each sample, found by the layers' heights: a height
+        # where the design has no section has no layer, so they are not one
+        # 'H' apart everywhere. Then the one below it and the one above it.
+        if len(ZS) > 1:
+            above = np.clip(np.searchsorted(ZS, p[:, 2]), 1, len(ZS) - 1)
+            nearest = np.where(p[:, 2] - ZS[above - 1] <= ZS[above] - p[:, 2], above - 1, above)
+        else:
+            nearest = np.zeros(len(p), dtype=int)
         out = np.full(len(p), FAR)
         for k in (-1, 0, 1):
             index = nearest + k
@@ -530,9 +537,10 @@ def deposit():
 
 
 # Within the box the route fills, which is a true distance outside it: what the
-# mesher's bounds are found by.
+# mesher's bounds are found by. From the lowest layer to the highest, whatever
+# is missing between them.
 BOUNDS = box(
-    (NX * G, NY * G, len(ZS) * H + 2 * H),
+    (NX * G, NY * G, ZS[-1] - ZS[0] + 3 * H),
     center=(X0 + NX * G / 2.0, Y0 + NY * G / 2.0, (ZS[0] + ZS[-1]) / 2.0),
 )
 print_ = (deposit() & BOUNDS)%(turn)s

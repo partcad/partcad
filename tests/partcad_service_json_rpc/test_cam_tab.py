@@ -12,6 +12,8 @@ to a temporary directory; what is shown is caught where it leaves for the IDE
 what a print is made of is pinned beside 'partcad.cam_view' and the wrappers.
 """
 
+import os
+
 import pytest
 
 import partcad as pc
@@ -140,6 +142,85 @@ def test_save_makes_the_materialized_file_again(session, package, made):
     assert made == [{"settings": {"infill": "20%", "walls": 3}, "write": True}]
 
 
+@pytest.mark.parametrize("failure", ["config", "other"])
+def test_save_that_cannot_make_the_file_again_puts_the_settings_back(session, package, monkeypatch, failure):
+    """The file still holds what the old settings made: a declaration saying otherwise is what Save must not leave."""
+    (package / "print.brep").write_text("an old print")
+    before = (package / "partcad.yaml").read_text()
+
+    async def broken(self, ctx, machine=None, write=False, **kwargs):
+        if failure == "config":
+            raise pc.cam.CamFailed("the printer is out of filament")
+        raise RuntimeError("the sandbox went away")
+
+    monkeypatch.setattr(Shape, "materialize_async", broken)
+    cam_view.forget_products()
+    expected = JsonRpcError if failure == "config" else RuntimeError
+    with pytest.raises(expected) as caught:
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": {"infill": "35%"}})
+    if failure == "config":
+        assert caught.value.code == operations.USAGE_ERROR
+        assert "settings are as they were" in caught.value.message and "out of filament" in caught.value.message
+    assert (package / "partcad.yaml").read_text() == before
+    assert (package / "print.brep").read_text() == "an old print"
+    # And the next request reads the settings as they were.
+    again = operations.cam_settings(session, {"package": "//", "object": "print"})
+    assert next(control for control in again["controls"] if control["key"] == "infill")["value"] == "20%"
+
+
+def test_settings_put_back_are_read_back_within_one_tick_of_the_save(session, package, monkeypatch):
+    """Windows stamps a file's time by a clock tick of about 16 ms, and a Save put back is the same size as it.
+
+    The file was last written a while before the Save, so the Save is seen; the
+    Save and putting it back land in one tick, so to a stat the file put back is
+    the file saved, and the package went on reading the settings that were
+    refused. The clock here moves once, as the Save writes, and then stands.
+    """
+    import partcad.context
+    import partcad.project_local
+    from partcad.project import Project
+
+    tick = [0]
+
+    def stamped(filename):
+        try:
+            return (tick[0], os.stat(filename).st_size)
+        except OSError:
+            return None
+
+    save = Project.set_machine_settings
+
+    def saved_a_tick_later(self, *args, **kwargs):
+        tick[0] += 1
+        return save(self, *args, **kwargs)
+
+    monkeypatch.setattr(partcad.context, "file_stat", stamped)
+    monkeypatch.setattr(partcad.project_local, "file_stat", stamped)
+    monkeypatch.setattr(Project, "set_machine_settings", saved_a_tick_later)
+    (package / "print.brep").write_text("an old print")
+
+    async def broken(self, ctx, machine=None, write=False, **kwargs):
+        raise pc.cam.CamFailed("the printer is out of filament")
+
+    monkeypatch.setattr(Shape, "materialize_async", broken)
+    cam_view.forget_products()
+    operations.cam_settings(session, {"package": "//", "object": "print"})
+    with pytest.raises(JsonRpcError):
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": {"infill": "35%"}})
+
+    again = operations.cam_settings(session, {"package": "//", "object": "print"})
+    assert next(control for control in again["controls"] if control["key"] == "infill")["value"] == "20%"
+
+
+@pytest.mark.parametrize("settings", [[], False, 0, ""])
+def test_save_refuses_settings_that_are_not_a_mapping(session, package, made, settings):
+    before = (package / "partcad.yaml").read_text()
+    with pytest.raises(JsonRpcError) as caught:
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": settings})
+    assert caught.value.code == operations.USAGE_ERROR
+    assert (package / "partcad.yaml").read_text() == before
+
+
 def test_save_refuses_what_the_machine_does_not_take_and_writes_nothing(session, package, made):
     before = (package / "partcad.yaml").read_text()
     for settings in ({"infill": "150%"}, {"diameter": "6"}, {"walls": True}, {"walls": [3]}):
@@ -166,6 +247,8 @@ def test_a_part_shows_with_extra_details_unless_asked_otherwise(session, shown):
         ({"detail": "medium"}, "A level of detail is one of low, high"),
         ({"cam": "fff"}, "'cam' is"),
         ({"cam": {"settings": ["infill"]}}, "'cam: settings' maps"),
+        ({"cam": {"settings": []}}, "'cam: settings' maps"),
+        ({"cam": {"settings": False}}, "'cam: settings' maps"),
         ({"cam": {"settings": {"infill": {"a": 1}}}}, "'cam: settings: infill'"),
         ({"cam": {"machine": 3}}, "'cam: machine'"),
     ],

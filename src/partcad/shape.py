@@ -2067,7 +2067,7 @@ class Shape(ShapeConfiguration):
                     cacheable=self.artifacts_cacheable(),
                     section=section,
                     detail=drawn.detail,
-                    hidden_stripped=True,
+                    hidden_stripped=drawn.stripped,
                 )
             else:
                 # TODO(clairbee): consider removing this exception handler permanently
@@ -2871,6 +2871,7 @@ class Shape(ShapeConfiguration):
         section=None,
         batch=None,
         visuals=None,
+        outsides=None,
         compound=False,
     ):
         """'_run_implementation_async' for an export or a render file, asked of the cache first.
@@ -2935,6 +2936,11 @@ class Shape(ShapeConfiguration):
             extra["section"] = section
         if visuals is not None and visuals.keys:
             extra["visuals"] = visuals.keys
+        if outsides is not None and outsides.keys:
+            # A simulation's scene: every print in it is its design's geometry
+            # ('visual.substitute_async(outsides=True)'), which is not the file an
+            # export of the same object writes.
+            extra["outsides"] = outsides.keys
         artifact = await self._artifact_hash(
             impl.section,
             impl.format_name,
@@ -2945,6 +2951,8 @@ class Shape(ShapeConfiguration):
             extra,
         )
         if visuals is not None and not visuals.cacheable:
+            artifact = None
+        if outsides is not None and not outsides.cacheable:
             artifact = None
 
         output_ = _Output(impl, script, request, final_filepath, artifact)
@@ -3170,13 +3178,15 @@ class Shape(ShapeConfiguration):
                 views[key] = await pc_visual.substitute_async(ctx, subject, obj)
             drawn_as = views[key]
             obj = drawn_as.tree
+        collides_as = None
         if outsides:
             from . import visual as pc_visual
 
             key = ("outsides", mask.key() if mask is not None and not mask.keeps_all else None, of_compound)
             if key not in views:
                 views[key] = await pc_visual.substitute_async(ctx, subject, obj, outsides=True)
-            obj = views[key].tree
+            collides_as = views[key]
+            obj = collides_as.tree
         # Cut after the filter: a section is a box through what is kept, and the
         # links a filter drops have nothing left to cut. The ports drawn on top
         # are found on the subject itself, uncut - a port is where it is whether
@@ -3227,6 +3237,7 @@ class Shape(ShapeConfiguration):
             section=section,
             batch=batch,
             visuals=drawn_as,
+            outsides=collides_as,
             compound=of_compound,
         )
         if result is None:
@@ -3957,6 +3968,13 @@ class Shape(ShapeConfiguration):
             subject = await pc_cae_material.subject_async(ctx, self)
             if subject.note:
                 pc_logging.info("%s:%s: %s" % (self.project_name, self.name, subject.note))
+            # What is meshed is then the design, and a print kept in a file of its
+            # own is keyed on that file: a design edited since it was
+            # materialized leaves the print's key as it was. So the answer is
+            # keyed on the design too, and not kept at all where it has no key.
+            meshed = None
+            if subject.shape is not self:
+                meshed = {"meshed": await subject.shape.get_artifact_key_async()}
 
             with pc_logging.Timeout(window, self.project_name, self.name):
                 # Clearing the path, writing it and reading the answer back are one
@@ -4014,9 +4032,17 @@ class Shape(ShapeConfiguration):
                     # with it. Asked here, once the request is complete, because the
                     # request is most of the question.
                     cache = getattr(ctx, "cache_artifacts", None)
-                    artifact = await self._artifact_hash(
-                        output.CAE, analysis, impl, script, request, "%s:%s" % (options_project.name, format_name)
-                    )
+                    artifact = None
+                    if meshed is None or meshed["meshed"] is not None:
+                        artifact = await self._artifact_hash(
+                            output.CAE,
+                            analysis,
+                            impl,
+                            script,
+                            request,
+                            "%s:%s" % (options_project.name, format_name),
+                            extra=meshed,
+                        )
                     model = {"model": final_filepath}
                     result = await cache_artifacts.restore_async(cache, artifact, files=model)
                     cached = result is not None
@@ -4663,10 +4689,29 @@ class Shape(ShapeConfiguration):
             # cavity as it is.
             default = MACHINE_FFF if data.method == METHOD_ADDITIVE else MACHINE_MOLD
             chosen = MachineConfig(default, None, declared=False)
-        if data.method in (METHOD_ADDITIVE, METHOD_FORMING) and not data.design:
-            raise pc_cam.CamConfigError(
-                "%s names no design to be made after: it is its own design ('manufacturing: source:')" % name
-            )
+        if data.method == METHOD_FORMING and not data.design:
+            # A print that names no design is its own, and is routed from its
+            # own geometry ('_route_subject_async'); a molding has nothing to be
+            # molded in.
+            raise pc_cam.CamConfigError("%s names no cavity to be molded in ('manufacturing: source:')" % name)
+
+        fmt = None
+        if write:
+            # Worked out before the route is, so that a part kept as STEP or as
+            # an SDF is asked for in that form the first time rather than
+            # routed again for it.
+            fmt = self.config.get(IMPLIED_TYPE_KEY) or self.config.get("type")
+            if fmt not in MATERIALIZED_FORMATS:
+                raise pc_cam.CamConfigError(
+                    "%s is a '%s' part, whose geometry is its own file or script rather than one 'pc cam' writes;"
+                    " leave 'type:' out, or say 'brep', 'step' or 'sdf'" % (name, fmt)
+                )
+            if fmt == "sdf" and chosen.kind != MACHINE_FFF:
+                raise pc_cam.CamConfigError(
+                    "%s: only a print is kept as an SDF; a '%s' makes a solid" % (name, chosen.kind)
+                )
+            if not representation and fmt in ("step", "sdf"):
+                representation = fmt
 
         extra = {pc_cam.MATERIALIZE_KEY: True}
         if representation:
@@ -4716,20 +4761,10 @@ class Shape(ShapeConfiguration):
         if not write:
             return made
 
-        fmt = self.config.get(IMPLIED_TYPE_KEY) or self.config.get("type")
-        if fmt not in MATERIALIZED_FORMATS:
-            raise pc_cam.CamConfigError(
-                "%s is a '%s' part, whose geometry is its own file or script rather than one 'pc cam' writes; leave"
-                " 'type:' out, or say 'brep', 'step' or 'sdf'" % (name, fmt)
-            )
         from .part_factory_manufactured import materialized_path
 
         project = ctx.get_project(self.project_name)
         target = os.path.abspath(filepath or materialized_path(project, self.config))
-        if fmt == "sdf" and chosen.kind != MACHINE_FFF:
-            raise pc_cam.CamConfigError(
-                "%s: only a print is kept as an SDF; a '%s' makes a solid" % (name, chosen.kind)
-            )
         if fmt == "sdf":
             text = made["sdf_script"]
             if not text:
@@ -4752,8 +4787,19 @@ class Shape(ShapeConfiguration):
                 raise pc_cam.CamFailed("%s: the 'pc cam' implementation made nothing" % name)
             payload = shape_envelope.brep_plain(made["product"][shape_envelope.KEY_BREP])
         ctx.ensure_dirs_for_file(target)
-        with open(target, "wb") as f:
-            f.write(payload)
+        # Written beside it and moved over it, so that the file is the old
+        # product or the new one and never a part of either: a write that fails
+        # half way would otherwise leave the part read from a truncated file.
+        # Opened as any file is, so that it gets the permissions any file gets.
+        written = "%s.%d.%d.partial" % (target, os.getpid(), threading.get_ident())
+        try:
+            with open(written, "wb") as f:
+                f.write(payload)
+            os.replace(written, target)
+        except BaseException:
+            if os.path.exists(written):
+                os.remove(written)
+            raise
         made["written"] = target
         return made
 
@@ -4821,6 +4867,34 @@ class Shape(ShapeConfiguration):
                 filepath=filepath,
                 output_dir=output_dir,
                 **kwargs,
+            )
+        )
+
+    def materialize(
+        self,
+        ctx: Context,
+        machine: Optional[str] = None,
+        implementation: Optional[str] = None,
+        write: bool = False,
+        filepath=None,
+        representation: Optional[str] = None,
+        output_dir=None,
+        overrides: Optional[dict] = None,
+        discard_route: bool = True,
+    ) -> dict:
+        """'materialize_async' for a caller that has no event loop of its own."""
+        # By keyword, as 'route' passes its own.
+        return asyncio.run(
+            self.materialize_async(
+                ctx,
+                machine=machine,
+                implementation=implementation,
+                write=write,
+                filepath=filepath,
+                representation=representation,
+                output_dir=output_dir,
+                overrides=overrides,
+                discard_route=discard_route,
             )
         )
 

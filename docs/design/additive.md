@@ -84,7 +84,7 @@ parts:
         topLayers: 5
         bottomLayers: 4
         infill: 20%
-        infillPattern: gyroid
+        infillPattern: grid
         feed: 3000
 ```
 
@@ -465,7 +465,9 @@ follows from its instructions: a print's deposit (`cam_fff.deposit`), what a rou
 stock (`cam_product.removal`, `drilled`), what a saw leaves (`sawn`), a mold's cavity shrunk (`molded`). The product is
 asked of the same implementation as the route, with `materialize: true`, so the two cannot disagree; `pc cam
 --materialize` writes it into the part's file, and the `materialize` check compares a part that has a file of its own
-with it by recorded volume and bounding box. The measurements below are the geometry's own, not yet the route's.
+with it by recorded volume and bounding box, and a cut part or a molding (one solid each) by shape as well: what either
+has that the other has not may be no deeper than the part's tolerance. The measurements below are the geometry's own,
+not yet the route's.
 
 The type-less printed part stopped being a reference to its design. `implied_type` gives it a part type of its own
 whose geometry is its route's deposit:

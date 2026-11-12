@@ -57,6 +57,14 @@ nox-poetry==1.2.0
 # that would ('test_shape_convert') skip when it is absent.
 build123d==0.11.1
 ocpsvg==0.6.0
+# What '//builtin/cam' offsets, clips and strokes a printer's route with
+# ('cam_fff.py'). Like build123d, a test dependency and not a runtime one: the
+# implementation runs in a sandbox that installs it from the file type's
+# 'pythonRequirements', at this same pin. 'test_cam_materialize.py' and
+# 'test_shape_visible.py' load the module in process, and without it here they
+# fail with "No module named 'pyclipper'" on every job CI installs from this
+# file, while a 'poetry install' (the dev group names it too) passes them.
+pyclipper==1.4.0
 # Every optional extra the 'partcad' wheel declares. Neither is a runtime
 # dependency - each carries a client library the core imports lazily, and only
 # when the feature that needs it is switched on - but 'tests/partcad/unit' has

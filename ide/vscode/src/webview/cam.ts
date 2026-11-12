@@ -58,6 +58,15 @@ export function stated(control: CamControl): string {
 }
 
 /**
+ * The same settings tried: the same keys, each with the same value. A key set to null takes a setting out, so it is
+ * not the same as a key left out -- that one is what the part states.
+ */
+export function sameSettings(a: CamSettings, b: CamSettings): boolean {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...keys].every((key) => key in a && key in b && a[key] === b[key]);
+}
+
+/**
  * What the fields say that the part does not: each setting whose field differs
  * from what the part states, as typed, and null for one emptied - taken out.
  * Nothing for a field left as it was.
@@ -270,15 +279,21 @@ export class CamView {
         this.note.classList.toggle('error', error);
     }
 
-    /** Whether Save is under way: nothing can be saved twice at once. */
+    /**
+     * Whether Save is under way: nothing can be saved twice at once, and no field changed meanwhile, since the fields
+     * start again from what the part states once the Save is done.
+     */
     public setSaving(saving: boolean): void {
         this.saving = saving;
         this.refresh();
     }
 
-    /** Save is done: say where it went. The settings are asked for again by the caller, and the fields follow. */
+    /**
+     * Save is done: say where it went. The settings are asked for again by the caller, and the fields follow them --
+     * so they stay as they are, and cannot be changed, until the caller has shown those and ends the Save
+     * ('setSaving'): an edit typed in between would be lost to them.
+     */
     public saved(data: CamSavedData | null | undefined): void {
-        this.setSaving(false);
         if (!data) {
             this.setNote('Saved.');
             return;
@@ -370,7 +385,11 @@ export class CamView {
         this.save.disabled = this.saving || !pending;
         this.revert.disabled = this.saving || !pending;
         for (const control of this.data?.controls ?? []) {
-            this.fields.get(control.key)?.classList.toggle('edited', control.key in this.edits());
+            const field = this.fields.get(control.key);
+            field?.classList.toggle('edited', control.key in this.edits());
+            if (field !== undefined) {
+                field.disabled = this.saving;
+            }
         }
     }
 }
