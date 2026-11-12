@@ -111,10 +111,12 @@
       "xqVersion": "none",
       "jaqVersion": "none"
     },
-    "ghcr.io/devcontainers/features/git-lfs:1": {
-      "autoPull": true,
-      "installDirectlyFromGitHubRelease": true,
-      "version": "3.7.1"
+    // Git LFS from Debian's own archive, by a feature of this repository's:
+    // the published ghcr.io/devcontainers/features/git-lfs has no apt path on
+    // bookworm and checks its download against keyservers, so the image fails
+    // to build whenever none of them answers. See git-lfs-debian/install.sh.
+    "./git-lfs-debian": {
+      "autoPull": true
     },
     // "ghcr.io/devcontainers/features/node:1": {
     //   "version": "1.6.1",
