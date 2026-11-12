@@ -661,7 +661,9 @@ at all).
   `wrappers/cae_support.prepare()` imprints every sketch on the part and puts on each record the faces of the
   part it covers (a sketchless port covers the face it lies on); the same module meshes with gmsh with those
   faces named and writes the result glTF, so the solver-independent half of every implementation lives here
-  once. Coming back, the implementation reports **findings** beside the file it wrote, a JSON array that
+  once. `write_glb` colours per point and first cuts the triangles at every stop of the ramp and at its two
+  ends (`split_at_levels`): a viewer blends the corners' colours, which is the value's colour only inside one
+  straight stretch of the ramp -- a texture would be exact too, but the IDE's painter draws no textures. Coming back, the implementation reports **findings** beside the file it wrote, a JSON array that
   `pc cae` prints, `pc qual test`'s per-analysis checks fail on, and the IDE lists under the model. `cae.py` imports
   nothing from `partcad`, which is what lets it be tested without a sandbox.
 

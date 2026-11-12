@@ -870,7 +870,12 @@ makes an inlet smaller than its face a face of its own; ``faces`` index it in th
 order OCCT maps a shape's faces. ``cae_support``, beside the meta-wrapper and
 importable from any implementation script, meshes it with gmsh with those faces
 named, and draws a result as the glTF the Digital Thread shows -- the half of an
-implementation that does not depend on the solver.
+implementation that does not depend on the solver. A result is coloured per
+point, which every viewer draws, and its triangles are cut wherever the field
+crosses a stop of the colour ramp or the top or bottom of its scale, so that the
+colour a viewer blends across a triangle is the colour of the value there: a
+region past the top of the scale is drawn in the top colour all the way out to
+where the field crosses it.
 
 .. _cam-section:
 
