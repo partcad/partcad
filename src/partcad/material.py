@@ -61,12 +61,22 @@ PHYSICS_FROM_MATERIAL = {"mu": "friction", "density": "density"}
 # fills in where neither the package, nor the object, nor the run states one
 # (see 'partcad.cae_material'). In SI, as every physical quantity here is: a
 # stiffness and a strength in Pa, which is what '//pub/feature/cae/calculix'
-# takes them in.
+# takes them in, a conductivity in W/(m*K) and a viscosity in Pa*s.
+#
+# The parameter is named as the implementations in the index already name it,
+# which is not always the material's own name for it: every thermal analysis
+# there ('//pub/feature/cae/code_aster:thermal', and Elmer's and MOOSE's) takes
+# a 'conductivity', and a material says which conductivity it means.
+#
+# 'viscosity' is what only a fluid states, and a fluid only reaches an
+# analysis of a fluid: see 'partcad.cae_material.FLUID_ANALYSES'.
 ANALYSIS_FROM_MATERIAL = {
     "youngs_modulus": "youngs_modulus",
     "poissons_ratio": "poissons_ratio",
     "yield_strength": "yield_strength",
     "density": "density",
+    "thermal_conductivity": "conductivity",
+    "viscosity": "viscosity",
 }
 
 
@@ -147,6 +157,29 @@ class Material(cmf.Declaration):
         """
         value = self.config.get("yieldStrength")
         return None if value is None else float(value)
+
+    @property
+    def thermal_conductivity(self) -> typing.Optional[float]:
+        """Thermal conductivity in W/(m*K), or None if the package did not state one.
+
+        How readily heat crosses the substance: what a steady heat conduction
+        analysis of a part made of it is solved with. Near room temperature, as
+        a datasheet tabulates it; a conductivity that changes much with
+        temperature is a different material at the other temperature, the way a
+        fluid at another temperature is.
+        """
+        value = self.config.get("thermalConductivity")
+        return None if value is None else float(value)
+
+    @property
+    def is_fluid(self) -> bool:
+        """Whether this is a fluid: a substance that states a viscosity.
+
+        What a scene is filled with, and what a fluid-dynamics analysis meshes
+        a part as -- never what a stress, a mode or a conduction analysis of a
+        part made of it is solved with (see 'partcad.cae_material').
+        """
+        return self.viscosity is not None
 
     @property
     def viscosity(self) -> typing.Optional[float]:
@@ -247,6 +280,8 @@ class Material(cmf.Declaration):
             info["Poissons ratio"] = "%g" % self.poissons_ratio
         if self.yield_strength is not None:
             info["Yield strength"] = "%g Pa" % self.yield_strength
+        if self.thermal_conductivity is not None:
+            info["Thermal conductivity"] = "%g W/(m*K)" % self.thermal_conductivity
         if self.mu is not None:
             info["Mu"] = "%g" % self.mu
         if self.tags:

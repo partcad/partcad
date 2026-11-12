@@ -4018,7 +4018,7 @@ class Shape(ShapeConfiguration):
                     # What the part is made of, where the analysis's own layers
                     # say nothing about it.
                     stated = self._analysis_stated(ctx, format_name, project, kwargs)
-                    filled = pc_cae_material.fill(request, self.get_material(ctx), stated, subject.fraction)
+                    filled = pc_cae_material.fill(request, self.get_material(ctx), stated, subject.fraction, analysis)
                     if filled:
                         pc_logging.debug("%s:%s: from its material: %s" % (self.project_name, self.name, filled))
                     request.update(config.to_data())

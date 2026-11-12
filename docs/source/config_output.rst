@@ -855,15 +855,22 @@ it, saying which implementation and what to do about it:
 
 **What the part is made of** fills the parameters of the substance. A parameter
 the implementation takes -- ``youngs_modulus``, ``poissons_ratio``,
-``yield_strength``, ``density`` -- that neither this section's layers nor the
-scenario's ``params:`` nor the run states is the part's material's, where it
-states it (``youngsModulus``, ``poissonsRatio``, ``yieldStrength`` and
-``density``; see :ref:`materials`); the implementation's own default is what is
-left when neither says. A statement here is about this analysis, and the
-material is a statement about everything made of it, so the narrower one wins.
-A part that is what its printer makes is analysed as its design, with the three
-of those that are per unit of volume scaled by the fraction of the design the
-printer deposits (see :ref:`additive`).
+``yield_strength``, ``density``, ``conductivity`` -- that neither this section's
+layers nor the scenario's ``params:`` nor the run states is the part's
+material's, where it states it (``youngsModulus``, ``poissonsRatio``,
+``yieldStrength``, ``density`` and ``thermalConductivity``; see
+:ref:`materials`); the implementation's own default is what is left when
+neither says. A statement here is about this analysis, and the material is a
+statement about everything made of it, so the narrower one wins. A part that is
+what its printer makes is analysed as its design, with the four of those that
+are per unit of volume scaled by the fraction of the design the printer deposits
+(see :ref:`additive`).
+
+A ``cfd`` analysis is the exception, because what it meshes the part as is the
+fluid that fills it: it takes ``density`` and ``viscosity`` from a part made of
+a fluid -- a material that states a ``viscosity`` -- and nothing from a part
+made of anything else, whose density is not that of what flows through it. A
+fluid, in turn, fills nothing in any other analysis.
 
 ``wrapped`` is the part with every port's sketch imprinted on it, which is what
 makes an inlet smaller than its face a face of its own; ``faces`` index it in the

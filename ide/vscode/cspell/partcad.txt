@@ -55,6 +55,7 @@ colors
 comment
 companions
 compound
+conductivity
 connect
 connectivity
 contact

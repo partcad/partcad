@@ -19,11 +19,14 @@ PLA = {
     "youngsModulus": 3.5e9,
     "poissonsRatio": 0.36,
     "yieldStrength": 5.0e7,
+    "thermalConductivity": 0.13,
 }
+
+WATER = {"density": 999.1, "viscosity": 0.001138, "thermalConductivity": 0.589}
 
 PACKAGE = {
     "name": "//test",
-    "materials": {"pla": dict(PLA), "plain": {"density": 1000}},
+    "materials": {"pla": dict(PLA), "plain": {"density": 1000}, "water": dict(WATER)},
     "parts": {
         "design": {
             "type": "basic",
@@ -66,8 +69,12 @@ def test_a_material_states_what_an_analysis_takes(ctx):
         "poissons_ratio": 0.36,
         "yield_strength": 5.0e7,
         "density": 1240.0,
+        "conductivity": 0.13,
     }
     assert material.material_info()["Yield strength"] == "5e+07 Pa"
+    assert material.material_info()["Thermal conductivity"] == "0.13 W/(m*K)"
+    assert not material.is_fluid
+    assert ctx.get_material("//test:water").is_fluid
 
 
 def test_the_material_fills_what_the_implementation_defaults(ctx):
@@ -107,6 +114,52 @@ def test_a_print_is_its_material_at_the_density_it_is_printed_at(ctx):
     assert request["density"] == pytest.approx(1240 * 0.4)
     # A ratio of strains is not thinner for being printed sparsely.
     assert request["poissons_ratio"] == pytest.approx(0.36)
+
+
+def test_a_thermal_analysis_takes_the_materials_conductivity(ctx):
+    """Every thermal implementation in the index calls it 'conductivity'."""
+    request = {"wrapped": None, "conductivity": 50.0, "ambient_temperature": 20.0}
+    filled = cae_material.fill(request, ctx.get_material("//test:pla"), stated=(), fraction=None, analysis="thermal")
+    assert filled == {"conductivity": pytest.approx(0.13)}
+    assert request["ambient_temperature"] == 20.0
+
+
+def test_a_prints_conductivity_is_thinned_like_its_stiffness(ctx):
+    request = {"wrapped": None, "conductivity": 50.0}
+    cae_material.fill(request, ctx.get_material("//test:pla"), stated=(), fraction=0.25, analysis="thermal")
+    assert request["conductivity"] == pytest.approx(0.13 * 0.25)
+
+
+def _cfd_request():
+    """A CFD implementation's parameters: air at 20 C."""
+    return {"wrapped": None, "density": 1.204, "viscosity": 1.82e-5, "iterations": 50}
+
+
+def test_a_part_made_of_a_fluid_hands_a_cfd_analysis_its_fluid(ctx):
+    request = _cfd_request()
+    filled = cae_material.fill(request, ctx.get_material("//test:water"), stated=(), fraction=None, analysis="cfd")
+    assert request["density"] == pytest.approx(999.1)
+    assert request["viscosity"] == pytest.approx(0.001138)
+    assert set(filled) == {"density", "viscosity"}
+
+
+def test_a_solid_says_nothing_to_a_cfd_analysis(ctx):
+    """A duct's PLA is not the density of the air a CFD analysis meshes it as."""
+    request = _cfd_request()
+    assert cae_material.fill(request, ctx.get_material("//test:pla"), stated=(), fraction=None, analysis="cfd") == {}
+    assert request["density"] == pytest.approx(1.204)
+
+
+def test_a_print_does_not_thin_the_fluid_a_cfd_analysis_is_of(ctx):
+    request = _cfd_request()
+    cae_material.fill(request, ctx.get_material("//test:water"), stated=(), fraction=0.2, analysis="cfd")
+    assert request["density"] == pytest.approx(999.1)
+
+
+def test_a_fluid_says_nothing_to_a_stress_analysis(ctx):
+    request = _request(density=7850)
+    assert cae_material.fill(request, ctx.get_material("//test:water"), stated=(), fraction=None, analysis="fea") == {}
+    assert request["density"] == 7850
 
 
 def test_a_print_of_nothing_named_is_the_implementations_default_thinned(ctx):
