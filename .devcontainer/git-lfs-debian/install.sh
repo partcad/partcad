@@ -72,8 +72,13 @@ if ! git lfs update; then
     hooks="$(git rev-parse --git-path hooks)"
     for hook in pre-push post-checkout post-commit post-merge; do
         [ -f "${hooks}/${hook}" ] || continue
-        if grep -qvE "^(#!/bin/sh|${guard}|git lfs ${hook} \"\\\$@\"|)\$" "${hooks}/${hook}"; then
-            echo "(!) ${hooks}/${hook} is not a Git LFS hook: merge it by hand, see 'git lfs update --manual'" >&2
+        # grep exits 1 only when it read the whole hook and found no other
+        # line. 0 is a line of someone else's, and 2 a hook it could not
+        # read, which '--force' would overwrite all the same without reading.
+        found=0
+        grep -qvE "^(#!/bin/sh|${guard}|git lfs ${hook} \"\\\$@\"|)\$" "${hooks}/${hook}" || found=$?
+        if [ "${found}" -ne 1 ]; then
+            echo "(!) ${hooks}/${hook} is not a Git LFS hook, or could not be read: merge it by hand, see 'git lfs update --manual'" >&2
             exit 1
         fi
     done
