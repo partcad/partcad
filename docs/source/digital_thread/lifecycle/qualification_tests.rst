@@ -322,7 +322,7 @@ Settings
 
 **Applies to** a part with ``manufacturing: method: additive``, ``subtractive`` or ``forming`` that names a ``source:`` and has a geometry of its own. ``pc qual test -f materialize <object>`` runs it alone.
 
-Whether a part is what its machine makes by following its instructions: the print its design's route deposits, what a router, a laser, a drill or a saw leaves of its stock, what a mold gives back of its cavity. ``pc cam --materialize`` writes that into the part's own file; this asks whether the file - or a model somebody drew, or an as-printed scan - still is it. Compared by volume and extent, within the part's tolerance; a print may also match its outside (its sections stacked up), which is what a part modelled solid is.
+Whether a part is what its machine makes by following its instructions: the print its design's route deposits, what a router, a laser, a drill or a saw leaves of its stock, what a mold gives back of its cavity. ``pc cam --materialize`` writes that into the part's own file; this asks whether the file - or a model somebody drew, or an as-printed scan - still is it. Compared by volume and extent, within the part's tolerance; a print may also match its outside (its sections stacked up), which is what a part modelled solid is. A cut part or a molding that is the right size is compared by shape as well, since a hole moved across a plate changes neither: what either has that the other has not may be no deeper than the tolerance anywhere.
 
 A part that names several machines is held to what each of them makes, since each is a claim that it could be made that way.
 
@@ -334,7 +334,8 @@ Anything but a part; a part made some other way or naming nothing it is made fro
 When it fails
 ^^^^^^^^^^^^^
 
-* ``It is not the size its machine makes it`` / ``It is not what its machine makes``: the file is from other settings, another design or another stock. Run ``pc cam --materialize`` to write what the machine makes now, or fix the manufacturing settings.
+* ``It is not the size its machine makes it`` / ``It is not what its machine makes`` / ``It is not the shape its machine makes``: the file is from other settings, another design or another stock. The last says where the first difference found is, and how deep. Run ``pc cam --materialize`` to write what the machine makes now, or fix the manufacturing settings.
+* ``It could not be compared with what its machine makes``: the boolean between the two failed; the sentence says why.
 * ``What its machine makes could not be worked out``: see ``pc cam`` for the route; the sentence says why.
 
 Settings

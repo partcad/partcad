@@ -120,8 +120,11 @@ part that has one to what its machine makes (the ``materialize`` check): the
 same extent within the part's tolerance, and the same volume within that
 tolerance over its surface. A part modelled solid and printed with infill
 passes on its outside -- the print's layers stacked up -- since that is what it
-looks like, if not what it weighs. A part with no geometry of its own *is* the
-product, and has nothing to compare.
+looks like, if not what it weighs. A cut part or a molding is compared by shape
+as well, since a hole moved across a plate changes neither its extent nor its
+volume: what either has that the other has not may be no deeper than the
+tolerance anywhere. A part with no geometry of its own *is* the product, and
+has nothing to compare.
 
 .. _additive:
 

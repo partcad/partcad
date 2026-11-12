@@ -76,6 +76,18 @@ async def enclosure(ctx, envelope, source_envelope) -> dict:
     return await _analyze(ctx, envelope, "enclosure", source=source_envelope)
 
 
+async def deviation(ctx, envelope, other_envelope, tolerance: float) -> dict:
+    """How far one solid is from another: what each has that the other has not, and how deep.
+
+    'deepest' is the piece of that found deepest -- 'side' says whose it is
+    ('surplus' is the first shape's, 'shortfall' the second's), 'depth' how
+    deep it is at least, and 'center' where it is -- or None where there is
+    nothing worth measuring. See 'wrappers/wrapper_manufacturability.deviation',
+    which is where it is worked out, for how deep is measured.
+    """
+    return await _analyze(ctx, envelope, "deviation", other=other_envelope, tolerance=tolerance)
+
+
 async def wall_alignment(ctx, envelope, tool_axis_vector, source_envelope=None) -> dict:
     """How the shape's faces lie relative to the axis a machine works along.
 

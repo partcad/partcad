@@ -23,7 +23,7 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def free_bounds(request):
@@ -133,6 +133,27 @@ def _volume(shape) -> float:
     return float(properties.Mass())
 
 
+def _area(shape) -> float:
+    """The area of a shape's surface, in square millimetres."""
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    properties = GProp_GProps()
+    BRepGProp.SurfaceProperties_s(shape, properties)
+    return float(properties.Mass())
+
+
+def _center(shape) -> list:
+    """A solid's centre of mass, which is where a piece of it is said to be."""
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    properties = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, properties)
+    center = properties.CentreOfMass()
+    return [center.X(), center.Y(), center.Z()]
+
+
 def _cut(minuend, subtrahend):
     """What is left of one shape when another is taken out of it."""
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
@@ -172,6 +193,176 @@ def enclosure(request):
         "source_volume": _volume(source),
         "outside_volume": _volume(_cut(part, source)),
         "removed_volume": _volume(_cut(source, part)),
+    }
+
+
+# A piece of what two shapes do not share whose mean thickness is under this
+# fraction of the tolerance is not looked at any closer: it is at its thickest
+# a few times its mean -- a crescent half again, a wedge twice, a cube three
+# times -- so it is within the tolerance however it is shaped.
+DEVIATION_SAMPLED_FROM = 1.0 / 3.0
+
+# How many of the pieces are looked at closer, the thickest on average first,
+# and how many points of each one at most. What two shapes that match leave is
+# slivers along their surfaces; a part drawn from arcs that its machine's
+# G-code follows as chords leaves one per chord, and every one of them as thin
+# as the chord's sagitta.
+DEVIATION_PIECES = 32
+DEVIATION_SAMPLES = 600
+
+
+def _solids(shape):
+    """The solids of a shape, which is what a boolean's result is made of."""
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    found = []
+    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+    while explorer.More():
+        found.append(explorer.Current())
+        explorer.Next()
+    return found
+
+
+def _faces(shape):
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    found = []
+    explorer = TopExp_Explorer(shape, TopAbs_FACE)
+    while explorer.More():
+        found.append(TopoDS.Face_s(explorer.Current()))
+        explorer.Next()
+    return found
+
+
+def _face_points(face, limit: int) -> list:
+    """Up to 'limit' points on a meshed face: its nodes and the middles of its triangles.
+
+    The middles are what reaches the inside of a face: a plane is meshed from
+    the nodes on its boundary alone, and the point of a piece furthest from the
+    surface across it is in the middle of one. A middle is off a curved face by
+    no more than the deflection it was meshed at.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.gp import gp_Pnt
+    from OCP.TopLoc import TopLoc_Location
+
+    location = TopLoc_Location()
+    mesh = BRep_Tool.Triangulation_s(face, location)
+    if mesh is None:
+        return []
+    placed = location.Transformation()
+    points = []
+    for index in range(1, mesh.NbTriangles() + 1):
+        a, b, c = (mesh.Node(node) for node in mesh.Triangle(index).Get())
+        points.append(
+            gp_Pnt((a.X() + b.X() + c.X()) / 3.0, (a.Y() + b.Y() + c.Y()) / 3.0, (a.Z() + b.Z() + c.Z()) / 3.0)
+        )
+    for index in range(1, mesh.NbNodes() + 1):
+        points.append(mesh.Node(index))
+    step = max(1, -(-len(points) // limit))
+    return [point.Transformed(placed) for point in points[::step]]
+
+
+def _depth(piece, deflection: float) -> float:
+    """How far the two surfaces that bound a piece are apart where they are furthest apart.
+
+    Every face of a piece is part of the surface of one of the two shapes, and
+    the faces across from it are the other's; so the distance from a point of
+    one face to the nearest of the others is how far the two shapes are apart
+    there, and the furthest such point is how far they are apart at all. Asked
+    of points sampled from the piece's mesh, so it is short of the truth by no
+    more than the spacing between them and over it by no more than the
+    deflection, which the caller takes off.
+    """
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.TopoDS import TopoDS_Compound
+
+    BRepMesh_IncrementalMesh(piece, deflection, False, 0.5, True)
+    faces = _faces(piece)
+    if len(faces) < 2:
+        return 0.0
+    per_face = max(8, DEVIATION_SAMPLES // len(faces))
+    deepest = 0.0
+    for index, face in enumerate(faces):
+        others = TopoDS_Compound()
+        builder = BRep_Builder()
+        builder.MakeCompound(others)
+        for other_index, other in enumerate(faces):
+            if other_index != index:
+                builder.Add(others, other)
+        for point in _face_points(face, per_face):
+            distance = BRepExtrema_DistShapeShape(BRepBuilderAPI_MakeVertex(point).Vertex(), others)
+            if distance.IsDone() and distance.NbSolution() > 0:
+                deepest = max(deepest, distance.Value())
+    return deepest
+
+
+def deviation(request):
+    """How far two solids are apart: what each has that the other has not, and how deep it is.
+
+    Volume and extent say whether two shapes are the same size; they do not say
+    whether they are the same shape, since a hole moved across a plate leaves
+    both as they were. What does is what one has and the other has not, both
+    ways round: two shapes that are one within a tolerance leave nothing of it
+    but slivers along their surfaces, none deeper than the tolerance, and a
+    feature that is somewhere else, the wrong size or missing leaves a piece as
+    deep as it is wrong.
+
+    Each piece is measured by its mean thickness first, twice its volume over
+    its surface, which is a sliver's thickness exactly and short of anything
+    chunkier: a hole moved by 'd' leaves two crescents 'd' wide at the middle
+    and about three fifths of that on average. So the pieces that could be
+    deeper than the tolerance are looked at closer ('_depth'), and a piece is
+    as deep as the greater of the two. The first piece found deeper than the tolerance ends the
+    search: one is enough to say the two are not the same, and it is the one
+    reported, with where it is.
+    """
+    shape = request["shape"]
+    other = request["other"]
+    tolerance = float(request["tolerance"])
+    deflection = tolerance / 20.0
+
+    pieces = []
+    volumes = {}
+    for side, (minuend, subtrahend) in (("surplus", (shape, other)), ("shortfall", (other, shape))):
+        volumes[side] = 0.0
+        for solid in _solids(_cut(minuend, subtrahend)):
+            volume = _volume(solid)
+            if volume <= 0.0:
+                continue
+            volumes[side] += volume
+            area = _area(solid)
+            mean = 2.0 * volume / area if area > 0.0 else 0.0
+            pieces.append({"side": side, "solid": solid, "volume": volume, "mean": mean})
+
+    pieces.sort(key=lambda piece: piece["mean"], reverse=True)
+    deepest = None
+    for piece in pieces[:DEVIATION_PIECES]:
+        depth = piece["mean"]
+        if depth <= tolerance * DEVIATION_SAMPLED_FROM:
+            break
+        depth = max(depth, _depth(piece["solid"], deflection) - deflection)
+        if deepest is None or depth > deepest["depth"]:
+            deepest = {
+                "side": piece["side"],
+                "depth": depth,
+                "volume": piece["volume"],
+                "center": _center(piece["solid"]),
+            }
+        if depth > tolerance:
+            break
+
+    return {
+        "surplus_volume": volumes["surplus"],
+        "shortfall_volume": volumes["shortfall"],
+        "pieces": len(pieces),
+        "deepest": deepest,
     }
 
 
@@ -429,6 +620,7 @@ OPERATIONS = {
     "free_bounds": free_bounds,
     "flatness": flatness,
     "enclosure": enclosure,
+    "deviation": deviation,
     "wall_alignment": wall_alignment,
     "cut": cut,
 }

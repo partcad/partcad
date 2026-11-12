@@ -23,6 +23,7 @@ What a route actually makes is 'test_cam_materialize.py's.
 
 import asyncio
 import os
+import sys
 
 import pytest
 import yaml
@@ -30,6 +31,7 @@ import yaml
 import partcad as pc
 from partcad import shape_envelope
 from partcad.part_config_manufacturing import IMPLIED_TYPE_KEY, MANUFACTURED_TYPE
+from partcad.qual.basic import manufacturability_analysis
 from partcad.qual.basic.materialize import MaterializeTest
 
 PACKAGE = {
@@ -403,6 +405,7 @@ def test_a_part_cut_either_way_is_held_to_what_each_machine_makes(tmp_path, monk
 
     monkeypatch.setattr(pc.shape.Shape, "get_wrapped", wrapped)
     monkeypatch.setattr(pc.shape.Shape, "materialize_async", materialize)
+    _shapes_match(monkeypatch)
     with caplog.at_level("ERROR"):
         verdict = asyncio.run(MaterializeTest().test([], context, context.get_part("//test:cut")))
     assert verdict is MaterializeTest.TEST_FAILED
@@ -422,6 +425,189 @@ def test_a_machine_that_cannot_make_it_fails_the_check(ctx, monkeypatch, caplog)
     with caplog.at_level("ERROR"):
         assert _verdict(ctx, "scanned") is MaterializeTest.TEST_FAILED
     assert "could not be worked out: no printer" in caplog.text
+
+
+#
+# The shape of a cut part or a molding
+#
+
+
+def _shapes_match(monkeypatch, deepest=None, broken=None):
+    """Answer the shape comparison without a sandbox: 'deepest' is the piece it found, None for none.
+
+    What it is asked with is returned, one tolerance per comparison.
+    """
+    asked = []
+
+    async def deviation(ctx, envelope, other_envelope, tolerance):
+        asked.append(tolerance)
+        if broken:
+            raise Exception(broken)
+        return {"surplus_volume": 0.0, "shortfall_volume": 0.0, "pieces": 0, "deepest": deepest}
+
+    monkeypatch.setattr(manufacturability_analysis, "deviation", deviation)
+    return asked
+
+
+def _drilled(tmp_path, method="subtractive"):
+    """A plate with a hole in it that claims to be what its machine makes: '(context, part)'."""
+    manufacturing = {"method": method, "source": "stock"}
+    if method == "subtractive":
+        manufacturing.update(instructions="holes", drill={"diameter": 6})
+    else:
+        manufacturing.update(mold={"shrinkage": "0%"})
+    package = {
+        "name": "//test",
+        "sketches": {"holes": {"type": "basic", "circle": 3}},
+        "parts": {
+            "stock": {"type": "basic", "cuboid": [20, 10, 5]},
+            "plate": {
+                "type": "basic",
+                "cuboid": [20, 10, 5],
+                "parameters": {"tolerance": {"type": "float", "default": 0.05}},
+                "manufacturing": manufacturing,
+            },
+        },
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(package))
+    context = pc.Context(str(tmp_path))
+    return context, context.get_part("//test:plate")
+
+
+MOVED = {"side": "shortfall", "depth": 2.04, "volume": 141.37, "center": [10.0, 10.0, 2.5]}
+
+
+@pytest.mark.parametrize("method", ["subtractive", "forming"])
+def test_a_cut_or_a_molding_the_right_size_is_compared_by_shape_too(tmp_path, monkeypatch, caplog, method):
+    """A hole moved across the plate: the same volume, the same extent, and not the same part."""
+    context, part = _drilled(tmp_path, method)
+    assert MaterializeTest().inapplicable(part) is None
+    _arrange(monkeypatch, _envelope(500.0, BOX), _envelope(500.0, BOX))
+    asked = _shapes_match(monkeypatch, deepest=MOVED)
+
+    with caplog.at_level("ERROR"):
+        verdict = asyncio.run(MaterializeTest().test([], context, part))
+
+    assert verdict is MaterializeTest.TEST_FAILED
+    # At the part's own tolerance, and said where and by how much.
+    assert asked == [0.05]
+    assert (
+        "It is not the shape its machine makes: its machine leaves 141.4 mm3 around (10.00, 10.00, 2.50) that it"
+        " does not have, at least 2.040 mm deep where its tolerance is 0.050 mm" in caplog.text
+    )
+
+
+def test_what_the_part_has_and_its_machine_does_not_leave_is_said_so(tmp_path, monkeypatch, caplog):
+    context, part = _drilled(tmp_path)
+    _arrange(monkeypatch, _envelope(500.0, BOX), _envelope(500.0, BOX))
+    _shapes_match(monkeypatch, deepest=dict(MOVED, side="surplus", center=[20.0, 20.0, -1e-15]))
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(MaterializeTest().test([], context, part)) is MaterializeTest.TEST_FAILED
+    assert "it has 141.4 mm3 around (20.00, 20.00, 0.00) that its machine does not leave" in caplog.text
+
+
+@pytest.mark.parametrize("deepest", [None, dict(MOVED, depth=0.05)])
+def test_a_cut_within_its_tolerance_of_what_its_machine_leaves_passes(tmp_path, monkeypatch, deepest):
+    """Nothing between the two, or nothing deeper than the tolerance: slivers along the surfaces."""
+    context, part = _drilled(tmp_path)
+    _arrange(monkeypatch, _envelope(500.0, BOX), _envelope(500.0, BOX))
+    _shapes_match(monkeypatch, deepest=deepest)
+    assert asyncio.run(MaterializeTest().test([], context, part)) is MaterializeTest.TEST_PASSED
+
+
+def test_a_cut_the_wrong_size_is_not_compared_by_shape(tmp_path, monkeypatch, caplog):
+    """Volume and extent first: they cost nothing, and a part they fail is not worth a boolean."""
+    context, part = _drilled(tmp_path)
+    _arrange(monkeypatch, _envelope(500.0, BOX), _envelope(560.0, BOX[:3] + (12.0, 5.0, 5.0)))
+    asked = _shapes_match(monkeypatch)
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(MaterializeTest().test([], context, part)) is MaterializeTest.TEST_FAILED
+    assert "its extent differs by 2.000 mm" in caplog.text
+    assert asked == []
+
+
+def test_a_print_is_not_compared_by_shape(ctx, monkeypatch):
+    """Tens of thousands of prisms, and allowed to be its outside, which no boolean against it is."""
+    _arrange(monkeypatch, _envelope(500.0, BOX), _envelope(500.0, BOX))
+    asked = _shapes_match(monkeypatch, deepest=MOVED)
+    assert _verdict(ctx, "scanned") is MaterializeTest.TEST_PASSED
+    assert asked == []
+
+
+def test_a_cut_that_cannot_be_compared_by_shape_fails(tmp_path, monkeypatch, caplog):
+    context, part = _drilled(tmp_path)
+    _arrange(monkeypatch, _envelope(500.0, BOX), _envelope(500.0, BOX))
+    _shapes_match(monkeypatch, broken="the boolean operation failed")
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(MaterializeTest().test([], context, part)) is MaterializeTest.TEST_FAILED
+    assert "It could not be compared with what its machine makes: the boolean operation failed" in caplog.text
+
+
+def _plate(hole=(10.0, 10.0), radius=3.0, pocket=None):
+    """A 100 x 100 x 5 mm plate with a hole through it and, if asked, a 30 mm pocket 'pocket' deep."""
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    def cut(minuend, subtrahend):
+        operation = BRepAlgoAPI_Cut(minuend, subtrahend)
+        operation.Build()
+        return operation.Shape()
+
+    plate = BRepPrimAPI_MakeBox(100.0, 100.0, 5.0).Shape()
+    plate = cut(
+        plate, BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(hole[0], hole[1], -1.0), gp_Dir(0, 0, 1)), radius, 7.0).Shape()
+    )
+    if pocket is not None:
+        plate = cut(plate, BRepPrimAPI_MakeBox(gp_Pnt(50.0, 50.0, 5.0 - pocket), 30.0, 30.0, 10.0).Shape())
+    return plate
+
+
+def _deviation(shape, other, tolerance=0.1):
+    """The shape comparison itself, against real geometry, in this process."""
+    sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+    import wrapper_manufacturability
+
+    return wrapper_manufacturability.deviation({"shape": shape, "other": other, "tolerance": tolerance})
+
+
+def test_two_solids_that_are_one_leave_nothing_to_measure():
+    measured = _deviation(_plate(), _plate())
+    assert measured["deepest"] is None
+    assert measured["surplus_volume"] == pytest.approx(0.0) and measured["shortfall_volume"] == pytest.approx(0.0)
+
+
+def test_a_hole_moved_across_a_plate_is_found_where_it_is():
+    """The same volume and the same extent, which is why the shape is compared at all."""
+    measured = _deviation(_plate(hole=(10.0, 10.0)), _plate(hole=(20.0, 20.0)))
+    deepest = measured["deepest"]
+    assert measured["surplus_volume"] == pytest.approx(measured["shortfall_volume"])
+    assert deepest["depth"] > 1.0
+    assert deepest["volume"] == pytest.approx(3.0 * 3.0 * 3.14159265 * 5.0, rel=1e-3)
+    # What the part has is where the other's hole is, and the other way round.
+    where = (20.0, 20.0, 2.5) if deepest["side"] == "surplus" else (10.0, 10.0, 2.5)
+    assert deepest["center"] == pytest.approx(list(where), abs=1e-3)
+
+
+@pytest.mark.parametrize("moved, deeper", [(0.08, False), (0.15, True)])
+def test_a_hole_moved_by_about_the_tolerance_is_measured_by_how_far(moved, deeper):
+    """Two crescents as wide as the move at the middle, and about three fifths of that on average.
+
+    The mean alone would pass the hole moved by 0.15 mm at a 0.1 mm tolerance;
+    looked at closer, the crescent is as deep as the move.
+    """
+    deepest = _deviation(_plate(hole=(10.0, 10.0)), _plate(hole=(10.0 + moved, 10.0)))["deepest"]
+    assert deepest["depth"] == pytest.approx(moved, abs=0.01)
+    assert (deepest["depth"] > 0.1) is deeper
+
+
+def test_a_pocket_cut_deeper_is_as_deep_as_the_difference():
+    deepest = _deviation(_plate(pocket=2.0), _plate(pocket=2.2))["deepest"]
+    # The part has the material the deeper pocket takes away.
+    assert deepest["side"] == "surplus"
+    assert deepest["depth"] == pytest.approx(0.2, abs=0.005)
+    assert deepest["volume"] == pytest.approx(30.0 * 30.0 * 0.2)
+    assert deepest["center"] == pytest.approx([65.0, 65.0, 2.9], abs=1e-3)
 
 
 def test_the_verdict_is_keyed_on_what_it_is_made_from_and_how(tmp_path):

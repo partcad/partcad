@@ -21,15 +21,21 @@ what it leaves. A part that could be made on several machines claims to be what
 each of them makes, and is held to each, as the `cam` check holds it to a route
 on each.
 
-Compared by what the shapes measured as they were built -- the volume and the
-bounding box each payload carries -- with no boolean between them: a print is
-tens of thousands of prisms, and the question is whether the two are the same
-part, which their extent and their volume answer to within the part's own
-tolerance. The volume may differ by the tolerance over the box's surface; every
-side of the box by the tolerance. A print is also allowed to be its outside:
-a part modelled solid that is printed with infill matches the print's sections
-stacked up (the route's `solid_volume`), which is what it looks like and weighs
-nothing like.
+Compared first by what the shapes measured as they were built -- the volume and
+the bounding box each payload carries -- which costs nothing: the volume may
+differ by the tolerance over the box's surface, and every side of the box by the
+tolerance. A print is compared by nothing more. It is tens of thousands of
+prisms, which no boolean is worth running against, and it is allowed to be its
+outside: a part modelled solid that is printed with infill matches the print's
+sections stacked up (the route's `solid_volume`), which is what it looks like
+and weighs nothing like.
+
+A cut part and a molding are one solid each, and the same size is not the same
+shape: a hole moved across a plate leaves the volume and the extent as they
+were. So where those agree, the two are compared by shape as well -- what each
+has that the other has not may be nowhere deeper than the tolerance (see
+'manufacturability_analysis.deviation') -- and the sentence says where the first
+piece found deeper is.
 """
 
 from ... import shape_envelope
@@ -38,6 +44,7 @@ from ...part_config import PartConfiguration
 from ...part_config_manufacturing import (
     MANUFACTURED_TYPE,
     MATERIALIZED_METHODS,
+    METHOD_FORMING,
     METHOD_SUBTRACTIVE,
     ROUTED_MACHINES,
     says_how_it_is_cut,
@@ -46,6 +53,9 @@ from ..qualification import BasicQualification, Qualification
 
 # What the part is compared at when it states no tolerance, in mm.
 DEFAULT_TOLERANCE = 0.1
+
+# The methods whose product is one solid, which is compared by shape too.
+SHAPE_COMPARED = (METHOD_SUBTRACTIVE, METHOD_FORMING)
 
 
 def _measured(envelope):
@@ -133,6 +143,40 @@ def _mismatch(own, made, tolerance):
     return None
 
 
+async def _shape_mismatch(ctx, own, made, tolerance):
+    """Where the part is not the shape its machine makes, as a sentence; None where it is.
+
+    Asked only of a part already the product's size and volume, which is what
+    leaves a feature that is in the wrong place, or the wrong shape at the same
+    volume, to be found here.
+    """
+    from .manufacturability_analysis import deviation
+
+    try:
+        measured = await deviation(ctx, own, made.get("product"), tolerance)
+    except Exception as e:  # pylint: disable=broad-except
+        return "It could not be compared with what its machine makes: %s" % e
+    deepest = measured.get("deepest")
+    if not deepest or deepest["depth"] <= tolerance + 1e-6:
+        return None
+    if deepest["side"] == "surplus":
+        what = "it has %.1f mm3 around (%.2f, %.2f, %.2f) that its machine does not leave"
+    else:
+        what = "its machine leaves %.1f mm3 around (%.2f, %.2f, %.2f) that it does not have"
+    return (
+        "It is not the shape its machine makes: "
+        + what
+        + ", at least %.3f mm deep where its tolerance is %.3f mm (run 'pc cam --materialize' to write what the"
+        " machine makes)"
+    ) % (
+        deepest["volume"],
+        # Rounded first, and a negative zero made a zero: "(0.00, 24.00, -0.00)" reads as an error.
+        *(round(coordinate, 2) + 0.0 for coordinate in deepest["center"]),
+        deepest["depth"],
+        tolerance,
+    )
+
+
 class MaterializeTest(BasicQualification):
     WRAPPERS = ("manufacturability.py",)
 
@@ -180,6 +224,7 @@ class MaterializeTest(BasicQualification):
         tolerance = float(tolerance) if tolerance else DEFAULT_TOLERANCE
 
         machines, _reason = _compared(shape)
+        method = PartConfiguration.get_manufacturing_data(shape).method
         for machine in machines:
             on = "" if machine is None else "On its '%s': " % machine
             try:
@@ -187,6 +232,8 @@ class MaterializeTest(BasicQualification):
             except Exception as e:  # pylint: disable=broad-except
                 return self.failed(shape, "%sWhat its machine makes could not be worked out: %s", on, e)
             mismatch = _mismatch(own, made, tolerance)
+            if mismatch is None and method in SHAPE_COMPARED:
+                mismatch = await _shape_mismatch(ctx, own, made, tolerance)
             if mismatch is not None:
                 return self.failed(shape, "%s%s", on, mismatch)
         return self.passed(shape)
