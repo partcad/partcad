@@ -43,18 +43,29 @@ fi
 # The filter for this user, and then the repository's hooks. The workspace
 # is usually a checkout made outside the container, whose hooks a newer Git
 # LFS may have written, and this older one refuses to replace hooks worded
-# differently from its own ("Hook already exists", exit 2). A pre-push hook
-# with a line that runs 'git lfs pre-push' works whichever version wrote it,
-# so it is kept. Anything else in its place still fails, a hook that only
-# mentions the command in a comment included, since without that line a
-# push from the container would leave its LFS objects behind.
+# differently from its own ("Hook already exists", exit 2).
+#
+# Whether a hook would still run 'git lfs' is not something to judge by
+# reading it: a line can be commented out, or follow an 'exit'. So a refused
+# hook is replaced only if it IS a Git LFS hook: a '#!/bin/sh' line, Git
+# LFS's guard against 'git-lfs' missing from the PATH (worded differently by
+# each version, so only its shape is matched), the one 'git lfs <hook> "$@"'
+# line, and nothing else. Then every Git LFS hook is rewritten as this
+# version's own. Any other line makes it someone's own hook, and the step
+# fails, for them to merge by hand: without a working pre-push hook, a push
+# from the container would leave its LFS objects behind.
 git lfs install --skip-repo
 if ! git lfs update; then
-    if grep -qsE '^[[:space:]]*git lfs pre-push( |$)' "$(git rev-parse --git-path hooks)/pre-push"; then
-        echo "(!) Keeping the Git LFS hooks this repository already has"
-    else
-        exit 1
-    fi
+    hooks="$(git rev-parse --git-path hooks)"
+    for hook in pre-push post-checkout post-commit post-merge; do
+        [ -f "${hooks}/${hook}" ] || continue
+        if grep -qvE "^(#!/bin/sh|command -v git-lfs >/dev/null 2>&1 \|\| \{ .*; exit 2; \}|git lfs ${hook} \"\\\$@\"|)$" "${hooks}/${hook}"; then
+            echo "(!) ${hooks}/${hook} is not a Git LFS hook: merge it by hand, see 'git lfs update --manual'" >&2
+            exit 1
+        fi
+    done
+    echo "(!) Replacing the Git LFS hooks another version wrote with this version's"
+    git lfs update --force
 fi
 git lfs pull
 EOF
