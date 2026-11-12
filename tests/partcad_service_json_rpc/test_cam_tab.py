@@ -12,6 +12,8 @@ to a temporary directory; what is shown is caught where it leaves for the IDE
 what a print is made of is pinned beside 'partcad.cam_view' and the wrappers.
 """
 
+import os
+
 import pytest
 
 import partcad as pc
@@ -162,6 +164,50 @@ def test_save_that_cannot_make_the_file_again_puts_the_settings_back(session, pa
     assert (package / "partcad.yaml").read_text() == before
     assert (package / "print.brep").read_text() == "an old print"
     # And the next request reads the settings as they were.
+    again = operations.cam_settings(session, {"package": "//", "object": "print"})
+    assert next(control for control in again["controls"] if control["key"] == "infill")["value"] == "20%"
+
+
+def test_settings_put_back_are_read_back_within_one_tick_of_the_save(session, package, monkeypatch):
+    """Windows stamps a file's time by a clock tick of about 16 ms, and a Save put back is the same size as it.
+
+    The file was last written a while before the Save, so the Save is seen; the
+    Save and putting it back land in one tick, so to a stat the file put back is
+    the file saved, and the package went on reading the settings that were
+    refused. The clock here moves once, as the Save writes, and then stands.
+    """
+    import partcad.context
+    import partcad.project_local
+    from partcad.project import Project
+
+    tick = [0]
+
+    def stamped(filename):
+        try:
+            return (tick[0], os.stat(filename).st_size)
+        except OSError:
+            return None
+
+    save = Project.set_machine_settings
+
+    def saved_a_tick_later(self, *args, **kwargs):
+        tick[0] += 1
+        return save(self, *args, **kwargs)
+
+    monkeypatch.setattr(partcad.context, "file_stat", stamped)
+    monkeypatch.setattr(partcad.project_local, "file_stat", stamped)
+    monkeypatch.setattr(Project, "set_machine_settings", saved_a_tick_later)
+    (package / "print.brep").write_text("an old print")
+
+    async def broken(self, ctx, machine=None, write=False, **kwargs):
+        raise pc.cam.CamFailed("the printer is out of filament")
+
+    monkeypatch.setattr(Shape, "materialize_async", broken)
+    cam_view.forget_products()
+    operations.cam_settings(session, {"package": "//", "object": "print"})
+    with pytest.raises(JsonRpcError):
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": {"infill": "35%"}})
+
     again = operations.cam_settings(session, {"package": "//", "object": "print"})
     assert next(control for control in again["controls"] if control["key"] == "infill")["value"] == "20%"
 

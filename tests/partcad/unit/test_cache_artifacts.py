@@ -1383,11 +1383,18 @@ def test_a_scene_whose_prints_collide_as_their_designs_is_not_an_export(exported
     project = ctx.get_project("//export-cache")
     impl, path = part.output_getopts(ctx, "toy", project, filepath=str(tmp_path / "out" / "bracket.toy"))
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    # A scene goes to a file of its own, as a simulation's does. The key has no
+    # path in it, so this is still the export's question asked again, and a
+    # second run into the export's file could be the same size, the same file
+    # and, on Windows, the same 16 ms tick: the run would look as though it had
+    # written nothing, and its answer would not be kept ('_written_besides').
+    scene = str(tmp_path / "out" / "scene.toy")
 
     async def once(outsides):
         script = await part._materialize_output_script(ctx, impl)
         request = {"wrapped": {"brep": b"scene"}, "shape_name": part.name}
-        return await part._output_run_async(ctx, impl, script, request, path, outsides=outsides)
+        where = path if outsides is None else scene
+        return await part._output_run_async(ctx, impl, script, request, where, outsides=outsides)
 
     _run(once(None))
     _run(once(visual.Substitution({}, [["//export-cache:design", "key-of-the-design"]])))

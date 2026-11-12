@@ -4793,8 +4793,11 @@ def cam_save(session, params):
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
     pc.logging.info("Saved the settings of %s into %s" % (path, written))
     # The package as it now reads: what is materialized is what the saved
-    # declaration makes, and what the next request about it sees.
-    ctx.reload_changed_packages([part.project_name])
+    # declaration makes, and what the next request about it sees. Reloaded
+    # because it was written here, not because a stat says so: one inside the
+    # same tick as the file's last write, at the same size, says nothing
+    # changed (see 'Context.reload_packages').
+    ctx.reload_packages([part.project_name])
     fresh = ctx.get_part(path) or part
     answer = {"object": path, "config": written, "materialized": None, "stats": None}
     try:
@@ -4805,7 +4808,7 @@ def cam_save(session, params):
         if before is not None:
             with open(config_path, "wb") as f:
                 f.write(before)
-            ctx.reload_changed_packages([part.project_name])
+            ctx.reload_packages([part.project_name])
             cam_view.forget_products()
             pc.logging.info("Put the settings of %s back as they were in %s" % (path, config_path))
         if isinstance(e, (pc.cam.CamConfigError, pc.cam.CamFailed)):
