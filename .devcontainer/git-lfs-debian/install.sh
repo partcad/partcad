@@ -40,7 +40,21 @@ if ! git lfs ls-files >/dev/null 2>&1; then
     echo "(!) Skipping 'git lfs pull': not in a Git repository"
     exit 0
 fi
-git lfs install
+# The filter for this user, and then the repository's hooks. The workspace
+# is usually a checkout made outside the container, whose hooks a newer Git
+# LFS may have written, and this older one refuses to replace hooks worded
+# differently from its own ("Hook already exists", exit 2). Hooks that run
+# 'git lfs pre-push' work whichever version wrote them, so they are kept;
+# anything else in their place still fails, since without that hook a push
+# from the container would leave its LFS objects behind.
+git lfs install --skip-repo
+if ! git lfs update; then
+    if grep -qs "git lfs pre-push" "$(git rev-parse --git-path hooks)/pre-push"; then
+        echo "(!) Keeping the Git LFS hooks this repository already has"
+    else
+        exit 1
+    fi
+fi
 git lfs pull
 EOF
 chmod 755 "${PULL}"
