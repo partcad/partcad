@@ -1,0 +1,14 @@
+{
+  "id": "git-lfs-debian",
+  "version": "1.0.0",
+  "name": "Git LFS from the distribution's own archive",
+  "description": "Installs git-lfs with apt from the base image's distribution, and pulls the repository's LFS files when the container is created. See install.sh for why this replaces ghcr.io/devcontainers/features/git-lfs.",
+  "options": {
+    "autoPull": {
+      "type": "boolean",
+      "default": true,
+      "description": "Run 'git lfs pull' when the container is created."
+    }
+  },
+  "postCreateCommand": "/usr/local/share/git-lfs-debian-pull.sh"
+}
