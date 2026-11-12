@@ -48,18 +48,25 @@ fi
 # Whether a hook would still run 'git lfs' is not something to judge by
 # reading it: a line can be commented out, or follow an 'exit'. So a refused
 # hook is replaced only if it IS a Git LFS hook: a '#!/bin/sh' line, Git
-# LFS's guard against 'git-lfs' missing from the PATH (worded differently by
-# each version, so only its shape is matched), the one 'git lfs <hook> "$@"'
-# line, and nothing else. Then every Git LFS hook is rewritten as this
-# version's own. Any other line makes it someone's own hook, and the step
-# fails, for them to merge by hand: without a working pre-push hook, a push
-# from the container would leave its LFS objects behind.
+# LFS's guard against 'git-lfs' missing from the PATH, the one
+# 'git lfs <hook> "$@"' line, and nothing else. Then every Git LFS hook is
+# rewritten as this version's own. Any other line makes it someone's own
+# hook, and the step fails, for them to merge by hand: without a working
+# pre-push hook, a push from the container would leave its LFS objects
+# behind, and replacing someone's hook would lose what they put in it.
+#
+# The guard has had two forms, 'echo >&2 "..."' (to 3.5) and
+# 'printf >&2 "\n%s\n\n" "..."' (from 3.6), each version wording the
+# message differently. Only those two commands are accepted, and only a
+# message that cannot end its quotes or run a substitution (no '"', '$' or
+# backquote in it), so no other command can hide in the line.
+guard='command -v git-lfs >/dev/null 2>&1 \|\| \{ (echo >&2|printf >&2 "\\n%s\\n\\n") "[^"$`]*"; exit 2; \}'
 git lfs install --skip-repo
 if ! git lfs update; then
     hooks="$(git rev-parse --git-path hooks)"
     for hook in pre-push post-checkout post-commit post-merge; do
         [ -f "${hooks}/${hook}" ] || continue
-        if grep -qvE "^(#!/bin/sh|command -v git-lfs >/dev/null 2>&1 \|\| \{ .*; exit 2; \}|git lfs ${hook} \"\\\$@\"|)$" "${hooks}/${hook}"; then
+        if grep -qvE "^(#!/bin/sh|${guard}|git lfs ${hook} \"\\\$@\"|)\$" "${hooks}/${hook}"; then
             echo "(!) ${hooks}/${hook} is not a Git LFS hook: merge it by hand, see 'git lfs update --manual'" >&2
             exit 1
         fi
