@@ -1,6 +1,8 @@
 from partcad_utils.parameters import (  # noqa: F401
     array_item_type,
+    bound_problem,
     coerce_parameter_value,
+    declaration_problems,
     is_shared,
     normalize_parameters,
 )
@@ -74,6 +76,12 @@ def apply_user_parameter_overrides(
                         "The override of the parameter '%s' of '%s' cannot be used: %s" % (param_name, object_name, e)
                     )
                     continue
+                outside = bound_problem(declared, value, param_name, object_name)
+                if outside is not None:
+                    # Like a value that is not of the declared type: said, and
+                    # the declared default stands.
+                    pc_logging.error("The override of the parameter '%s' is not used: %s" % (param_name, outside))
+                    continue
                 declared["default"] = value
             else:
                 pc_logging.debug(
@@ -101,7 +109,29 @@ class Configuration:
             normalize_parameters(config["parameters"])
 
         # Override parameters with user configuration
-        return apply_user_parameter_overrides(config, object_name, user_config=user_config)
+        config = apply_user_parameter_overrides(config, object_name, user_config=user_config)
+        check_parameter_declarations(config.get("parameters"), object_name)
+        return config
+
+
+def check_parameter_declarations(parameters, object_name: str) -> None:
+    """Refuse a parameter section whose bounds cannot hold, or whose default is outside them.
+
+    Every parametrizable kind is normalized through here or through
+    'InterfaceConfiguration.normalize', which asks the same: a 'min' or a 'max'
+    on a parameter that is no number, a 'min' above the 'max', a default
+    outside them. Raised rather than reported, because an object declared that
+    way has no value it could be built with that its own declaration allows:
+    the object is broken, and the message says why (see
+    'partcad_utils.parameters.declaration_problems', which the linter reads too).
+    """
+    if not isinstance(parameters, dict):
+        return
+    problems = []
+    for param_name, declared in parameters.items():
+        problems.extend(declaration_problems(declared, param_name, object_name))
+    if problems:
+        raise ValueError("; ".join(problems))
 
 
 def apply_parameter_values(parameters: dict, values: dict, object_name: str, package_name: str = None) -> dict:
@@ -127,9 +157,15 @@ def apply_parameter_values(parameters: dict, values: dict, object_name: str, pac
 
             check_instance_value(declared, param_value, param_name, object_name, package_name=package_name)
             continue
-        declared["default"] = coerce_parameter_value(
+        value = coerce_parameter_value(
             declared.get("type"), param_value, param_name, object_name, item_type=array_item_type(declared)
         )
+        # The range a numeric parameter declares holds for every value it is
+        # given, whichever kind of object declares it.
+        outside = bound_problem(declared, value, param_name, object_name)
+        if outside is not None:
+            raise ValueError(outside)
+        declared["default"] = value
     return parameters
 
 

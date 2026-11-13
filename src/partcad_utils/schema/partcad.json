@@ -423,44 +423,37 @@
                 "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
                 "parameters": { "$ref": "#/definitions/shape-parameter" },
                 "aliases": { "$ref": "#/definitions/cmf-aliases" },
-                "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
-                "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
+                "type": { "type": "string", "enum": ["alias", "enrich"], "description": "'alias' makes this declaration another name for the one 'source' names, which is what it is; 'enrich' makes it a declaration of its own, under its own name, that takes every field of the instance 'source' and 'with' name but its 'ids' and 'aliases', and overrides what it states itself" },
+                "source": { "type": "string", "minLength": 1, "description": "What an alias or an enrich names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric. Rendered with the declaration's own parameters, as every field is" },
+                "with": { "$ref": "#/definitions/cmf-with" },
                 "display": { "type": "string", "minLength": 1, "description": "How the substance looks as it comes, for drawing a part made of it that states no colour: any CSS colour, or a colour declaration whose display it takes. A hint, not a claim" },
                 "color": { "type": "string", "minLength": 1, "description": "The colour declaration this material claims for its natural surface. A part made of it that states no colour of its own is that colour, and counts as specified" },
                 "density": {
-                  "type": "number",
-                  "exclusiveMinimum": 0,
+                  "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "$ref": "#/definitions/expression" }],
                   "description": "Density in kg/m^3, the one unit PartCAD states a density in. A datasheet's 1.32 g/cm^3 is 1320. A part made of this material is weighed at it unless it states a 'mass' or a 'density' of its own"
                 },
                 "viscosity": {
-                  "type": "number",
-                  "exclusiveMinimum": 0,
+                  "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "$ref": "#/definitions/expression" }],
                   "description": "Dynamic viscosity in Pa*s, SI like every physical quantity PartCAD states: water at 15 C is 0.001138. What a fluid states so that a scene filled with it ('medium') can slow down what moves through it, and what a fluid-dynamics analysis of a part made of it is handed as its 'viscosity'"
                 },
                 "youngsModulus": {
-                  "type": "number",
-                  "exclusiveMinimum": 0,
+                  "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "$ref": "#/definitions/expression" }],
                   "description": "Young's modulus in Pa, SI like every physical quantity PartCAD states: PLA is about 3.5e9, steel about 2.0e11. What an analysis of a part made of this material is handed as its 'youngs_modulus' unless the package or the part states one"
                 },
                 "poissonsRatio": {
-                  "type": "number",
-                  "minimum": 0,
-                  "exclusiveMaximum": 0.5,
+                  "oneOf": [{ "type": "number", "minimum": 0, "exclusiveMaximum": 0.5 }, { "$ref": "#/definitions/expression" }],
                   "description": "Poisson's ratio, dimensionless. Handed to an analysis as its 'poissons_ratio' unless the package or the part states one"
                 },
                 "yieldStrength": {
-                  "type": "number",
-                  "exclusiveMinimum": 0,
+                  "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "$ref": "#/definitions/expression" }],
                   "description": "Yield strength in Pa: the stress past which the material does not spring back. Handed to an analysis as its 'yield_strength', which is what a part's peak stress is held to, unless the package or the part states one"
                 },
                 "thermalConductivity": {
-                  "type": "number",
-                  "exclusiveMinimum": 0,
+                  "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "$ref": "#/definitions/expression" }],
                   "description": "Thermal conductivity in W/(m*K), near room temperature: PLA is about 0.13, aluminium 6061-T6 167. Handed to a heat conduction analysis of a part made of this material as its 'conductivity' unless the package or the part states one"
                 },
                 "mu": {
-                  "type": "number",
-                  "minimum": 0,
+                  "oneOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/definitions/expression" }],
                   "description": "Coefficient of sliding friction, dimensionless. The same number SDFormat states as '<friction><ode><mu>', URDF as '<gazebo><mu1>' and MJCF as the first 'friction' component; a part made of this material gets it unless it states a 'friction' of its own"
                 },
                 "tags": {
@@ -471,7 +464,8 @@
                   "description": "What the material is good at, as the package chose to say it. Free-form on purpose"
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "allOf": [{ "$ref": "#/definitions/cmf-reference-rules" }]
             }
           ]
         }
@@ -495,8 +489,9 @@
                 "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
                 "parameters": { "$ref": "#/definitions/shape-parameter" },
                 "aliases": { "$ref": "#/definitions/cmf-aliases" },
-                "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
-                "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
+                "type": { "type": "string", "enum": ["alias", "enrich"], "description": "'alias' makes this declaration another name for the one 'source' names, which is what it is; 'enrich' makes it a declaration of its own, under its own name, that takes every field of the instance 'source' and 'with' name but its 'ids' and 'aliases', and overrides what it states itself" },
+                "source": { "type": "string", "minLength": 1, "description": "What an alias or an enrich names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric. Rendered with the declaration's own parameters, as every field is" },
+                "with": { "$ref": "#/definitions/cmf-with" },
                 "display": {
                   "description": "How the colour is drawn. A hint, not a claim",
                   "oneOf": [
@@ -521,7 +516,8 @@
                   ]
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "allOf": [{ "$ref": "#/definitions/cmf-reference-rules" }]
             }
           ]
         }
@@ -545,8 +541,9 @@
                 "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
                 "parameters": { "$ref": "#/definitions/shape-parameter" },
                 "aliases": { "$ref": "#/definitions/cmf-aliases" },
-                "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
-                "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
+                "type": { "type": "string", "enum": ["alias", "enrich"], "description": "'alias' makes this declaration another name for the one 'source' names, which is what it is; 'enrich' makes it a declaration of its own, under its own name, that takes every field of the instance 'source' and 'with' name but its 'ids' and 'aliases', and overrides what it states itself" },
+                "source": { "type": "string", "minLength": 1, "description": "What an alias or an enrich names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric. Rendered with the declaration's own parameters, as every field is" },
+                "with": { "$ref": "#/definitions/cmf-with" },
                 "display": {
                   "type": "object",
                   "description": "How the finish looks in a 3D view. A hint, not a claim",
@@ -557,12 +554,36 @@
                   "additionalProperties": false
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "allOf": [{ "$ref": "#/definitions/cmf-reference-rules" }]
             }
           ]
         }
       },
       "additionalProperties": false
+    },
+    "cmf-with": {
+      "description": "An enrich's values for the parameters of the declaration it names: the instance it takes its fields from is 'source' with these values. Each is rendered with the enrich's own parameters, so a value may be an expression over them ('%round(interpolate(izod, [15, 45], [0.15, 0.25]), 3)%'), which is how a declaration with parameters of its own maps them onto its source's",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "anyOf": [{ "$ref": "#/definitions/parameter-override" }, { "$ref": "#/definitions/expression" }]
+        }
+      },
+      "additionalProperties": false
+    },
+    "cmf-reference-rules": {
+      "description": "What 'type' asks of the rest of a colour, a material or a finish: an enrich names its 'source', and only an enrich has a 'with' (an alias names its values in its 'source')",
+      "allOf": [
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "enrich" } } },
+          "then": { "required": ["source"] }
+        },
+        {
+          "if": { "required": ["with"] },
+          "then": { "required": ["type"], "properties": { "type": { "const": "enrich" } } }
+        }
+      ]
     },
     "cmf-ids": {
       "type": "object",
@@ -1910,7 +1931,7 @@
       ]
     },
     "interface-parameter": {
-      "description": "An interface's 'parameters:'. It holds two kinds at once, told apart by what each declares rather than by where it is written: a construction parameter, exactly as a part or a sketch declares one ('size: {type: float, default: 3.0}'), which a reference sets ('m-thru;size=4'); and a freedom-of-movement parameter, which states a range and an axis ('min', 'max', 'dir') and says what a connection made through the interface may still do. The two vocabularies do not overlap: one of the six predefined movement names, a '[min, max, default]' list, or a 'min'/'max'/'dir' or 'type: move'/'type: turn' makes it the second kind; anything else is the first.",
+      "description": "An interface's 'parameters:'. It holds two kinds at once, told apart by what each declares rather than by where it is written: a construction parameter, exactly as a part or a sketch declares one ('size: {type: float, default: 3.0}'), which a reference sets ('m-thru;size=4'); and a freedom-of-movement parameter, which states a range and an axis ('min', 'max', 'dir') and says what a connection made through the interface may still do. The two vocabularies do not overlap: one of the six predefined movement names, a '[min, max, default]' list, or a 'min'/'max'/'dir' or 'type: move'/'type: turn' makes it the second kind, unless it states the type of a value ('type: float'), which a construction parameter bounded by 'min' and 'max' does; anything else is the first.",
       "oneOf": [
         { "type": "null" },
         {
@@ -1918,7 +1939,7 @@
           "patternProperties": {
             "^(move[XYZ]|turn[XYZ]|move-[xyz]|turn-[xyz])$": { "$ref": "#/definitions/interface-movement-value" },
             "^(?!(move[XYZ]|turn[XYZ]|move-[xyz]|turn-[xyz])$)[a-zA-Z0-9_/./-]+$": {
-              "$comment": "Which kind this is, decided the same way 'partcad.interface_config.is_movement_parameter' decides it: a declaration stating 'min', 'max', 'dir' or 'type: move'/'type: turn' is freedom of movement, and anything else is a construction value. Written as 'if'/'then' rather than as an 'anyOf' of the two so that a declaration meant as one kind is reported against that kind - an 'anyOf' answers a missing 'dir' with whatever the *other* branch disliked.",
+              "$comment": "Which kind this is, decided the same way 'partcad.interface_config.is_movement_parameter' decides it: a declaration stating the type of a value ('type: float') is a construction value, bounded by its 'min' and 'max' if it states them; otherwise one stating 'min', 'max', 'dir' or 'type: move'/'type: turn' is freedom of movement, and anything else is a construction value. Written as 'if'/'then' rather than as an 'anyOf' of the two so that a declaration meant as one kind is reported against that kind - an 'anyOf' answers a missing 'dir' with whatever the *other* branch disliked.",
               "if": {
                 "type": "object",
                 "anyOf": [
@@ -1926,7 +1947,8 @@
                   { "required": ["max"] },
                   { "required": ["dir"] },
                   { "required": ["type"], "properties": { "type": { "enum": ["move", "turn"] } } }
-                ]
+                ],
+                "not": { "required": ["type"], "properties": { "type": { "enum": ["string", "int", "bool", "float", "array"] } } }
               },
               "then": { "$ref": "#/definitions/interface-movement-body-custom" },
               "else": { "$ref": "#/definitions/shape-parameter-value" }
@@ -1988,6 +2010,15 @@
       "items": { "type": "string", "pattern": "^[^,;=]*$" },
       "uniqueItems": true
     },
+    "parameter-bound": {
+      "description": "One end of the range a numeric parameter may take, included: 'min: 15' takes 15 and refuses 14.9. A value outside it - given by a reference, by an override or as the default - is refused with the parameter, the value and the bound named, whichever kind of object declares it.",
+      "type": "number"
+    },
+    "parameter-bounded": {
+      "description": "Only a number has a range: a parameter that states 'min' or 'max' is an 'int' or a 'float' (a declaration that states no 'type' is a float).",
+      "if": { "anyOf": [{ "required": ["min"] }, { "required": ["max"] }] },
+      "then": { "properties": { "type": { "enum": ["int", "float"] } } }
+    },
     "parameter-shared": {
       "description": "Whether this parameter is a package-level parameter: one value for every object of this package that declares a parameter of this name with 'shared: true', so that setting it through any of them sets it for all. Every declaration of the name in the package has to say the same here (absent is false), and shared declarations have to agree on everything but 'desc'.",
       "type": "boolean"
@@ -2012,11 +2043,14 @@
             },
             "desc": { "type": "string", "maxLength": 1000 },
             "default": { "$ref": "#/definitions/parameter-default" },
+            "min": { "$ref": "#/definitions/parameter-bound" },
+            "max": { "$ref": "#/definitions/parameter-bound" },
             "shared": { "$ref": "#/definitions/parameter-shared" },
             "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
             "material": { "type": "string", "minLength": 1 }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "allOf": [{ "$ref": "#/definitions/parameter-bounded" }]
         }
       ]
     },
@@ -2040,11 +2074,14 @@
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "default": { "$ref": "#/definitions/parameter-default" },
+                "min": { "$ref": "#/definitions/parameter-bound" },
+                "max": { "$ref": "#/definitions/parameter-bound" },
                 "shared": { "$ref": "#/definitions/parameter-shared" },
                 "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
                 "material": { "type": "string", "minLength": 1 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "allOf": [{ "$ref": "#/definitions/parameter-bounded" }]
             }
           ]
         }

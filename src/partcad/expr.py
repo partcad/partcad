@@ -42,6 +42,7 @@ number stays a number. A string that merely contains one (``"m;size=%size%"``,
 """
 
 import ast
+import bisect
 import math
 import re
 from typing import Any
@@ -53,6 +54,144 @@ from .consts import CAD_CONSTANTS
 # 'Interface.instantiate' excluded '*' as well, which quietly made '%a*b%'
 # not an expression. There is no reason a product cannot be one.
 PATTERN = re.compile(r"%([^%]+)%")
+
+
+def _is_number(value: Any) -> bool:
+    # A flag is an int to Python and not a quantity to anybody writing one.
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _number(value: Any, what: str) -> float:
+    if not _is_number(value):
+        raise TypeError("%s is %r, not a number" % (what, value))
+    return value
+
+
+def _sequence(value: Any, what: str) -> list:
+    if not isinstance(value, (list, tuple)):
+        raise TypeError("%s is %r, not a list" % (what, value))
+    return list(value)
+
+
+def _stops(x: Any, xs: Any, ys: Any, what: str) -> tuple:
+    """'(x, xs, ys)' of an interpolation, checked: the stops strictly increasing, as many values as stops."""
+    x = _number(x, "the position")
+    xs = _sequence(xs, "the stops")
+    ys = _sequence(ys, "the %s" % what)
+    if len(xs) < 2:
+        raise ValueError("an interpolation needs at least 2 stops, and has %d" % len(xs))
+    if len(xs) != len(ys):
+        raise ValueError("there are %d stops and %d %s: one for each" % (len(xs), len(ys), what))
+    for index, stop in enumerate(xs):
+        _number(stop, "the stop %d" % index)
+    for index in range(1, len(xs)):
+        if not xs[index] > xs[index - 1]:
+            raise ValueError(
+                "the stops increase strictly, and %r is not above the %r before it" % (xs[index], xs[index - 1])
+            )
+    return x, xs, ys
+
+
+def _segment(x: float, xs: list) -> tuple:
+    """'(index, fraction)': x is the fraction of the way from xs[index] to xs[index + 1], 0 at a stop itself.
+
+    Asked only for an x inside the stops. A stop starts the segment after it,
+    so that the value at a stop is the one written for it, to the digit.
+    """
+    index = bisect.bisect_right(xs, x) - 1
+    index = min(max(index, 0), len(xs) - 2)
+    return index, (x - xs[index]) / (xs[index + 1] - xs[index])
+
+
+def clamp(x, lo, hi):
+    """'x', bounded to [lo, hi]."""
+    x, lo, hi = _number(x, "the value"), _number(lo, "the lower bound"), _number(hi, "the upper bound")
+    if lo > hi:
+        raise ValueError("the lower bound %r is above the upper bound %r" % (lo, hi))
+    return min(max(x, lo), hi)
+
+
+def lerp(a, b, t):
+    """'a + (b - a) * t': 'a' at t = 0, 'b' at t = 1, and the same line beyond them (t is not clamped)."""
+    a, b, t = _number(a, "the start"), _number(b, "the end"), _number(t, "the fraction")
+    return a + (b - a) * t
+
+
+def interpolate(x, xs, ys):
+    """The piecewise-linear function through the points (xs[i], ys[i]), at 'x'.
+
+    Constant past the ends - ys[0] below xs[0], ys[-1] above xs[-1] - rather
+    than extrapolated: a value outside the points somebody measured is a
+    claim, and one a declaration makes by writing the line itself.
+    """
+    x, xs, ys = _stops(x, xs, ys, "values")
+    for index, value in enumerate(ys):
+        _number(value, "the value %d" % index)
+    if x <= xs[0]:
+        return ys[0]
+    if x >= xs[-1]:
+        return ys[-1]
+    index, t = _segment(x, xs)
+    if t == 0:
+        return ys[index]
+    return ys[index] + (ys[index + 1] - ys[index]) * t
+
+
+def pick(key, keys, values):
+    """'values[keys.index(key)]': the lookup in a table an expression has no other way to write."""
+    keys = _sequence(keys, "the keys")
+    values = _sequence(values, "the values")
+    if len(keys) != len(values):
+        raise ValueError("there are %d keys and %d values: one for each" % (len(keys), len(values)))
+    if key not in keys:
+        raise ValueError("%r is not one of the keys %s" % (key, ", ".join(repr(each) for each in keys)))
+    return values[keys.index(key)]
+
+
+def _css_color():
+    # The wrappers directory holds the CSS reader, which a sandbox imports too
+    # (see 'partcad.cmf'); put on the path here so that this module needs
+    # nothing imported before it.
+    import os
+    import sys
+
+    wrappers = os.path.join(os.path.dirname(__file__), "wrappers")
+    if wrappers not in sys.path:
+        sys.path.append(wrappers)
+    import css_color
+
+    return css_color
+
+
+def _colour(value: Any, what: str):
+    parsed = _css_color().parse(value) if isinstance(value, str) else None
+    if parsed is None:
+        raise ValueError("%s is %r, which is not a CSS colour" % (what, value))
+    return parsed
+
+
+def color_mix(c0, c1, t):
+    """Two CSS colours mixed as CSS's 'color-mix(in oklab, c0, c1 t)' mixes them, as '#RRGGBB' or '#RRGGBBAA'.
+
+    't' is the share of 'c1', clamped to [0, 1]: 0 is 'c0', 1 is 'c1'.
+    """
+    css_color = _css_color()
+    first, second = _colour(c0, "the first colour"), _colour(c1, "the second colour")
+    return css_color.to_hex(css_color.mix_oklab(first, second, _number(t, "the share")))
+
+
+def interpolate_color(x, xs, colors):
+    """'interpolate' for colours: the stops' colours mixed in Oklab, the first and last colour past the ends."""
+    x, xs, colors = _stops(x, xs, colors, "colours")
+    css_color = _css_color()
+    parsed = [_colour(each, "the colour %d" % index) for index, each in enumerate(colors)]
+    if x <= xs[0]:
+        return css_color.to_hex(parsed[0])
+    if x >= xs[-1]:
+        return css_color.to_hex(parsed[-1])
+    index, t = _segment(x, xs)
+    return css_color.to_hex(css_color.mix_oklab(parsed[index], parsed[index + 1], t))
+
 
 # What an expression may call. '__builtins__' is emptied - an expression in a
 # package declaration is not a place to open files from - and what is put back
@@ -82,6 +221,15 @@ SAFE_NAMES: dict[str, Any] = {
     "sin": math.sin,
     "sqrt": math.sqrt,
     "tan": math.tan,
+    # What a value is worked out from a table with: a parametric material's
+    # density across its grades, a colour across a range of compositions. The
+    # tables are lists an expression writes ('[15, 45]'); see the functions.
+    "clamp": clamp,
+    "lerp": lerp,
+    "interpolate": interpolate,
+    "pick": pick,
+    "color_mix": color_mix,
+    "interpolate_color": interpolate_color,
     # The same constants the template 'partcad.yaml' is rendered from has.
     **CAD_CONSTANTS,
 }
@@ -257,6 +405,10 @@ NUMERIC_FUNCTIONS = frozenset(
         "sin",
         "sqrt",
         "tan",
+        # Each of these checks that what it is handed is numbers.
+        "clamp",
+        "lerp",
+        "interpolate",
     ]
 )
 
@@ -295,6 +447,12 @@ def _is_numeric(node: ast.AST, values: dict[str, Any]) -> bool:
     if isinstance(node, ast.Compare):
         return True  # a comparison answers True or False, which are numbers
     if isinstance(node, ast.Call):
+        if isinstance(node.func, ast.Name) and node.func.id == "pick":
+            # A number when every value it picks from is written out as one:
+            # 'pick(temper, ['O', 'T6'], [55e6, 276e6])' is certainly a number,
+            # 'pick(i, keys, labels)' may be text.
+            picked = node.args[2] if len(node.args) == 3 else None
+            return isinstance(picked, (ast.List, ast.Tuple)) and all(_is_numeric(v, values) for v in picked.elts)
         if isinstance(node.func, ast.Name):
             return node.func.id in NUMERIC_FUNCTIONS
         if isinstance(node.func, ast.Attribute):

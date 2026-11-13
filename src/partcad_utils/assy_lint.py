@@ -261,7 +261,9 @@ ASSEMBLY_NO_FIXED = (
 #   4 -- 'check_unique_names': one name given to two kinds of object.
 #   5 -- 'check_shared_parameters': declarations of a parameter that disagree
 #        about 'shared: true', or shared ones that disagree about anything else.
-CHECKER_VERSION = 5
+#   6 -- 'check_parameter_bounds': a 'min'/'max' that cannot hold, or a default
+#        outside them.
+CHECKER_VERSION = 6
 
 # An upper bound on how many findings a single file reports. A file that is
 # mid-edit can cascade; an editor gains nothing from the thousandth squiggle.
@@ -1416,6 +1418,46 @@ def check_shared_parameters(data, root_node=None) -> list:
     return diagnostics
 
 
+# The sections of a 'partcad.yaml' whose declarations take 'parameters:', the
+# colours, materials and finishes with the kinds that may share one.
+_BOUNDED_SECTIONS = tuple(parameters.PARAMETERIZED_SECTIONS.items()) + (
+    ("color", "colors"),
+    ("material", "materials"),
+    ("finish", "finishes"),
+)
+
+
+def check_parameter_bounds(data, root_node=None) -> list:
+    """Report a parameter whose 'min' and 'max' cannot hold, or whose default is outside them.
+
+    The rule and its words are 'partcad_utils.parameters.declaration_problems',
+    which PartCAD reads as it loads the object and refuses it on; this says so
+    on the parameter, before anything loads it. Only the construction half of
+    an interface's 'parameters:' is a value with a range of this kind: its
+    freedom of movement states 'min' and 'max' too, and means something else
+    by them (see 'parameters.is_movement_parameter').
+    """
+    diagnostics: list = []
+    if not isinstance(data, dict):
+        return diagnostics
+    for kind, section in _BOUNDED_SECTIONS:
+        declarations = data.get(section)
+        if not isinstance(declarations, dict):
+            continue
+        for object_name, config in declarations.items():
+            declared = config.get("parameters") if isinstance(config, dict) else None
+            if not isinstance(declared, dict):
+                continue
+            for param_name, declaration in declared.items():
+                if kind == "interface" and parameters.is_movement_parameter(param_name, declaration):
+                    continue
+                expanded = parameters.normalize_parameters({param_name: copy.deepcopy(declaration)})[param_name]
+                for message in parameters.declaration_problems(expanded, param_name, str(object_name)):
+                    path = [section, object_name, "parameters"]
+                    _report_at(diagnostics, root_node, path, param_name, message, code=CODE_PARAMETERS)
+    return diagnostics
+
+
 # ---- entry points ----------------------------------------------------------
 
 
@@ -1504,6 +1546,7 @@ def _document_checks(data, schema, root_node, masked, manufacturable, inherited_
         diagnostics.extend(check_manufacturable_parts(data, root_node, inherited_manufacturable))
         diagnostics.extend(check_unique_names(data, root_node))
         diagnostics.extend(check_shared_parameters(data, root_node))
+        diagnostics.extend(check_parameter_bounds(data, root_node))
     return diagnostics
 
 

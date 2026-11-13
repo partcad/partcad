@@ -88,6 +88,104 @@ def normalize_parameters(parameters: dict) -> dict:
     return parameters
 
 
+# The types a parameter is declared as, which a value is read as (see
+# 'coerce_parameter_value'). A freedom-of-movement parameter of an interface is
+# 'move' or 'turn' instead, and never one of these (see 'is_movement_parameter').
+VALUE_TYPES = ("string", "int", "bool", "float", "array")
+
+# The two of them that are quantities, and so may be bounded.
+NUMERIC_TYPES = ("int", "float")
+
+# What a numeric parameter states its range in, both ends included.
+BOUNDS = ("min", "max")
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _spelled(value) -> str:
+    # A whole float as the integer it is, the way an expression writes one
+    # into a name: a bound of 45 is not refused as '45.0'.
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return format_assignment(value)
+
+
+def declaration_problems(declaration, param_name: str, object_name: str) -> list:
+    """What is wrong with the bounds and the default of one expanded parameter declaration, as messages.
+
+    'min' and 'max' bound a number, so only an 'int' or a 'float' parameter
+    states them, each a number, the one not above the other; and the default is
+    a value like any other, so it lies within them. Read by PartCAD as it loads
+    an object (see 'partcad.config.check_parameter_declarations') and by the
+    linter ('assy_lint.check_parameter_bounds'), in the same words.
+    """
+    if not isinstance(declaration, dict) or not any(bound in declaration for bound in BOUNDS):
+        return []
+    kind = declaration.get("type", "float")
+    if kind not in NUMERIC_TYPES:
+        return [
+            "The parameter '%s' of '%s' is a%s %s, and only an int or a float parameter states a 'min' or a 'max'"
+            % (param_name, object_name, "n" if kind[:1] in "aeiou" else "", kind)
+        ]
+    problems = []
+    for bound in BOUNDS:
+        if bound in declaration and not _is_number(declaration[bound]):
+            problems.append(
+                "The '%s' of the parameter '%s' of '%s' is %r, not a number"
+                % (bound, param_name, object_name, declaration[bound])
+            )
+    if problems:
+        return problems
+    low, high = declaration.get("min"), declaration.get("max")
+    if low is not None and high is not None and low > high:
+        return [
+            "The parameter '%s' of '%s' has a 'min' of %s above its 'max' of %s: no value is both"
+            % (param_name, object_name, _spelled(low), _spelled(high))
+        ]
+    if "default" in declaration:
+        problem = bound_problem(declaration, declaration["default"], param_name, object_name, default=True)
+        if problem is not None:
+            problems.append(problem)
+    return problems
+
+
+def bound_problem(declaration, value, param_name: str, object_name: str, default: bool = False) -> Optional[str]:
+    """Why 'value' is outside the range a numeric parameter declares, or None if it is not.
+
+    The bounds are inclusive. 'default' says the value is the one the
+    declaration defaults to rather than one a reference gave, which is all that
+    changes about the message. A value that is not a number is not this
+    function's to report: reading it as the declared type is what fails on it.
+    """
+    if not isinstance(declaration, dict) or declaration.get("type", "float") not in NUMERIC_TYPES:
+        return None
+    if not _is_number(value):
+        return None
+    low, high = declaration.get("min"), declaration.get("max")
+    for bound, outside in (("min", _is_number(low) and value < low), ("max", _is_number(high) and value > high)):
+        if not outside:
+            continue
+        limit = _spelled(declaration[bound])
+        if default:
+            return "The parameter '%s' of '%s' defaults to %s, and its '%s' is %s" % (
+                param_name,
+                object_name,
+                _spelled(value),
+                bound,
+                limit,
+            )
+        return "The parameter '%s' of '%s' cannot be %s: its '%s' is %s" % (
+            param_name,
+            object_name,
+            _spelled(value),
+            bound,
+            limit,
+        )
+    return None
+
+
 def coerce_parameter_value(param_type, param_value, param_name: str, object_name: str, item_type=None):
     """One parameter value, read as the type the parameter declares.
 
@@ -324,6 +422,11 @@ def is_movement_parameter(name: str, declaration) -> bool:
     if isinstance(declaration, (list, tuple)):
         return True
     if isinstance(declaration, dict):
+        if declaration.get("type") in VALUE_TYPES:
+            # Says what kind of value it is, which a freedom of movement never
+            # does ('move' or 'turn'): a construction parameter, bounded by its
+            # 'min' and 'max' as any numeric one may be.
+            return False
         if any(key in declaration for key in MOVEMENT_PARAMETER_KEYS):
             return True
         if declaration.get("type") in MOVEMENT_PARAMETER_TYPES:

@@ -22,6 +22,10 @@ them under 'colors:', 'materials:' and 'finishes:', addresses each as
   with the values a reference gives ('rgba;color=C91A09FF').
 - 'aliases': other names of itself; and 'type: alias' with a 'source:' makes the
   declaration another name for one elsewhere.
+- 'type: enrich' with a 'source:' (and the source's parameter values in
+  'with:') makes it a declaration of its own, under its own name, made from the
+  instance it names: every field of that one but what names it rather than the
+  thing ('ENRICH_EXCLUDED'), and its own fields on top (see 'enriched').
 
 A material adds its physical facts (see 'material.py') and may claim a colour
 for its natural surface ('color:'); a finish adds nothing PartCAD computes
@@ -110,6 +114,9 @@ class Declaration:
         desc = config.get("desc", "")
         self.desc = desc.strip() if isinstance(desc, str) else desc
         self.errors: list = []
+        # The canonical reference of the instance an enrich is made from, set
+        # by whoever made it (see 'Project.get_cmf'); None for any other.
+        self.enriches: typing.Optional[str] = None
 
     def error(self, msg: str) -> None:
         # Said once: 'display()' is asked again on every read of a part that
@@ -129,8 +136,13 @@ class Declaration:
         return self.config.get("type") == "alias"
 
     @property
+    def is_enrich(self) -> bool:
+        """Whether this is a declaration of its own made from another ('type: enrich')."""
+        return self.config.get("type") == "enrich"
+
+    @property
     def source(self) -> typing.Optional[str]:
-        """What an alias names, as written - relative to this declaration's package."""
+        """What an alias or an enrich names, as written - relative to this declaration's package."""
         source = self.config.get("source")
         return source if isinstance(source, str) and source else None
 
@@ -191,6 +203,8 @@ class Declaration:
         info = {"Path": self.project_name, "Name": self.name, "Kind": self.kind}
         if self.is_alias:
             info["Alias of"] = self.source
+        if self.enriches:
+            info["Enriches"] = self.enriches
         if self.desc:
             info["Desc"] = self.desc
         if self.display_words() is not None:
@@ -343,6 +357,84 @@ def with_parameters(config: dict, values: dict, object_name: str) -> dict:
     return instance
 
 
+# What an enrich does not take from the instance it is made from: what makes
+# that one a reference or a template rather than saying anything about the
+# thing - 'type', 'source', 'with', 'parameters' - and what names the source
+# rather than whatever is made from it. 'aliases' are the source's other names
+# in its own package, and an enrich publishes its own if it has any. 'ids' are
+# what another system calls the source, and an id names one declaration: a
+# converter matching a STEP file's or LDraw's name against them would otherwise
+# find two declarations under one id, and which it took would depend on the
+# order it looked. An enrich states the ids it answers to itself, which is how
+# a converter's package gives a catalogue's values its own system's numbers.
+# 'name' and 'orig_name' are what normalizing a declaration writes into it.
+ENRICH_EXCLUDED = frozenset({"type", "source", "with", "parameters", "aliases", "ids", "name", "orig_name"})
+
+
+class EnrichCycleError(ValueError):
+    """An enrich that is, through the declarations it is made from, made from itself."""
+
+    def __init__(self, kind: str, chain: list):
+        self.kind = kind
+        self.chain = list(chain)
+        super().__init__(
+            "The %s '%s' is an enrich that leads back to itself: %s"
+            % (NOUNS.get(kind, kind), self.chain[0], " -> ".join(self.chain))
+        )
+
+
+def is_enrich(config) -> bool:
+    """Whether a declaration, as written, is an enrich."""
+    return isinstance(config, dict) and config.get("type") == "enrich"
+
+
+def enrich_source_reference(source: str, values, relative_to: str) -> str:
+    """The absolute reference of the instance an enrich names: its 'source', with the values of its 'with'.
+
+    A value in 'with' wins over one the source names itself, as an outer
+    reference's always does (see 'format_parameterized_name'). Each is spelled
+    the way an expression writes a value into a name ('partcad.expr.format_value'),
+    so that a computed 0.2 and a written '0.2' ask for one instance.
+    """
+    from . import expr
+
+    package, item = _split(source, relative_to)
+    base, named = parse_parameterized_name(item)
+    for key, value in (values or {}).items():
+        if isinstance(value, (list, tuple)):
+            named[str(key)] = [expr.format_value(each) for each in value]
+        else:
+            named[str(key)] = expr.format_value(value)
+    return "%s:%s" % (package, instance_key(base, named))
+
+
+def _absolute(ref: str, relative_to: str) -> str:
+    return "%s:%s" % _split(ref, relative_to)
+
+
+def enriched(kind: str, own: dict, source) -> tuple:
+    """'(configuration, display inherited)' of an enrich of 'source', a declaration's instance.
+
+    Every field 'source' has but those 'ENRICH_EXCLUDED' names, with the
+    references among them made absolute against the source's package - a
+    material's 'color' claim, and a 'display' naming a colour - so that they
+    go on naming what they named where the enrich is; then everything 'own'
+    states, which wins. 'display inherited' says the display came from the
+    source, so that an image it names is read where the source keeps it.
+    """
+    inherited = {key: copy.deepcopy(value) for key, value in source.config.items() if key not in ENRICH_EXCLUDED}
+    package = source.project_name
+    claim = inherited.get("color")
+    if kind == "material" and isinstance(claim, str) and claim.strip():
+        inherited["color"] = _absolute(claim.strip(), package)
+    display = inherited.get("display")
+    if kind != "finish" and isinstance(display, str) and display.strip() and css_color.parse(display) is None:
+        inherited["display"] = _absolute(display.strip(), package)
+    configuration = dict(inherited)
+    configuration.update(own)
+    return configuration, "display" in inherited and "display" not in own
+
+
 def _split(ref: str, relative_to: str) -> tuple:
     """'(package, name with its parameters)' of a reference written in 'relative_to'.
 
@@ -421,7 +513,11 @@ def why_unresolved(ctx, kind: str, ref: str, relative_to: str = "") -> typing.Op
             break
         declaration = project.get_cmf(kind, name, quiet=True)
         if declaration is None:
-            reason = "'%s' declares no %s '%s'" % (package_name, noun, name)
+            failure = project.cmf_failure(kind, name) if hasattr(project, "cmf_failure") else None
+            if failure is not None:
+                reason = "'%s:%s' cannot be made: %s" % (package_name, name, failure)
+            else:
+                reason = "'%s' declares no %s '%s'" % (package_name, noun, name)
             break
         if not declaration.is_alias:
             return None

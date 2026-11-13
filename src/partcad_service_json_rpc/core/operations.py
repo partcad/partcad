@@ -3233,6 +3233,9 @@ def cmf_info(session, params):
             name = escape_name(name)
         declaration = project.get_cmf(said, name, quiet=True) if project is not None else None
         if declaration is None:
+            failure = project.cmf_failure(said, name) if project is not None else None
+            if failure is not None:
+                raise JsonRpcError(USAGE_ERROR, "The %s %s cannot be made: %s" % (said, path, failure))
             raise JsonRpcError(USAGE_ERROR, "The %s %s is not found" % (said, path))
         return {"object": path, "kind": said, "declaration": cmf.declaration_data(ctx, declaration)}
 
@@ -3258,16 +3261,30 @@ def _cmf_items(session, project, kind: str) -> list:
     is in a package that may not have loaded yet, and listing a package must
     not load its neighbours. The CMF tab says the rest, once one is opened.
     """
+    from partcad import cmf
     from partcad_utils.utils import escape_name
 
     described = []
     for name in project.object_names(kind):
         try:
+            config = project.object_config(kind, name)
+            if cmf.is_enrich(config) and _enriches_elsewhere(project, config):
+                # Made from another package's declaration, which making it
+                # would load: described by what it says itself, as an alias is.
+                row = {"name": name, "type": "enrich", "desc": config.get("desc") or "enrich of %s" % config["source"]}
+                if isinstance(config.get("display"), str) and "%" not in config["display"]:
+                    row["display"] = config["display"]
+                row["manufacturable"] = config.get("manufacturable", True) is not False
+                described.append(row)
+                continue
             # Asked for by reference, which spells a reserved character escaped.
             declaration = project.get_cmf(kind, escape_name(name), quiet=True)
             if declaration is None:
-                raise Exception("the declaration cannot be read")
-            row = {"name": name, "type": "alias" if declaration.is_alias else kind}
+                raise Exception(project.cmf_failure(kind, escape_name(name)) or "the declaration cannot be read")
+            row = {
+                "name": name,
+                "type": "alias" if declaration.is_alias else "enrich" if declaration.is_enrich else kind,
+            }
             desc = declaration.desc or ("alias of %s" % declaration.source if declaration.is_alias else None)
             if desc:
                 row["desc"] = desc
@@ -3278,6 +3295,20 @@ def _cmf_items(session, project, kind: str) -> list:
         except Exception as e:  # pylint: disable=broad-except
             session.emitter.warning("Skipping the %s '%s:%s': %s" % (kind, project.name, name, e))
     return described
+
+
+def _enriches_elsewhere(project, config) -> bool:
+    """Whether an enrich declaration names a declaration of a package other than its own."""
+    from partcad import cmf
+
+    source = config.get("source")
+    if not isinstance(source, str) or not source.strip():
+        return False
+    try:
+        package, _name = cmf._split(source.strip(), project.name)
+    except Exception:  # pylint: disable=broad-except
+        return False
+    return package != project.name
 
 
 def list_packages(session, params):
