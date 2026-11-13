@@ -83,7 +83,8 @@ at all).
 - **A name is one object of its package, whatever its kind** (`partcad_utils/object_names.py`,
   `Project.object_kind`, `Project._refuse_duplicate_names`). Parts, interfaces, assemblies, sketches, scenes and
   software share one namespace per package -- materials, providers, repositories and part types keep their own,
-  since nothing names one of those without saying what it is -- and that is what lets a command take a bare name
+  since nothing names one of those without saying what it is (`pc info` is the exception, and looks a colour,
+  material or finish up only where no object has the name) -- and that is what lets a command take a bare name
   and find out what it is instead of being told with `-a`/`-s`/`-i`/`-S`/`-w`. `NAMED_OBJECT_KINDS` is both the
   set and the order a name is looked for in, the most frequent first.
 

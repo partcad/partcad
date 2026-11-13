@@ -17,7 +17,10 @@ the kind skips the lookup, which is all they are for now.
 The rule covers the kinds a command names: :data:`NAMED_KINDS`. Materials,
 providers, repositories and part types keep namespaces of their own, because
 nothing names one of them without saying what it is -- a part's ``material:``,
-``pc supply --provider``, a part's ``type:``.
+``pc supply --provider``, a part's ``type:``. ``pc info`` is the exception: it
+takes a colour's, a material's or a finish's name where an object's goes, and
+looks for one only where no object of the package has the name, so this rule
+still decides what every such name is.
 
 :data:`NAMED_KINDS` is also the order a name of unknown kind is looked for in:
 the kinds a package holds most of first, so that the usual answer is the first

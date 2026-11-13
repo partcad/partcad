@@ -95,7 +95,9 @@ _SVG_LIMIT = 200_000
 
 ObjectKind = Literal["part", "assembly", "scene", "sketch"]
 TestKind = Literal["part", "assembly", "scene", "sketch", "interface"]
-InfoKind = Literal["part", "assembly", "scene", "sketch", "interface", "software"]
+# `pc info` also reports on a colour, a material or a finish (`--color`, `-m`,
+# `--finish`), which are looked for only where no object has the name.
+InfoKind = Literal["part", "assembly", "scene", "sketch", "interface", "software", "material", "color", "finish"]
 
 # A name is one object of its package whatever its kind, so the daemon looks the
 # kind up when it is not given; saying it only saves the lookup.
@@ -274,7 +276,9 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     ) -> CallToolResult:
         """Show an object's configuration, parameters and properties, or the package's when no object is named.
 
-        `pc info`.
+        Also a material's -- its density, stiffness, strength, conductivity and friction -- and a colour's or a
+        finish's, by their names ('//pub/std/manufacturing/material/plastic:pla'), looked for where no object has
+        the name. `pc info`.
         """
         request = {"package": package, "object": object, "params": _assignments(params), **_kind_flag(kind)}
         return await run(ctx, "info.object", request)
