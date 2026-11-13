@@ -13,7 +13,8 @@ it is refused wherever it comes from - a reference, the user's override, the
 default itself - naming the parameter, the value, the bound and the object.
 Pinned here for a part, an interface's construction parameter and a CMF
 declaration, and for what 'pc lint' says of a declaration before anything
-loads it.
+loads it. A declared 'enum' is held the same way: a value that is not one of
+those it lists is refused with them named.
 """
 
 import pytest
@@ -38,6 +39,19 @@ PACKAGE = {
                 "thickness": {"type": "float", "default": 2.0, "min": 0.5},
             },
         },
+        "bolt": {
+            "type": "basic",
+            "cuboid": 1,
+            "parameters": {
+                "finish": {"type": "string", "default": "plain", "enum": ["plain", "zinc"]},
+                "size": {"type": "int", "default": 3, "enum": ["3", "4"]},
+            },
+        },
+        "gold-bolt": {
+            "type": "basic",
+            "cuboid": 1,
+            "parameters": {"finish": {"type": "string", "default": "gold", "enum": ["plain", "zinc"]}},
+        },
         "too-wide": {
             "type": "basic",
             "cuboid": 1,
@@ -50,11 +64,18 @@ PACKAGE = {
             # range: it is no freedom of movement for having one.
             "parameters": {
                 "size": {"type": "float", "default": 3.0, "min": 1.6, "max": 30},
+                "head": {"type": "string", "default": "flat", "enum": ["flat", "round"]},
                 "slide": {"dir": [1, 0, 0], "min": 0, "max": 5},
             },
         },
     },
     "materials": {
+        "steel-4340": {
+            "parameters": {
+                "condition": {"type": "string", "default": "quenched-and-tempered", "enum": ["quenched-and-tempered"]}
+            },
+            "density": 7850,
+        },
         "abs": {
             "parameters": {"butadiene": {"type": "float", "default": 0.2, "min": 0.05, "max": 0.3}},
             "density": "%1040 + 100 * butadiene%",
@@ -143,10 +164,13 @@ def test_a_value_in_the_range_makes_the_instance(ctx):
 @pytest.mark.parametrize(
     "reference, says",
     [
-        ("//:plate;holes=11", "The parameter 'holes' of '//:plate' cannot be 11: its 'max' is 10"),
-        ("//:plate;holes=0", "The parameter 'holes' of '//:plate' cannot be 0: its 'min' is 1"),
-        ("//:plate;width=4.5", "The parameter 'width' of '//:plate' cannot be 4.5: its 'min' is 5"),
-        ("//:plate;thickness=0.1", "The parameter 'thickness' of '//:plate' cannot be 0.1: its 'min' is 0.5"),
+        ("//:plate;holes=11", "The parameter 'holes' of 'plate;holes=11' cannot be 11: its 'max' is 10"),
+        ("//:plate;holes=0", "The parameter 'holes' of 'plate;holes=0' cannot be 0: its 'min' is 1"),
+        ("//:plate;width=4.5", "The parameter 'width' of 'plate;width=4.5' cannot be 4.5: its 'min' is 5"),
+        (
+            "//:plate;thickness=0.1",
+            "The parameter 'thickness' of 'plate;thickness=0.1' cannot be 0.1: its 'min' is 0.5",
+        ),
     ],
 )
 def test_a_value_outside_the_range_costs_that_instance(ctx, reference, says):
@@ -249,3 +273,85 @@ def test_lint_leaves_an_interface_s_freedom_of_movement_alone():
     """'slide' states 'min' and 'max' as a range of movement, which is no default to hold to them."""
     interface = {"parameters": {"slide": {"dir": [1, 0, 0], "min": 0, "max": 5, "default": 9}}}
     assert [d for d in _lint({"interfaces": {"i": interface}}) if d.code == CODE_PARAMETERS] == []
+
+
+# --------------------------------------------------------------------------- #
+# 'enum'                                                                      #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "declaration, value, problem",
+    [
+        ({"type": "string", "enum": ["plain", "zinc"]}, "zinc", None),
+        ({"type": "string", "enum": ["plain", "zinc"]}, "gold", "cannot be 'gold': its 'enum' allows 'plain', 'zinc'"),
+        # Compared as a name spells them: the integer 3 is the '3' listed.
+        ({"type": "int", "enum": ["3", "4"]}, 3, None),
+        ({"type": "int", "enum": ["3", "4"]}, 5, "cannot be 5: its 'enum' allows '3', '4'"),
+        # No 'enum', or an array, which an 'enum' of single values does not describe.
+        ({"type": "string"}, "anything", None),
+        ({"type": "array", "enum": ["A", "B"]}, ["A", "C"], None),
+    ],
+)
+def test_a_value_has_to_be_one_the_enum_allows(declaration, value, problem):
+    found = parameters.value_problem(declaration, value, "p", "//pkg:thing")
+    assert found == (None if problem is None else "The parameter 'p' of '//pkg:thing' " + problem)
+
+
+def test_a_default_not_in_the_enum_says_it_is_the_default():
+    problems = parameters.declaration_problems({"type": "string", "default": "z", "enum": ["a", "b"]}, "k", "x")
+    assert problems == ["The parameter 'k' of 'x' defaults to 'z', and its 'enum' allows 'a', 'b'"]
+
+
+def test_a_part_s_reference_has_to_name_a_value_its_enum_allows(ctx):
+    assert ctx.get_part("//:bolt;finish=zinc,size=4") is not None
+    assert ctx.get_part("//:bolt;finish=gold") is None
+    assert ctx.get_project("//").get_broken_object_reason("part", "bolt;finish=gold") == (
+        "The parameter 'finish' of 'bolt;finish=gold' cannot be 'gold': its 'enum' allows 'plain', 'zinc'"
+    )
+    assert ctx.get_part("//:bolt;size=5") is None
+    assert ctx.get_part("//:bolt") is not None
+
+
+def test_a_default_not_in_the_enum_refuses_the_object(ctx):
+    assert ctx.get_part("//:gold-bolt") is None
+    assert "defaults to 'gold', and its 'enum' allows 'plain', 'zinc'" in ctx.get_project(
+        "//"
+    ).get_broken_object_reason("part", "gold-bolt")
+
+
+def test_an_interface_s_enum_holds(ctx):
+    project = ctx.get_project("//")
+    assert project.get_interface("m-hole;head=round") is not None
+    assert project.get_interface("m-hole;head=domed") is None
+    assert "cannot be 'domed': its 'enum' allows 'flat', 'round'" in project.get_broken_object_reason(
+        "interface", "m-hole;head=domed"
+    )
+
+
+def test_a_material_s_condition_has_to_be_one_it_lists(ctx):
+    """What a catalogue relied on 'pick' failing for: a condition nobody measured is refused by name."""
+    project = ctx.get_project("//")
+    assert project.get_cmf("material", "steel-4340;condition=quenched-and-tempered", quiet=True) is not None
+    assert project.get_cmf("material", "steel-4340;condition=normalized", quiet=True) is None
+    assert project.cmf_failure("material", "steel-4340;condition=normalized") == (
+        "The parameter 'condition' of '//:steel-4340' cannot be 'normalized': its 'enum' allows 'quenched-and-tempered'"
+    )
+
+
+def test_an_override_not_in_the_enum_is_an_error_and_the_default_stands():
+    name = "//test:enumerated"
+    user_config.parameter_config[name] = {"finish": "gold"}
+    try:
+        config = pc_config.apply_user_parameter_overrides(
+            {"parameters": {"finish": {"type": "string", "default": "plain", "enum": ["plain", "zinc"]}}}, name
+        )
+    finally:
+        del user_config.parameter_config[name]
+    assert config["parameters"]["finish"]["default"] == "plain"
+    assert pc_logging.had_errors
+
+
+def test_lint_reports_a_default_not_in_the_enum():
+    found = [d for d in _lint({"parts": {"gold-bolt": PACKAGE["parts"]["gold-bolt"]}}) if d.code == CODE_PARAMETERS]
+    assert [d.path for d in found] == ["$.parts.gold-bolt.parameters.finish"]

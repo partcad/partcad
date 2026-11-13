@@ -262,7 +262,7 @@ ASSEMBLY_NO_FIXED = (
 #   5 -- 'check_shared_parameters': declarations of a parameter that disagree
 #        about 'shared: true', or shared ones that disagree about anything else.
 #   6 -- 'check_parameter_bounds': a 'min'/'max' that cannot hold, or a default
-#        outside them.
+#        outside them or not one of its 'enum'.
 CHECKER_VERSION = 6
 
 # An upper bound on how many findings a single file reports. A file that is
@@ -1428,7 +1428,7 @@ _BOUNDED_SECTIONS = tuple(parameters.PARAMETERIZED_SECTIONS.items()) + (
 
 
 def check_parameter_bounds(data, root_node=None) -> list:
-    """Report a parameter whose 'min' and 'max' cannot hold, or whose default is outside them.
+    """Report a parameter whose 'min' and 'max' cannot hold, or whose default is outside them or its 'enum'.
 
     The rule and its words are 'partcad_utils.parameters.declaration_problems',
     which PartCAD reads as it loads the object and refuses it on; this says so

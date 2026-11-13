@@ -1397,7 +1397,7 @@ modify the part.
 The parameters can be of types ``string``, ``float``, ``int``, ``bool`` and ``array``.
 The parameter values can be restricted by specifying the list of possible values
 in ``enum``, and an ``int`` or a ``float`` parameter by the range it may take in
-``min`` and ``max``.
+``min`` and ``max``. Both are enforced, the same way (below).
 The initial parameter value is set using ``default``.
 
 .. code-block:: yaml
@@ -1418,11 +1418,13 @@ say where whatever the parameter feeds stops making sense -- the smallest plate
 a hole pattern fits, the last grade a material's numbers were measured for --
 and a value outside them is refused wherever it comes from: a reference
 (``plate;holes=11``), an ASSY link's ``params:``, an override in the user's
-configuration, or the declared ``default``. The message names the parameter,
-the value, the bound and the object, and a reference outside the range costs
-that one instance, while a default outside it is a declaration no value can
-fix, and refuses the object. ``pc lint`` reports that last case, and a ``min``
-above the ``max``, where they are written. The same holds for every kind of
+configuration, or the declared ``default``. A value that is not one of what
+``enum`` lists is refused the same way (``bolt;finish=gold`` of an ``enum:
+[plain, zinc]``). The message names the parameter, the value, the bound or the
+allowed values, and the object, and a reference outside them costs that one
+instance, while a default outside them is a declaration no value can fix, and
+refuses the object. ``pc lint`` reports that last case, and a ``min`` above the
+``max``, where they are written. The same holds for every kind of
 object that declares parameters -- a sketch, an assembly, a scene, a provider,
 a colour, a material, a finish, and the construction parameters of an
 interface, which state their ``type`` to be told apart from a freedom of

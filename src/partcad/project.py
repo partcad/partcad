@@ -810,16 +810,16 @@ class Project(project_config.Configuration):
         try:
             try:
                 normalized = config_class.normalize(name, config, f"{self.name}:{name}", self.ctx.user_config)
-            except pc_config.ParameterBoundError as e:
+            except pc_config.ParameterValueError as e:
                 # Only this one of what normalizing may raise: the rest is the
                 # caller's to report, as it always was.
                 raise ValueError(str(e)) from e
             self.bind_shared_parameters(name, normalized)
         except ValueError as e:
             # A declaration whose parameters cannot hold their own bounds (a
-            # default outside its 'min' and 'max'), or one the package's shared
-            # parameter refuses: the object is not served, and says why where it
-            # is looked for.
+            # default outside its 'min' and 'max', or not one of its 'enum'),
+            # or one the package's shared parameter refuses: the object is not
+            # served, and says why where it is looked for.
             self._refused_names.setdefault(kind, {})[name] = str(e)
             if configs is not None:
                 configs.pop(name, None)
@@ -1905,7 +1905,7 @@ class Project(project_config.Configuration):
                 config = interface_config.InterfaceConfiguration.normalize(
                     result_name, config, full_object_name, self.ctx.user_config
                 )
-            except pc_config.ParameterBoundError as e:
+            except pc_config.ParameterValueError as e:
                 self.record_broken_object("interface", result_name, e)
                 return None
             config["orig_name"] = base_name
@@ -1923,9 +1923,7 @@ class Project(project_config.Configuration):
                 )
                 return None
             try:
-                pc_config.apply_parameter_values(
-                    construction, params, f"{self.name}:{base_name}", package_name=self.name
-                )
+                pc_config.apply_parameter_values(construction, params, result_name, package_name=self.name)
             except Exception as e:
                 self.record_broken_object("interface", result_name, e)
                 return None
@@ -3185,12 +3183,11 @@ class Project(project_config.Configuration):
             if "parameters" in config and config["parameters"] is not None:
                 # Filling "parameters"
                 try:
-                    pc_config.apply_parameter_values(
-                        config["parameters"], params, f"{self.name}:{base_object_name}", package_name=self.name
-                    )
-                except pc_config.ParameterBoundError as e:
-                    # A value outside the range its parameter declares costs
-                    # the caller this instance, said with the bound it broke.
+                    pc_config.apply_parameter_values(config["parameters"], params, result_name, package_name=self.name)
+                except pc_config.ParameterValueError as e:
+                    # A value its parameter does not allow - outside its range,
+                    # or not one of its 'enum' - costs the caller this
+                    # instance, said with what it broke.
                     self.record_broken_object(factory_name, result_name, e)
                     return None
             else:

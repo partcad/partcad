@@ -241,7 +241,10 @@ written out has to lie in (a density above 0, a Poisson's ratio from 0 to below 
 outside it, or is not a number at all -- an expression that cannot be evaluated is left as the text it was written
 as -- is refused, naming the field, the value and the instance, rather than weighing anything at it. So give every
 numeric parameter the ``min`` and ``max`` its model holds between (see :ref:`parameters`): a reference outside them is
-refused before anything is computed, with the bound it broke, and ``pc lint`` reports a default outside them.
+refused before anything is computed, with the bound it broke, and ``pc lint`` reports a default outside them. A
+parameter that names a condition rather than numbering it -- a temper, a heat treatment -- lists the conditions in
+``enum``, and a reference naming any other is refused the same way: ``al-6061;temper=T7`` is an error, not a
+material whose ``pick`` fails.
 
 Write a number with an exponent the way YAML reads it as one, with a point and a sign: ``69.0e+9``. YAML reads
 ``69e9`` as text, and a material stating that is refused with the advice to write it so. Inside an expression either

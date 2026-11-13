@@ -1999,7 +1999,8 @@ at all).
   feature. The split is `interface_config.is_movement_parameter`, and it is safe because the two
   vocabularies do not overlap: a movement parameter is one of the six predefined names, a `[min, max,
   default]` list, or states `min`/`max`/`dir` or `type: move`/`turn`. A construction parameter may state
-  `min`/`max` too, now that every numeric parameter may be bounded (`partcad_utils.parameters.bound_problem`),
+  `min`/`max` too, now that every numeric parameter may be bounded (`partcad_utils.parameters.value_problem`,
+  which also holds every value to a declared `enum`),
   and what tells it apart is that it states the type of a value (`type: float`), which a movement parameter
   never does -- so an interface's bounded construction parameter has to state its `type`, and the schema's
   `if` says the same. Every movement parameter the schema has ever accepted is caught — a custom name is *required* to

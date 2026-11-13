@@ -1,10 +1,10 @@
 from partcad_utils.parameters import (  # noqa: F401
     array_item_type,
-    bound_problem,
     coerce_parameter_value,
     declaration_problems,
     is_shared,
     normalize_parameters,
+    value_problem,
 )
 
 from . import expr
@@ -12,8 +12,12 @@ from . import logging as pc_logging
 from .user_config import user_config as process_user_config
 
 
-class ParameterBoundError(ValueError):
-    """A parameter's 'min'/'max' that cannot hold, or a value - given, or its default - outside them."""
+class ParameterValueError(ValueError):
+    """A value a parameter may not take - given, or its default - or a 'min'/'max' that cannot hold.
+
+    Outside the range a numeric parameter declares, or not one of what its
+    'enum' allows (see 'partcad_utils.parameters.value_problem').
+    """
 
 
 def parameter_overrides(user_config=None) -> dict:
@@ -80,7 +84,7 @@ def apply_user_parameter_overrides(
                         "The override of the parameter '%s' of '%s' cannot be used: %s" % (param_name, object_name, e)
                     )
                     continue
-                outside = bound_problem(declared, value, param_name, object_name)
+                outside = value_problem(declared, value, param_name, object_name)
                 if outside is not None:
                     # Like a value that is not of the declared type: said, and
                     # the declared default stands.
@@ -119,12 +123,12 @@ class Configuration:
 
 
 def check_parameter_declarations(parameters, object_name: str) -> None:
-    """Refuse a parameter section whose bounds cannot hold, or whose default is outside them.
+    """Refuse a parameter section whose bounds cannot hold, or whose default is not a value it allows.
 
     Every parametrizable kind is normalized through here or through
     'InterfaceConfiguration.normalize', which asks the same: a 'min' or a 'max'
     on a parameter that is no number, a 'min' above the 'max', a default
-    outside them. Raised rather than reported, because an object declared that
+    outside them or not one of its 'enum'. Raised rather than reported, because an object declared that
     way has no value it could be built with that its own declaration allows:
     the object is broken, and the message says why (see
     'partcad_utils.parameters.declaration_problems', which the linter reads too).
@@ -135,7 +139,7 @@ def check_parameter_declarations(parameters, object_name: str) -> None:
     for param_name, declared in parameters.items():
         problems.extend(declaration_problems(declared, param_name, object_name))
     if problems:
-        raise ParameterBoundError("; ".join(problems))
+        raise ParameterValueError("; ".join(problems))
 
 
 def apply_parameter_values(parameters: dict, values: dict, object_name: str, package_name: str = None) -> dict:
@@ -164,11 +168,12 @@ def apply_parameter_values(parameters: dict, values: dict, object_name: str, pac
         value = coerce_parameter_value(
             declared.get("type"), param_value, param_name, object_name, item_type=array_item_type(declared)
         )
-        # The range a numeric parameter declares holds for every value it is
-        # given, whichever kind of object declares it.
-        outside = bound_problem(declared, value, param_name, object_name)
+        # The range a numeric parameter declares, and the values an 'enum'
+        # allows, hold for every value it is given, whichever kind of object
+        # declares it.
+        outside = value_problem(declared, value, param_name, object_name)
         if outside is not None:
-            raise ParameterBoundError(outside)
+            raise ParameterValueError(outside)
         declared["default"] = value
     return parameters
 

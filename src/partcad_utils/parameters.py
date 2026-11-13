@@ -113,15 +113,76 @@ def _spelled(value) -> str:
 
 
 def declaration_problems(declaration, param_name: str, object_name: str) -> list:
-    """What is wrong with the bounds and the default of one expanded parameter declaration, as messages.
+    """What is wrong with the bounds, the 'enum' and the default of one expanded parameter declaration, as messages.
 
     'min' and 'max' bound a number, so only an 'int' or a 'float' parameter
     states them, each a number, the one not above the other; and the default is
-    a value like any other, so it lies within them. Read by PartCAD as it loads
-    an object (see 'partcad.config.check_parameter_declarations') and by the
-    linter ('assy_lint.check_parameter_bounds'), in the same words.
+    a value like any other, so it lies within them and is one of what 'enum'
+    allows. Read by PartCAD as it loads an object (see
+    'partcad.config.check_parameter_declarations') and by the linter
+    ('assy_lint.check_parameter_bounds'), in the same words.
     """
-    if not isinstance(declaration, dict) or not any(bound in declaration for bound in BOUNDS):
+    if not isinstance(declaration, dict):
+        return []
+    problems = _bounds_problems(declaration, param_name, object_name)
+    if not problems and "default" in declaration:
+        problem = enum_problem(declaration, declaration["default"], param_name, object_name, default=True)
+        if problem is not None:
+            problems.append(problem)
+    return problems
+
+
+def value_problem(declaration, value, param_name: str, object_name: str) -> Optional[str]:
+    """Why a value given to a parameter - by a reference, by an override - is not one it may take, or None.
+
+    Outside the range a numeric parameter declares ('bound_problem'), or not
+    one of the values its 'enum' allows ('enum_problem'). The one check every
+    kind of object's values go through ('partcad.config.apply_parameter_values').
+    """
+    return bound_problem(declaration, value, param_name, object_name) or enum_problem(
+        declaration, value, param_name, object_name
+    )
+
+
+def _quoted(value) -> str:
+    return "'%s'" % value if isinstance(value, str) else _spelled(value)
+
+
+def enum_problem(declaration, value, param_name: str, object_name: str, default: bool = False) -> Optional[str]:
+    """Why 'value' is not one of the values a parameter's 'enum' allows, or None if it is (or there is no 'enum').
+
+    A value and an allowed one are compared as a name spells them, so the
+    integer 3 is the '3' an 'enum' of text lists. An array is not checked: an
+    'enum' lists single values.
+    """
+    if not isinstance(declaration, dict):
+        return None
+    allowed = declaration.get("enum")
+    if not isinstance(allowed, (list, tuple)) or not allowed:
+        return None
+    if value is None or isinstance(value, (list, tuple, dict)) or declaration.get("type") == "array":
+        return None
+    if value in allowed or _spelled(value) in {_spelled(each) for each in allowed}:
+        return None
+    listed = ", ".join(_quoted(each) for each in allowed)
+    if default:
+        return "The parameter '%s' of '%s' defaults to %s, and its 'enum' allows %s" % (
+            param_name,
+            object_name,
+            _quoted(value),
+            listed,
+        )
+    return "The parameter '%s' of '%s' cannot be %s: its 'enum' allows %s" % (
+        param_name,
+        object_name,
+        _quoted(value),
+        listed,
+    )
+
+
+def _bounds_problems(declaration: dict, param_name: str, object_name: str) -> list:
+    """What is wrong with a declaration's 'min' and 'max', and with its default against them."""
+    if not any(bound in declaration for bound in BOUNDS):
         return []
     kind = declaration.get("type", "float")
     if kind not in NUMERIC_TYPES:
