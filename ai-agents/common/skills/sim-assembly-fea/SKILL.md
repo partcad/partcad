@@ -207,12 +207,13 @@ of those keys or after a condition (`fix`, `load`, `gravity`).
 - `implementation:` has to name one that **reads** what the scenario states: a
   direction (`force`) and a `gravity`. PartCAD refuses an analysis to one that
   does not, saying so, rather than letting it pull every load straight down.
-- The material: a part whose `material` names a catalogued one (`pc info` on
-  the material shows its `Youngs modulus`, `Yield strength`, ...) is analysed
-  as that material without anything written here. Otherwise an alias may carry
-  its own `cae: fea:` -- `youngs_modulus`, `poissons_ratio`, `yield_strength`
-  (Pa), `density` (kg/m³) -- for what the part is made of, when the
-  implementation's defaults (steel) are not it. That is the implementation's
+- The material: a part whose `material` names a catalogued one is analysed as
+  that material without anything written here -- `pc info <part>` lists what it
+  is handed under `Material` (`Youngs modulus`, `Yield strength`, ...); a
+  material is not an object `pc info` looks up on its own. Otherwise an alias
+  may carry its own `cae: fea:` -- `youngs_modulus`, `poissons_ratio`,
+  `yield_strength` (Pa), `density` (kg/m³) -- for what the part is made of, when
+  the implementation's defaults (steel) are not it. That is the implementation's
   configuration for every scenario of the part, not part of yours: add it only
   if it is missing, and say where the numbers come from.
 - Comments say, for every condition, which load of which simulation it came
