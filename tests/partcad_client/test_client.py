@@ -209,15 +209,17 @@ def test_a_long_but_talkative_call_is_not_cut_off(socket_dir):
     a limit on how much work a command may do.
     """
 
+    # An event every half second against a bound of two: seconds of room between
+    # any two of them on a busy runner, and still a bound shorter than the call.
     def slow(session, params):
         for _ in range(6):
-            time.sleep(0.1)
+            time.sleep(0.5)
             session.emitter.emit(events.INFO, "still here")
         return "done"
 
     server, path = _serve(socket_dir, {"slow": slow})
     try:
-        client = _stalling_client(path, 0.35)  # shorter than the whole call
+        client = _stalling_client(path, 2.0)  # shorter than the whole call, 3s
         seen = []
         assert client.call("slow", {}, on_event=lambda m, p: seen.append(m)) == "done"
         assert len(seen) == 6
@@ -533,6 +535,19 @@ def test_an_ordinary_error_is_not_mistaken_for_a_staging_request(socket_dir):
 # markers emitted the way the daemon's log hook emits them.
 
 
+# How long these tests' client waits for a word from the service, and the windows
+# around it. The service's first word is a thread switch and a socket write away,
+# which a busy runner can delay by tenths of a second - and a wait of 0.3s is what
+# a parallel run broke on, the window's opening arriving after the client had
+# given up (see "bound a duration tightly" in 'CLAUDE.md'). So the wait has
+# seconds in it, a quiet spell that must outlast it does so by a second, and a
+# window that must outlast both does so by seconds again.
+DEFAULT_WAIT = 2.0
+QUIET = 3.0  # longer than DEFAULT_WAIT: only an open window lets the client sit it out
+LONG_WINDOW = 10.0  # longer than QUIET, by more than a busy runner adds to it
+STALL_WINDOW = 5.0  # longer than DEFAULT_WAIT, so that the window is what runs out
+
+
 def _windowed_client(path, timeout):
     """'_stalling_client', with the bound applied to the socket as it moves."""
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -557,14 +572,14 @@ def test_a_declared_timeout_outlasts_the_default(socket_dir):
     """Quiet for longer than the default, inside a window that allows it."""
 
     def slow(session, params):
-        _window(session, timeouts.START, 5.0)
-        time.sleep(1.0)
-        _window(session, timeouts.END, 5.0)
+        _window(session, timeouts.START, LONG_WINDOW)
+        time.sleep(QUIET)
+        _window(session, timeouts.END, LONG_WINDOW)
         return "built"
 
     server, path = _serve(socket_dir, {"slow": slow})
     try:
-        client = _windowed_client(path, 0.3)
+        client = _windowed_client(path, DEFAULT_WAIT)
         assert client.call("slow") == "built"
         client.close()
     finally:
@@ -586,7 +601,7 @@ def test_a_closed_window_puts_the_default_back(socket_dir):
 
     server, path = _serve(socket_dir, {"slow": slow_then_wedged})
     try:
-        client = _windowed_client(path, 0.3)
+        client = _windowed_client(path, DEFAULT_WAIT)
         started = time.monotonic()
         with pytest.raises(DaemonStalled):
             client.call("slow")
@@ -608,7 +623,7 @@ def test_a_declared_timeout_never_shortens_the_wait(socket_dir):
 
     server, path = _serve(socket_dir, {"quick": quick_declared})
     try:
-        client = _windowed_client(path, 2.0)
+        client = _windowed_client(path, DEFAULT_WAIT)
         assert client.call("quick") == "built"
         client.close()
     finally:
@@ -620,16 +635,16 @@ def test_the_stall_report_names_the_declaration(socket_dir):
     release = threading.Event()
 
     def wedged_inside(session, params):
-        _window(session, timeouts.START, 1.0, item="tower")
+        _window(session, timeouts.START, STALL_WINDOW, item="tower")
         release.wait(30)
         return "eventually"
 
     server, path = _serve(socket_dir, {"wedged": wedged_inside})
     try:
-        client = _windowed_client(path, 0.3)
+        client = _windowed_client(path, DEFAULT_WAIT)
         with pytest.raises(DaemonStalled) as caught:
             client.call("wedged")
-        assert "'timeout: 1'" in str(caught.value)
+        assert "'timeout: 5'" in str(caught.value)
         assert "//pkg:tower" in str(caught.value)
         client.close()
     finally:
@@ -648,15 +663,15 @@ def test_a_sandbox_install_is_waited_for_and_pip_s_own_error_arrives(socket_dir)
     pip_said = "Error in [pip install build123d==0.11.1]: Failed to resolve 'files.pythonhosted.org'"
 
     def installs(session, params):
-        session.emitter.emit("log", timeouts.event(timeouts.START, 5.0, "3.11", "build123d", reason))
-        time.sleep(1.0)
+        session.emitter.emit("log", timeouts.event(timeouts.START, LONG_WINDOW, "3.11", "build123d", reason))
+        time.sleep(QUIET)
         session.emitter.emit("log", {"kind": "log", "levelno": logging.ERROR, "message": pip_said})
-        session.emitter.emit("log", timeouts.event(timeouts.END, 5.0, "3.11", "build123d", reason))
+        session.emitter.emit("log", timeouts.event(timeouts.END, LONG_WINDOW, "3.11", "build123d", reason))
         return "failed to convert"
 
     server, path = _serve(socket_dir, {"convert": installs})
     try:
-        client = _windowed_client(path, 0.3)
+        client = _windowed_client(path, DEFAULT_WAIT)
         seen = []
         assert client.call("convert", on_event=lambda method, params: seen.append(params)) == "failed to convert"
         assert pip_said in [event.get("message") for event in seen]
@@ -671,13 +686,13 @@ def test_the_stall_report_names_what_the_service_was_doing(socket_dir):
     reason = "installing build123d==0.11.1 in /sandbox"
 
     def wedged_install(session, params):
-        session.emitter.emit("log", timeouts.event(timeouts.START, 1.0, "3.11", "build123d", reason))
+        session.emitter.emit("log", timeouts.event(timeouts.START, STALL_WINDOW, "3.11", "build123d", reason))
         release.wait(30)
         return "eventually"
 
     server, path = _serve(socket_dir, {"wedged": wedged_install})
     try:
-        client = _windowed_client(path, 0.3)
+        client = _windowed_client(path, DEFAULT_WAIT)
         with pytest.raises(DaemonStalled) as caught:
             client.call("wedged")
         assert "That is how long the service allows for %s." % reason in str(caught.value)
@@ -702,7 +717,7 @@ def test_a_window_does_not_outlive_its_request(socket_dir):
 
     server, path = _serve(socket_dir, {"opens": opens, "wedged": wedged})
     try:
-        client = _windowed_client(path, 0.3)
+        client = _windowed_client(path, DEFAULT_WAIT)
         assert client.call("opens") == "left open"
         started = time.monotonic()
         with pytest.raises(DaemonStalled):
