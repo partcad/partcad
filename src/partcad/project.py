@@ -1603,6 +1603,8 @@ class Project(project_config.Configuration):
             if display_inherited and getattr(source, "config_dir", None):
                 # An image the source is drawn with is a file of its package.
                 config_dir = source.config_dir
+        if kind == "material":
+            config = material.read_numbers(config)
         made = {"color": cmf.Color, "finish": cmf.Finish, "material": material.Material}[kind]
         declaration = made(
             instance_name,

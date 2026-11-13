@@ -247,8 +247,8 @@ parameter that names a condition rather than numbering it -- a temper, a heat tr
 material whose ``pick`` fails.
 
 Write a number with an exponent the way YAML reads it as one, with a point and a sign: ``69.0e+9``. YAML reads
-``69e9`` as text, and a material stating that is refused with the advice to write it so. Inside an expression either
-spelling is a number.
+``69e9`` as text: PartCAD still reads such a material at the number the text spells, as it always has, but ``pc lint``
+reports it, since the schema asks for a number. Inside an expression either spelling is a number.
 
 **Declarations stack.** An enrich may declare parameters of its own: its fields are rendered with them -- its
 ``source`` and its ``with:`` values included -- so it can offer the parameters a user thinks in and map them onto the

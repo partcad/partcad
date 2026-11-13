@@ -114,6 +114,24 @@ def _spells_a_number(text: str) -> bool:
     return True
 
 
+def read_numbers(config: dict) -> dict:
+    """'config' with every number YAML handed over as text read as the number it spells.
+
+    YAML 1.1 reads '69e9' - an exponent with no point or no sign - as text, and
+    a material that wrote one was weighed and analysed at that number all the
+    same, because every property here was read with 'float()'. It still is: a
+    package that worked keeps working. 'pc lint' goes on reporting the text,
+    since the schema asks for a number, and says how to write one. Only text
+    that is nothing but a number is read so; an expression that could not be
+    evaluated stays the text it was written as, and is refused below.
+    """
+    for key in NUMBERS:
+        value = config.get(key)
+        if isinstance(value, str) and "%" not in value and _spells_a_number(value.strip()):
+            config[key] = float(value)
+    return config
+
+
 def number_problems(config: dict) -> list:
     """What is wrong with the numbers a material's declaration states, once rendered, as clauses.
 
@@ -128,12 +146,7 @@ def number_problems(config: dict) -> list:
         if value is None:
             continue
         if isinstance(value, bool) or not isinstance(value, (int, float)):
-            hint = ""
-            if isinstance(value, str) and "%" not in value and _spells_a_number(value):
-                # YAML 1.1 reads '69e9' as text: a number written with an
-                # exponent is one only with a point and a signed exponent.
-                hint = ": YAML reads a number with an exponent only when it has a point and a sign, as '69.0e+9'"
-            problems.append("its '%s' is %r, which is text and not a number%s" % (key, value, hint))
+            problems.append("its '%s' is %r, which is text and not a number" % (key, value))
             continue
         for keyword, bound in bounds.items():
             words, holds = _RANGE_WORDS[keyword]

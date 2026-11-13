@@ -158,11 +158,12 @@ def test_an_expression_that_cannot_be_evaluated_is_no_number(ctx):
     )
 
 
-def test_a_number_yaml_reads_as_text_is_refused_with_how_to_write_it(ctx):
-    assert _get(ctx, "material", "exponent") is None
-    failure = _failure(ctx, "material", "exponent")
-    assert "its 'youngsModulus' is '69e9', which is text and not a number" in failure
-    assert "'69.0e+9'" in failure
+def test_a_number_yaml_reads_as_text_is_still_that_number(ctx):
+    """YAML 1.1 reads '69e9' as text; a material that wrote it was read at 69e9 before, and still is."""
+    exponent = _get(ctx, "material", "exponent")
+    assert exponent is not None
+    assert exponent.youngs_modulus == 69e9
+    assert exponent.config["youngsModulus"] == 69e9
 
 
 def test_the_ranges_are_the_schema_s():
