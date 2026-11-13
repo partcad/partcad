@@ -513,9 +513,10 @@ def keeps_source_ports(shape) -> bool:
 
     The rule an alias has always followed (see 'PartFactoryAlias'): a part that
     is another one under a new name has its ports, unless it declares ports or
-    interfaces of its own or moves the geometry they sit on. A 'map:' adds names
-    to those rather than replacing them - which is the point of giving a port of
-    a standard part a name that says what it is for.
+    interfaces of its own or moves the geometry they sit on. An enrich's 'map:'
+    adds names to those rather than replacing them - which is the point of giving
+    a port of a standard part a name that says what it is for. An alias takes no
+    'map:' ('Project.init_object_by_config').
     """
     from .assembly import Assembly
 

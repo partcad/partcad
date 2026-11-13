@@ -2559,6 +2559,13 @@
                   }
                 }
               ],
+              "allOf": [
+                {
+                  "description": "An alias is the object it names under another name, and takes no 'map:'. Names of its own for what that object has are given by an enrich of the same 'source'.",
+                  "if": { "properties": { "type": { "const": "alias" } }, "required": ["type"] },
+                  "then": { "properties": { "map": false } }
+                }
+              ],
               "additionalProperties": false
             },
             {
@@ -2695,6 +2702,13 @@
                 "software": { "$ref": "#/definitions/software-refs" }
               },
               "required": ["type"],
+              "allOf": [
+                {
+                  "description": "An alias is the object it names under another name, and takes no 'map:'. Names of its own for what that object has are given by an enrich of the same 'source'.",
+                  "if": { "properties": { "type": { "const": "alias" } }, "required": ["type"] },
+                  "then": { "properties": { "map": false } }
+                }
+              ],
               "additionalProperties": false
             },
             {

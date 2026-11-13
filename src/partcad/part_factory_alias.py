@@ -82,9 +82,10 @@ class PartFactoryAlias(pf.PartFactory):
             # part that nothing can be connected to. One that declares ports or
             # interfaces of its own keeps them, and so does one that moves or
             # scales the geometry, which the source's ports would no longer
-            # sit on. One with a 'map:' has them too, and the names it maps
-            # besides: they are its own, so it answers for its ports itself
-            # (see 'assembly_ports.keeps_source_ports').
+            # sit on. An enrich with a 'map:' has them too, and the names it
+            # maps besides: they are its own, so it answers for its ports itself
+            # (see 'assembly_ports.keeps_source_ports'). An alias takes no 'map:'
+            # ('Project.init_object_by_config').
             if not any(key in config for key in ("implements", "ports", "map", "offset", "scale")):
                 self.part.with_ports = _SourcePorts(ctx, self.source, source_project.name)
 
