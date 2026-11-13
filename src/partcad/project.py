@@ -807,12 +807,19 @@ class Project(project_config.Configuration):
         configs = self._object_configs.get(kind)
         if name in done and configs is not None and configs.get(name) is config:
             return config
-        normalized = config_class.normalize(name, config, f"{self.name}:{name}", self.ctx.user_config)
         try:
+            try:
+                normalized = config_class.normalize(name, config, f"{self.name}:{name}", self.ctx.user_config)
+            except pc_config.ParameterBoundError as e:
+                # Only this one of what normalizing may raise: the rest is the
+                # caller's to report, as it always was.
+                raise ValueError(str(e)) from e
             self.bind_shared_parameters(name, normalized)
         except ValueError as e:
-            # A declaration the package's shared parameter refuses: the object
-            # is not served, and says why where it is looked for.
+            # A declaration whose parameters cannot hold their own bounds (a
+            # default outside its 'min' and 'max'), or one the package's shared
+            # parameter refuses: the object is not served, and says why where it
+            # is looked for.
             self._refused_names.setdefault(kind, {})[name] = str(e)
             if configs is not None:
                 configs.pop(name, None)
@@ -1892,11 +1899,15 @@ class Project(project_config.Configuration):
             # instance derives from, so it is copied rather than filled in -
             # writing the values into it would make the next reference, and the
             # unparametrized interface itself, inherit them.
-            config = self.normalized_interface_config(base_name, deep_copy=True)
-            full_object_name = f"{self.name}:{result_name}"
-            config = interface_config.InterfaceConfiguration.normalize(
-                result_name, config, full_object_name, self.ctx.user_config
-            )
+            try:
+                config = self.normalized_interface_config(base_name, deep_copy=True)
+                full_object_name = f"{self.name}:{result_name}"
+                config = interface_config.InterfaceConfiguration.normalize(
+                    result_name, config, full_object_name, self.ctx.user_config
+                )
+            except pc_config.ParameterBoundError as e:
+                self.record_broken_object("interface", result_name, e)
+                return None
             config["orig_name"] = base_name
             # The construction half of 'parameters:' - the values the interface
             # is built from. The other half of that section is the freedom of
@@ -1912,7 +1923,9 @@ class Project(project_config.Configuration):
                 )
                 return None
             try:
-                pc_config.apply_parameter_values(construction, params, result_name, package_name=self.name)
+                pc_config.apply_parameter_values(
+                    construction, params, f"{self.name}:{base_name}", package_name=self.name
+                )
             except Exception as e:
                 self.record_broken_object("interface", result_name, e)
                 return None
@@ -3171,7 +3184,15 @@ class Project(project_config.Configuration):
             # Fill in the parameter values
             if "parameters" in config and config["parameters"] is not None:
                 # Filling "parameters"
-                pc_config.apply_parameter_values(config["parameters"], params, result_name, package_name=self.name)
+                try:
+                    pc_config.apply_parameter_values(
+                        config["parameters"], params, f"{self.name}:{base_object_name}", package_name=self.name
+                    )
+                except pc_config.ParameterBoundError as e:
+                    # A value outside the range its parameter declares costs
+                    # the caller this instance, said with the bound it broke.
+                    self.record_broken_object(factory_name, result_name, e)
+                    return None
             else:
                 # Filling "with"
                 if "with" not in config:

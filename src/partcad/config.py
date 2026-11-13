@@ -12,6 +12,10 @@ from . import logging as pc_logging
 from .user_config import user_config as process_user_config
 
 
+class ParameterBoundError(ValueError):
+    """A parameter's 'min'/'max' that cannot hold, or a value - given, or its default - outside them."""
+
+
 def parameter_overrides(user_config=None) -> dict:
     """The parameter overrides in effect for a context: object name -> {parameter: value}.
 
@@ -131,7 +135,7 @@ def check_parameter_declarations(parameters, object_name: str) -> None:
     for param_name, declared in parameters.items():
         problems.extend(declaration_problems(declared, param_name, object_name))
     if problems:
-        raise ValueError("; ".join(problems))
+        raise ParameterBoundError("; ".join(problems))
 
 
 def apply_parameter_values(parameters: dict, values: dict, object_name: str, package_name: str = None) -> dict:
@@ -164,7 +168,7 @@ def apply_parameter_values(parameters: dict, values: dict, object_name: str, pac
         # given, whichever kind of object declares it.
         outside = bound_problem(declared, value, param_name, object_name)
         if outside is not None:
-            raise ValueError(outside)
+            raise ParameterBoundError(outside)
         declared["default"] = value
     return parameters
 

@@ -370,6 +370,8 @@ Define parts with CodeCAD scripts using the following syntax:
         <param name>:
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
+          min: <(optional, int and float only) the smallest value>
+          max: <(optional, int and float only) the largest value>
           default: <default value>
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
@@ -1394,7 +1396,8 @@ Each part may have a list of parameters that are passed into the scripts to
 modify the part.
 The parameters can be of types ``string``, ``float``, ``int``, ``bool`` and ``array``.
 The parameter values can be restricted by specifying the list of possible values
-in ``enum``.
+in ``enum``, and an ``int`` or a ``float`` parameter by the range it may take in
+``min`` and ``max``.
 The initial parameter value is set using ``default``.
 
 .. code-block:: yaml
@@ -1406,7 +1409,24 @@ The initial parameter value is set using ``default``.
         <param name>:
           type: <string|float|int|bool|array>
           enum: <(optional) list of possible values>
+          min: <(optional, int and float only) the smallest value it may take>
+          max: <(optional, int and float only) the largest value it may take>
           default: <default value>
+
+``min`` and ``max`` are both included: ``min: 1`` takes 1 and refuses 0.9. They
+say where whatever the parameter feeds stops making sense -- the smallest plate
+a hole pattern fits, the last grade a material's numbers were measured for --
+and a value outside them is refused wherever it comes from: a reference
+(``plate;holes=11``), an ASSY link's ``params:``, an override in the user's
+configuration, or the declared ``default``. The message names the parameter,
+the value, the bound and the object, and a reference outside the range costs
+that one instance, while a default outside it is a declaration no value can
+fix, and refuses the object. ``pc lint`` reports that last case, and a ``min``
+above the ``max``, where they are written. The same holds for every kind of
+object that declares parameters -- a sketch, an assembly, a scene, a provider,
+a colour, a material, a finish, and the construction parameters of an
+interface, which state their ``type`` to be told apart from a freedom of
+movement (see :ref:`interface-parameters`).
 
 An ``array`` is a list however a reference hands it over -- ``holes=30,40`` in a
 name or on the command line, ``holes: [30, 40]`` in an ASSY file's ``params:``,

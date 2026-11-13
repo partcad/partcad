@@ -566,6 +566,8 @@ Repositories are declared in ``partcad.yaml`` using the following syntax:
         <param name>:
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
+          min: <(optional, int and float only) the smallest value>
+          max: <(optional, int and float only) the largest value>
           default: <default value>
 
 ``enrich`` repositories are references to other repositories with some

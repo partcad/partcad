@@ -1998,8 +1998,11 @@ at all).
   the construction values a reference sets — because "the same way as for a part" is the point of the
   feature. The split is `interface_config.is_movement_parameter`, and it is safe because the two
   vocabularies do not overlap: a movement parameter is one of the six predefined names, a `[min, max,
-  default]` list, or states `min`/`max`/`dir` or `type: move`/`turn`; a part's parameter states none of
-  those. Every movement parameter the schema has ever accepted is caught — a custom name is *required* to
+  default]` list, or states `min`/`max`/`dir` or `type: move`/`turn`. A construction parameter may state
+  `min`/`max` too, now that every numeric parameter may be bounded (`partcad_utils.parameters.bound_problem`),
+  and what tells it apart is that it states the type of a value (`type: float`), which a movement parameter
+  never does -- so an interface's bounded construction parameter has to state its `type`, and the schema's
+  `if` says the same. Every movement parameter the schema has ever accepted is caught — a custom name is *required* to
   state its `dir` — so nothing written before this changes meaning. `WithPorts` overrides both accessors:
   for a shape that section has only ever meant construction values, so none of it is movement.
 
@@ -2065,6 +2068,29 @@ at all).
   defence is that no name on that list leads anywhere. `format` is off it deliberately: `"{0.__class__}"
   .format(x)` traverses attributes by name at run time, which is the whole of what the list prevents. Adding
   a name to it is a decision about what a package may run at *load* time, not a convenience.
+
+  The table functions in `SAFE_NAMES` (`clamp`, `lerp`, `interpolate`, `pick`, `color_mix`,
+  `interpolate_color`) are ordinary Python in `expr.py`, and each checks what it is handed before using it --
+  numbers where a number belongs, stops strictly increasing, one value per stop -- because they are called with
+  whatever a declaration wrote, and an error has to say what is wrong with the table. `NUMERIC_FUNCTIONS` lists
+  the ones that answer a number whatever they are given, and `_is_numeric` treats `pick` as one only when its
+  values are written out as numbers: the multiplication check is what keeps `'x' * 10**9` from allocating, and
+  `pick` from a list of text would be that.
+
+- **Computed and stacked CMF declarations** (`cmf.py`, `material.py`, `Project._make_cmf` / `_get_enrich`). A
+  colour's, a material's or a finish's fields are rendered with its parameters (`cmf.with_parameters`), and a
+  material's numbers are then held to the ranges the schema gives them (`material.NUMBERS`, which a test holds
+  to the schema): a computed density that came out negative, or an expression that could not be evaluated and is
+  still text, refuses that instance by name. `type: enrich` is a declaration of its own made from another
+  instance (`cmf.enriched`, `ENRICH_EXCLUDED`): its reference is its own, it takes no `ids`/`aliases` (an id
+  names one declaration, and `cmf_conventions` counts an enrich's own), and references it takes are made
+  absolute against the source's package. Enriches are the one CMF declaration not made as the package loads
+  (`init_materials` skips them): the context has not registered the package yet, and the source may be in a
+  package nothing else loads. They are made outside the declaration's `MaterialLock`, because making one asks
+  for its source, which may be an enrich asking for this one; a thread-local stack (`_ENRICHING`) is what
+  notices that, and `EnrichCycleError` reaches the outermost one to report the whole chain once. Why an
+  instance could not be made is kept in `Project.cmf_failures`, for `cmf.why_unresolved` and for an enrich of
+  it to say rather than "declares no material".
 
 - **What a `partcad.yaml` is rendered with** (`./src/partcad/config_template.py`): the file is a Jinja2 template
   rendered to YAML before it is parsed, and this is the context. Beside the package name and the constants a CAD

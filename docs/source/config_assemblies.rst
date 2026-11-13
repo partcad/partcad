@@ -80,6 +80,8 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         <param name>:
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
+          min: <(optional, int and float only) the smallest value>
+          max: <(optional, int and float only) the largest value>
           default: <default value>
       dependencies: # (optional) the list of filenames the caching logic checks for changes
         - <macros.j2>

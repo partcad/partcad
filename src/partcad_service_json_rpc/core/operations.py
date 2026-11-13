@@ -3268,7 +3268,7 @@ def _cmf_items(session, project, kind: str) -> list:
     for name in project.object_names(kind):
         try:
             config = project.object_config(kind, name)
-            if cmf.is_enrich(config) and _enriches_elsewhere(project, config):
+            if cmf.is_enrich(config) and _enriches_elsewhere(project, kind, config):
                 # Made from another package's declaration, which making it
                 # would load: described by what it says itself, as an alias is.
                 row = {"name": name, "type": "enrich", "desc": config.get("desc") or "enrich of %s" % config["source"]}
@@ -3297,18 +3297,34 @@ def _cmf_items(session, project, kind: str) -> list:
     return described
 
 
-def _enriches_elsewhere(project, config) -> bool:
-    """Whether an enrich declaration names a declaration of a package other than its own."""
-    from partcad import cmf
+def _enriches_elsewhere(project, kind: str, config) -> bool:
+    """Whether making an enrich declaration reaches a package other than its own.
 
-    source = config.get("source")
-    if not isinstance(source, str) or not source.strip():
-        return False
-    try:
-        package, _name = cmf._split(source.strip(), project.name)
-    except Exception:  # pylint: disable=broad-except
-        return False
-    return package != project.name
+    Its source may be another of the package's own enriches or aliases, made
+    from another package's declaration in turn, so the chain is followed for
+    as long as it stays in the package - by what the declarations say, making
+    nothing.
+    """
+    from partcad import cmf
+    from partcad_utils.utils import parse_parameterized_name
+
+    seen = set()
+    while isinstance(config, dict) and config.get("type") in ("enrich", "alias"):
+        source = config.get("source")
+        if not isinstance(source, str) or not source.strip():
+            return False
+        try:
+            package, name = cmf._split(source.strip(), project.name)
+        except Exception:  # pylint: disable=broad-except
+            return False
+        if package != project.name:
+            return True
+        name, _values = parse_parameterized_name(name)
+        if name in seen:
+            return False
+        seen.add(name)
+        config = project.object_config(kind, name)
+    return False
 
 
 def list_packages(session, params):
