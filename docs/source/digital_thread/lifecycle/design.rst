@@ -156,6 +156,11 @@ Agent skills
   by ``location:``, fixed to the world unless it is mobile, and standing on a
   bottom surface at or above z = 0 unless it is in space.
 
+``/pc:gen-landscape``
+  Makes a landscape at an address or between two corners -- the terrain, the
+  roads, the buildings and the trees there, from public data -- as a scene to
+  place objects in and test them.
+
 ``/pc:add-interfaces``
   Adds ``interfaces``, ports and ``implements:`` to a part that has none, so it
   can be mated by connection instead of by hand-written coordinates. It works

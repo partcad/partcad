@@ -253,6 +253,21 @@ The plugin folder is named `claude`, but the command namespace comes from
   skill judges each warning by what the overlap touches rather than treating it
   as a defect: walls sharing a corner are left alone, a mobile object inside
   another never is.
+- **`/pc:gen-landscape <place>`** — generates a landscape: a piece of the real
+  world at an address, a point or between two corners, as a package of its own
+  to drop objects into and test them. The ground comes from a public elevation
+  model (the AWS Terrain Tiles, or Open Topo Data) and is one cubic B-spline
+  surface with its poles at the Greville abscissae of its knots, so that X and Y
+  are linear in its parameters: its helper, `landscape.py`, evaluates a height
+  exactly as OCCT does, and drapes roads, paths, water, fences, walls and hedges
+  on it as faces trimmed in the surface's own (u, v) rather than with booleans.
+  Buildings and single trees, signs, lamps, benches, bollards and the like come
+  from OpenStreetMap; each prop is a `basic` solid drawn through a scaled model
+  from the `//pub` collections. `landscape.py place` stands the user's objects
+  on the ground in a scene of their own. Nothing is taken from Google, whose
+  terms forbid keeping or deriving models from its data. `landscape.py` is
+  standard-library Python, and `tests/partcad/unit/test_skill_landscape.py` holds
+  it to worked examples.
 - **`/pc:gen-sketch <description>`** — generates a 2D sketch whose dimensions
   are measured rather than estimated. The input is normalized to 2D first — a
   description is a table of targets, a DXF or SVG is re-rendered, a 3D

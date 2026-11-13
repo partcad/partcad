@@ -72,6 +72,11 @@ link. Generate it with `/pc:gen-assembly` first, or reuse one that exists.
   "In space" has to be **said**, or be the obvious meaning of the
   description (a satellite, a space station, an asteroid field). Anything else
   stands on something.
+
+  Outdoors at a **real place** - an address, coordinates, "this street" - the
+  ground is the place's own: make it with `/pc:gen-landscape`, which writes
+  the terrain, the streets, the buildings and the trees there as a scene, and
+  place this scene's objects in it with its `place` helper.
 - **For a building, whether its outside is part of the scene.** It is when the
   description has the building seen from outside, standing in something modelled
   around it (a garden, a street), or names its facade, its outside walls or

@@ -168,6 +168,20 @@ Generating geometry
   overlap touches: walls sharing a corner are left alone, a mobile object inside
   another never is.
 
+``/pc:gen-landscape``
+  Makes a landscape: a piece of the real world at an address, a point or between
+  two corners, as a package of its own, to drop objects into and test them there.
+  The ground comes from a public elevation model -- the AWS Terrain Tiles by
+  default, or Open Topo Data -- and roads, paths, buildings, fences, walls,
+  hedges, water, trees, signs, street lamps, benches and bollards from
+  OpenStreetMap. The ground is one smooth solid on a flat base at z = 0; what lies
+  on it follows it exactly; each prop is a ``basic`` solid, drawn through a model
+  from the ``//pub`` collections scaled to its size. The helper it ships beside
+  itself, ``landscape.py``, needs nothing but Python, and its ``place`` command
+  gives the ``location:`` that stands an object on the ground, at the height of
+  the very surface PartCAD builds. Nothing is taken from Google, whose terms forbid
+  keeping or deriving models from its data.
+
 ``/pc:gen-sketch``
   Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline --
   whose dimensions are **measured rather than estimated**. Whatever it is given

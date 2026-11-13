@@ -205,6 +205,8 @@ Tooling for AI agents doing mechanical design. See :doc:`/ai_agents/mcp`.
   - Lay out a scene (``/pc:gen-scene``): a room on its floor plan, a building with solid walls, doors and windows, a
     workcell or a world to simulate in, with every object a ``basic`` primitive unless it needs more detail, placed
     by ``location:`` and fixed to the world unless it is mobile
+  - Make a landscape at a real place (``/pc:gen-landscape``): the terrain from a public elevation model, and the
+    roads, buildings, fences, trees and signs from OpenStreetMap, as a scene to test objects in
   - Describe an existing object (``/pc:describe``), search the catalog (``/pc:search``), add interfaces
     (``/pc:add-interfaces``)
   - Validate an object against its ``requirements:`` (``/pc:validate``): ``pc qual test`` for the ports,
