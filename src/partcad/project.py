@@ -192,6 +192,20 @@ ALIAS_TAKES_NO_MAP = (
     "to give it names of its own, declare it 'type: enrich' with the same 'source'"
 )
 
+
+def refuse_a_mapped_alias(config) -> None:
+    """Raise 'ALIAS_TAKES_NO_MAP' if 'config' is an alias that declares a 'map:'.
+
+    Asked by every path that hands a declaration to 'factory.instantiate' - a
+    name, a parametrized name and an instance the package resolved itself - so
+    that ':a;width=2' is refused for the same reason ':a' is, rather than built
+    from the declaration ':a' is refused for. Each of them records the refusal
+    against the object it was making ('record_broken_object').
+    """
+    if config.get("type") == "alias" and "map" in config:
+        raise ValueError(ALIAS_TAKES_NO_MAP)
+
+
 # Object types whose parts the object itself materializes, rather than the
 # package declaring them: a STEP assembly's components become the parts
 # '<assembly>/<component>', a URDF's links the parts '<assembly>/<link>', a
@@ -2286,8 +2300,7 @@ class Project(project_config.Configuration):
         # names of its own for what that object has are an enrich's to give.
         # Refused here, for every kind of object, so that each caller reports it
         # as the object it is ('record_broken_object').
-        if config.get("type") == "alias" and "map" in config:
-            raise ValueError(ALIAS_TAKES_NO_MAP)
+        refuse_a_mapped_alias(config)
         factory.instantiate(factory_name, config["type"], self.ctx, source_project, self, config)
 
         # Initialize aliases if they are declared implicitly
@@ -2820,6 +2833,7 @@ class Project(project_config.Configuration):
             config["orig_name"] = base_object_name
             if factory_name in LAZY_OBJECT_KINDS and "manufacturable" not in config:
                 config["manufacturable"] = self.is_manufacturable
+            refuse_a_mapped_alias(config)
             factory.instantiate(factory_name, config["type"], self.ctx, self, self, config)
         except Exception as e:
             self.record_broken_object(factory_name, result_name, e)
@@ -3060,6 +3074,7 @@ class Project(project_config.Configuration):
             #     % pformat(config)
             # )
             try:
+                refuse_a_mapped_alias(config)
                 factory.instantiate(factory_name, config["type"], self.ctx, self, self, config)
             except Exception as e:
                 # Same reasoning as the non-parametrized branch above: a

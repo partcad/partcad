@@ -116,6 +116,20 @@ def test_an_alias_with_a_map_is_refused_whatever_it_names(ctx, kind, name):
     assert pc.logging.had_errors is True
 
 
+@pytest.mark.parametrize(
+    "kind, name",
+    [("sketch", "circle-alias"), ("part", "plate-alias"), ("assembly", "stack-alias"), ("scene", "room-alias")],
+)
+def test_an_alias_with_a_map_is_refused_when_asked_for_with_parameters_too(ctx, kind, name):
+    """':a;x=1' is made from the declaration ':a' is refused for, and is refused for the same reason."""
+    parametrized = name + ";x=1"
+    found = getattr(ctx, GETTERS[kind])(":" + parametrized)
+
+    assert found is None
+    assert ctx.get_project("//").get_broken_object_reason(kind, parametrized) == ALIAS_TAKES_NO_MAP
+    assert pc.logging.had_errors is True
+
+
 @pytest.mark.parametrize("kind, name", [("part", "plate-enrich"), ("assembly", "stack-enrich")])
 def test_an_enrich_with_the_same_map_is_created(ctx, kind, name):
     assert getattr(ctx, GETTERS[kind])(":" + name) is not None
