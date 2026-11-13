@@ -388,6 +388,58 @@ def lookup(ctx, kind: str, ref: str, relative_to: str = "", quiet: bool = False,
         current_ref, current_package = declaration.source, declaration.project_name
 
 
+# What a log line calls each kind of declaration.
+NOUNS = {"color": "colour", "material": "material", "finish": "finish"}
+
+
+def why_unresolved(ctx, kind: str, ref: str, relative_to: str = "") -> typing.Optional[str]:
+    """Why 'ref' names no declaration of 'kind', as a clause a message can end with, or None if it names one.
+
+    'lookup' answers None however a reference comes to nothing - a package that
+    is not there, a name it does not declare, an alias that leads to either -
+    and a caller reporting it should say which, and where along a chain of
+    aliases it happened. An alias of LEGO's Medium Stone Grey in a package whose
+    index serves a LEGO package without that colour is drawn in no colour at
+    all, and the reason is a package away from the part that names it:
+
+        it is an alias of '//pub/universe/lego:Medium Stone Grey', and
+        '//pub/universe/lego' declares no colour 'Medium Stone Grey'
+
+    Walks the chain the way 'lookup' does, and logs nothing.
+    """
+    noun = NOUNS.get(kind, kind)
+    if not isinstance(ref, str) or not ref:
+        return "it names nothing"
+    aliases = []
+    seen = set()
+    current_ref, current_package = ref, relative_to
+    while True:
+        package_name, name = _split(current_ref, current_package)
+        project = ctx.get_project(package_name) if ctx is not None else None
+        if project is None:
+            reason = "there is no package '%s'" % package_name
+            break
+        declaration = project.get_cmf(kind, name, quiet=True)
+        if declaration is None:
+            reason = "'%s' declares no %s '%s'" % (package_name, noun, name)
+            break
+        if not declaration.is_alias:
+            return None
+        key = (declaration.project_name, declaration.name)
+        if key in seen:
+            reason = "the aliases go round in a circle"
+            break
+        seen.add(key)
+        if declaration.source is None:
+            reason = "'%s:%s' is an alias with no 'source'" % key
+            break
+        current_ref, current_package = declaration.source, declaration.project_name
+        aliases.append("%s:%s" % _split(current_ref, current_package))
+    if not aliases:
+        return reason
+    return "it is an alias of %s, and %s" % (", an alias of ".join("'%s'" % alias for alias in aliases), reason)
+
+
 def canonical(ctx, kind: str, value, relative_to: str = "", quiet: bool = True) -> typing.Optional[str]:
     """The canonical reference a CMF parameter's value stands for, or None for no value.
 

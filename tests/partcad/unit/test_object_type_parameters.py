@@ -70,7 +70,14 @@ def _part(part_type, **extra):
 def _declare(name, value=None):
     """One policed parameter, declared the way a part author would declare it."""
     if value is None:
-        value = 0.1 if name == "tolerance" else "//pub/std/manufacturing/material/plastic:pla"
+        if name == "tolerance":
+            value = 0.1
+        elif name == "color":
+            # A colour that is declared - the display-only one PartCAD ships - as
+            # a colour nobody declares is an error of its own.
+            value = "//builtin/color:rgba;color=C91A09FF"
+        else:
+            value = "//pub/std/manufacturing/material/plastic:pla"
     kind = "float" if isinstance(value, float) else "string"
     return {name: {"type": kind, "default": value}}
 
