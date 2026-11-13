@@ -580,3 +580,90 @@ def test_an_alias_is_in_what_its_source_is_in(tmp_path):
     assert asyncio.run(alias.get_wrapped(ctx)) is not None
     summary = asyncio.run(alias.get_metadata_async(ctx))[shape_envelope.METADATA_CMF]
     assert [(entry["material"], entry["color"]) for entry in summary["sets"]] == [("//:alu", "//:natural")]
+
+
+# ---- a colour that is not declared ------------------------------------------
+#
+# What a part named in a colour nobody declares is told: where the chain of
+# aliases breaks. The case it is written for is an alias of LEGO's colours in a
+# package whose index serves a LEGO package without them - every part drawn in
+# the default colour, and the only word of it a warning that the colour had "no
+# display to draw it in".
+
+UNRESOLVED_VENDOR = """
+colors:
+  Medium Stone Grey: {display: "#969696"}
+"""
+
+UNRESOLVED_ROOT = """
+dependencies:
+  vendor: {type: local, path: vendor}
+colors:
+  stone: {type: alias, source: "//vendor:Medium Stone Grey"}
+  red: {type: alias, source: "//vendor:Bright Red"}
+  bright: {type: alias, source: ":red"}
+  elsewhere: {type: alias, source: "//nowhere:Bright Red"}
+  loop-a: {type: alias, source: ":loop-b"}
+  loop-b: {type: alias, source: ":loop-a"}
+  plain: {desc: A colour that says what it is and not how it looks}
+parts:
+  box: {type: step, path: box.step}
+"""
+
+
+@pytest.fixture
+def unresolved(tmp_path):
+    (tmp_path / "vendor").mkdir()
+    (tmp_path / "vendor" / "partcad.yaml").write_text(textwrap.dedent(UNRESOLVED_VENDOR))
+    (tmp_path / "partcad.yaml").write_text(textwrap.dedent(UNRESOLVED_ROOT))
+    (tmp_path / "box.step").write_text("ISO-10303-21;\nEND-ISO-10303-21;\n")
+    return pc.Context(str(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "ref, why",
+    [
+        (":stone", None),
+        (":nothing", "'//' declares no colour 'nothing'"),
+        (":red", "it is an alias of '//vendor:Bright Red', and '//vendor' declares no colour 'Bright Red'"),
+        (
+            ":bright",
+            "it is an alias of '//:red', an alias of '//vendor:Bright Red', "
+            "and '//vendor' declares no colour 'Bright Red'",
+        ),
+        (":elsewhere", "it is an alias of '//nowhere:Bright Red', and there is no package '//nowhere'"),
+        (":loop-a", "it is an alias of '//:loop-b', an alias of '//:loop-a', and the aliases go round in a circle"),
+    ],
+)
+def test_why_a_colour_is_not_declared(unresolved, ref, why):
+    assert cmf.why_unresolved(unresolved, "color", ref, "//") == why
+
+
+def test_a_part_in_an_undeclared_colour_is_an_error_that_says_where_the_aliases_break(unresolved, caplog):
+    pc.logging.reset_errors()
+    try:
+        with caplog.at_level(logging.WARNING):
+            box = unresolved.get_part(":box;color=:bright")
+        messages = [record.getMessage() for record in caplog.records]
+        assert any(
+            "is not declared: it is an alias of '//:red', an alias of '//vendor:Bright Red', "
+            "and '//vendor' declares no colour 'Bright Red'" in message
+            for message in messages
+        ), messages
+        assert not any("no display" in message for message in messages)
+        assert pc.logging.had_errors is True
+        assert box.config.get("properties", {}).get("color") is None
+    finally:
+        pc.logging.reset_errors()
+
+
+def test_a_declared_colour_with_no_display_is_still_only_a_warning(unresolved, caplog):
+    pc.logging.reset_errors()
+    try:
+        with caplog.at_level(logging.WARNING):
+            unresolved.get_part(":box;color=:plain")
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("the colour ':plain' has no display to draw it in" in message for message in messages), messages
+        assert pc.logging.had_errors is False
+    finally:
+        pc.logging.reset_errors()

@@ -324,7 +324,19 @@ class PartFactory(ShapeFactory):
         reference = cmf.canonical(ctx, "color", value, package, quiet=False)
         rgba = cmf.rgba_of_reference(reference)
         if rgba is None:
-            rgba = cmf.display(ctx, cmf.lookup(ctx, "color", reference, package, quiet=True))
+            declaration = cmf.lookup(ctx, "color", reference, package, quiet=True)
+            if declaration is None:
+                # A colour that is not declared anywhere is a reference to
+                # nothing, as a link to a part nobody declares is: an error,
+                # which says where the chain of aliases breaks. Every picture
+                # of the part would otherwise come out in the default colour
+                # with nothing failing.
+                pc_logging.error(
+                    "%s: the colour '%s' is not declared: %s"
+                    % (config.get("name"), value, cmf.why_unresolved(ctx, "color", reference, package))
+                )
+                return
+            rgba = cmf.display(ctx, declaration)
         if rgba is None:
             pc_logging.warning("%s: the colour '%s' has no display to draw it in" % (config.get("name"), value))
             return
