@@ -261,9 +261,9 @@ New names for what an object has
 
 An entry with no node names something the object has of its own, and gives it a
 name that says what it is for. That is what a ``map:`` is for on a part, and on
-an enrich or an alias of anything: their own is what they point at, the same
-geometry with the same ports. Anything else's own is what it declares in
-``ports:`` and ``implements:``. In the list form that is ``[<port>]``; the long
+an enrich of anything: its own is what it points at, the same geometry with the
+same ports. Anything else's own is what it declares in ``ports:`` and
+``implements:``. In the list form that is ``[<port>]``; the long
 form spells out by key what the list form says by position -- ``node``,
 ``port``, or ``interface`` and ``instance`` -- and is the one that can name an
 interface of the object's own, since ``[<interface>, <instance>]`` would read as
@@ -296,15 +296,21 @@ An interface instance is mapped the same way, and the result is a new instance
 of the same interface: ``corner: {interface: m3-thru, instance: TL, moveX: -1}``
 adds ``corner`` beside ``TL``.
 
-The names a map gives are *added* to what the object has. An enrich or an alias
-of a part keeps every port and interface of what it points at, as it does
-without a ``map:``, unless it declares ``ports:`` or ``implements:`` of its own
-or moves the geometry with ``offset:`` -- the rule it has always followed. An
-assembly, which has no ports but the ones it states, has the ones its map
-names.
+The names a map gives are *added* to what the object has. An enrich of a part
+keeps every port and interface of what it points at, as it does without a
+``map:``, unless it declares ``ports:`` or ``implements:`` of its own or moves
+the geometry with ``offset:`` -- the rule it has always followed. An assembly,
+which has no ports but the ones it states, has the ones its map names.
 
-An entry that names a port of what an enrich or an alias points at follows
-the reference's ``offset:``, since the port moves with the geometry it is on.
+**An alias takes no** ``map:``, of any kind of object. An alias is the object it
+names under another name and nothing more, so a declaration that gives it names
+of its own is refused, and so is the package's ``partcad.yaml`` in ``pc lint``
+and the editor. Declare it ``type: enrich`` with the same ``source`` instead: an
+enrich with no ``with:`` is the same object, and its ``map:`` means exactly what
+the alias's used to.
+
+An entry that names a port of what an enrich points at follows the enrich's
+``offset:``, since the port moves with the geometry it is on.
 One that declares ``scale:`` cannot map those ports at all: where a port is on
 the scaled geometry is not something a map can say, and it is reported.
 
@@ -689,10 +695,11 @@ with other values is another instance of the same assembly, and that is what an
 Either one is joined by the ports of the assembly it points at -- the ones that
 assembly's ``map:`` externalizes, under the same names -- as an alias or an
 enrich of a part is. A chain of them, an alias of an alias or an enrich of an
-alias, has the ports at the end of the chain. One that declares a ``map:``,
-``ports:`` or ``implements:`` of its own has those instead, and so does one that
-moves the assembly with ``offset:``: the ports it points at would no longer be
-where the assembly is.
+alias, has the ports at the end of the chain. One that declares ``ports:`` or
+``implements:`` of its own has those instead, as does an enrich that declares a
+``map:`` (an alias takes none, see `New names for what an object has`_), and so
+does one that moves the assembly with ``offset:``: the ports it points at would
+no longer be where the assembly is.
 
 Procurement
 ===========
