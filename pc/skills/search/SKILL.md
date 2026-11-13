@@ -1,0 +1,111 @@
+---
+name: search
+description: Find existing PartCAD parts and assemblies in the catalog that match a natural-language query, using the PartCAD CLI (`pc search`), then present the matches and optionally inspect or render a chosen one. Use for /pc:search or when the user asks to search, find, look up, or discover a part or assembly.
+---
+
+# pc:search
+
+Find existing PartCAD **parts and assemblies** that match a query, using
+PartCAD's own `pc search`. The text after the command (`$ARGUMENTS`) is what to
+look for — a natural-language description or a set of keywords. Present the
+matches and, when the user points at one, act on it (inspect or render). This
+searches the existing catalog; it does **not** create anything — to generate a
+new object, use `/pc:gen` instead.
+
+## 1. Understand the request
+
+- `$ARGUMENTS` is the query. `pc search` matches a **single keyword** as a
+  case-insensitive substring against each object's name, its configured fields
+  (`desc`, `type`, `path`, …), and the contents of its source file. It does not
+  parse natural language and does not rank by relevance.
+- So distill the query into a few concrete terms — e.g. "M3 hex standoff" →
+  `standoff`, `hex`, `m3` — search each, then union the results yourself.
+- Decide the scope. A search starts at the root package (`//`) and walks every
+  package below it by default, imported packages and the public PartCAD
+  registry included. Use `-P <package>` to start lower, or `-R` to keep the
+  search to one package.
+
+## 2. Make sure PartCAD is available
+
+Resolve a command as `/pc:init` does (`pc`, then `partcad`, then
+`python -m partcad_cli.click.command`). If none is found, stop and run
+`/pc:setup executable` first.
+
+## 3. Search
+
+Run one search per object kind you care about — parts and assemblies — for each
+keyword. The keyword is the **required** `-k`/`--keyword` option (quote
+multi-word terms):
+
+```sh
+pc search parts -k "<keyword>"          # search parts
+pc search assemblies -k "<keyword>"     # search assemblies
+```
+
+A search walks every package below the one it starts in by default (the public
+registry and any dependencies), which is where most catalog items live. Narrow
+it with `-P`, or keep it to one package with `-R`:
+
+```sh
+pc search parts -k "<keyword>" -P //pub/std       # scope to one package subtree
+pc search parts -k "<keyword>" -R                 # this package only
+```
+
+A search finds objects, not a catalog's categories: to browse those, walk down
+with `pc list packages <package>`, which lists the sub-packages one level at a
+time.
+
+Sibling commands share the same flags if the query is broader: `pc search all`
+(parts, sketches, interfaces, assemblies, and packages at once), plus
+`pc search sketches`, `pc search interfaces`, and `pc search packages`.
+
+Each match prints as `<package> <name>` followed by its description, and the run
+ends with `Matches: N` (or `<none>`). Read both columns — the package tells you
+where the object lives, which you need in order to act on it.
+
+## 4. Present the results
+
+Collect the matches across all the keywords you tried, drop duplicates, and show
+the user a short list: the qualified name (`<package> <name>`) and its
+description, best-fit first (you judge fit from the description — the tool does
+not order results). If nothing matched, say so and suggest trying different
+terms, or generating it with `/pc:gen`.
+
+## 5. Act on a chosen result (optional)
+
+When the user picks a match, reference it by the two columns the search printed —
+`-P <package>` plus the object name; add `-a` when it is an assembly:
+
+```sh
+pc ide view -P <package> <name>                            # view it, whatever kind it is
+mkdir -p /tmp/pc-render                                    # the -O directory must already exist
+pc render -t png -O /tmp/pc-render -P <package> <name>     # writes a PNG under /tmp/pc-render
+```
+
+Then follow up as the user asks — for example describe it with `/pc:describe`,
+or add it to their project.
+
+## 6. Model sites, and logging in to them
+
+Some packages are served by a plugin for a model site (Thingiverse, MakerWorld,
+GrabCAD, Printables, Cults3D: `//pub/universe/<site>/models`). Nothing in them
+is listed, so `pc search` asks the site itself, and each match is a name to use
+as it is - `763622;file=1234567`, the file and all. `--limit N` caps how many
+come back from each such package. A name's `format=` (`stl`, `step`, ...) or
+`source=preview` (the site's own mesh, coarser and needing no login, where it
+has one) picks another file of the same model.
+
+Getting a file may take the user's account on the site. Never guess a
+credential, and run `pc login` without `--agent` only when the user says they
+are at this machine's screen - it opens a browser and waits for them. Otherwise
+run
+
+```sh
+pc login --agent //pub/universe/<site>:<site>_repo
+```
+
+It exits with status 3 and prints what a person has to do - where to sign in,
+what to copy - and the `pc login --agent ... --set <name>=<value>` command that
+hands it over. Relay those instructions to the user, and run that command with
+what they give you; PartCAD checks it with the site before keeping it in their
+`~/.partcad/config.yaml`. Status 0 means they are logged in already.
