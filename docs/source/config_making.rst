@@ -1094,6 +1094,22 @@ part in one package names a material catalogued in another:
 List what a package catalogues with ``pc list materials`` (and
 ``pc list materials //...`` to walk the packages it imports).
 
+``pc info`` on a material shows what it states, by the name a part would give
+it::
+
+  pc info //pub/std/manufacturing/material/plastic:pla
+  pc info :pla                     # from inside the package that catalogues it
+  pc info "resin;density=1250"     # an instance of a parametric one
+
+It prints the declaration and then its formal and full names, its description,
+its density, a fluid's viscosity, its Young's modulus, Poisson's ratio and
+yield strength, its thermal conductivity, ``mu``, the colour it claims, its
+tags and its URL -- the same facts a part made of it reports under
+``Material``, without a part to ask. An alias says what it is an alias of and
+what it resolves to, with the facts of that one. A name an object of the
+package also has is that object, so ``pc info -m <name>`` is how to reach a
+material that shares its name with a part (see :ref:`pc-info`).
+
 Standard catalogues
 -------------------
 

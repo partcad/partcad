@@ -15,10 +15,12 @@ options, the pipelines as text, the frames as pixels - needs only the CAD stack
 this environment already has.
 """
 
+import io
 import math
 import os
 import re
 import sys
+import types
 
 import numpy as np
 import pytest
@@ -498,6 +500,100 @@ def test_a_pipeline_appending_puts_the_old_frames_first(monkeypatch):
     assert any(token.startswith("tags=") and "partcad-video/1" in token for token in argv)
 
 
+class _Decoder:
+    """A 'gst-launch-1.0' decoding a video, as 'decode_frames' sees it: what it writes, and how it exits.
+
+    'status' is what it exits with by itself, once what it writes has been read
+    to its end - when 'wait' is asked, as one still closing down is; 'running'
+    false is one that has exited already.
+    """
+
+    def __init__(self, data, status=0, running=True):
+        self.stdout = io.BytesIO(data)
+        self.status = status
+        self.returncode = None if running else status
+        self.killed = False
+
+    def poll(self):
+        return self.returncode
+
+    def kill(self):
+        # The status a process that is stopped exits with on Windows.
+        self.killed = True
+        self.returncode = 1
+
+    def wait(self):
+        if self.returncode is None:
+            self.returncode = self.status
+        return self.returncode
+
+
+def _decoding(monkeypatch, *decoders):
+    """'decode_frames' handed 'decoders', one per call, for the 'gst-launch-1.0' it starts."""
+    started = list(decoders)
+    monkeypatch.setattr(video_encode, "launcher", lambda: "gst-launch-1.0")
+    monkeypatch.setattr(
+        video_encode,
+        "subprocess",
+        types.SimpleNamespace(Popen=lambda argv, **kwargs: started.pop(0), DEVNULL=None, PIPE=None),
+    )
+
+
+def test_a_video_is_read_back_as_long_as_it_is(monkeypatch):
+    """Without the frame GStreamer 1.28's frame rate converter repeats past the end of a Matroska or AVI file.
+
+    'videorate' sends each frame as soon as its time has come, and at the end of
+    a stream whose end nothing stated - which is how the Matroska and AVI
+    demuxers leave it - sends the one it holds once more: a ten-frame video was
+    read back as eleven, and appended to as eleven. Here the decoder writes that
+    frame and is still running, blocked writing it, when it is not read.
+    """
+    width, height, fps = 4, 2, 10
+    frames = [bytes([index]) * (width * height * 3) for index in range(10)]
+    eleven = [_Decoder(b"".join(frames + frames[-1:])) for _ in range(2)]
+    _decoding(monkeypatch, *eleven)
+    monkeypatch.setattr(video_encode, "discover", lambda path: {"duration": 1.0})
+
+    read = list(video_encode.decode_frames("turn.mkv", width, height, fps, limit=100))
+    assert [int(frame[0, 0, 0]) for frame in read] == list(range(10))
+    # Stopped rather than read to its end, and that is not a decoder that failed.
+    assert eleven[0].killed
+
+    # A length the caller has already asked for is not asked for again.
+    monkeypatch.setattr(video_encode, "discover", lambda path: pytest.fail("asked for the length again"))
+    assert len(list(video_encode.decode_frames("turn.mkv", width, height, fps, duration=0.5))) == 5
+    assert eleven[1].killed
+
+
+def test_a_decoder_whose_output_ended_is_waited_for(monkeypatch):
+    """Not stopped, and how it exits counts: one that fails as it closes down has not read the whole video.
+
+    Only one still writing once all the frames wanted are read is stopped,
+    and its exit status is no failure.
+    """
+    width, height, fps = 4, 2, 10
+    frames = b"".join(bytes([index]) * (width * height * 3) for index in range(3))
+    failing, exited, closing = _Decoder(frames, status=1), _Decoder(frames, status=1, running=False), _Decoder(frames)
+    _decoding(monkeypatch, failing, exited, closing)
+
+    for decoder in (failing, exited):
+        with pytest.raises(video_encode.GStreamerError, match="Could not decode"):
+            list(video_encode.decode_frames("turn.mkv", width, height, fps, duration=1.0))
+        assert not decoder.killed
+    assert len(list(video_encode.decode_frames("turn.mkv", width, height, fps, duration=1.0))) == 3
+    assert not closing.killed and closing.returncode == 0
+
+
+def test_a_video_is_at_least_a_frame_long():
+    """At any rate it is read at: one frame at 25 frames a second is no whole frame at 10 a second, and still one."""
+    assert video_encode.frames_in(0.04, 10) == 1
+    assert video_encode.frames_in(1.0, 10) == 10
+    assert video_encode.frames_in(0.333, 30) == 10
+    # One that does not say how long it is, or lasts no time at all, says nothing of its frames.
+    assert video_encode.frames_in(None, 10) == 0
+    assert video_encode.frames_in(0.0, 10) == 0
+
+
 # ---------------------------------------------------------------------------
 # The frames
 # ---------------------------------------------------------------------------
@@ -971,6 +1067,78 @@ def test_an_append_is_never_remembered(tmp_path):
     assert first["success"], first.get("exception")
     assert first["video"]["appended_to"] is None
     assert first["files"] is None
+
+
+@needs_gstreamer
+@pytest.mark.parametrize("container", ["mp4", "mkv"])
+def test_a_video_shorter_than_a_frame_is_kept_when_appended_to(tmp_path, container):
+    """A frame at 25 frames a second, appended to at 10: no whole frame at that rate, and still the frame it showed.
+
+    Counted as none, it was decoded as none, and the video was written over
+    with the part appended to it alone.
+    """
+    path = str(tmp_path / ("turn." + container))
+    request = {
+        "wrapped": _box(),
+        "container_format": container,
+        "size": "64x48",
+        "fps": 25,
+        "duration": 0.04,
+        "antialias": 1,
+    }
+    first = render_video.process(path, dict(request))
+    assert first["success"], first.get("exception")
+    assert first["video"]["frames"] == 1
+
+    second = render_video.process(path, dict(request, fps=10, duration=0.5, append=True))
+    assert second["success"], second.get("exception")
+    assert second["video"]["appended_to"] == 1
+    assert second["video"]["frames"] == 5
+    assert len(list(video_encode.decode_frames(path, 64, 48, 10, limit=100))) == 6
+    assert "frames=6 " in video_encode.discover(path)["text"]
+
+
+def test_an_append_that_reads_nothing_back_leaves_the_video_alone(monkeypatch, tmp_path):
+    """Written over with the new part alone, the video appended to would be gone, and nothing would say so."""
+
+    class Pipeline:
+        def __init__(self, output, *args, **kwargs):
+            self.output = output
+
+        def run(self, frames, prefix=()):
+            before = len(list(prefix))
+            written = len(list(frames))
+            with open(self.output, "wb") as stream:
+                stream.write(b"the new part alone")
+            return before, written
+
+    monkeypatch.setattr(video_encode, "launcher", lambda: "gst-launch-1.0")
+    monkeypatch.setattr(video_encode, "has_element", lambda name: True)
+    monkeypatch.setattr(video_encode, "Pipeline", Pipeline)
+    monkeypatch.setattr(
+        video_encode, "discover", lambda path: {"duration": 1.0, "video": True, "audio": False, "text": ""}
+    )
+    monkeypatch.setattr(video_encode, "decode_frames", lambda *args, **kwargs: iter(()))
+    path = tmp_path / "turn.mp4"
+    path.write_bytes(b"the video appended to")
+
+    result = render_video.process(
+        str(path),
+        {
+            "wrapped": _box(),
+            "container_format": "mp4",
+            "size": "64x48",
+            "fps": 4,
+            "duration": 0.5,
+            "antialias": 1,
+            "append": True,
+        },
+    )
+
+    assert not result["success"]
+    assert "Not one frame of" in result["exception"] and "left as it was" in result["exception"]
+    assert path.read_bytes() == b"the video appended to"
+    assert sorted(os.listdir(tmp_path)) == ["turn.mp4"]
 
 
 @needs_gstreamer

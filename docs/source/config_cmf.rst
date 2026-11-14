@@ -17,6 +17,8 @@ CMF declarations
 A package declares colours under ``colors:``, materials under ``materials:`` and finishes under ``finishes:``. Each is
 addressed as ``<package>:<name>`` -- or ``:<name>``, or just ``<name>``, for one of the package that writes the
 reference -- and each kind has a namespace of its own, so a colour and a material may share a name.
+``pc info <reference>`` shows a declaration -- every one of the three kinds that has the name, where no object of the
+package does -- and ``--color``, ``-m``/``--material`` or ``--finish`` says which one is meant (see :ref:`pc-info`).
 
 All three take the same fields:
 

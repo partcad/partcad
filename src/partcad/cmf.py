@@ -1244,6 +1244,49 @@ def declaration_data(ctx, declaration) -> dict:
     return data
 
 
+def declaration_info(ctx, declaration) -> dict:
+    """What 'pc info' says of a colour, a material or a finish asked about by name.
+
+    The declaration's own 'info()' -- a material's density, stiffness and
+    friction, a colour's display -- except for an alias, which is shown the way
+    'declaration_data' shows one: as itself, its name and what it names, with
+    the facts of the declaration it resolves to, which are the ones it has.
+    'Resolves to' is the reference of that declaration: where a chain of
+    aliases ends, and what a part made in the alias is made in. An alias that
+    resolves to nothing says why, in the words 'why_unresolved' finds for it.
+    """
+    if not declaration.is_alias:
+        return declaration.info()
+    info = {
+        "Path": declaration.project_name,
+        "Name": declaration.name,
+        "Kind": declaration.kind,
+        "Alias of": declaration.source,
+    }
+    shown = lookup(ctx, declaration.kind, declaration.reference(), declaration.project_name, quiet=True)
+    if shown is None:
+        # None when every declaration along the way is there and one of them
+        # could not be made: asking for that one by its own name says why.
+        why = why_unresolved(ctx, declaration.kind, declaration.reference(), declaration.project_name)
+        info["Errors"] = list(declaration.errors) + ["resolves to nothing: %s" % (why or "it cannot be read")]
+        return info
+    info["Resolves to"] = shown.reference()
+    # The alias's own description where it gives one, as a listing has it, and
+    # the other names of both.
+    own = {
+        "Desc": declaration.desc or shown.desc or None,
+        "Aliases": ", ".join(dict.fromkeys(declaration.aliases + shown.aliases)) or None,
+        "Errors": list(declaration.errors) + [error for error in shown.errors if error not in declaration.errors],
+    }
+    for key, value in shown.info().items():
+        if key not in ("Path", "Name", "Kind", "Alias of"):
+            info[key] = own.get(key, value)
+    for key, value in own.items():
+        if value and key not in info:
+            info[key] = value
+    return info
+
+
 async def report_async(ctx, shape) -> dict:
     """What the IDE's CMF tab shows of a part, an assembly or a scene (docs/design/cmf.md, section 9).
 
