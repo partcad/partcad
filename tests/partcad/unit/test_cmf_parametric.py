@@ -356,6 +356,44 @@ def test_an_enrich_of_itself_is_reported_and_does_not_wait_on_itself(ctx, caplog
     assert pc_logging.had_errors
 
 
+def test_an_alias_of_an_enrich_made_from_that_alias_is_a_loop_and_does_not_wait_on_itself(tmp_path):
+    """Asked for by the alias: the enrich it names asks for the alias again, on the same thread.
+
+    Not under the alias's lock, which a thread would wait on itself for: the
+    enrich's own loop check is what answers.
+    """
+    materials = {"self-named": {"type": "enrich", "source": ":also", "aliases": ["also"]}}
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump({"materials": materials}))
+    project = pc.Context(str(tmp_path)).get_project("//")
+    answers = {}
+    asking = threading.Thread(
+        target=lambda: answers.setdefault("also", project.get_cmf("material", "also", quiet=True)), daemon=True
+    )
+    asking.start()
+    asking.join(timeout=60)
+    assert not asking.is_alive(), "asking for an alias waited on its own lock"
+    assert answers == {"also": None}
+    assert project.cmf_failure("material", "self-named") == (
+        "The material '//:self-named' is an enrich that leads back to itself: //:self-named -> //:self-named"
+    )
+
+
+def test_an_enrich_of_a_name_holding_a_reserved_character_is_made_from_that_declaration(tmp_path):
+    """':a%3Bb' names the declaration 'a;b' whether or not 'with:' adds values: not 'a' with a value 'b'."""
+    materials = {
+        "a;b": {"parameters": {"k": {"type": "float", "default": 1}}, "density": "%1000 * k%"},
+        "plain": {"type": "enrich", "source": ":a%3Bb"},
+        "given": {"type": "enrich", "source": ":a%3Bb", "with": {"k": 2}},
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump({"materials": materials}))
+    ctx = pc.Context(str(tmp_path))
+    assert cmf.enrich_source_reference(":a%3Bb", {}, "//") == "//:a%3Bb"
+    plain = _get(ctx, "material", "plain")
+    assert (plain.enriches, plain.density) == ("//:a%3Bb", pytest.approx(1000))
+    given = _get(ctx, "material", "given")
+    assert (given.enriches, given.density) == ("//:a%3Bb;k=2", pytest.approx(2000))
+
+
 def test_an_enrich_is_made_when_it_is_first_asked_for(ctx):
     """Not as its package loads: it may be made from a package nothing else loads."""
     project = ctx.get_project("//")
@@ -409,6 +447,36 @@ def test_the_explorer_lists_an_enrich_without_loading_its_source_s_package(ctx):
         "manufacturable": True,
     }
     assert "satin-again" in project.finishes
+
+
+def test_the_explorer_neither_renders_nor_follows_an_alias_into_another_package(tmp_path):
+    """A source an expression gives is known only once it is made, and an alias is the declaration listing it."""
+    from partcad_service_json_rpc.core import operations
+
+    (tmp_path / "vendor").mkdir()
+    (tmp_path / "vendor" / "partcad.yaml").write_text(yaml.safe_dump(VENDOR))
+    root = {
+        "dependencies": {"vendor": {"type": "local", "path": "vendor"}},
+        "materials": {
+            "picked": {
+                "type": "enrich",
+                "source": "%grade%",
+                "parameters": {"grade": {"type": "string", "default": "//vendor:abs"}},
+            },
+            "far": {"type": "enrich", "source": "//vendor:abs", "aliases": ["far-alias"]},
+            "near": {"type": "enrich", "source": ":far-alias"},
+        },
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(root))
+    ctx = pc.Context(str(tmp_path))
+    session = types.SimpleNamespace(emitter=types.SimpleNamespace(warning=lambda message: None))
+    items = {item["name"]: item for item in operations._cmf_items(session, ctx.get_project("//"), "material")}
+    assert items["picked"] == {"name": "picked", "type": "enrich", "desc": "enrich of %grade%", "manufacturable": True}
+    assert items["near"] == {"name": "near", "type": "enrich", "desc": "enrich of :far-alias", "manufacturable": True}
+    assert "//vendor" not in ctx.projects
+    # And each is what it names once it is made.
+    assert _get(ctx, "material", "picked").density == pytest.approx(1060)
+    assert _get(ctx, "material", "near").density == pytest.approx(1060)
 
 
 # --------------------------------------------------------------------------- #

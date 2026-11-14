@@ -3303,9 +3303,12 @@ def _enriches_elsewhere(project, kind: str, config) -> bool:
     Its source may be another of the package's own enriches or aliases, made
     from another package's declaration in turn, so the chain is followed for
     as long as it stays in the package - by what the declarations say, making
-    nothing.
+    nothing. A name one of them lists under 'aliases:' is that one. A source
+    an expression gives ('%target%') is only known once the declaration's
+    parameters render it, which is making it: it may name any package, so it
+    is taken to name another.
     """
-    from partcad import cmf
+    from partcad import cmf, expr
     from partcad_utils.utils import parse_parameterized_name
 
     seen = set()
@@ -3313,6 +3316,9 @@ def _enriches_elsewhere(project, kind: str, config) -> bool:
         source = config.get("source")
         if not isinstance(source, str) or not source.strip():
             return False
+        # A reserved character's escape ('%3B') is no expression.
+        if expr.has_expression(cmf._masked(source, True)):
+            return True
         try:
             package, name = cmf._split(source.strip(), project.name)
         except Exception:  # pylint: disable=broad-except
@@ -3324,6 +3330,11 @@ def _enriches_elsewhere(project, kind: str, config) -> bool:
             return False
         seen.add(name)
         config = project.object_config(kind, name)
+        if config is None:
+            owner = project._cmf_alias_owner(kind, name)
+            if owner is not None and owner not in seen:
+                seen.add(owner)
+                config = project.object_config(kind, owner)
     return False
 
 

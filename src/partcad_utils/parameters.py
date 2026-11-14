@@ -186,9 +186,15 @@ def _bounds_problems(declaration: dict, param_name: str, object_name: str) -> li
         return []
     kind = declaration.get("type", "float")
     if kind not in NUMERIC_TYPES:
+        if isinstance(kind, str) and kind:
+            what = "a%s %s" % ("n" if kind[0] in "aeiou" else "", kind)
+        else:
+            # No type at all ('type: null') or one that is no name, which the
+            # schema reports as well: said here without failing to say it.
+            what = "of the type %r" % (kind,)
         return [
-            "The parameter '%s' of '%s' is a%s %s, and only an int or a float parameter states a 'min' or a 'max'"
-            % (param_name, object_name, "n" if kind[:1] in "aeiou" else "", kind)
+            "The parameter '%s' of '%s' is %s, and only an int or a float parameter states a 'min' or a 'max'"
+            % (param_name, object_name, what)
         ]
     problems = []
     for bound in BOUNDS:

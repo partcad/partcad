@@ -25,7 +25,7 @@ import partcad.logging as pc_logging
 from partcad import config as pc_config
 from partcad_utils import parameters
 from partcad_utils.assy_lint import CODE_PARAMETERS, PARTCAD_SCHEMA, get_schema, validate_source
-from partcad_utils.user_config import user_config
+from partcad_utils.user_config import UserConfig, user_config
 
 PACKAGE = {
     "parts": {
@@ -201,6 +201,64 @@ def test_an_override_outside_the_range_is_an_error_and_the_default_stands():
     assert pc_logging.had_errors
 
 
+SHARED = """\
+parts:
+  a:
+    type: basic
+    cuboid: 1
+    parameters:
+      holes: {type: int, default: 3, max: 10, shared: true}
+      finish: {type: string, default: plain, enum: [plain, zinc], shared: true}
+  b:
+    type: basic
+    cuboid: 1
+    parameters:
+      holes: {type: int, default: 3, max: 10, shared: true}
+      finish: {type: string, default: plain, enum: [plain, zinc], shared: true}
+"""
+
+
+def _shared_values(tmp_path, overrides):
+    (tmp_path / "partcad.yaml").write_text(SHARED)
+    caller = UserConfig()
+    for key, values in overrides.items():
+        caller.parameter_config[key] = values
+    project = pc.Context(str(tmp_path), user_config=caller).get_project("//")
+    declared = project.get_part_config("b")["parameters"]
+    return {name: declared[name]["default"] for name in ("holes", "finish")}
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"//": {"holes": 40}},  # the package's own entry
+        {"//:a": {"holes": "40"}},  # one sharing object's, as a command line types it
+        {"//": {"finish": "gold"}},
+    ],
+)
+def test_a_shared_parameter_s_override_is_held_to_its_bounds_too(tmp_path, overrides):
+    """A shared value is the package's, resolved once for every object sharing it, and checked as any other."""
+    assert _shared_values(tmp_path, overrides) == {"holes": 3, "finish": "plain"}
+    assert pc_logging.had_errors
+
+
+def test_a_shared_parameter_s_override_within_its_bounds_is_used(tmp_path):
+    assert _shared_values(tmp_path, {"//": {"holes": 10, "finish": "zinc"}}) == {"holes": 10, "finish": "zinc"}
+    assert not pc_logging.had_errors
+
+
+def test_qualifying_a_package_passes_over_what_it_refuses(ctx):
+    """'pc qual test' asks for every object, and one refused as it is asked for leaves the package's list then."""
+    project = ctx.get_project("//")
+    # Raised "dictionary changed size during iteration" when it went over the
+    # package's own dictionary of declarations, which refusing one shrinks.
+    project.test(ctx, tests=[])
+    assert "defaults to 'gold'" in project.get_broken_object_reason("part", "gold-bolt")
+    assert "defaults to 200" in project.get_broken_object_reason("part", "too-wide")
+    # Asked for after the first of them was refused.
+    assert "plate" in project.parts
+
+
 # --------------------------------------------------------------------------- #
 # An interface and a CMF declaration                                          #
 # --------------------------------------------------------------------------- #
@@ -267,6 +325,69 @@ def test_lint_reports_it_for_a_material_too():
     material = {"parameters": {"b": {"type": "float", "default": 0.5, "min": 0.6}}, "density": 1000}
     found = [d for d in _lint({"materials": {"m": material}}) if d.code == CODE_PARAMETERS]
     assert [d.path for d in found] == ["$.materials.m.parameters.b"]
+
+
+@pytest.mark.parametrize("kind", [None, 5, ["int"]])
+def test_a_range_on_a_parameter_whose_type_is_no_name_is_said_rather_than_failing_to_say_it(tmp_path, kind):
+    declaration = {"type": kind, "min": 1}
+    (problem,) = parameters.declaration_problems(declaration, "n", "p")
+    assert problem == (
+        "The parameter 'n' of 'p' is of the type %r, and only an int or a float parameter states a 'min' or a 'max'"
+        % (kind,)
+    )
+    document = {"parts": {"p": {"type": "basic", "cuboid": 1, "parameters": {"n": declaration}}}}
+    assert [d.message for d in _lint(document) if d.code == CODE_PARAMETERS] == [problem]
+    # And PartCAD refuses the object for it, saying the same.
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(document))
+    ctx = pc.Context(str(tmp_path))
+    assert ctx.get_part("//:p") is None
+    assert "is of the type %r" % (kind,) in ctx.get_project("//").get_broken_object_reason("part", "p")
+
+
+# A 'partcad.yaml' with nothing to render it with is checked masked (see
+# 'assy_lint.mask_template'): what a template gives is filler text there.
+TEMPLATED = """\
+parts:
+  p:
+    type: basic
+    cuboid: 1
+    parameters:
+      low:
+        type: int
+        default: 3
+        min: {{ lower }}
+      picked:
+        type: string
+        default: {{ finish }}
+        enum: [plain, zinc]
+      typed:
+        type: {{ kind }}
+        default: 3
+        min: 1
+      sometimes:
+        type: int
+        default: 30
+        {% if strict %}
+        max: 10
+        {% endif %}
+      crossed:
+        type: int
+        desc: {{ what }}
+        default: 3
+        min: 5
+        max: 1
+"""
+
+
+def test_lint_says_nothing_that_depends_on_what_a_template_gives():
+    found = [d for d in validate_source(TEMPLATED, get_schema(PARTCAD_SCHEMA)) if d.code == CODE_PARAMETERS]
+    # Only what is written out in full: both bounds of 'crossed'.
+    assert [(d.path, d.message) for d in found] == [
+        (
+            "$.parts.p.parameters.crossed",
+            "The parameter 'crossed' of 'p' has a 'min' of 5 above its 'max' of 1: no value is both",
+        )
+    ]
 
 
 def test_lint_leaves_an_interface_s_freedom_of_movement_alone():

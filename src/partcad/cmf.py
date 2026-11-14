@@ -405,7 +405,12 @@ def enrich_source_reference(source: str, values, relative_to: str) -> str:
             named[str(key)] = [expr.format_value(each) for each in value]
         else:
             named[str(key)] = expr.format_value(value)
-    return "%s:%s" % (package, instance_key(base, named))
+    # The name escaped whether or not there are values to add: this is a
+    # reference, read again by 'lookup', and 'instance_key' leaves a name with
+    # no values as it is - a storage key, in which ':a%3Bb' would be 'a;b',
+    # the declaration 'a' asked for with a value 'b'.
+    given = format_parameterized_name("", named) if named else ""
+    return "%s:%s%s" % (package, escape_name(base), given)
 
 
 def _absolute(ref: str, relative_to: str) -> str:

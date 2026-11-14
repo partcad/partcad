@@ -1674,17 +1674,23 @@ class Project(project_config.Configuration):
         config = self.object_config(kind, base)
         if cmf.is_enrich(config):
             return self._get_enrich(kind, config, base, values, instance_name, quiet)
+        if config is None:
+            # One of a declaration's 'aliases:', which is that declaration:
+            # asked for outside this name's lock, which nothing here needs. The
+            # owner may be an enrich made from this very name, and making it
+            # asks for the name again on this thread, which would wait on its
+            # own lock rather than reach the enrich's loop check.
+            owner = self._cmf_alias_owner(kind, base)
+            if owner is not None:
+                # Asked for by reference, which spells a reserved character escaped.
+                return self.get_cmf(
+                    kind, cmf.instance_key(owner, values) if values else escape_name(owner), quiet=quiet
+                )
 
         with Project.MaterialLock(self, instance_name, kind):
             if objects.get(instance_name) is not None:
                 return objects[instance_name]
             if config is None:
-                owner = self._cmf_alias_owner(kind, base)
-                if owner is not None:
-                    # Asked for by reference, which spells a reserved character escaped.
-                    return self.get_cmf(
-                        kind, cmf.instance_key(owner, values) if values else escape_name(owner), quiet=quiet
-                    )
                 if not quiet:
                     pc_logging.error("The %s '%s' is not found in '%s'" % (kind, base, self.name))
                 return None
@@ -3776,7 +3782,10 @@ class Project(project_config.Configuration):
         test_method = "test_log_wrapper" if use_wrapper else "test_cached"
 
         def get_objects(config_dict, getter):
-            for name in config_dict:
+            # Over a copy of the names: asking for an object normalizes its
+            # declaration, and one refused there (a default outside its own
+            # bounds) is dropped from 'config_dict' as it is asked for.
+            for name in list(config_dict):
                 obj = getter(name)
                 # skip testing objects that are not finalized
                 if obj and (not hasattr(obj, "finalized") or obj.finalized):

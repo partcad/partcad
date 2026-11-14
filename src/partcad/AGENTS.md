@@ -2089,7 +2089,9 @@ at all).
   (`init_materials` skips them): the context has not registered the package yet, and the source may be in a
   package nothing else loads. They are made outside the declaration's `MaterialLock`, because making one asks
   for its source, which may be an enrich asking for this one; a thread-local stack (`_ENRICHING`) is what
-  notices that, and `EnrichCycleError` reaches the outermost one to report the whole chain once. Why an
+  notices that, and `EnrichCycleError` reaches the outermost one to report the whole chain once. A name asked for
+  that is one of a declaration's `aliases:` is handed to that declaration before any lock is taken, for the same
+  reason: the declaration may be an enrich of that very name. Why an
   instance could not be made is kept in `Project.cmf_failures`, for `cmf.why_unresolved` and for an enrich of
   it to say rather than "declares no material".
 

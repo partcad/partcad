@@ -1427,7 +1427,7 @@ _BOUNDED_SECTIONS = tuple(parameters.PARAMETERIZED_SECTIONS.items()) + (
 )
 
 
-def check_parameter_bounds(data, root_node=None) -> list:
+def check_parameter_bounds(data, root_node=None, masked=None) -> list:
     """Report a parameter whose 'min' and 'max' cannot hold, or whose default is outside them or its 'enum'.
 
     The rule and its words are 'partcad_utils.parameters.declaration_problems',
@@ -1436,6 +1436,11 @@ def check_parameter_bounds(data, root_node=None) -> list:
     an interface's 'parameters:' is a value with a range of this kind: its
     freedom of movement states 'min' and 'max' too, and means something else
     by them (see 'parameters.is_movement_parameter').
+
+    ``masked`` is the record of what a template stands for in a document
+    checked masked, as for '_validate_schema': a value an expression gives is
+    not known there, and nothing is said that depends on it (see
+    '_known_declaration').
     """
     diagnostics: list = []
     if not isinstance(data, dict):
@@ -1448,14 +1453,53 @@ def check_parameter_bounds(data, root_node=None) -> list:
             declared = config.get("parameters") if isinstance(config, dict) else None
             if not isinstance(declared, dict):
                 continue
+            path = [section, object_name, "parameters"]
             for param_name, declaration in declared.items():
                 if kind == "interface" and parameters.is_movement_parameter(param_name, declaration):
                     continue
+                declaration = _known_declaration(declaration, root_node, masked, path + [param_name])
+                if declaration is None:
+                    continue
                 expanded = parameters.normalize_parameters({param_name: copy.deepcopy(declaration)})[param_name]
                 for message in parameters.declaration_problems(expanded, param_name, str(object_name)):
-                    path = [section, object_name, "parameters"]
                     _report_at(diagnostics, root_node, path, param_name, message, code=CODE_PARAMETERS)
     return diagnostics
+
+
+# What 'declaration_problems' reads of a parameter declaration.
+_BOUND_KEYS = frozenset({"type", "default", "min", "max", "enum"})
+
+
+def _known_declaration(declaration, root_node, masked, path):
+    """A parameter's ``declaration`` without what a template stands for, or None when none of it can be checked.
+
+    A value an expression gives ('min: {{ lower }}') is filler text in a masked
+    document, so the field it is in is left out of what is checked: it is no
+    text 'min', and a default it gives is not one an 'enum' refuses. What does
+    not depend on it is still said - a 'min' above a 'max', both written as
+    numbers. An expression in 'type' changes what every other field means, a
+    statement inside the declaration can add or take away any of them, and a
+    declaration that is one value is that value: each leaves it unchecked.
+    """
+    if masked is None or root_node is None or not masked.spans:
+        return declaration
+    node = _resolve(root_node, path)
+    start, end = _node_span(node)
+    if masked.overlaps(start, end, _STMT):
+        return None
+    if not isinstance(declaration, dict):
+        return None if masked.overlaps(start, _reach(node, end, masked), _EXPR) else declaration
+    known = {}
+    for key, value in declaration.items():
+        value_node = _child(node, key) if key in _BOUND_KEYS else None
+        if value_node is not None:
+            value_start, value_end = _node_span(value_node)
+            if masked.overlaps(value_start, _reach(value_node, value_end, masked), _EXPR):
+                if key == "type":
+                    return None
+                continue
+        known[key] = value
+    return known
 
 
 # ---- entry points ----------------------------------------------------------
@@ -1546,7 +1590,7 @@ def _document_checks(data, schema, root_node, masked, manufacturable, inherited_
         diagnostics.extend(check_manufacturable_parts(data, root_node, inherited_manufacturable))
         diagnostics.extend(check_unique_names(data, root_node))
         diagnostics.extend(check_shared_parameters(data, root_node))
-        diagnostics.extend(check_parameter_bounds(data, root_node))
+        diagnostics.extend(check_parameter_bounds(data, root_node, masked))
     return diagnostics
 
 

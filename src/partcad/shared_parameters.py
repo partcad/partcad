@@ -135,7 +135,7 @@ class SharedParameters:
         if not found.found:
             return
         try:
-            holder["default"] = pc_parameters.coerce_parameter_value(
+            value = pc_parameters.coerce_parameter_value(
                 declared_parameter_type(holder),
                 found.value,
                 name,
@@ -146,6 +146,15 @@ class SharedParameters:
             pc_logging.error(
                 "The override of the shared parameter '%s' of '%s' cannot be used: %s" % (name, found.source, e)
             )
+            return
+        # Held to the declaration's 'min', 'max' and 'enum' as any other
+        # override is ('config.apply_user_parameter_overrides', which passes a
+        # shared parameter over to this): said, and the declared default stands.
+        outside = pc_parameters.value_problem(holder, value, name, found.source)
+        if outside is not None:
+            pc_logging.error("The override of the shared parameter '%s' is not used: %s" % (name, outside))
+            return
+        holder["default"] = value
 
     def bind(self, object_name: str, config) -> None:
         """Make each shared parameter 'config' declares the package's one declaration of it.
