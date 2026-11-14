@@ -55,6 +55,16 @@ ROOT = {
         "nowhere": {"type": "alias", "source": "//missing:steel"},
         # The name of a part as well: a material keeps a namespace of its own.
         "bolt": {"density": 7900, "desc": "The material called bolt"},
+        # A grade worked out from a parameter, and a declaration of its own
+        # made from one value of it ('type: enrich').
+        "al-6061": {
+            "parameters": {"temper": {"type": "string", "default": "T6", "enum": ["O", "T4", "T6"]}},
+            "full": "Aluminium 6061-%temper%",
+            "density": 2700,
+            "yieldStrength": "%pick(temper, ['O', 'T4', 'T6'], [55e6, 145e6, 276e6])%",
+        },
+        "al-6061-t4": {"type": "enrich", "source": ":al-6061", "with": {"temper": "T4"}, "desc": "6061, T4 temper"},
+        "al-6061-t9": {"type": "enrich", "source": ":al-6061", "with": {"temper": "T9"}},
     },
     "finishes": {"Zinc-Plated": {"desc": "Zinc plated", "display": {"roughness": 0.3, "metallic": 1}}},
     "parts": {"bolt": {"type": "basic", "cuboid": [1, 1, 1]}},
@@ -331,3 +341,36 @@ def test_a_kind_flag_of_an_object_is_still_taken_at_its_word(session, log, monke
 
     assert asked == ["//:water"]
     assert log.errors()[-1] == "Object //:water not found"
+
+
+@pytest.mark.parametrize("name, strength", [("al-6061", "2.76e+08"), ("al-6061;temper=O", "5.5e+07")])
+def test_a_number_a_material_works_out_is_shown_worked_out(session, log, name, strength):
+    operations.info_object(session, {"package": "//", "object": name, "material": True})
+
+    assert log.errors() == []
+    assert log.facts()["Yield strength"] == "'%s Pa'" % strength
+
+
+def test_an_enrich_says_what_it_is_made_from_and_has_its_facts(session, log):
+    operations.info_object(session, {"package": "//", "object": "al-6061-t4"})
+
+    assert log.errors() == []
+    assert "'type': 'enrich'" in log.info()[0]
+    facts = log.facts()
+    assert facts["Name"] == "'al-6061-t4'"
+    assert facts["Enriches"] == "'//:al-6061;temper=T4'"
+    assert facts["Desc"] == "'6061, T4 temper'"
+    assert facts["Full"] == "'Aluminium 6061-T4'"
+    assert facts["Yield strength"] == "'1.45e+08 Pa'"
+    assert facts["Density"] == "'2700 kg/m^3'"
+
+
+def test_an_enrich_that_cannot_be_made_says_why(session, log):
+    operations.info_object(session, {"package": "//", "object": "al-6061-t9", "material": True})
+
+    assert log.info() == []
+    assert log.errors() == [
+        "//: material 'al-6061-t9': is an enrich of '//:al-6061;temper=T9', which cannot be made: "
+        "The parameter 'temper' of '//:al-6061' cannot be 'T9': its 'enum' allows 'O', 'T4', 'T6'",
+        "Object //:al-6061-t9 not found",
+    ]

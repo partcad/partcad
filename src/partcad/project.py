@@ -330,6 +330,18 @@ def declare_object_type_parameters(factory_name: str, config: dict, params: dict
         parameters[name] = declaration
 
 
+# The enriches each thread is in the middle of making, outermost first, as
+# (package, kind, instance) - see 'Project._get_enrich'.
+_ENRICHING = threading.local()
+
+
+def _enriches_being_made() -> list:
+    making = getattr(_ENRICHING, "stack", None)
+    if making is None:
+        making = _ENRICHING.stack = []
+    return making
+
+
 @telemetry.instrument()
 class Project(project_config.Configuration):
     sketches: dict[str, sketch.Sketch]
@@ -558,6 +570,10 @@ class Project(project_config.Configuration):
         self.material_locks_lock = threading.Lock()
         self.colors = {}
         self.finishes = {}
+        # Why each CMF instance that was asked for and could not be made was
+        # not, by (kind, instance key): 'get_cmf' answers None either way, and
+        # an enrich of one, or a part made in one, has to be able to say why.
+        self.cmf_failures: dict[tuple, str] = {}
 
         self.interfaces = {}
         self.interface_locks = {}
@@ -791,12 +807,19 @@ class Project(project_config.Configuration):
         configs = self._object_configs.get(kind)
         if name in done and configs is not None and configs.get(name) is config:
             return config
-        normalized = config_class.normalize(name, config, f"{self.name}:{name}", self.ctx.user_config)
         try:
+            try:
+                normalized = config_class.normalize(name, config, f"{self.name}:{name}", self.ctx.user_config)
+            except pc_config.ParameterValueError as e:
+                # Only this one of what normalizing may raise: the rest is the
+                # caller's to report, as it always was.
+                raise ValueError(str(e)) from e
             self.bind_shared_parameters(name, normalized)
         except ValueError as e:
-            # A declaration the package's shared parameter refuses: the object
-            # is not served, and says why where it is looked for.
+            # A declaration whose parameters cannot hold their own bounds (a
+            # default outside its 'min' and 'max', or not one of its 'enum'),
+            # or one the package's shared parameter refuses: the object is not
+            # served, and says why where it is looked for.
             self._refused_names.setdefault(kind, {})[name] = str(e)
             if configs is not None:
                 configs.pop(name, None)
@@ -1499,14 +1522,23 @@ class Project(project_config.Configuration):
         return self.object_config("interface", interface_name)
 
     def init_materials(self):
-        """Build every CMF declaration of this package: its colours, materials and finishes."""
+        """Build every CMF declaration of this package: its colours, materials and finishes.
+
+        All but the enriches, which are built when they are first asked for
+        ('get_cmf'): an enrich is made from a declaration that may be in another
+        package, and reading a package must not load its neighbours - nor its
+        own declarations through the context, which has not registered it yet.
+        """
         for kind in cmf.KINDS:
             for name in self.object_names(kind):
+                config = self.object_config(kind, name)
+                if cmf.is_enrich(config):
+                    continue
                 # Per object, exactly as 'init_objects' does it and for the same
                 # reason: an unreadable declaration costs the user that one
                 # declaration rather than every one declared after it.
                 try:
-                    self.init_cmf_by_config(kind, self.object_config(kind, name), name)
+                    self.init_cmf_by_config(kind, config, name)
                 except Exception as e:
                     self.record_broken_object(kind, name, e)
 
@@ -1514,27 +1546,8 @@ class Project(project_config.Configuration):
         """Build one CMF declaration - or an instance of a parametric one - and put it in this package."""
         if kind == "material":
             return self.init_material_by_config(config, name, parameter_values=parameter_values)
-        object_name = "%s:%s" % (self.name, name)
-        # With the caller's configuration, as a material is: a daemon builds
-        # each context from its caller's, and the parameter overrides are there.
-        config = Configuration.normalize(
-            name, copy.deepcopy(cmf.normalize(kind, config)), object_name, self.ctx.user_config
-        )
-        # A parametric declaration named without values is its defaults: its
-        # fields rendered with them, as a reference that gives some renders the
-        # rest ('//builtin/color:rgba' is drawn in its default colour).
-        if parameter_values or config.get("parameters"):
-            config = cmf.with_parameters(config, parameter_values or {}, object_name)
-        instance_name = cmf.instance_key(name, parameter_values)
-        declaration = (cmf.Color if kind == "color" else cmf.Finish)(
-            instance_name,
-            self.name,
-            config,
-            base_name=name,
-            parameter_values=parameter_values,
-            config_dir=self.config_dir,
-        )
-        self.register_object(kind, instance_name, declaration)
+        declaration = self._make_cmf(kind, config, name, parameter_values)
+        self.register_object(kind, declaration.name, declaration)
         return declaration
 
     def init_material_by_config(self, config, material_name=None, source_project=None, parameter_values=None):
@@ -1551,18 +1564,105 @@ class Project(project_config.Configuration):
             source_project = self
         if material_name is None:
             material_name = config["name"]
-        config = material_config.MaterialConfiguration.normalize(
-            material_name, copy.deepcopy(config), "%s:%s" % (self.name, material_name), self.ctx.user_config
-        )
-        # Its defaults where it is named without values (see 'init_cmf_by_config').
-        if parameter_values or config.get("parameters"):
-            config = cmf.with_parameters(config, parameter_values or {}, "%s:%s" % (self.name, material_name))
-        instance_name = cmf.instance_key(material_name, parameter_values)
-        found = material.Material(
-            instance_name, source_project.name, config, base_name=material_name, parameter_values=parameter_values
-        )
-        self.register_object("material", instance_name, found)
+        found = self._make_cmf("material", config, material_name, parameter_values, project_name=source_project.name)
+        self.register_object("material", found.name, found)
         return found
+
+    def _make_cmf(self, kind: str, config, name: str, parameter_values=None, project_name=None):
+        """One CMF declaration - or an instance of a parametric one - made, and not put anywhere yet.
+
+        Its parameters set and its fields rendered with them, and, for an
+        enrich, the fields of the instance it is made from taken (see
+        'cmf.enriched'). A material's numbers are then held to their ranges
+        (see 'material.number_problems'), whether written or computed: an
+        instance whose density came out negative is refused here, naming it,
+        rather than weighing a part at it.
+        """
+        object_name = "%s:%s" % (self.name, name)
+        # With the caller's configuration: a daemon builds each context from
+        # its caller's, and the parameter overrides are there.
+        if kind == "material":
+            config = material_config.MaterialConfiguration.normalize(
+                name, copy.deepcopy(config), object_name, self.ctx.user_config
+            )
+        else:
+            config = Configuration.normalize(
+                name, copy.deepcopy(cmf.normalize(kind, config)), object_name, self.ctx.user_config
+            )
+        # A parametric declaration named without values is its defaults: its
+        # fields rendered with them, as a reference that gives some renders the
+        # rest ('//builtin/color:rgba' is drawn in its default colour).
+        if parameter_values or config.get("parameters"):
+            config = cmf.with_parameters(config, parameter_values or {}, object_name)
+        instance_name = cmf.instance_key(name, parameter_values)
+        config_dir = self.config_dir
+        source = None
+        if cmf.is_enrich(config):
+            source = self._enrich_source(kind, config)
+            config, display_inherited = cmf.enriched(kind, config, source)
+            if display_inherited and getattr(source, "config_dir", None):
+                # An image the source is drawn with is a file of its package.
+                config_dir = source.config_dir
+        if kind == "material":
+            config = material.read_numbers(config)
+        made = {"color": cmf.Color, "finish": cmf.Finish, "material": material.Material}[kind]
+        declaration = made(
+            instance_name,
+            project_name or self.name,
+            config,
+            base_name=name,
+            parameter_values=parameter_values,
+            config_dir=config_dir,
+        )
+        if source is not None:
+            declaration.enriches = source.reference()
+        if kind == "material":
+            problems = material.number_problems(config)
+            if problems:
+                raise ValueError(
+                    "The material '%s' cannot be used: %s" % (declaration.reference(), "; ".join(problems))
+                )
+        return declaration
+
+    def _enrich_source(self, kind: str, config: dict):
+        """The declaration an enrich of this package is made from: its 'source' with its 'with', aliases followed.
+
+        Both as rendered with the enrich's own parameters, which is what lets
+        an enrich state parameters of its own and pass on what they come to.
+        """
+        source = config.get("source")
+        if not isinstance(source, str) or not source.strip():
+            raise ValueError("is an enrich with no 'source'")
+        values = config.get("with") or {}
+        if not isinstance(values, dict):
+            raise ValueError("is an enrich whose 'with' is %r, not a mapping of parameter values" % (values,))
+        reference = cmf.enrich_source_reference(source.strip(), values, self.name)
+        found = cmf.lookup(self.ctx, kind, reference, self.name, quiet=True)
+        if found is None:
+            package_name, name = reference.split(":", 1)
+            project = self if package_name == self.name else self.ctx.get_project(package_name)
+            failure = project.cmf_failure(kind, name) if project is not None else None
+            if failure is not None:
+                # Declared, and refused for the values it was asked for: said
+                # as the instance said it, which names the value and the bound.
+                raise ValueError("is an enrich of '%s', which cannot be made: %s" % (reference, failure))
+            why = cmf.why_unresolved(self.ctx, kind, reference, self.name)
+            raise ValueError("is an enrich of '%s', and %s" % (reference, why or "it resolves to nothing"))
+        return found
+
+    def cmf_failure(self, kind: str, name: str) -> typing.Optional[str]:
+        """Why the instance of 'kind' a reference names as 'name' could not be made, or None if nothing said so.
+
+        A name among a declaration's 'aliases:' is that declaration (see
+        'get_cmf'), whose failure is kept under its own name.
+        """
+        base, values = parse_parameterized_name(name)
+        failure = self.cmf_failures.get((kind, cmf.instance_key(base, values)))
+        if failure is None and self.object_config(kind, base) is None:
+            owner = self._cmf_alias_owner(kind, base)
+            if owner is not None:
+                failure = self.cmf_failures.get((kind, cmf.instance_key(owner, values)))
+        return failure
 
     def get_cmf(self, kind: str, name: str, quiet: bool = False):
         """The colour, material or finish of this package called 'name', or None.
@@ -1580,26 +1680,84 @@ class Project(project_config.Configuration):
         if existing is not None:
             return existing
 
+        config = self.object_config(kind, base)
+        if cmf.is_enrich(config):
+            return self._get_enrich(kind, config, base, values, instance_name, quiet)
+        if config is None:
+            # One of a declaration's 'aliases:', which is that declaration:
+            # asked for outside this name's lock, which nothing here needs. The
+            # owner may be an enrich made from this very name, and making it
+            # asks for the name again on this thread, which would wait on its
+            # own lock rather than reach the enrich's loop check.
+            owner = self._cmf_alias_owner(kind, base)
+            if owner is not None:
+                # Asked for by reference, which spells a reserved character escaped.
+                return self.get_cmf(
+                    kind, cmf.instance_key(owner, values) if values else escape_name(owner), quiet=quiet
+                )
+
         with Project.MaterialLock(self, instance_name, kind):
             if objects.get(instance_name) is not None:
                 return objects[instance_name]
-            config = self.object_config(kind, base)
             if config is None:
-                owner = self._cmf_alias_owner(kind, base)
-                if owner is not None:
-                    # Asked for by reference, which spells a reserved character escaped.
-                    return self.get_cmf(
-                        kind, cmf.instance_key(owner, values) if values else escape_name(owner), quiet=quiet
-                    )
                 if not quiet:
                     pc_logging.error("The %s '%s' is not found in '%s'" % (kind, base, self.name))
                 return None
             try:
                 return self.init_cmf_by_config(kind, config, base, parameter_values=values or None)
             except Exception as e:
-                if not quiet:
-                    pc_logging.error("%s: %s '%s': %s" % (self.name, kind, instance_name, e))
+                self._cmf_failed(kind, instance_name, e, quiet)
                 return None
+
+    def _get_enrich(self, kind: str, config: dict, base: str, values: dict, instance_name: str, quiet: bool):
+        """The instance of an enrich, made on first asking (see 'get_cmf').
+
+        Made outside the declaration's lock, unlike every other: making it asks
+        for the declaration it is made from, which may be another enrich, in
+        this package or another, and a chain of them that leads back to where it
+        started would wait on a lock its own thread holds - or, asked from two
+        threads at once, on each other's. Unlocked, the thread itself notices:
+        it keeps the enriches it is making ('_ENRICHING'), and one asked for
+        again before it is made is a loop, refused naming every link of it.
+        Two threads making the same enrich at once make it twice, and the
+        first one registered is the one both get.
+        """
+        key = (self.name, kind, instance_name)
+        making = _enriches_being_made()
+        if key in making:
+            chain = making[making.index(key) :] + [key]
+            raise cmf.EnrichCycleError(kind, ["%s:%s" % (package, name) for package, _kind, name in chain])
+        making.append(key)
+        try:
+            try:
+                declaration = self._make_cmf(kind, config, base, values or None)
+            finally:
+                making.pop()
+        except cmf.EnrichCycleError as e:
+            if making:
+                # Inside another enrich's making: the one the loop started from
+                # says so, once, with the whole of it.
+                raise
+            self._cmf_failed(kind, instance_name, e, quiet, prefixed=False)
+            return None
+        except Exception as e:
+            self._cmf_failed(kind, instance_name, e, quiet)
+            return None
+        with Project.MaterialLock(self, instance_name, kind):
+            existing = self.objects(kind).get(instance_name)
+            if existing is not None:
+                return existing
+            self.register_object(kind, instance_name, declaration)
+            self.cmf_failures.pop((kind, instance_name), None)
+            return declaration
+
+    def _cmf_failed(self, kind: str, instance_name: str, error: Exception, quiet: bool, prefixed: bool = True) -> None:
+        self.cmf_failures[(kind, instance_name)] = str(error)
+        if not quiet:
+            if prefixed:
+                pc_logging.error("%s: %s '%s': %s" % (self.name, kind, instance_name, error))
+            else:
+                pc_logging.error(str(error))
 
     def declares_cmf(self, kind: str, name: str) -> bool:
         """Whether this package has a colour, material or finish of 'kind' that 'name' names, building nothing.
@@ -1634,34 +1792,12 @@ class Project(project_config.Configuration):
     def get_material(self, material_name, quiet=False) -> Optional[material.Material]:
         """The material of this package called 'material_name', or None.
 
-        Built directly rather than through 'get_object' for the same reason
-        'get_interface' is: there is no factory to dispatch on a 'type'. Unlike
-        an interface, a material has no parameters either, so there is no
-        instance to derive - what remains is the two-step look under the lock
-        that every kind needs, because the object may have been created while
-        this thread waited for the lock and creating a second one would collide
-        in 'register_object'.
+        A material is one of the three kinds of CMF declaration, and is found
+        the way every one of them is ('get_cmf'): by name, as an instance of a
+        parametric one ('abs;butadiene=0.2'), under one of its 'aliases', and as
+        an enrich made on first asking.
         """
-        with self.lock:
-            existing = self.materials.get(material_name)
-        if existing is not None:
-            return existing
-
-        with Project.MaterialLock(self, material_name):
-            if self.materials.get(material_name) is not None:
-                return self.materials[material_name]
-
-            config = self.get_material_config(material_name)
-            if config is None:
-                if not quiet:
-                    pc_logging.error(
-                        "Material '%s' not found in '%s'",
-                        material_name,
-                        self.name,
-                    )
-                return None
-            self.init_material_by_config(config, material_name)
-            return self.materials[material_name]
+        return self.get_cmf("material", material_name, quiet=quiet)
 
     def get_material_config(self, material_name):
         return self.object_config("material", material_name)
@@ -1793,11 +1929,15 @@ class Project(project_config.Configuration):
             # instance derives from, so it is copied rather than filled in -
             # writing the values into it would make the next reference, and the
             # unparametrized interface itself, inherit them.
-            config = self.normalized_interface_config(base_name, deep_copy=True)
-            full_object_name = f"{self.name}:{result_name}"
-            config = interface_config.InterfaceConfiguration.normalize(
-                result_name, config, full_object_name, self.ctx.user_config
-            )
+            try:
+                config = self.normalized_interface_config(base_name, deep_copy=True)
+                full_object_name = f"{self.name}:{result_name}"
+                config = interface_config.InterfaceConfiguration.normalize(
+                    result_name, config, full_object_name, self.ctx.user_config
+                )
+            except pc_config.ParameterValueError as e:
+                self.record_broken_object("interface", result_name, e)
+                return None
             config["orig_name"] = base_name
             # The construction half of 'parameters:' - the values the interface
             # is built from. The other half of that section is the freedom of
@@ -3072,7 +3212,14 @@ class Project(project_config.Configuration):
             # Fill in the parameter values
             if "parameters" in config and config["parameters"] is not None:
                 # Filling "parameters"
-                pc_config.apply_parameter_values(config["parameters"], params, result_name, package_name=self.name)
+                try:
+                    pc_config.apply_parameter_values(config["parameters"], params, result_name, package_name=self.name)
+                except pc_config.ParameterValueError as e:
+                    # A value its parameter does not allow - outside its range,
+                    # or not one of its 'enum' - costs the caller this
+                    # instance, said with what it broke.
+                    self.record_broken_object(factory_name, result_name, e)
+                    return None
             else:
                 # Filling "with"
                 if "with" not in config:
@@ -3657,7 +3804,10 @@ class Project(project_config.Configuration):
         test_method = "test_log_wrapper" if use_wrapper else "test_cached"
 
         def get_objects(config_dict, getter):
-            for name in config_dict:
+            # Over a copy of the names: asking for an object normalizes its
+            # declaration, and one refused there (a default outside its own
+            # bounds) is dropped from 'config_dict' as it is asked for.
+            for name in list(config_dict):
                 obj = getter(name)
                 # skip testing objects that are not finalized
                 if obj and (not hasattr(obj, "finalized") or obj.finalized):

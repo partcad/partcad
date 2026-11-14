@@ -566,11 +566,19 @@ true, and a **construction** parameter otherwise:
   ``turnX``, ``turnY``, ``turnZ`` (or the hyphenated spellings a ``mates:``
   section uses);
 - it is written in the short list form ``[min, max, default]``;
-- it states ``min``, ``max`` or ``dir``, or ``type: move`` / ``type: turn``.
+- it states ``min``, ``max`` or ``dir``, or ``type: move`` / ``type: turn`` --
+  unless it states the type of a value (``type: float``, ``int``, ``string``,
+  ``bool`` or ``array``), which a freedom of movement never does.
 
 Every freedom-of-movement parameter PartCAD has ever accepted is caught by the
 first or the third of those -- a custom name is *required* to state its ``dir``
 -- so a declaration written before this existed keeps the meaning it had.
+
+The exception is for a construction parameter that states the range it may
+take, as any numeric parameter may (see :ref:`parameters`): ``size: {type:
+float, default: 3, min: 1.6, max: 30}`` is a value a reference sets, refused
+outside that range. Without its ``type`` it would read as a freedom of movement
+-- and, with no ``dir``, as one that is missing its axis.
 
 A part's or an assembly's ``parameters:`` is not split: for a shape that section
 has only ever meant the values it is built from.
@@ -622,9 +630,12 @@ A value that is *nothing but* an expression evaluates to the value itself, which
 is what lets a coordinate be written as one; a value that merely contains an
 expression gets it formatted in, which is what builds a name or a description.
 Inside the delimiters is an ordinary arithmetic expression over the object's
-parameters, with the usual functions available (``sqrt``, ``sin``, ``cos``,
-``floor``, ``min``, ``max``, ``round`` ...) and the same constants a template has
-(``PI``, ``SQRT_2``, ``INCH`` ...; see :ref:`templates`). A constant is a number
+parameters, with the usual functions available (``abs``, ``bool``, ``float``,
+``int``, ``len``, ``max``, ``min``, ``round``, ``str``, ``acos``, ``asin``,
+``atan``, ``atan2``, ``ceil``, ``cos``, ``degrees``, ``floor``, ``hypot``,
+``log``, ``pow``, ``radians``, ``sin``, ``sqrt``, ``tan``), the table functions
+below, and the same constants a template has (``PI``, ``SQRT_2``, ``INCH`` ...;
+see :ref:`templates`). A constant is a number
 like any other, so ``%PI * size / 4%`` is an expression; a parameter of the same
 name takes its place. Arithmetic,
 comparisons, a conditional, indexing and the plain methods of a string or a
@@ -635,11 +646,56 @@ reach into an object, or define one. An expression that cannot be evaluated is
 reported by name and left standing as the text it was written as, so a
 misspelling costs that one value rather than the package.
 
+Six functions work a value out of a table, which is what a parametric
+declaration of a material or a colour is mostly written with (see
+:ref:`cmf-parametric`): a table is a list of the values somebody measured, and
+a value between them is read off the line through them rather than off a
+formula nobody measured.
+
+``clamp(x, lo, hi)``
+  ``x``, bounded to ``[lo, hi]``.
+
+``lerp(a, b, t)``
+  ``a + (b - a) * t``: ``a`` at ``t = 0``, ``b`` at ``t = 1``, and the same line
+  beyond them (``t`` is not clamped).
+
+``interpolate(x, xs, ys)``
+  The piecewise-linear function through the points ``(xs[i], ys[i])``, at ``x``:
+  ``interpolate(izod, [15, 30, 45], [0.15, 0.2, 0.25])``. ``xs`` increase
+  strictly, there are at least two of them, and as many ``ys``. At a stop it is
+  exactly the value written for it. Past the ends it is the end value -- ``ys[0]``
+  below ``xs[0]``, ``ys[-1]`` above ``xs[-1]`` -- and not extrapolated: a
+  declaration that means to extrapolate writes the line itself, with ``lerp``,
+  and says so.
+
+``pick(key, keys, values)``
+  ``values[keys.index(key)]``, the lookup in a table an expression has no other
+  way to write: ``pick(temper, ['O', 'T4', 'T6'], [55e6, 145e6, 276e6])``. A key
+  that is not among ``keys`` is an error naming it and them.
+
+``color_mix(c0, c1, t)``
+  Two CSS colours mixed as CSS's ``color-mix(in oklab, c0, c1 t)`` mixes them,
+  ``t`` being the share of ``c1`` (clamped to ``[0, 1]``), as ``#RRGGBB`` --
+  ``#RRGGBBAA`` when it is not opaque. In Oklab because its distances are the
+  ones an eye sees: half way from white to black is ``#636363``, a grey that
+  looks half way, and not the lighter mean of the sRGB numbers.
+
+``interpolate_color(x, xs, colors)``
+  ``interpolate`` for colours: the stops' colours mixed in Oklab, the first and
+  the last colour past the ends.
+
+Each refuses a table that is not one -- stops that do not increase, lists of
+different lengths, a colour CSS does not read -- saying what is wrong with it.
+``clamp``, ``lerp``, ``interpolate``, and ``pick`` from a written-out list of
+numbers, answer a number, and may be multiplied like one.
+
 Outside interfaces, the same expressions work over a part's parameters in its
 ``offset``, and over a basic sketch's or a basic part's parameters in its
 dimensions (see :ref:`basic_parts`). Each instance of a parametrized part is
 moved by its own values: ``offset: [[0, 0, "%length / 2%"], [0, 0, 1], 0]``
-stands a part of any length on the XY plane.
+stands a part of any length on the XY plane. A colour's, a material's and a
+finish's fields are rendered with their parameters the same way (see
+:ref:`cmf-parametric`).
 
 .. note::
 
