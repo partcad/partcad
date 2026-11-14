@@ -80,6 +80,81 @@ ANALYSIS_FROM_MATERIAL = {
 }
 
 
+# The numbers a material states, by the key it states each under, and the range
+# each has to lie in - the same keywords, with the same bounds, the schema
+# gives the plain number ('partcad_utils/schema/partcad.json', where a test
+# holds the two together). A material may compute any of them from its
+# parameters ('density: "%1040 + 100 * butadiene%"', see 'partcad.cmf'), and
+# what the expression comes to is held to the same range a number written out
+# is: a parametric declaration whose 'max' a catalogue got wrong would
+# otherwise hand an analysis a negative stiffness.
+NUMBERS = {
+    "density": {"exclusiveMinimum": 0},
+    "viscosity": {"exclusiveMinimum": 0},
+    "youngsModulus": {"exclusiveMinimum": 0},
+    "poissonsRatio": {"minimum": 0, "exclusiveMaximum": 0.5},
+    "yieldStrength": {"exclusiveMinimum": 0},
+    "thermalConductivity": {"exclusiveMinimum": 0},
+    "mu": {"minimum": 0},
+}
+
+_RANGE_WORDS = {
+    "minimum": ("at least", lambda value, bound: value >= bound),
+    "exclusiveMinimum": ("above", lambda value, bound: value > bound),
+    "maximum": ("at most", lambda value, bound: value <= bound),
+    "exclusiveMaximum": ("below", lambda value, bound: value < bound),
+}
+
+
+def _spells_a_number(text: str) -> bool:
+    try:
+        float(text)
+    except ValueError:
+        return False
+    return True
+
+
+def read_numbers(config: dict) -> dict:
+    """'config' with every number YAML handed over as text read as the number it spells.
+
+    YAML 1.1 reads '69e9' - an exponent with no point or no sign - as text, and
+    a material that wrote one was weighed and analysed at that number all the
+    same, because every property here was read with 'float()'. It still is: a
+    package that worked keeps working. 'pc lint' goes on reporting the text,
+    since the schema asks for a number, and says how to write one. Only text
+    that is nothing but a number is read so; an expression that could not be
+    evaluated stays the text it was written as, and is refused below.
+    """
+    for key in NUMBERS:
+        value = config.get(key)
+        if isinstance(value, str) and "%" not in value and _spells_a_number(value.strip()):
+            config[key] = float(value)
+    return config
+
+
+def number_problems(config: dict) -> list:
+    """What is wrong with the numbers a material's declaration states, once rendered, as clauses.
+
+    Each has to be a number - an expression that could not be evaluated is
+    still the text it was written as (see 'partcad.expr.resolve'), and a
+    string where a density belongs is the fault, not something to read a
+    number out of later - in the range 'NUMBERS' gives it.
+    """
+    problems = []
+    for key, bounds in NUMBERS.items():
+        value = config.get(key)
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            problems.append("its '%s' is %r, which is text and not a number" % (key, value))
+            continue
+        for keyword, bound in bounds.items():
+            words, holds = _RANGE_WORDS[keyword]
+            if not holds(value, bound):
+                problems.append("its '%s' is %s, and has to be %s %s" % (key, "%g" % value, words, "%g" % bound))
+    return problems
+
+
 @telemetry.instrument()
 class Material(cmf.Declaration):
     """One material of a package: a CMF declaration with the physical facts of a substance.

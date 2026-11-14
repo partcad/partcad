@@ -422,6 +422,45 @@ def _oklab_to_rgb(lightness, a, b):
     return [_encode(c) for c in linear]
 
 
+def _cube_root(value):
+    return math.copysign(abs(value) ** (1.0 / 3.0), value)
+
+
+def _rgb_to_oklab(red, green, blue):
+    """Gamma-encoded sRGB, each channel 0 to 1, as Oklab's '(L, a, b)': Ottosson's matrices, as CSS uses them."""
+    r, g, b = (_decode(c) for c in (red, green, blue))
+    l_ = _cube_root(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+    m_ = _cube_root(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+    s_ = _cube_root(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    return (
+        0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+        1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+        0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+    )
+
+
+def mix_oklab(first, second, share):
+    """Two '(red, green, blue, alpha)' colours mixed in Oklab, 'share' of the second, as '(red, green, blue, alpha)'.
+
+    What CSS's 'color-mix(in oklab, first, second <share * 100>%)' draws: the
+    two converted to Oklab, each component weighted by its colour's alpha
+    (premultiplied, as CSS mixes), the weights 1 - share and share, and the
+    alpha mixed the same way. Oklab rather than sRGB because its distances are
+    the ones an eye sees: half way from white to black is a grey that looks
+    half way, not the lighter one the mean of the sRGB numbers is. 'share' is
+    clamped to [0, 1]; the result is clipped to sRGB as every reading here is.
+    """
+    share = _clamp(share)
+    alpha = first[3] * (1.0 - share) + second[3] * share
+    one = _rgb_to_oklab(*(c / 255.0 for c in first[:3]))
+    other = _rgb_to_oklab(*(c / 255.0 for c in second[:3]))
+    if alpha <= 0:
+        # Nothing to see whatever the colour: CSS leaves it transparent black.
+        return (0, 0, 0, 0.0)
+    mixed = [(x * first[3] * (1.0 - share) + y * second[3] * share) / alpha for x, y in zip(one, other)]
+    return tuple(_byte(c) for c in _oklab_to_rgb(*mixed)) + (_clamp(alpha),)
+
+
 def _oklab(channels):
     if len(channels) != 3:
         return None

@@ -50,7 +50,7 @@ from partcad_utils.parameters import (  # noqa: F401
 )
 
 from . import logging as pc_logging
-from .config import apply_user_parameter_overrides, normalize_parameters
+from .config import apply_user_parameter_overrides, check_parameter_declarations, normalize_parameters
 
 # The name of the section both kinds are declared in - the same one a part and a
 # sketch use, which is the whole point.
@@ -123,6 +123,7 @@ class InterfaceConfiguration:
                 # with, and a freedom-of-movement range is not one of those.
                 apply_user_parameter_overrides({PARAMETERS: construction}, object_name, PARAMETERS, user_config)
                 declared.update(construction)
+                check_parameter_declarations(construction, object_name)
             for param_name in movement:
                 pc_logging.debug("%s: '%s' is a freedom-of-movement parameter" % (object_name, param_name))
 

@@ -3329,6 +3329,9 @@ def cmf_info(session, params):
             name = escape_name(name)
         declaration = project.get_cmf(said, name, quiet=True) if project is not None else None
         if declaration is None:
+            failure = project.cmf_failure(said, name) if project is not None else None
+            if failure is not None:
+                raise JsonRpcError(USAGE_ERROR, "The %s %s cannot be made: %s" % (said, path, failure))
             raise JsonRpcError(USAGE_ERROR, "The %s %s is not found" % (said, path))
         return {"object": path, "kind": said, "declaration": cmf.declaration_data(ctx, declaration)}
 
@@ -3354,16 +3357,30 @@ def _cmf_items(session, project, kind: str) -> list:
     is in a package that may not have loaded yet, and listing a package must
     not load its neighbours. The CMF tab says the rest, once one is opened.
     """
+    from partcad import cmf
     from partcad_utils.utils import escape_name
 
     described = []
     for name in project.object_names(kind):
         try:
+            config = project.object_config(kind, name)
+            if cmf.is_enrich(config) and _enriches_elsewhere(project, kind, config):
+                # Made from another package's declaration, which making it
+                # would load: described by what it says itself, as an alias is.
+                row = {"name": name, "type": "enrich", "desc": config.get("desc") or "enrich of %s" % config["source"]}
+                if isinstance(config.get("display"), str) and "%" not in config["display"]:
+                    row["display"] = config["display"]
+                row["manufacturable"] = config.get("manufacturable", True) is not False
+                described.append(row)
+                continue
             # Asked for by reference, which spells a reserved character escaped.
             declaration = project.get_cmf(kind, escape_name(name), quiet=True)
             if declaration is None:
-                raise Exception("the declaration cannot be read")
-            row = {"name": name, "type": "alias" if declaration.is_alias else kind}
+                raise Exception(project.cmf_failure(kind, escape_name(name)) or "the declaration cannot be read")
+            row = {
+                "name": name,
+                "type": "alias" if declaration.is_alias else "enrich" if declaration.is_enrich else kind,
+            }
             desc = declaration.desc or ("alias of %s" % declaration.source if declaration.is_alias else None)
             if desc:
                 row["desc"] = desc
@@ -3374,6 +3391,47 @@ def _cmf_items(session, project, kind: str) -> list:
         except Exception as e:  # pylint: disable=broad-except
             session.emitter.warning("Skipping the %s '%s:%s': %s" % (kind, project.name, name, e))
     return described
+
+
+def _enriches_elsewhere(project, kind: str, config) -> bool:
+    """Whether making an enrich declaration reaches a package other than its own.
+
+    Its source may be another of the package's own enriches or aliases, made
+    from another package's declaration in turn, so the chain is followed for
+    as long as it stays in the package - by what the declarations say, making
+    nothing. A name one of them lists under 'aliases:' is that one. A source
+    an expression gives ('%target%') is only known once the declaration's
+    parameters render it, which is making it: it may name any package, so it
+    is taken to name another.
+    """
+    from partcad import cmf, expr
+    from partcad_utils.utils import parse_parameterized_name
+
+    seen = set()
+    while isinstance(config, dict) and config.get("type") in ("enrich", "alias"):
+        source = config.get("source")
+        if not isinstance(source, str) or not source.strip():
+            return False
+        # A reserved character's escape ('%3B') is no expression.
+        if expr.has_expression(cmf._masked(source, True)):
+            return True
+        try:
+            package, name = cmf._split(source.strip(), project.name)
+        except Exception:  # pylint: disable=broad-except
+            return False
+        if package != project.name:
+            return True
+        name, _values = parse_parameterized_name(name)
+        if name in seen:
+            return False
+        seen.add(name)
+        config = project.object_config(kind, name)
+        if config is None:
+            owner = project._cmf_alias_owner(kind, name)
+            if owner is not None and owner not in seen:
+                seen.add(owner)
+                config = project.object_config(kind, owner)
+    return False
 
 
 def list_packages(session, params):

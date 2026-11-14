@@ -35,6 +35,10 @@ All three take the same fields:
       aliases: <(optional) other names of it in this package, one or a list>
       parameters:    # (optional) see "Parametric declarations"
         <name>: ...
+      type: <(optional) alias|enrich, with a source - see "Aliases" and "Enriches">
+      source: <(alias and enrich only) the declaration it is made from>
+      with:          # (enrich only) the values of the source's parameters
+        <name>: <value>
 
 **A display is a hint; a declaration is a claim.** ``display`` is only how to draw the thing. A declaration with
 ``manufacturable: true`` -- the default -- claims that what it declares can be sourced or made as declared, and that
@@ -155,11 +159,47 @@ models gives a vendor's colours short names of its own:
 declaration it names: an item made in ``:stone`` is the same item as one made in
 ``//pub/universe/lego:Medium Stone Grey``.
 
+Enriches
+========
+
+An alias *is* the declaration it names. An **enrich** is a declaration of its own, made from another one: it takes
+every field of the declaration it names, and says what is different about it. It is how a catalogue names one grade of
+a parametric material, and how a package reuses another package's values under names and ids of its own:
+
+.. code-block:: yaml
+
+  materials:
+    al-6061-t6:
+      type: enrich
+      source: ":al-6061"             # any reference, in any package; an alias is followed to what it names
+      with: {temper: T6}             # values for the source's parameters
+      desc: Aluminium 6061 in the T6 temper   # its own fields win over the source's
+
+What it takes is the source *instance* -- ``:al-6061;temper=T6`` here, its fields rendered with those values -- with
+everything but the six keys that are not about the substance: ``type``, ``source``, ``with`` and ``parameters``, which
+make the source a reference or a template, and ``aliases`` and ``ids``, which are names of the source. An id says what
+another system calls *one* declaration, so a converter reading a STEP file's or LDraw's names finds one declaration
+under it and not two; an enrich states the ids it answers to itself. A reference among what it takes -- a material's
+``color``, a ``display`` that names a colour -- is made absolute against the source's package, so it goes on naming
+what it named there, and an image a colour is drawn with is read from the source's package too.
+
+**Its name is its own.** An item made of ``:al-6061-t6`` is made of ``//<its package>:al-6061-t6``, not of
+``:al-6061;temper=T6``, so a catalogue can rework how a grade is computed without renaming what its users already
+name. That is the difference to choose by: write an alias for another *name* of the same declaration, and an enrich
+for a declaration that is to stay one under its own name. ``pc info`` and the IDE's CMF tab say what an enrich is made
+from (``Enriches: //pub/...:al-6061;temper=T6``).
+
+An enrich is made when it is first named rather than as its package loads, since its source may be in a package
+nothing else loads. An enrich of an enrich works, and a chain of them that leads back to itself is reported, naming
+every link of it, rather than resolved.
+
+.. _cmf-parametric:
+
 Parametric declarations
 =======================
 
-A declaration may take parameters, which its fields name as ``%<parameter>%`` -- PartCAD's own expression syntax, since
-``partcad.yaml`` is rendered as a Jinja2 template before any reference gives a value:
+A declaration may take parameters, which its fields name as ``%<parameter>%`` -- PartCAD's own expression syntax (see
+:ref:`expressions`), since ``partcad.yaml`` is rendered as a Jinja2 template before any reference gives a value:
 
 .. code-block:: yaml
 
@@ -171,7 +211,70 @@ A declaration may take parameters, which its fields name as ``%<parameter>%`` --
       manufacturable: false
 
 ``//builtin/color:rgba;color=C91A09FF`` is that declaration, shipped with PartCAD: the quick way to draw something in
-a colour without claiming anything, and what PartCAD reads a hex or CSS colour as.
+a colour without claiming anything, and what PartCAD reads a hex or CSS colour as. A parametric declaration named
+without values is its defaults, under its plain name: ``//builtin/color:rgba`` is goldenrod.
+
+**A field may be computed.** A field that is nothing but an expression is the value it comes to, a number staying a
+number -- which is what lets a material state its grades by what they are made of rather than one by one. The
+functions an expression has for that work a value out of a table of the values somebody measured
+(``interpolate``, ``pick``, ``interpolate_color``; see :ref:`expressions` for all of them), which is what a catalogue
+should prefer to a formula nobody measured:
+
+.. code-block:: yaml
+
+  colors:
+    brass:
+      parameters:
+        zinc: {type: float, default: 0.3, min: 0.05, max: 0.4, desc: "zinc, mass fraction"}
+      display: "%interpolate_color(zinc, [0.05, 0.4], ['#B87333', '#E1C16E'])%"
+  materials:
+    abs:
+      parameters:
+        butadiene: {type: float, default: 0.2, min: 0.15, max: 0.25, desc: "butadiene, mass fraction"}
+      density: "%interpolate(butadiene, [0.15, 0.25], [1050, 1040])%"   # a line between two measured grades
+    al-6061:
+      parameters:
+        temper: {type: string, default: T6, enum: [O, T4, T6]}
+      yieldStrength: "%pick(temper, ['O', 'T4', 'T6'], [55e6, 145e6, 276e6])%"   # typical, per temper
+
+A material's numbers -- ``density``, ``viscosity``, ``youngsModulus``, ``poissonsRatio``, ``yieldStrength``,
+``thermalConductivity`` and ``mu`` -- may be expressions, and what each comes to is held to the range a number
+written out has to lie in (a density above 0, a Poisson's ratio from 0 to below 0.5). An instance whose number falls
+outside it, or is not a number at all -- an expression that cannot be evaluated is left as the text it was written
+as -- is refused, naming the field, the value and the instance, rather than weighing anything at it. So give every
+numeric parameter the ``min`` and ``max`` its model holds between (see :ref:`parameters`): a reference outside them is
+refused before anything is computed, with the bound it broke, and ``pc lint`` reports a default outside them. A
+parameter that names a condition rather than numbering it -- a temper, a heat treatment -- lists the conditions in
+``enum``, and a reference naming any other is refused the same way: ``al-6061;temper=T7`` is an error, not a
+material whose ``pick`` fails.
+
+Write a number with an exponent the way YAML reads it as one, with a point and a sign: ``69.0e+9``. YAML reads
+``69e9`` as text: PartCAD still reads such a material at the number the text spells, as it always has, but ``pc lint``
+reports it, since the schema asks for a number. Inside an expression either spelling is a number.
+
+**Declarations stack.** An enrich may declare parameters of its own: its fields are rendered with them -- its
+``source`` and its ``with:`` values included -- so it can offer the parameters a user thinks in and map them onto the
+ones its source is written in:
+
+.. code-block:: yaml
+
+  materials:
+    abs-high-impact:
+      type: enrich
+      source: ":abs"
+      parameters:
+        izod: {type: float, default: 30, min: 15, max: 45, desc: "notched Izod, kJ/m^2 (ISO 180/1A)"}
+      with:
+        butadiene: "%round(interpolate(izod, [15, 45], [0.15, 0.25]), 3)%"
+
+``:abs-high-impact`` is the default grade and ``:abs-high-impact;izod=45`` another; each is a declaration of its own,
+made from ``:abs;butadiene=0.2`` and ``:abs;butadiene=0.25``. A parameter value is written into the name of the
+instance it asks for, so give the values a computed ``with:`` produces a fixed precision (``round``), and the same
+composition is one instance however it was reached.
+
+An expression may not reach outside the declaration it is in, so a relation used by many entries of one file -- a
+mixture's density from its fractions -- can be written once as a Jinja2 ``{% macro %}`` at the top of the file that
+writes the expression text for each of them (see :ref:`templates`).
 
 .. _cmf-names:
 
