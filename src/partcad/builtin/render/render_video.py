@@ -512,7 +512,7 @@ def _process(path, request):
             )
     previous_count = 0
     if previous is not None:
-        previous_count = int(round((previous["duration"] or 0.0) * fps))
+        previous_count = video_encode.frames_in(previous["duration"], fps)
 
     # The object made ready to be drawn.
     shaded.build(warnings)
@@ -597,6 +597,12 @@ def _process(path, request):
             written_before, written = pipeline.run(
                 frames(shaded, painters, start, speed, fps, count, fade_in, fade_out, fade_color), prefix=prefix
             )
+            if previous is not None and not written_before:
+                # Written over, the video appended to would be gone, and
+                # nothing would say so.
+                raise video_encode.GStreamerError(
+                    "Not one frame of '%s' could be read back to append to, so it is left as it was" % path
+                )
             if comments:
                 video_encode.write_comments(partial, comments)
             os.replace(partial, path)

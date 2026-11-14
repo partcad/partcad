@@ -1067,6 +1067,18 @@ def diagnose(argv, debug_path):
     return "".join("\n" + part for part in parts)
 
 
+def frames_in(duration, fps):
+    """How many frames a video 'duration' seconds long has at 'fps': to the nearest frame, and one at the least.
+
+    One at the least, if it lasts at all: a video of a single frame at 25
+    frames a second lasts 0.04s, which is no whole frame at 10 a second, and
+    counted as none it was left out of the video appended to it altogether.
+    """
+    if not duration or duration <= 0:
+        return 0
+    return max(1, int(round(duration * float(fps))))
+
+
 def decode_frames(path, width, height, fps, limit=None, duration=None):
     """The frames of the video at 'path', as (height, width, 3) uint8 arrays, one at a time.
 
@@ -1094,7 +1106,7 @@ def decode_frames(path, width, height, fps, limit=None, duration=None):
     if duration is None:
         duration = discover(path)["duration"]
     if duration is not None:
-        length = int(round(duration * float(fps)))
+        length = frames_in(duration, fps)
         limit = length if limit is None else min(limit, length)
 
     argv = [
@@ -1122,22 +1134,26 @@ def decode_frames(path, width, height, fps, limit=None, duration=None):
     with tempfile.TemporaryFile() as errors:
         process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=errors)
         count = 0
-        stopped = False
+        ended = False
         try:
             while limit is None or count < limit:
                 data = process.stdout.read(size)
                 if len(data) < size:
+                    ended = True
                     break
                 count += 1
                 yield np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
         finally:
-            # Still writing once there are as many frames as were wanted - the
-            # one past the end above, typically - and stopped. How it exits
-            # then is no failure, and is not the same everywhere: by a signal
-            # on Linux and macOS, and with status 1 on Windows.
-            if process.poll() is None:
+            # Stopped when it is still writing once there are as many frames
+            # as were wanted - the one past the end above, typically - or once
+            # whoever was reading them has stopped. How it exits then is no
+            # failure, and is not the same everywhere: by a signal on Linux
+            # and macOS, and with status 1 on Windows. One whose output has
+            # ended is exiting by itself, and is waited for: how it exits says
+            # whether what it wrote was the whole video.
+            stopped = not ended and process.poll() is None
+            if stopped:
                 process.kill()
-                stopped = True
             process.stdout.close()
             status = process.wait()
         if status != 0 and not stopped:
