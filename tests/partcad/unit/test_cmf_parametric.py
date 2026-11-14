@@ -97,7 +97,13 @@ ROOT = {
         "loop-a": {"type": "enrich", "source": ":loop-b"},
         "loop-b": {"type": "enrich", "source": ":loop-a"},
         "nowhere": {"type": "enrich", "source": ":nothing"},
-        "too-much": {"type": "enrich", "source": "//vendor:abs", "with": {"butadiene": 0.9}},
+        "too-much": {
+            "type": "enrich",
+            "source": "//vendor:abs",
+            "with": {"butadiene": 0.9},
+            "aliases": ["too-much-butadiene"],
+        },
+        "through-too-much": {"type": "enrich", "source": ":too-much-butadiene"},
         "heavy": {
             "parameters": {"k": {"type": "float", "default": 1}},
             "density": "%1000 - 2000 * k%",
@@ -283,6 +289,25 @@ def test_an_enrich_asking_its_source_for_what_it_refuses_says_so(ctx):
     assert _failure(ctx, "material", "too-much") == (
         "is an enrich of '//vendor:abs;butadiene=0.9', which cannot be made: "
         "The parameter 'butadiene' of '//vendor:abs' cannot be 0.9: its 'max' is 0.3"
+    )
+
+
+def test_why_one_cannot_be_made_is_said_by_any_name_it_has(ctx):
+    """One of its 'aliases:' is the declaration, and so is the reason it cannot be made."""
+    why = (
+        "is an enrich of '//vendor:abs;butadiene=0.9', which cannot be made: "
+        "The parameter 'butadiene' of '//vendor:abs' cannot be 0.9: its 'max' is 0.3"
+    )
+    assert _get(ctx, "material", "too-much-butadiene") is None
+    assert _failure(ctx, "material", "too-much-butadiene") == why
+    assert (
+        cmf.why_unresolved(ctx, "material", ":too-much-butadiene", "//")
+        == "'//:too-much-butadiene' cannot be made: " + why
+    )
+    # And an enrich made from it says that, rather than that there is no such material.
+    assert _get(ctx, "material", "through-too-much") is None
+    assert _failure(ctx, "material", "through-too-much") == (
+        "is an enrich of '//:too-much-butadiene', which cannot be made: " + why
     )
 
 

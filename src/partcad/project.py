@@ -1651,9 +1651,18 @@ class Project(project_config.Configuration):
         return found
 
     def cmf_failure(self, kind: str, name: str) -> typing.Optional[str]:
-        """Why the instance of 'kind' a reference names as 'name' could not be made, or None if nothing said so."""
+        """Why the instance of 'kind' a reference names as 'name' could not be made, or None if nothing said so.
+
+        A name among a declaration's 'aliases:' is that declaration (see
+        'get_cmf'), whose failure is kept under its own name.
+        """
         base, values = parse_parameterized_name(name)
-        return self.cmf_failures.get((kind, cmf.instance_key(base, values)))
+        failure = self.cmf_failures.get((kind, cmf.instance_key(base, values)))
+        if failure is None and self.object_config(kind, base) is None:
+            owner = self._cmf_alias_owner(kind, base)
+            if owner is not None:
+                failure = self.cmf_failures.get((kind, cmf.instance_key(owner, values)))
+        return failure
 
     def get_cmf(self, kind: str, name: str, quiet: bool = False):
         """The colour, material or finish of this package called 'name', or None.
