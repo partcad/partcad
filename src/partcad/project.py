@@ -1601,6 +1601,19 @@ class Project(project_config.Configuration):
                     pc_logging.error("%s: %s '%s': %s" % (self.name, kind, instance_name, e))
                 return None
 
+    def declares_cmf(self, kind: str, name: str) -> bool:
+        """Whether this package has a colour, material or finish of 'kind' that 'name' names, building nothing.
+
+        'name' as a reference spells it -- escaped, and with any parameter
+        values, which are cut off before looking -- and a name a declaration
+        lists among its 'aliases' is that declaration's, as 'get_cmf' has it.
+        What 'pc info' asks of a name no object of the package has: the
+        declaration is read and not made, so a declaration that cannot be made
+        is still found, and says why when it is asked for.
+        """
+        base, _ = parse_parameterized_name(name)
+        return self.object_config(kind, base) is not None or self._cmf_alias_owner(kind, base) is not None
+
     def _cmf_alias_owner(self, kind: str, name: str):
         """The declaration of 'kind' that lists 'name' among its 'aliases', or None."""
         for candidate in self.object_names(kind):

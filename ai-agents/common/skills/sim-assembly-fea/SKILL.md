@@ -209,8 +209,9 @@ of those keys or after a condition (`fix`, `load`, `gravity`).
   does not, saying so, rather than letting it pull every load straight down.
 - The material: a part whose `material` names a catalogued one is analysed as
   that material without anything written here -- `pc info <part>` lists what it
-  is handed under `Material` (`Youngs modulus`, `Yield strength`, ...); a
-  material is not an object `pc info` looks up on its own. Otherwise an alias
+  is handed under `Material` (`Youngs modulus`, `Yield strength`, ...), and
+  `pc info -m <material>` the material's own values, before any part names it.
+  Otherwise an alias
   may carry its own `cae: fea:` -- `youngs_modulus`, `poissons_ratio`,
   `yield_strength` (Pa), `density` (kg/m³) -- for what the part is made of, when
   the implementation's defaults (steel) are not it. That is the implementation's

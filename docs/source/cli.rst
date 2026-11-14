@@ -79,8 +79,11 @@ That is a rule a package has to keep, and PartCAD holds it to it. A package that
 sketch and an interface both called ``m3``, or a part whose ``aliases:`` take the name of a scene -- keeps the
 name for one of them and refuses the other, with an error saying which and why, when it loads; ``pc lint``
 and the editor say the same where the second one is written. The one that keeps the name is the one a bare
-name finds, of the kind looked for first in the order below. Materials, providers, repositories and part types
-have names of their own: nothing names one of those without saying what it is.
+name finds, of the kind looked for first in the order below. Colours, materials and finishes, providers,
+repositories and part types have names of their own, beside the objects': a part names its material with
+``material:``, and ``pc supply`` a provider with ``--provider``. ``pc info`` is the one command that also takes the
+name of a colour, a material or a finish where an object's goes, and it looks for an object of that name first (see
+:ref:`pc-info`).
 
 Finding the kind costs almost nothing. Everything already in memory is asked first, about every kind --
 which, for a package read from a ``partcad.yaml``, is the whole answer, since every declaration was read as it
@@ -92,7 +95,8 @@ assemblies, sketches, scenes, then software -- so that a part costs the one requ
 an interface, an assembly, a scene or software. They are no longer needed for anything: what they do now is
 skip the lookup, for whoever knows the kind and would rather not pay for asking -- a script working through a
 catalog a plugin serves, say. Given one, ``pc`` takes it at its word, and on a ``...`` walk (below) it narrows
-the walk to the objects of that kind.
+the walk to the objects of that kind. ``pc info`` takes three more, ``--color``, ``-m``/``--material`` and
+``--finish``, which say the name is a CMF declaration's.
 
 .. _recursive-names:
 
@@ -645,10 +649,38 @@ Object commands
   --set validation=... block stands`` declares a simulation. ``--set KEY=VALUE`` may be repeated, each value
   read as YAML.
 
+.. _pc-info:
+
 ``pc info``
-  Show detailed information about a part, assembly, scene, or software, including its parameters. Name the
-  object as ``...:<name>`` to report every object of that name from here down, or pass ``<package>...`` as the
-  package with no object at all to report each package of a subtree (see :ref:`recursive-names`).
+  Show detailed information about a part, assembly, scene, or software, including its parameters -- or about a
+  colour, a material or a finish. Name the object as ``...:<name>`` to report every object of that name from here
+  down, or pass ``<package>...`` as the package with no object at all to report each package of a subtree (see
+  :ref:`recursive-names`).
+
+  A **colour, material or finish** (see :ref:`cmf`) is named the way an object is::
+
+      pc info //pub/std/manufacturing/material/metal:steel-1018
+      pc info :pla                                       # one of the current package
+      pc info "//builtin/color:rgba;color=C91A09FF"      # an instance of a parametric one; or -p color=C91A09FF
+      pc info ...:water                                  # the one of that name in each package from here down
+
+  It prints the declaration's configuration -- an instance of a parametric one with the values it was named with,
+  and its fields rendered with them -- and what it says of itself. For a material that is what a part made of it
+  reports as ``Material``: its formal and full names and description, its ``Density`` in kg/m³, a fluid's
+  ``Viscosity`` in Pa·s, its ``Youngs modulus``, ``Poissons ratio`` and ``Yield strength`` in Pa, its ``Thermal
+  conductivity`` in W/(m·K), its coefficient of friction ``Mu``, the colour it claims, its tags and its URL. A colour
+  says what it is drawn in, a finish how rough and how metallic it looks. An **alias** (``type: alias``) is shown as
+  itself -- its name, ``Alias of`` what it names as written, and ``Resolves to`` the declaration at the end of the
+  chain -- with the facts of that declaration, which are the ones it has; one that resolves to nothing says why.
+
+  A name is looked for among the package's **objects first**, as every command looks for one, so a name an object
+  has is that object, as it always was. Only a name no object of the package has is looked for among its colours,
+  materials and finishes, and since each of those three kinds keeps names of its own, it is **every** one of them
+  that has the name, each under a heading naming its kind (``COLOR:``, ``MATERIAL:``, ``FINISH:``): a vendor's
+  ``Zinc-Plated`` is often a colour and a finish both. ``--color``, ``-m``/``--material`` and ``--finish`` say which
+  kind the name is. They skip the lookup, and they are how a declaration that shares its name with an object is
+  reached: ``pc info -m bolt`` is the material when the package also has a part called ``bolt``. A name that is
+  nothing at all is reported as missing in the words a missing object is.
 
   Where the object says what it is made of, the material it names is resolved and reported as
   ``Material`` — the formal and full names, the density in kg/m³, the coefficient of friction and the

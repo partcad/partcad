@@ -251,6 +251,47 @@ def _object_kind(params):
     return None
 
 
+# The flags 'pc info' says its object is a colour, a material or a finish with:
+# '--color', '-m'/'--material' and '--finish', in the order CMF names the three
+# kinds and every view lists them ('partcad.cmf.KINDS'). Read by 'info.object'
+# alone, because it is the one method that reports on a declaration named the
+# way an object is; every other method that takes an object makes, measures or
+# builds it, and a declaration is nothing of the kind.
+_CMF_FLAGS = ("color", "material", "finish")
+
+
+def _info_kind(params):
+    """The kind the flags of an 'info.object' request say its object is, or None for none.
+
+    An object's kind flag as every command reads it (``_object_kind``), and
+    then the three that say the name is a CMF declaration's.
+    """
+    said = _object_kind(params)
+    if said is not None:
+        return said
+    for kind in _CMF_FLAGS:
+        if params.get(kind):
+            return kind
+    return None
+
+
+def _cmf_kinds(prj, name, said=None):
+    """The kinds of CMF declaration of package ``prj`` that ``name`` names, in the order CMF lists them.
+
+    What 'info.object' falls back on for a name no object of the package has.
+    CMF declarations are not objects, and each of the three kinds keeps a
+    namespace of its own -- a colour, a material and a finish may share a name,
+    and often do ('Zinc-Plated' is the colour of a part and the finish that
+    gives it that colour) -- so a name is every one of them that has it, rather
+    than the first. ``said`` narrows it to one kind. Read from the declarations,
+    so a declaration that cannot be made is found, and says why when it is.
+    """
+    if prj is None:
+        return []
+    kinds = _CMF_FLAGS if said is None else (said,)
+    return [kind for kind in kinds if prj.declares_cmf(kind, name)]
+
+
 def _said_kind(params):
     """The kind a method that takes ``kind`` was told, or None when it was told none.
 
@@ -393,7 +434,7 @@ def _overlay(session, params):
     )
 
 
-def _targets(ctx, pc, packages, object_name, said=None, kinds=None):
+def _targets(ctx, pc, packages, object_name, said=None, kinds=None, cmf=False):
     """The ``(package, object, kind)`` triples that a named object resolves to, where it exists.
 
     What a recursive run over a named object is: each package of the subtree is
@@ -413,6 +454,11 @@ def _targets(ctx, pc, packages, object_name, said=None, kinds=None):
     (``//elsewhere:bolt``) resolves to the same pair whichever package it was
     reached from -- one target rather than forty.
 
+    ``cmf`` is for 'info.object', which reports on colours, materials and
+    finishes too: a package with no object of that name then contributes every
+    CMF declaration of it (see ``_cmf_kinds``), and a ``said`` that is one of
+    those kinds is looked for among them.
+
     An empty result is the one failure this has: the object is nowhere in the
     subtree, and the caller says so once.
     """
@@ -426,13 +472,14 @@ def _targets(ctx, pc, packages, object_name, said=None, kinds=None):
         prj = ctx.get_project(target)
         if prj is None:
             continue
-        if said is not None:
-            kind = said if prj.declares_object(said, name) else None
+        if said in _CMF_FLAGS:
+            found = _cmf_kinds(prj, name, said)
+        elif said is not None:
+            found = [said] if prj.declares_object(said, name) else []
         else:
             kind = prj.object_kind(name, kinds)
-        if kind is None:
-            continue
-        targets.append((target, name, kind))
+            found = [kind] if kind is not None else (_cmf_kinds(prj, name) if cmf else [])
+        targets.extend((target, name, kind) for kind in found)
     return targets
 
 
@@ -1272,11 +1319,20 @@ def info(session, params):
 
 
 def info_object(session, params):
-    """Show detailed information about a part, assembly, scene, interface, sketch, or software.
+    """Show detailed information about a part, assembly, scene, interface, sketch, or software -- or a colour, a
+    material or a finish.
 
     Ported verbatim from the CLI `info` command: with no object name it reports
     the package's info, otherwise the object's configuration and info. Output is
     emitted through PartCAD logging so it renders exactly as before.
+
+    A name is looked for among the package's objects first, as every command
+    looks for one, so a name an object has is that object here too. Only a name
+    no object of the package has is looked for among its CMF declarations, and
+    it is every one of them that has it: the three kinds keep namespaces of
+    their own (see ``_cmf_kinds``). ``color``, ``material`` and ``finish`` say
+    which kind the name is, the way the object kind flags do, and are how a
+    declaration that shares its name with an object is reached.
     """
     from pprint import pformat
 
@@ -1319,13 +1375,13 @@ def info_object(session, params):
     # 'pc info' has no '-r' of its own; '...' is how it is asked for one, which
     # is the whole reason the recursion is written on the package rather than
     # spelled as a flag on every command that could want it.
-    said = _object_kind(params)
+    said = _info_kind(params)
     if recursive:
         packages = [
             p["name"]
             for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False, exclude=_excluded(ctx, params))
         ]
-        targets = _targets(ctx, pc, packages, object_name, said)
+        targets = _targets(ctx, pc, packages, object_name, said, cmf=True)
         if not targets:
             _nowhere(pc, object_name, package_name)
             return None
@@ -1336,10 +1392,19 @@ def info_object(session, params):
         # of its own, which is the ordinary way to spell one. A name that does
         # carry a prefix still wins over the flag.
         package, name = pc.utils.resolve_resource_path(package_name, object_name)
-        targets = [(package, name, _kind_of(ctx, package, name, said) or "part")]
+        kind = _kind_of(ctx, package, name, said)
+        # A name no object has may be a colour's, a material's or a finish's,
+        # or several of those. A name that is nothing at all is a part, so that
+        # the miss is reported by the part getter as it always was.
+        found = [kind] if kind is not None else _cmf_kinds(ctx.get_project(package), name)
+        targets = [(package, name, each) for each in found or ["part"]]
 
     for package, name, kind in targets:
         path = _qualified(package, name)
+
+        if kind in _CMF_FLAGS:
+            _report_declaration(ctx, pc, package, name, kind, recursive or len(targets) > 1)
+            continue
 
         if kind == "assembly":
             obj = ctx.get_assembly(path)
@@ -1371,6 +1436,37 @@ def info_object(session, params):
             for k, v in obj.info().items():
                 pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
     return None
+
+
+def _report_declaration(ctx, pc, package, name, kind, heading):
+    """Report one colour, material or finish as 'info.object' reports an object.
+
+    Its configuration -- with the values a parametric one was named with in it,
+    and its fields rendered with them -- and then what it says of itself, as
+    ``partcad.cmf.declaration_info`` says it: a material's physical facts, and
+    an alias as itself with the facts of what it resolves to. ``heading`` is
+    for a report one of several: the kind leads it, because the same name can
+    be a colour and a finish of one package.
+
+    Asked for out loud, so that a declaration a flag named and the package does
+    not have, or one it cannot make, is said why by the package -- and then
+    "not found" in the words a missing object is.
+    """
+    from pprint import pformat
+
+    from partcad import cmf
+
+    path = _qualified(package, name)
+    project = ctx.get_project(package)
+    declaration = project.get_cmf(kind, name) if project is not None else None
+    if declaration is None:
+        pc.logging.error("Object %s not found" % path)
+        return
+    if heading:
+        pc.logging.info("%s: %s" % (kind.upper(), path))
+    pc.logging.info("CONFIGURATION: %s" % pformat(declaration.config))
+    for k, v in cmf.declaration_info(ctx, declaration).items():
+        pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
 
 
 def _compared_object(ctx, pc, params, key, what):
