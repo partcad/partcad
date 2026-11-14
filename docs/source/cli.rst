@@ -490,7 +490,8 @@ Object commands
   ``obj``, ``gltf`` -- compressed web assets included, see :ref:`gltf-files`), or one of the CAD file formats
   PartCAD ships as declarations (``fcstd``,
   ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- ``iges``, read
-  by OpenCASCADE, and ``usd``, an OpenUSD stage, read by usd-core; see :ref:`cad-files`). The part
+  by OpenCASCADE, and ``usd``, an OpenUSD stage, read by usd-core; see :ref:`cad-files`), or measured data
+  made solid (``heightmap``, ``pointcloud``, ``voxels``; see :ref:`measured-data`). The part
   is named after the file, without its extension. Where the file is ``<name>.<extension>`` with the
   extension spelled as the type declares it -- ``design.FCStd``, ``bracket.SLDPRT``, ``bracket.CATPart`` --
   the declaration names no ``path``; any other spelling of it keeps one: another case (``design.fcstd``), or

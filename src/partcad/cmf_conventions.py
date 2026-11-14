@@ -74,6 +74,8 @@ BUILTIN = {
     "gltf": Convention("gltf", "gltf", False),
     # OpenUSD: a material's name, as USD names it (see the 'usd' part type).
     "usd": Convention("usd", "usd", False),
+    # MagicaVoxel: a palette index, '1' to '255' (see the 'voxels' part type).
+    "vox": Convention("vox", "vox", False),
     "ldraw": Convention("ldraw", "ldraw", False),
 }
 

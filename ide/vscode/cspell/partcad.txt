@@ -170,6 +170,7 @@ has
 hash
 heat
 height
+heightmap
 hm
 hold
 how
@@ -307,6 +308,7 @@ plunge
 png
 poc
 pocket
+pointcloud
 poissons
 port
 ports
@@ -443,6 +445,8 @@ visibility
 visual
 visuals
 volume
+vox
+voxels
 wall
 walls
 weight

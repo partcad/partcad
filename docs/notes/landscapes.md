@@ -155,10 +155,17 @@ taken for a sign entirely inside the ground, which a millimetre of clearance und
 - **A simulation does not see the ground.** MuJoCo collides with convex hulls, and the hull of `ground` is the block
   around the whole landscape: its valleys filled, its buildings and roads inside. MuJoCo has height fields (`hfield`); a `terrain` part the sim plugins can
   write as one would make landscapes simulable. Until then, physics is for `--dem flat`.
-- **A `terrain` part type** in `//builtin`, like `wall`: a heightmap file (GeoTIFF, ASCII grid, a 16-bit PNG, a
-  Terrarium tile) or a `site.json` made into this surface by PartCAD itself, so that the ground is declared rather
-  than generated as a script with its data inlined, and its heights could be asked of PartCAD (`pc` answering what
-  `landscape.py height` answers).
+- **Ground from files, declared** -- now three part types of `//builtin/import` (see "Height maps, point clouds and
+  voxels" in `docs/source/config_parts.rst`): `heightmap` makes an ESRI ASCII grid, a gray, floating-point,
+  Terrarium or Terrain-RGB image, or a 2D NumPy array into the same Greville-pole B-spline solid; `pointcloud` bins
+  LAS, LAZ, PLY or text points into one (`classes: 2` keeps a lidar scan's ground), or into voxels; `voxels` makes
+  MagicaVoxel models, binvox grids and 3D arrays into exact solids, a solid per colour. What is left is for the
+  landscape's own ground to be one of them - a `heightmap` of `site.json` rather than a script with its data inlined
+  - and for its heights to be asked of PartCAD (`pc` answering what `landscape.py height` answers). Building the
+  types turned up one more thing worth knowing: a ruled side between a surface's edge and a line that run opposite
+  ways is a twisted face OCCT calls valid, and it bounds the wrong volume - 16% short on a test hill - which only a
+  volume checked against the surface found. A height field's sides are planes now, cut by the surface's exact
+  iso-curves.
 - **A `landscape` scene type**, like `walls`: its links worked out from the map's features, as a `walls` scene's are
   from a sketch, so that a landscape is a declaration of where and how much rather than a generated file.
 - **Checking a landscape still takes minutes.** Every prop is intersected with the whole ground, 4 s each against

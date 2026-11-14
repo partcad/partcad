@@ -94,6 +94,10 @@ PART_EXTENSION_ALIASES = {
     "usda": "usd",
     "usdc": "usd",
     "usdz": "usd",
+    "laz": "pointcloud",
+    "xyz": "pointcloud",
+    "pts": "pointcloud",
+    "binvox": "voxels",
 }
 
 SKETCH_EXTENSION_MAPPING = {

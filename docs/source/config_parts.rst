@@ -42,7 +42,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
   parts:
     <part name>:
       type: <basic|scad|cadquery|build123d|chili3d|sdf|extrude|sweep|boolean
-             |step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz
+             |step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz|usd
+             |heightmap|pointcloud|voxels
              |kicad|compound|wall|alias|enrich|:<partType declared by this package>
              |<package>:<partType declared by that package>>
       desc: <(optional) textual description>
@@ -500,7 +501,7 @@ Define parts with CAD files using the following syntax:
 
   parts:
     <part name>:
-      type: <step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz|usd>
+      type: <step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz|usd|heightmap|pointcloud|voxels>
       binary: <(stl only) use the binary format>
 
 .. list-table::
@@ -554,6 +555,15 @@ Define parts with CAD files using the following syntax:
    * - ``usd``
      - OpenUSD stage: a ``.usd``, ``.usda`` or ``.usdc`` layer, or a ``.usdz`` package; the meshes it shows
      - ``<name>.usd``
+   * - ``heightmap``
+     - Heights on a grid: an ESRI ASCII grid, an image, a 2D NumPy array (see :ref:`measured-data`)
+     - ``<name>.asc``
+   * - ``pointcloud``
+     - Points: LAS, LAZ, PLY, or text (see :ref:`measured-data`)
+     - ``<name>.las``
+   * - ``voxels``
+     - Filled cells: a MagicaVoxel model, a binvox grid, a 3D NumPy array (see :ref:`measured-data`)
+     - ``<name>.vox``
 
 A file of another name or extension -- a ``.stp``, an ``.igs``, a binary ACIS
 ``.sab`` -- is named with ``path``:
@@ -716,6 +726,93 @@ IGES surface model whose faces bound no solid is not an ``iges`` part.
 |                                                                                      |       # type: 3mf         |                                                                                                                         |
 |                                                                                      |       # type: obj         |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+.. _measured-data:
+
+Height maps, point clouds and voxels
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Measured data bounds no solid as it is: a height map is pixels, a scan is points, a voxel grid is cells. Each of
+these types makes one, exact or smooth rather than a triangle per sample, so that a STEP file, a hidden-line drawing,
+a boolean and a mass are what they would be for a part modelled by hand. All three are ``partTypes`` of
+``//builtin/import`` that ``requireSolid``, and read several formats each, by the file's extension; a file of
+another name than the type's own extension is named with ``path``.
+
+.. code-block:: yaml
+
+  parts:
+    terrain:
+      type: heightmap
+      path: srtm_tile.tif            # floating-point heights, in metres
+      parameters:
+        cell: {type: float, default: 30000}   # a pixel is 30 m
+    site:
+      type: pointcloud               # reads site.las
+      parameters:
+        classes: {type: string, default: "2"}  # the ground only
+    figurine:
+      type: voxels                   # reads figurine.vox
+      parameters:
+        size: {type: float, default: 2}         # a voxel is 2 mm
+
+**A height field** -- what ``heightmap`` makes, and ``pointcloud`` by default -- is the solid under the heights: one
+cubic B-spline face over the rectangle the grid covers, four flat sides and a flat base at z = 0. The surface's poles
+stand on a regular grid (at the Greville abscissae of its knots), so it is a true height field, z(x, y), and has as
+many poles as the grid has cells, up to ``maxPoles`` (256) along a side, a finer grid being averaged down to it. It
+smooths: a step in the data comes out as a slope a pole's spacing wide. A missing height -- a no-data value, a
+transparent pixel, a cell no point fell in -- is the nearest present one's. The part is centred on the origin, its
+lowest height ``base`` mm above z = 0 (twice the cell, by default), and every height ``exaggeration`` times what it is
+above the lowest.
+
+A ``heightmap`` reads:
+
+- an ESRI ASCII grid (``.asc``), what GIS tools export an elevation model as, at its own cell size, its heights in
+  ``unit`` (``m`` by default; ``cm``, ``mm``, ``in``, ``ft``, ``us-ft``);
+- an image (``.png``, ``.tif`` and what else Pillow reads), by its ``encoding``: ``gray`` (the default) is one
+  channel -- integer levels from nought up to ``relief`` mm at the brightest the format holds, as a game engine reads a
+  16-bit height map, or floating-point heights in ``unit``, as a GeoTIFF's are; ``terrarium`` and ``terrain-rgb`` are
+  the AWS Terrain Tiles' and Mapbox's RGB encodings, in metres;
+- a two-dimensional NumPy array (``.npy``) of heights in ``unit``.
+
+The first row of a raster is its north edge, as an image is drawn, so the part looks from above as the file does. A
+pixel is ``cell`` mm (one number, or two: along X and along Y), the grid's own where it says one, and a metre
+otherwise. Georeferencing is not read: the part is in its own frame.
+
+A ``pointcloud`` reads LAS and LAZ (``.las``, ``.laz``, with `laspy <https://laspy.readthedocs.io>`_ and lazrs, which
+the type installs into its sandbox), PLY (``.ply``, ASCII or binary; a mesh's faces are not read) and text (``.xyz``,
+``.txt``, ``.csv``, ``.pts``: a point a line, x y z, then r g b). Its coordinates are in ``unit`` (``m``), at most
+``maxPoints`` (20 000 000) are read, evenly through the file, and lidar is filtered by its points' classes:
+``classes: 2`` keeps the ground, ``6`` the buildings, ``"3,4,5"`` the vegetation. What it makes is its ``as``:
+
+- ``heightfield`` (the default): the points binned on the plan into cells ``cell`` mm wide (by default, about four
+  points a cell), each cell as high as the ``statistic`` of its points -- ``max`` (the default: roofs and canopies),
+  ``min`` (the ground under them) or ``mean`` -- and the part is that height field. What an airborne scan or a
+  photogrammetry survey is made into.
+- ``voxels``: the cells ``cell`` mm a side (by default, a 128th of the cloud's longest side) that hold at least
+  ``minPoints`` points, as voxels (below). A scan's points lie on surfaces, so this is the scanned skin, a cell thick.
+  Where the points have colours, each cell is in its points' mean colour, to 64 shades.
+
+``origin: file`` keeps x and y where the file has them, rather than centring the cloud on the origin.
+
+**Voxels** -- what ``voxels`` makes, and ``pointcloud`` with ``as: voxels`` -- are exact: each filled cell is a box,
+the boxes of one colour or label are taken greedily into as few larger boxes as the grid allows and fused into the
+solids they make, and the part is those solids, one or more per colour. Two colours touching stay two solids, face
+against face, so each keeps its look and a print in several materials has a body per material; cells of one colour
+touching only along an edge are two solids, as a valid B-rep has to be. ``maxBoxes`` (50 000) refuses a grid too
+fine to fuse in reasonable time. A ``voxels`` part reads:
+
+- a MagicaVoxel model (``.vox``): every model its scene places, where it places it and turned as it says, each voxel
+  in its palette's colour. Each colour is stated under the ``vox`` convention by its palette index, ``"1"`` to
+  ``"255"``, so a package's colour, material or finish claims an index (``ids: {vox: "17"}``) and the voxels of that
+  index are made of it (see :doc:`config_cmf`);
+- a binvox grid (``.binvox``), as mesh voxelizers write one, at its own scale unless ``size`` says otherwise;
+- a three-dimensional NumPy array (``.npy``): booleans, filled where true; integers, a solid per value other than
+  nought -- the labels of a segmentation -- unless a ``threshold`` says they are densities; floats, filled at
+  ``threshold`` (0.5) and above, a CT scan's or a simulation's density field.
+
+A voxel is ``size`` mm (one number, or three), 1 mm unless the file says otherwise. The grid is cut to its filled
+cells, its middle put over the origin and its bottom on z = 0 (``origin: file`` keeps it where the file has it), and
+``up: y`` turns a Y-up model onto Z.
 
 .. _gltf-files:
 

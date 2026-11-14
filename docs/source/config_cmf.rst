@@ -358,7 +358,8 @@ source's convention:
         step: Aluminium 6061      # a STEP product made of 'Aluminium 6061'
 
 The builtin conventions are ``partcad`` (references, as ``set_cmf`` writes them), ``step``, ``build123d``,
-``cadquery``, ``openscad``, ``3mf``, ``gltf``, ``ldraw`` and ``usd`` (a USD material's name, see :ref:`the usd part type <usd-files>`);
+``cadquery``, ``openscad``, ``3mf``, ``gltf``, ``ldraw``, ``usd`` (a USD material's name, see :ref:`the usd part type <usd-files>`)
+and ``vox`` (a MagicaVoxel palette index, ``"1"`` to ``"255"``, see :ref:`the voxels part type <measured-data>`);
 each type uses its own, and a part's ``cmfConvention`` parameter names another. A colour nothing claims is drawn as the source drew it, as the display-only
 ``//builtin/color:rgba`` of its value; a material or a finish nothing claims is left for the parameters. Either is
 reported once per part.

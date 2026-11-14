@@ -79,6 +79,15 @@ elevation tile is kept in `~/.cache/partcad/landscape`, so a second fetch of the
 same place asks only Overpass again. When Overpass is busy the helper tries the
 other public servers, then says so; wait a minute rather than retrying in a loop.
 
+**When the user already has the data** - an elevation model (a GeoTIFF, an
+ESRI ASCII grid, a 16-bit height map), or a lidar or photogrammetry scan (LAS,
+LAZ, PLY) - declare it as a part rather than fetching anything: a `heightmap`
+part, or a `pointcloud` part (`classes: 2` keeps a lidar scan's ground; see
+"Height maps, point clouds and voxels" in PartCAD's documentation of parts). It
+is a solid on a flat base at z = 0, centred on the origin, and is placed in a
+scene of the user's own as the ground; `landscape.py` is for a place whose data
+has to be fetched, and its `place` and `height` read only a `site.json`.
+
 **Google's data is not a source**, and say so if the user asks for it: Google's
 terms forbid storing or deriving models from Google Earth, Google's
 Photorealistic 3D Tiles and its Elevation API, so a landscape made from them

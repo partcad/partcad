@@ -178,6 +178,51 @@ partTypes:
       - usd-core==25.11; python_version < "3.11"
       - pillow==12.2.0
 
+  # Measured data: heights on a grid, points a scanner took, cells filled or
+  # not. None of it bounds a solid as it is, so each type makes one, and makes
+  # it exact or smooth rather than a triangle per sample: a height field is one
+  # cubic B-spline face on a flat base ('heightfield.py'), and voxels are boxes
+  # fused into a solid per colour ('voxel_solid.py'). numpy and scipy are in
+  # the sandbox already; Pillow reads the images a height map is, at the
+  # version the render types pin it at, and laspy - with lazrs for the
+  # compressed form - reads lidar. Each reads several formats, told apart by
+  # the file's extension, and is stored by default in the one no other type
+  # claims.
+  heightmap:
+    desc: |
+      Heights on a grid - an elevation model, a game engine's terrain, a relief
+      to print - as the solid under them: one smooth face on a flat base at
+      z = 0. Reads an ESRI ASCII grid (`.asc`), an image (`.png`, `.tif`: gray
+      levels up to a `relief`, floating-point heights, or the Terrarium and
+      Terrain-RGB encodings) and a 2D NumPy array (`.npy`).
+    path: part_heightmap.py
+    extension: asc
+    requireSolid: true
+    pythonRequirements:
+      - pillow==12.2.0
+  pointcloud:
+    desc: |
+      Points a scanner or a lidar measured, made a solid: a height field of the
+      points binned on the plan (`as: heightfield`, the default; `classes: 2`
+      keeps a lidar scan's ground), or the voxels they fall in (`as: voxels`),
+      in their colours. Reads LAS and LAZ (`.las`, `.laz`), PLY (`.ply`) and
+      a point a line of text (`.xyz`, `.txt`, `.csv`, `.pts`).
+    path: part_pointcloud.py
+    extension: las
+    requireSolid: true
+    pythonRequirements:
+      - laspy==2.7.0
+      - lazrs==0.8.2
+  voxels:
+    desc: |
+      A grid of filled cells as the exact solids they make, a solid per colour
+      or label: a MagicaVoxel model (`.vox`), its palette claimable under the
+      `vox` convention; a binvox grid (`.binvox`); or a 3D NumPy array
+      (`.npy`) of occupancy, labels, or densities filled at a `threshold`.
+    path: part_voxels.py
+    extension: vox
+    requireSolid: true
+
 import:
   # A native CAD document read as an assembly, through cadmpeg: every format
   # below is converted to STEP, and its tree read the way a STEP assembly's is
