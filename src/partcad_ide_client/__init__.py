@@ -37,7 +37,7 @@ from .protocol import (
     viewer_tab_ids,
 )
 
-__version__ = "0.10.21"
+__version__ = "0.10.22"
 
 __all__ = [
     "CONNECT_TIMEOUT",
