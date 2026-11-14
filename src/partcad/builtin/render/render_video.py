@@ -585,10 +585,14 @@ def _process(path, request):
         painters = [shaded.painter() for _ in range(threads_of(request))]
         prefix = ()
         if previous is not None:
-            # A bound, so that a file whose timestamps are wrong cannot have the
-            # frame rate converter fill hours: the length it says it is, and a
-            # second.
-            prefix = video_encode.decode_frames(path, width, height, fps, limit=previous_count + int(fps) + 1)
+            # As many frames as the length it says it is holds, which is what
+            # 'previous_count' - the frames the state counts, and the sound is
+            # cut to - counts as well. And a bound, for a file that does not
+            # say how long it is, so that one whose timestamps are wrong cannot
+            # have the frame rate converter fill hours: a second.
+            prefix = video_encode.decode_frames(
+                path, width, height, fps, limit=previous_count + int(fps) + 1, duration=previous["duration"]
+            )
         try:
             written_before, written = pipeline.run(
                 frames(shaded, painters, start, speed, fps, count, fade_in, fade_out, fade_color), prefix=prefix

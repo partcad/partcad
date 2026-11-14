@@ -15,10 +15,12 @@ options, the pipelines as text, the frames as pixels - needs only the CAD stack
 this environment already has.
 """
 
+import io
 import math
 import os
 import re
 import sys
+import types
 
 import numpy as np
 import pytest
@@ -496,6 +498,66 @@ def test_a_pipeline_appending_puts_the_old_frames_first(monkeypatch):
     assert 'location="/out/x y.mp4"' in argv
     assert "avenc_aac" in argv and argv[-6:] == ["filesrc", "location=a.srt", "!", "subparse", "!", "text0.text_sink"]
     assert any(token.startswith("tags=") and "partcad-video/1" in token for token in argv)
+
+
+class _Decoder:
+    """A 'gst-launch-1.0' decoding a video, as 'decode_frames' sees it: what it writes, and how it exits."""
+
+    def __init__(self, data, returncode=None):
+        self.stdout = io.BytesIO(data)
+        self.returncode = returncode
+        self.killed = False
+
+    def poll(self):
+        return self.returncode
+
+    def kill(self):
+        # The status a process that is stopped exits with on Windows.
+        self.killed = True
+        self.returncode = 1
+
+    def wait(self):
+        return self.returncode
+
+
+def test_a_video_is_read_back_as_long_as_it_is(monkeypatch):
+    """Without the frame GStreamer 1.28's frame rate converter repeats past the end of a Matroska or AVI file.
+
+    'videorate' sends each frame as soon as its time has come, and at the end of
+    a stream whose end nothing stated - which is how the Matroska and AVI
+    demuxers leave it - sends the one it holds once more: a ten-frame video was
+    read back as eleven, and appended to as eleven. Here the decoder writes that
+    frame and is still running, blocked writing it, when it is not read.
+    """
+    width, height, fps = 4, 2, 10
+    frames = [bytes([index]) * (width * height * 3) for index in range(10)]
+    decoders = []
+
+    def popen(argv, **kwargs):
+        decoders.append(_Decoder(b"".join(frames + frames[-1:])))
+        return decoders[-1]
+
+    monkeypatch.setattr(video_encode, "launcher", lambda: "gst-launch-1.0")
+    monkeypatch.setattr(video_encode, "subprocess", types.SimpleNamespace(Popen=popen, DEVNULL=None, PIPE=None))
+    monkeypatch.setattr(video_encode, "discover", lambda path: {"duration": 1.0})
+
+    read = list(video_encode.decode_frames("turn.mkv", width, height, fps, limit=100))
+    assert [int(frame[0, 0, 0]) for frame in read] == list(range(10))
+    # Stopped rather than read to its end, and that is not a decoder that failed.
+    assert decoders[-1].killed
+
+    # A length the caller has already asked for is not asked for again.
+    monkeypatch.setattr(video_encode, "discover", lambda path: pytest.fail("asked for the length again"))
+    assert len(list(video_encode.decode_frames("turn.mkv", width, height, fps, duration=0.5))) == 5
+
+    # One that exits on its own with an error has failed, however many frames it wrote.
+    monkeypatch.setattr(
+        video_encode,
+        "subprocess",
+        types.SimpleNamespace(Popen=lambda argv, **kwargs: _Decoder(frames[0], returncode=1), DEVNULL=None, PIPE=None),
+    )
+    with pytest.raises(video_encode.GStreamerError, match="Could not decode"):
+        list(video_encode.decode_frames("turn.mkv", width, height, fps, duration=1.0))
 
 
 # ---------------------------------------------------------------------------

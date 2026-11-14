@@ -1067,17 +1067,35 @@ def diagnose(argv, debug_path):
     return "".join("\n" + part for part in parts)
 
 
-def decode_frames(path, width, height, fps, limit=None):
+def decode_frames(path, width, height, fps, limit=None, duration=None):
     """The frames of the video at 'path', as (height, width, 3) uint8 arrays, one at a time.
 
     Scaled into a frame of 'width' by 'height' - with bars rather than stretched,
     where the two are not the same shape - and to 'fps', dropping or repeating
-    frames, so that they can go before frames of that size and rate. At most
-    'limit' of them: the rate is changed by repeating frames to fill the time
-    between their timestamps, and a file whose timestamps are wrong can say there
-    are hours between two of them.
+    frames, so that they can go before frames of that size and rate. As many as
+    the video's length holds at 'fps' - 'duration', in seconds, or what
+    'discover' says it is when that is None - and at most 'limit' of them: the
+    rate is changed by repeating frames to fill the time between their
+    timestamps, and a file whose timestamps are wrong can say there are hours
+    between two of them.
     """
     import numpy as np
+
+    # The frame rate converter ('videorate') also repeats a frame once more at
+    # the end of a stream whose end nothing stated - which is how the Matroska
+    # (and so WebM) and AVI demuxers leave it; MP4's, Ogg's and ASF's state it,
+    # and it fills exactly up to there. Since GStreamer 1.28 it sends each
+    # frame as soon as its time has come, rather than once the next one
+    # arrives, and still sends the one it holds at the end "at least once": the
+    # last frame a second time, a frame's length past the end of the file. So
+    # a ten-frame video was read back as eleven, and one appended to it grew
+    # by a frame each time. Counted by its length, a video is read back as the
+    # frames it was written with, whichever GStreamer reads it.
+    if duration is None:
+        duration = discover(path)["duration"]
+    if duration is not None:
+        length = int(round(duration * float(fps)))
+        limit = length if limit is None else min(limit, length)
 
     argv = [
         launcher(),
@@ -1104,6 +1122,7 @@ def decode_frames(path, width, height, fps, limit=None):
     with tempfile.TemporaryFile() as errors:
         process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=errors)
         count = 0
+        stopped = False
         try:
             while limit is None or count < limit:
                 data = process.stdout.read(size)
@@ -1112,11 +1131,16 @@ def decode_frames(path, width, height, fps, limit=None):
                 count += 1
                 yield np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
         finally:
+            # Still writing once there are as many frames as were wanted - the
+            # one past the end above, typically - and stopped. How it exits
+            # then is no failure, and is not the same everywhere: by a signal
+            # on Linux and macOS, and with status 1 on Windows.
             if process.poll() is None:
                 process.kill()
+                stopped = True
             process.stdout.close()
             status = process.wait()
-        if status not in (0, -9) and status is not None:
+        if status != 0 and not stopped:
             errors.seek(0)
             raise GStreamerError(
                 "Could not decode '%s': %s" % (path, errors.read().decode("utf-8", "replace").strip()[-1000:])
