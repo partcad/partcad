@@ -317,10 +317,13 @@ class TypeWrapperFactory:
         # executed, so it has to come from inside that package, as an output
         # implementation's does (see 'output'): a 'path' of '../../..' would
         # otherwise both read and, for a plugin-backed package, write outside it.
+        # Symbolic links resolved on both sides, so that a directory of the
+        # package linked to somewhere else is not a way out of it.
         config_dir = os.path.abspath(type_project.config_dir)
         script_abs = os.path.abspath(os.path.join(config_dir, script_rel))
         try:
-            inside = os.path.commonpath([config_dir, script_abs]) == config_dir
+            real_dir = os.path.realpath(config_dir)
+            inside = os.path.commonpath([real_dir, os.path.realpath(script_abs)]) == real_dir
         except ValueError:  # another drive, on Windows
             inside = False
         if not inside:

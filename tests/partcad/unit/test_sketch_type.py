@@ -293,3 +293,28 @@ def test_a_sketch_type_s_script_outside_its_package_is_refused(tmp_path):
     sketch = ctx.get_sketch(":s")
     assert asyncio.run(sketch.get_wrapped(ctx)) is None
     assert any("outside its package" in str(e) for e in sketch.errors), sketch.errors
+
+
+def test_a_sketch_type_s_script_through_a_link_out_of_its_package_is_refused(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "escape.py").write_text("raise SystemExit('never run')\n")
+    _package(
+        tmp_path / "pkg",
+        """
+        sketchTypes:
+          escape:
+            path: linked/escape.py
+        sketches:
+          s:
+            type: ":escape"
+        """,
+    )
+    try:
+        os.symlink(str(outside), str(tmp_path / "pkg" / "linked"), target_is_directory=True)
+    except (OSError, NotImplementedError) as e:  # Windows without the privilege to link
+        pytest.skip("Cannot create a symbolic link here: %s" % e)
+    ctx = pc.Context(str(tmp_path / "pkg"))
+    sketch = ctx.get_sketch(":s")
+    assert asyncio.run(sketch.get_wrapped(ctx)) is None
+    assert any("outside its package" in str(e) for e in sketch.errors), sketch.errors
