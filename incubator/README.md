@@ -147,6 +147,16 @@ Two things PartCAD itself could do better, found on the way:
 * Carts: Octopart's `supOctocart` and Mouser's cart API can answer a quote's `cartId`.
 * Fastenal: register at its developer portal to see what it offers.
 
+## Places in Google Earth
+
+`partcad-repo-google-earth` is a repository plugin of another kind: it serves a place in
+Google Earth - named by its middle and its size - as parts, the ground from Google's Elevation
+API and what stands on it from Google's Photorealistic 3D Tiles, each a solid made when it is
+built, with the user's own Google Maps Platform key (`pc login`). Nothing of Google's is in the
+package, and its metadata says `"persist": false`, so PartCAD keeps none of what it serves
+beyond the process that fetched it. It is published as `//pub/collection/google-earth`, beside
+the other collections; see its README.
+
 ## Into the index
 
 Once a package has a repository, `svc/commerce/partcad.yaml` in `partcad/partcad-index`

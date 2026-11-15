@@ -88,11 +88,21 @@ is a solid on a flat base at z = 0, centred on the origin, and is placed in a
 scene of the user's own as the ground; `landscape.py` is for a place whose data
 has to be fetched, and its `place` and `height` read only a `site.json`.
 
-**Google's data is not a source**, and say so if the user asks for it: Google's
-terms forbid storing or deriving models from Google Earth, Google's
-Photorealistic 3D Tiles and its Elevation API, so a landscape made from them
-could not be kept in a package or committed. A Google Maps link's coordinates
-and the user's own KML are fine: they are the user's.
+**Google's data is never written into the package**: Google's terms forbid
+storing it, so `landscape.py` takes nothing from Google. A Google Maps link's
+coordinates and the user's own KML are fine: they are the user's. A user who
+asks for Google Earth's ground, or for what Google Earth shows standing there,
+and has a Google Maps Platform key of their own (`pc login
+//pub/collection/google-earth:google_earth_repo`) gets it as a *reference*
+instead: a part of `//pub/collection/google-earth/places` - `elevation` for the
+ground, `surface` for buildings and trees as well - named by the place's middle
+and size, e.g.
+`//pub/collection/google-earth/places:surface;lat=38.708300,lon=-77.086300,resolution=0.5,size=300`,
+linked into the scene in place of `ground` (fixed, at the origin). It is fetched
+with the user's key whenever it is built and kept nowhere; tell them so, and
+that its use is under the terms they accepted for that key. The OSM layers and
+props are still placed on the generated `ground`, so keep `landscape.py`'s
+package beside it for those.
 
 ## 3. Package
 

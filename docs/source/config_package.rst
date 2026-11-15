@@ -697,7 +697,26 @@ declaration is still asked for, and should declare the parameters an instance
 may be given, so that ``pc info`` and the canonical spelling of a name both know
 them.
 
-Responses are cached per key (in memory and on disk), so a repository that is
-slow or remote is queried as little as possible. See
+Keep nothing beyond the process
+-------------------------------
+
+A repository that serves somebody else's data, fetched with the user's own
+credentials under terms that limit keeping it -- Google's, for the Google Earth
+package -- says so in its ``meta``:
+
+.. code-block:: json
+
+  {"objectKinds": ["part"], "instanceKinds": ["part"], "persist": false}
+
+PartCAD then keeps every other answer of that package in the memory of the
+process that fetched it, and writes none of them to disk; a file the package
+serves is written to disk only because a part type reads a path, and is removed
+when the process exits. The ``meta`` itself is still kept, since it is what
+says so. The objects should say ``cache: false`` as well, so that what is built
+of them is not kept either.
+
+Responses are cached per key (in memory and, unless the package says
+``"persist": false``, on disk), so a repository that is slow or remote is
+queried as little as possible. See
 ``examples/plugin_repository_basic``, ``examples/plugin_repository_full`` (an
 HTTP-backed repository) and ``examples/plugin_repository_tree`` (a hierarchy).

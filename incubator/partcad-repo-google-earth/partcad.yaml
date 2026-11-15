@@ -1,0 +1,58 @@
+# PartCAD package: places in Google Earth, as parts.
+#
+# Published as //pub/collection/google-earth. Its external dependency 'places'
+# is served by one script, google_earth_repo.py: a part there is a reference
+# to a place - 'elevation;lat=...,lon=...,size=...' - and is made, when it is
+# built, from Google's data, fetched with the key of whoever builds it, under
+# the terms that key was given on. Nothing of Google's is in this package, and
+# the plugin says '"persist": false', so PartCAD keeps none of what it serves
+# beyond the process that fetched it. See the README.
+name: //pub/collection/google-earth
+
+desc: |
+  Places in Google Earth, as parts to put in a scene: the ground, from
+  Google's Elevation API, and what stands on it - buildings and trees
+  included - from Google's Photorealistic 3D Tiles, each a solid (a box below,
+  the surface on top) drawn as Google Earth draws it. A part names a place by
+  its middle and its size; it is fetched when it is built, with your own Google
+  Maps Platform key, under Google's terms, which you accept for yourself.
+url: https://earth.google.com
+
+# The first PartCAD with the 'heightmap' part type, and that keeps what a
+# '"persist": false' package serves for the process only.
+partcad: ">=0.10.21"
+
+manufacturable: false
+
+# Google's 3D tiles are Draco-compressed glTF; the plugin decodes them.
+pythonRequirements:
+  - DracoPy==2.1.0
+
+docs:
+  name: Google Earth for PartCAD
+  usage: |
+    ```shell
+    pc login //pub/collection/google-earth:google_earth_repo
+    pc search parts -P //pub/collection/google-earth/places -k "Mount Vernon, Virginia"
+    pc inspect "//pub/collection/google-earth/places:surface;lat=38.708300,lon=-77.086300,size=300"
+    ```
+
+dependencies:
+  places:
+    type: external
+    plugin: :google_earth_repo
+    desc: Places in Google Earth, named by their middle and their size, fetched with your own key.
+
+repositories:
+  google_earth_repo:
+    type: basic
+    path: google_earth_repo.py
+    desc: Serves a place in Google Earth as parts, from Google's Elevation API and Photorealistic 3D Tiles.
+    parameters:
+      api_key:
+        type: string
+        default: ""
+        desc: >-
+          Your Google Maps Platform API key, with the Elevation API, the Map
+          Tiles API and the Geocoding API enabled for its project. Set by 'pc
+          login', or GOOGLE_MAPS_API_KEY. Never set it in a package.

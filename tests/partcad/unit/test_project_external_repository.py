@@ -252,6 +252,63 @@ def test_the_users_overrides_of_the_plugin_are_part_of_the_cache_key(monkeypatch
                 shutil.rmtree(backend.cache_dir, ignore_errors=True)
 
 
+def test_a_package_that_says_persist_false_keeps_its_answers_for_the_process_only():
+    """Its plugin's answers are not written to disk, nor read from it; its metadata is, since it says so."""
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_persist_false_%s" % uuid.uuid4().hex, ctx.user_config)
+    try:
+        meta = {"objectKinds": ["part"], "persist": False}
+        data = {"meta": meta, "objects/part": {"place": {"type": "heightmap", "cache": False}}}
+
+        def package(data):
+            repo = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+            repo._repository = FakeRepository(data)
+            return repo
+
+        first = package(data)
+        assert asyncio.run(first.get_data_async("meta")) == meta
+        assert first.object_names("part") == ["place"]
+        assert first.persists() is False
+        assert first._repository.keys == ["meta", "objects/part"]
+        # Another process: the metadata comes from disk, and says to ask the plugin again for the rest.
+        second = package(data)
+        assert second.object_names("part") == ["place"]
+        assert second._repository.keys == ["objects/part"]
+        assert second.persists() is False
+    finally:
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_a_file_a_non_persisting_package_serves_is_removed_when_the_process_exits(tmp_path, monkeypatch):
+    import base64
+
+    from partcad import file_factory_plugin
+
+    class Package:
+        def __init__(self, persists):
+            self._persists = persists
+
+        def persists(self):
+            return self._persists
+
+        async def get_data_async(self, key):
+            return base64.b64encode(b"heights").decode()
+
+    registered = []
+    monkeypatch.setattr(file_factory_plugin, "_FORGOTTEN", set())
+    monkeypatch.setattr(file_factory_plugin.atexit, "register", registered.append)
+    for persists, name in ((True, "kept.npy"), (False, "place.npy"), (False, "other.npy")):
+        factory = file_factory_plugin.FileFactoryPlugin(None, Package(persists), None, {"path": name})
+        asyncio.run(factory.download(str(tmp_path / name)))
+        assert (tmp_path / name).read_bytes() == b"heights"
+    # Registered once, however many files.
+    assert registered == [file_factory_plugin._remove_forgotten]
+    registered[0]()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["kept.npy"]
+
+
 def test_file_backed_configs_are_tagged_for_materialization():
     """Served configs with a 'path' get fileFrom=plugin; others are untouched."""
     ctx = pc.Context("examples")

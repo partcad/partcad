@@ -194,7 +194,10 @@ a CAD addon, documentation, or a PartCAD package incubated here until it has a r
   Octopart and McMaster-Carr, built the same way, have moved out to `partcad/partcad-svc-commerce-*`. All
   four share a toolkit (`_shared/distributor.py`, which builds on `plugin_models`): `_shared/` is the copy to
   edit, and `_shared/copy.sh` copies it into the packages here and into checkouts of the moved-out ones, each
-  held to it by a digest. The README has the evaluation of the eleven distributors considered. Nothing here is built, packaged or tested
+  held to it by a digest. The README has the evaluation of the eleven distributors considered. Beside them is
+  Google Earth (`partcad-repo-google-earth`), a repository plugin serving a place as parts made, when they are
+  built, from Google's data with the user's own key -- the one package that says `"persist": false`, so that
+  PartCAD keeps none of what it serves beyond the process. Nothing here is built, packaged or tested
   by CI (`changed-scopes` counts it as documentation); the linters read it, and each package's tests run by
   hand: `cd incubator/<package> && pytest -c /dev/null --rootdir . .`.
 

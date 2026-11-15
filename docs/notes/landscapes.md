@@ -64,7 +64,8 @@ kept as a note, not used.
 
 ## Google Earth and Google's data
 
-**Nothing Google-derived can be kept in a package.** In detail:
+**Nothing Google-derived can be kept in a package** - but a package can *refer* to a place in Google Earth, and a
+user with access of their own can build it. In detail:
 
 - **KML/KMZ** carries placemarks, paths, polygons, models and overlays - no terrain. What a user drew in Google
   Earth is theirs, and its coordinates are a fine way to say where a landscape is.
@@ -81,8 +82,16 @@ kept as a note, not used.
 - Add-ons that capture Google's 3D tiles into Blender (Blosm's import, MapsModelsImporter through RenderDoc) put
   their users under those terms, or say they are for education only.
 
-So a landscape committed with a package can come from the open sources above and not from Google; a Google Maps link
-or a KML is used for its coordinates only. (A reading of the terms, not legal advice.)
+So a landscape committed with a package comes from the open sources above, and a Google Maps link or a KML is used for
+its coordinates. Google's data is reached the other way: `incubator/partcad-repo-google-earth`, published as
+`//pub/collection/google-earth`, serves a place as parts that are *references* - a kind (`elevation`, `surface`,
+`tiles`), a middle and a size - each fetched when it is built, with the key of whoever builds it, under the terms that
+person accepted to get it. Nothing of Google's is in a package that names one; the plugin's metadata says
+`"persist": false`, so PartCAD keeps nothing it served beyond the process that fetched it (the plugin's files are
+removed when that process exits), and every part says `cache: false`. Every part is a solid all the same - a box
+below, the surface on top, as the `heightmap` type builds one - so it is rendered, exported and simulated like any
+other part, and `surface` is drawn with Google Earth's own mesh as its `visual:`. Whether a particular use is within
+Google's terms is for the person whose key it is. (A reading of the terms, not legal advice.)
 
 ## What `/pc:gen-landscape` does
 

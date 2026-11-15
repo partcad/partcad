@@ -312,7 +312,7 @@ class ProjectExternalRepository(ProjectPlugin):
         #    is no way to refresh), mirroring the git dependency factory.
         offline = self.ctx.user_config.offline
         refresh = self.ctx.user_config.force_update or getattr(self.ctx, "refresh_imports", False)
-        if self._cache is not None and (not refresh or offline):
+        if self._cache is not None and (not refresh or offline) and await self._persists_async(scoped):
             cached = await self._read_cache(scoped)
             if cached is not _MISSING:
                 with self._request_lock:
@@ -346,12 +346,47 @@ class ProjectExternalRepository(ProjectPlugin):
             except Exception as e:
                 pc_logging.error("%s: failed to fetch '%s' from the repository: %s" % (self.name, scoped, e))
 
-        # Persist a successful fetch so it survives across runs.
-        if value is not None and self._cache is not None:
+        # Persist a successful fetch so it survives across runs - unless the
+        # package said its answers are for this run only (see '_persists').
+        if value is not None and self._cache is not None and await self._persists_async(scoped):
             await self._write_cache(scoped, value)
 
         with self._request_lock:
             return self._request_cache.setdefault(scoped, value)
+
+    async def _persists_async(self, scoped: str) -> bool:
+        """Whether the answer to 'scoped' may be kept on disk, across runs.
+
+        A package's 'meta' may say ``"persist": false``: what its plugin serves
+        is the user's to fetch, under terms that limit keeping it - a
+        provider's own data, fetched with the user's own key - and is kept in
+        this process's memory and nowhere else. Its objects should then say
+        ``cache: false`` too, so that what is built of them is not kept either.
+        The metadata itself is always kept: it says what the package is, and
+        is the one answer that says whether the others may be.
+
+        Read from the metadata as this process has it, or as the disk does, and
+        never fetched for the purpose - the same rule as '_served_kinds'. A
+        package that says so has its metadata read before anything else of it
+        in any case: an object is reached through 'objectKinds',
+        'instanceKinds' or 'searchKinds', each read from it.
+        """
+        meta_key = self._scope("meta")
+        if scoped == meta_key:
+            return True
+        if self._peek_data("meta") is _MISSING and self._cache is not None:
+            await self._cached_async(meta_key)
+        return self.persists()
+
+    def persists(self) -> bool:
+        """Whether what this package's plugin serves may outlive this process (see '_persists_async').
+
+        From the metadata this process already has. A file the plugin serves is
+        asked about too, since it is written to disk to be built from
+        ('FileFactoryPlugin').
+        """
+        meta = self._peek_data("meta")
+        return not (isinstance(meta, dict) and meta.get("persist") is False)
 
     def _served_kinds(self):
         """The object kinds this package holds, or None if it does not say.
