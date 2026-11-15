@@ -76,10 +76,15 @@ class SketchFactoryWrapper(TypeWrapperFactory, SketchFactory):
             # split out the components, as it does for a build123d sketch (see
             # wrapper_common.combine); the factory forwards the envelope.
             components = response.get("components") or []
-            if not components or response.get("shape") is None:
+            if not _has_component(components) or response.get("shape") is None:
                 sketch.error("The sketchType wrapper produced no edge, wire or face")
                 return None
             await self.record_reported_async(sketch, response)
             self.ctx.stats_sketches_instantiated += 1
             sketch.components = components
             return response["shape"]
+
+
+def _has_component(components) -> bool:
+    """Whether a tree of components (lists may nest) holds any component at all."""
+    return any(_has_component(item) if isinstance(item, list) else item is not None for item in components)

@@ -37,6 +37,7 @@ package supplies.
 
 import base64
 import os
+import tempfile
 
 from . import code_version, discovered_dependencies
 from . import logging as pc_logging
@@ -312,7 +313,18 @@ class TypeWrapperFactory:
         plugin-backed package it is fetched from the plugin (like a file-backed
         object) and written into the package's cache directory.
         """
-        script_abs = os.path.join(type_project.config_dir, script_rel)
+        # The script is named by the type's own declaration and is about to be
+        # executed, so it has to come from inside that package, as an output
+        # implementation's does (see 'output'): a 'path' of '../../..' would
+        # otherwise both read and, for a plugin-backed package, write outside it.
+        config_dir = os.path.abspath(type_project.config_dir)
+        script_abs = os.path.abspath(os.path.join(config_dir, script_rel))
+        try:
+            inside = os.path.commonpath([config_dir, script_abs]) == config_dir
+        except ValueError:  # another drive, on Windows
+            inside = False
+        if not inside:
+            raise Exception("The %s wrapper is outside its package: %s" % (self.TYPE_KIND, script_rel))
         if os.path.exists(script_abs):
             return script_abs
 
@@ -328,8 +340,17 @@ class TypeWrapperFactory:
         dirs = os.path.dirname(script_abs)
         if dirs and not os.path.exists(dirs):
             os.makedirs(dirs, exist_ok=True)
-        with open(script_abs, "wb") as f:
-            f.write(content)
+        # Written beside it and moved into place, so that another object of the
+        # same type, built at the same time, finds the whole script or none of it.
+        fd, partial = tempfile.mkstemp(dir=dirs or None, prefix=".%s." % os.path.basename(script_abs))
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(content)
+            os.replace(partial, script_abs)
+        except BaseException:
+            if os.path.exists(partial):
+                os.remove(partial)
+            raise
         return script_abs
 
     def resolve_type(self, shape):

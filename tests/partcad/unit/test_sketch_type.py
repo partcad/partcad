@@ -160,13 +160,11 @@ def test_the_schema_refuses_require_solid_on_a_sketch_type():
 
 
 def _build(ctx, name):
+    # Not skipped when it raises: a sketch type's failure is reported against
+    # the sketch and answered with None, so an exception here is a regression.
     sketch = ctx.get_sketch(name)
     assert sketch is not None
-    try:
-        wrapped = asyncio.run(sketch.get_wrapped(ctx))
-    except Exception as e:  # pragma: no cover - the sandbox could not be made
-        pytest.skip("Sandbox unavailable for sketchType wrapper: %s" % e)
-    return sketch, wrapped
+    return sketch, asyncio.run(sketch.get_wrapped(ctx))
 
 
 @pytest.mark.slow
@@ -254,6 +252,8 @@ def test_a_file_backed_sketch_type_of_another_package_reads_the_sketch_s_file(tm
     [
         ('from build123d import Box\n    output = {"shape": Box(1, 1, 1)}', "handed back a solid"),
         ("output = {}", "no edge, wire or face"),
+        ('output = {"shapes": [[]]}', "no edge, wire or face"),
+        ('output = {"shapes": [[None]]}', "no edge, wire or face"),
         ('output = {"exception": "the outline is malformed"}', "the outline is malformed"),
     ],
 )
@@ -274,3 +274,22 @@ def test_a_sketch_type_s_script_that_hands_back_no_sketch_fails_the_sketch(tmp_p
     sketch, wrapped = _build(ctx, ":s")
     assert wrapped is None
     assert any(message in str(e) for e in sketch.errors), sketch.errors
+
+
+def test_a_sketch_type_s_script_outside_its_package_is_refused(tmp_path):
+    _package(
+        tmp_path / "pkg",
+        """
+        sketchTypes:
+          escape:
+            path: ../outside.py
+        sketches:
+          s:
+            type: ":escape"
+        """,
+    )
+    (tmp_path / "outside.py").write_text("raise SystemExit('never run')\n")
+    ctx = pc.Context(str(tmp_path / "pkg"))
+    sketch = ctx.get_sketch(":s")
+    assert asyncio.run(sketch.get_wrapped(ctx)) is None
+    assert any("outside its package" in str(e) for e in sketch.errors), sketch.errors

@@ -208,7 +208,9 @@ def _sketch_answer(shapes):
             message = "A sketch is made of faces, wires and edges, and the sketchType's script handed back a solid"
             return {"success": False, "exception": message}
     compound, components = wrapper_common.combine(shapes, "sketch")
-    if not components:
+    # 'combine' keeps the nesting of what it was handed, so '[[]]' is a tree of
+    # components with no component in it.
+    if not any(True for _ in _flattened(components)):
         message = "The sketchType's script handed back no edge, wire or face"
         return {"success": False, "exception": message}
     compound, components = wrapper_common.encode_combined(compound, components)
