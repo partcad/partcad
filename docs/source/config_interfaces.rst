@@ -859,6 +859,10 @@ the target, so it mates with whatever the target mates with, and what it does
 not declare for itself (its description, ``leadPort``, ``abstract``, ``motion``,
 ``physics``, ``threadStep`` ...) it takes from the target.
 
+It works the other way round too: a mating another interface declares against
+the alias -- ``mates: {m3-thru-3: {how: ...}}`` -- is the target's mating, found
+by a connection that reaches the target under either name, ``how`` and all.
+
 That is what lets a package make a family parametric without withdrawing the
 names it has published. A package that spelled out ``m3-thru-3``,
 ``m3-thru-4``, ``m4-thru-3`` and several thousand more can declare the family
