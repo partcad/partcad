@@ -183,6 +183,15 @@ IMPORTED_KINDS = {
     "scene": "__imported__",
 }
 
+# The kinds whose 'type' may name a package-defined type ('partTypes:',
+# 'sketchTypes:'), built by the factory registered as 'wrapper' for the kind,
+# mapped to the function of 'partcad.output' that finds the type of that kind
+# PartCAD ships under a bare name.
+TYPE_WRAPPED_KINDS = {
+    "part": "builtin_part_type",
+    "sketch": "builtin_sketch_type",
+}
+
 
 def register(kind: str, t: str, factory_class: Factory.__class__):
     all[kind][t] = factory_class
@@ -209,7 +218,7 @@ def accepted_object_type_parameters(kind: str, t) -> dict:
     """
     factory_class = all.get(kind, {}).get(t)
     if factory_class is None and isinstance(t, str):
-        if kind == "part":
+        if kind in TYPE_WRAPPED_KINDS:
             factory_class = all.get(kind, {}).get("wrapper")
         elif kind in IMPORTED_KINDS:
             factory_class = all.get(kind, {}).get(IMPORTED_KINDS[kind])
@@ -223,7 +232,8 @@ def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
     # declared in the part's own package. Expand it to the fully-qualified
     # '<package path>:<name>' and store it back so the config carries the
     # resolved reference from here on (see the "partTypes" documentation).
-    if kind == "part" and isinstance(t, str) and t.startswith(":"):
+    # The same holds for a sketch 'type' and a sketchType.
+    if kind in TYPE_WRAPPED_KINDS and isinstance(t, str) and t.startswith(":"):
         t = target_project.name + t
         config["type"] = t
 
@@ -234,17 +244,19 @@ def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
     # A part 'type' that carries a package path ('<package>:<name>') is not a
     # built-in factory but a reference to a partType. It is constructed by the
     # generic wrapper factory, which resolves the partType and runs it.
-    if kind == "part" and isinstance(t, str) and ":" in t and "wrapper" in all[kind]:
+    # A sketch's 'type' the same way references a sketchType.
+    if kind in TYPE_WRAPPED_KINDS and isinstance(t, str) and ":" in t and "wrapper" in all[kind]:
         return all[kind]["wrapper"](ctx, source_project, target_project, config)
 
     # A bare part 'type' nothing is registered for may be a partType PartCAD
-    # ships ('fcstd', in '//builtin/import'). The wrapper factory builds it the
-    # same as any other partType, and resolves the bare name the same way. The
-    # import is deferred for the reason the one below is.
-    if kind == "part" and isinstance(t, str) and "wrapper" in all[kind]:
-        from .output import builtin_part_type
+    # ships ('fcstd', in '//builtin/import'), and a bare sketch 'type' a
+    # sketchType it ships. The wrapper factory builds it the same as any other
+    # type, and resolves the bare name the same way. The import is deferred for
+    # the reason the one below is.
+    if kind in TYPE_WRAPPED_KINDS and isinstance(t, str) and "wrapper" in all[kind]:
+        from . import output
 
-        if builtin_part_type(ctx, t) is not None:
+        if getattr(output, TYPE_WRAPPED_KINDS[kind])(ctx, t) is not None:
             return all[kind]["wrapper"](ctx, source_project, target_project, config)
 
     # An assembly or a scene 'type' nothing is registered for may still be a

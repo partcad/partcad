@@ -143,4 +143,7 @@ declares one part type and one part built with it:
 
 ``box`` is absent from ``pc list parts``, because it is a ``partType`` and not a
 part -- PartCAD counts the two as different kinds of object (``partType`` is one
-of the ten in ``Project.OBJECT_KINDS``), and only one of them is a shape.
+of those in ``Project.OBJECT_KINDS``), and only one of them is a shape.
+
+A sketch is built by a package-defined type the same way, through a
+``sketchTypes:`` section: see :doc:`/plugins/sketch_types`.

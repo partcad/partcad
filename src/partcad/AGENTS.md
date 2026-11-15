@@ -321,6 +321,16 @@ at all).
   changes a file it has declared settled waits for the file system's clock to move first. `code_version`
   remembers a script's `CACHE_VERSION` by the same rule, and `source_key` goes by the same `RACY_NS`.
 
+- **A part type and a sketch type are one mechanism** (`type_wrapper.TypeWrapperFactory`). `PartFactoryWrapper`
+  (`partTypes:`) and `SketchFactoryWrapper` (`sketchTypes:`) mix in the same class for resolving the type
+  (`:name`, `<package>:name`, a bare name `//builtin/import` declares), the file a type with an `extension` reads,
+  the image and sandbox its script runs in, what the object is keyed on, and running the script; and the scripts of
+  both run through one wrapper, `wrapper_part_type.py`, which shapes the answer by `request["kind"]` (a part is
+  compounded and finished, a sketch is its faces, wires and edges with their components). A factory says only which
+  section its types are in and what it makes of the answer, plus what is its own kind's (`requireSolid` is a
+  part's). So a feature added to how a type's script runs -- a container, a new key -- is added in `type_wrapper`,
+  once, and not to one kind of type.
+
 - **A file a part was read from that nothing declared is keyed on once a build has reported it**
   (`discovered_dependencies`). A part's key has to be known before it is built, and the layers an OpenUSD stage
   composes are not known until it is read. So a `partType` that says `reportsDependencies` has its script list the

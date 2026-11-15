@@ -1179,13 +1179,29 @@ def builtin_part_type(ctx, name):
     'factory.instantiate()' only once no registered factory claimed the name, so
     a built-in factory always wins.
     """
+    return _builtin_type(ctx, "partTypes", name)
+
+
+def builtin_sketch_type(ctx, name):
+    """The package path declaring a built-in ``sketchType`` called ``name``, or None.
+
+    The counterpart of 'builtin_part_type()' for sketches: a sketch names a
+    'sketchTypes' entry of '//builtin/import' by its bare name. PartCAD ships
+    none today; the lookup is here so that adding one is a declaration and
+    nothing else.
+    """
+    return _builtin_type(ctx, "sketchTypes", name)
+
+
+def _builtin_type(ctx, section, name):
+    """The path of '//builtin/import' if its 'section' declares 'name', or None."""
     if not isinstance(name, str) or not name or ":" in name or ctx is None:
         return None
     project = builtin_project(ctx, IMPORT)
     if project is None:
         return None
-    part_types = project.config_obj.get("partTypes")
-    if isinstance(part_types, dict) and name in part_types:
+    declared = project.config_obj.get(section)
+    if isinstance(declared, dict) and name in declared:
         return project.name
     return None
 
