@@ -33,6 +33,13 @@ its script reports reading as it builds the object (see
 'partcad.discovered_dependencies'). That is what makes a format a package can
 teach PartCAD to read: 'fcstd' in '//builtin/import', and the ones a plugin
 package supplies.
+
+A type that declares ``container:`` runs its script in that image instead of in
+a Python sandbox: the image as it is, with nothing installed into it, so that a
+script driving a native program finds the program there (see
+'partcad.wrapper_container'). With no container runtime the object fails, saying
+so; ``dockerImage`` and ``pythonRequirements`` are not read for such a type,
+since they describe a sandbox it does not run in.
 """
 
 import base64
@@ -41,9 +48,10 @@ import tempfile
 
 from . import code_version, discovered_dependencies
 from . import logging as pc_logging
-from . import output, request_paths, sandbox_versions, shape_envelope, wrapper
+from . import output, request_paths, sandbox_versions, shape_envelope, wrapper, wrapper_container
 from .cache_hash import CacheHash
 from .process_crash import describe_exit_code
+from .runtime import SandboxUnavailable
 from .runtime_python import environment_requirements
 from .utils import resolve_resource_path
 
@@ -160,9 +168,50 @@ class TypeWrapperFactory:
             or self.project.docker_image_declared
         )
 
-        python_version = self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION
-        self.runtime = self.ctx.get_python_runtime(python_version, image=self.docker_image)
-        self.session = self.runtime.get_session(source_project.name)
+        # The container the type's script runs in, if it declared one: what the
+        # object is keyed on instead of the sandbox (see
+        # 'environment_cache_key'). Read again where the object is built, which
+        # is where a declaration that is not one fails it.
+        try:
+            self.container = wrapper_container.declaration(type_config.get("container"), "A %s" % self.TYPE_KIND)
+        except ValueError:
+            self.container = None
+
+        # The Python sandbox, for a type that runs in one. Not made for one that
+        # runs in a container: a sandbox this machine cannot make (a
+        # 'pythonSandbox' whose interpreter is not installed) would fail an
+        # object that never needed it. Nor does one that cannot be made fail an
+        # object here: a type that could not be resolved yet may turn out to run
+        # in a container, and one that does not fails where it is built, when
+        # the sandbox is asked for again.
+        self.runtime = None
+        self.session = None
+        if self.container is None:
+            try:
+                self._python_sandbox()
+            except Exception as e:
+                pc_logging.debug("%s: the Python sandbox could not be made: %s" % (config["name"], e))
+
+    def _python_version(self) -> str:
+        return str(self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION)
+
+    def _python_sandbox(self):
+        """The Python sandbox this type's script runs in, made the first time it is asked for."""
+        if self.runtime is None:
+            self.runtime = self.ctx.get_python_runtime(self._python_version(), image=self.docker_image)
+            self.session = self.runtime.get_session(self.project.name)
+        return self.runtime
+
+    def _type_container(self):
+        """The type's 'container:', now that its package can be asked; None where it declares none or is not found."""
+        type_project = self.ctx.get_project(self.type_package)
+        type_config = self._type_config(type_project, self.type_name) if type_project is not None else None
+        if not isinstance(type_config, dict):
+            return None
+        try:
+            return wrapper_container.declaration(type_config.get("container"), "A %s" % self.TYPE_KIND)
+        except ValueError:
+            return None  # 'run_type_async()' fails the object for it
 
     def post_create_type(self) -> None:
         """Key the object on the files it is read from (called from 'post_create')."""
@@ -187,10 +236,17 @@ class TypeWrapperFactory:
         they are what a stack upgrade moves, so keying on them is worth having
         even though a type changing its own requirements does not move the key
         - no more than a type changing its wrapper script does today.
+
+        A type that runs in a container is keyed on the image it named and what
+        it runs there (see 'wrapper_container.cache_key'), and not on any
+        sandbox: none is involved.
         """
+        if self.container is not None:
+            return wrapper_container.cache_key(self.container)
         return sandbox_versions.environment_cache_key(
             "python",
-            self.runtime.version,
+            # The version asked for, where the sandbox could not be made here.
+            self.runtime.version if self.runtime is not None else self._python_version(),
             environment_requirements(self.project, self.config),
             # What the package declared, never what this machine's sandbox was
             # built in: every sandbox type is expected to produce the same shape,
@@ -218,6 +274,15 @@ class TypeWrapperFactory:
         Called by a subclass's 'prepare_async', which keys on anything of its
         own (a part's 'requireSolid') before '_key_on_reported_async', last.
         """
+        # A type that runs in a container and could not be resolved when the
+        # object was created was keyed as a sandboxed one; it is keyed on its
+        # image here, before the cache is read, so that an object built by one
+        # image is never served for another.
+        if self.container is None:
+            container = self._type_container()
+            if container is not None:
+                self.container = container
+                shape.hash.add_string(wrapper_container.cache_key(container))
         # The file has to be on disk before the cache key means anything: the
         # key hashes its content (see 'PartFactoryFile.prepare_async').
         await self.download_file_async(shape)
@@ -428,6 +493,79 @@ class TypeWrapperFactory:
             shape.error(str(e))
             return None
 
+        # Where the script runs: the container the type names, as the image has
+        # it, or the Python sandbox otherwise.
+        try:
+            container = wrapper_container.declaration(
+                type_config.get("container"), "%s '%s'" % (self.TYPE_KIND, self.type_name)
+            )
+        except ValueError as e:
+            shape.error(str(e))
+            return None
+        if container is None:
+            self._python_sandbox()
+            await self._prepare_sandbox_async(type_project, type_config)
+
+        request = self.type_request(shape, type_project)
+        # The file goes on the command line as well as in the request, which is
+        # what a sandbox that is sent files rather than sharing them sends and
+        # rewrites (see 'request_paths'). In a container the cache does too: it
+        # is where a script keeps what it fetched, and in 'upload' mode a
+        # directory not named there is one the container never sees and never
+        # sends back.
+        command = request_paths.carry(
+            [wrapper.get("part_type.py"), os.path.abspath(script_abs), os.path.abspath(type_project.config_dir)],
+            request,
+            ("path", "cache_dir") if container is not None else ("path",),
+        )
+
+        if container is not None:
+            try:
+                exitcode, response_serialized, errors = await wrapper_container.run_async(
+                    self.ctx, container, command, request, written=[request["cache_dir"]]
+                )
+            except SandboxUnavailable as e:
+                shape.error("%s '%s': %s" % (self.TYPE_KIND, self.type_name, e))
+                return None
+        else:
+            exitcode, response_serialized, errors = await self.runtime.run_async(
+                command,
+                shape_envelope.serialize(request),
+                session=self.session,
+            )
+        if exitcode != 0 and not errors:
+            errors = "%s: %s: %s wrapper failed (%s)" % (
+                shape.project_name,
+                shape.name,
+                self.TYPE_KIND,
+                describe_exit_code(exitcode),
+            )
+        if errors:
+            for line in errors.split("\n"):
+                line = line.strip()
+                if line:
+                    pc_logging.debug("%s: %s" % (shape.name, line))
+
+        if exitcode != 0 and not (response_serialized or "").strip():
+            # Nothing answered: the wrapper did not get as far as the script -
+            # an image that cannot import OCP says so here, and a
+            # deserialization error would say only that there was nothing.
+            shape.error(errors)
+            return None
+
+        try:
+            response = shape_envelope.deserialize(response_serialized)
+        except Exception as e:
+            shape.error("Deserialization error: %s" % e)
+            return None
+
+        if not response.get("success"):
+            shape.error(str(response.get("exception")))
+            return None
+        return response
+
+    async def _prepare_sandbox_async(self, type_project, type_config) -> None:
+        """Install what the type's script imports into the Python sandbox it runs in."""
         # Prepare the sandbox: the type's package dependencies, then whatever
         # the type itself declares, then the geometry stack.
         await self.runtime.prepare_for_package(type_project, session=self.session)
@@ -450,46 +588,6 @@ class TypeWrapperFactory:
         # 'pythonRequirements', and runs in a layer that carries CadQuery's own
         # build.
         await self.runtime.ensure_async(sandbox_versions.OCP, session=self.session)
-
-        request = self.type_request(shape, type_project)
-        # The file goes on the command line as well as in the request, which is
-        # what a sandbox that is sent files rather than sharing them sends and
-        # rewrites (see 'request_paths').
-        command = request_paths.carry(
-            [wrapper.get("part_type.py"), os.path.abspath(script_abs), os.path.abspath(type_project.config_dir)],
-            request,
-            ("path",),
-        )
-        request_serialized = shape_envelope.serialize(request)
-
-        exitcode, response_serialized, errors = await self.runtime.run_async(
-            command,
-            request_serialized,
-            session=self.session,
-        )
-        if exitcode != 0 and not errors:
-            errors = "%s: %s: %s wrapper failed (%s)" % (
-                shape.project_name,
-                shape.name,
-                self.TYPE_KIND,
-                describe_exit_code(exitcode),
-            )
-        if errors:
-            for line in errors.split("\n"):
-                line = line.strip()
-                if line:
-                    pc_logging.debug("%s: %s" % (shape.name, line))
-
-        try:
-            response = shape_envelope.deserialize(response_serialized)
-        except Exception as e:
-            shape.error("Deserialization error: %s" % e)
-            return None
-
-        if not response.get("success"):
-            shape.error(str(response.get("exception")))
-            return None
-        return response
 
     async def record_reported_async(self, shape, response) -> None:
         """Keep what a successful build's script reported reading, for a type keyed on it."""

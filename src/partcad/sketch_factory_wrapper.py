@@ -60,7 +60,10 @@ class SketchFactoryWrapper(TypeWrapperFactory, SketchFactory):
 
     def info(self, sketch):
         info: dict[str, object] = sketch.shape_info(self.ctx)
-        info.update({"sandbox_version": self.runtime.version, "sandbox_path": self.runtime.path})
+        if self.runtime is not None:
+            info.update({"sandbox_version": self.runtime.version, "sandbox_path": self.runtime.path})
+        elif self.container is not None:
+            info.update({"container": self.container["image"]})
         return info
 
     async def instantiate(self, sketch):

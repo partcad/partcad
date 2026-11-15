@@ -72,8 +72,11 @@ Writing one
 
 A ``sketchTypes:`` entry takes the keys a ``partTypes:`` entry does, with the
 same meanings: ``kind``, ``desc``, ``url``, ``unless``, ``path``,
-``extension``, ``dockerImage``, ``reportsDependencies`` and
-``pythonRequirements``. ``requireSolid`` is a part's only, and there is no
+``extension``, ``dockerImage``, ``container``, ``reportsDependencies`` and
+``pythonRequirements``. With ``container:`` the script runs in that image as it
+is, instead of in a Python sandbox, exactly as a part type's does -- what the image
+needs, how the sketch's file and ``request["cache_dir"]`` reach it, and what the
+sketch is cached under are in :ref:`part-type-container`. ``requireSolid`` is a part's only, and there is no
 sketch counterpart of it: no sketch type of PartCAD's holds its sketches to
 being closed or planar -- a DXF of bend lines is open, a sweep path is a wire --
 so what a sketch must be is said by what uses it (an extrusion wants faces).

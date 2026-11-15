@@ -871,6 +871,7 @@ class Runtime:
         output_files: list[str] = None,
         env: dict = None,
         input_dirs: list[str] = None,
+        output_dirs: list[str] = None,
     ):
         # 'env' replaces this process's environment for the child, and is only
         # ever passed by a runtime that has to place something of its own on it
@@ -896,6 +897,7 @@ class Runtime:
                 input_files=input_files,
                 output_files=output_files,
                 input_dirs=input_dirs,
+                output_dirs=output_dirs,
             )
             returncode, stderr = self._endpoint_ended(endpoint, returncode, stderr)
         else:
@@ -936,7 +938,11 @@ class Runtime:
         env: dict = None,
         timeout: float = None,
         input_dirs: list[str] = None,
+        output_dirs: list[str] = None,
     ):
+        # 'output_dirs' is for a container alone, like 'input_dirs': directories
+        # a command writes into, sent back by one that is sent files rather than
+        # sharing them (see 'partcad_utils.containers.Endpoint.run').
         if input_files is None:
             input_files = []
         if output_files is None:
@@ -955,6 +961,7 @@ class Runtime:
                 input_files=input_files,
                 output_files=output_files,
                 input_dirs=input_dirs,
+                output_dirs=output_dirs,
                 timeout=timeout,
             )
             if returncode != 0:

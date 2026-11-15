@@ -186,13 +186,23 @@ def _answering(tmp_path, answer, exitcode=0, errors=""):
 
 
 def test_an_answer_that_is_not_one_fails_the_sketch(tmp_path):
-    sketch, runtime = _answering(tmp_path, b"", exitcode=3)
+    sketch, runtime = _answering(tmp_path, b"")
     assert _instantiate(sketch) is None
     assert any("Deserialization error" in str(e) for e in sketch.errors), sketch.errors
     # The script ran under the one wrapper, told it is building a sketch.
     command, request = runtime.commands[0]
     assert os.path.basename(command[0]) == "wrapper_part_type.py"
     assert shape_envelope.deserialize(request)["kind"] == "sketch"
+
+
+def test_a_wrapper_that_answered_nothing_fails_the_sketch_saying_why(tmp_path):
+    """What the wrapper said, rather than that there was nothing to deserialize (an image without OCP, say)."""
+    sketch, _ = _answering(tmp_path, b"", exitcode=3, errors="this image cannot import OCP")
+    assert _instantiate(sketch) is None
+    assert any("cannot import OCP" in str(e) for e in sketch.errors), sketch.errors
+    sketch, _ = _answering(tmp_path, b"", exitcode=3)
+    assert _instantiate(sketch) is None
+    assert any("sketchType wrapper failed (exit code 3)" in str(e) for e in sketch.errors), sketch.errors
 
 
 def test_a_failure_the_script_reports_fails_the_sketch(tmp_path):
