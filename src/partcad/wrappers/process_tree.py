@@ -90,6 +90,8 @@ def _table():
             ["ps", "-A", "-o", "pid=", "-o", "ppid=", "-o", "pgid=", "-o", "stat="],
             capture_output=True,
             text=True,
+            # A process's name is whatever its program called it.
+            errors="replace",
             timeout=10,
         )
     except (OSError, subprocess.SubprocessError):

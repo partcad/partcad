@@ -118,6 +118,10 @@ def _run(command: List[str], log: Callable[[str], None]) -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            # The editors' command lines (Electron) print UTF-8; text mode alone
+            # would decode it in the locale's encoding.
+            encoding="utf-8",
+            errors="replace",
             timeout=600,
         )
     except (OSError, subprocess.TimeoutExpired) as e:
