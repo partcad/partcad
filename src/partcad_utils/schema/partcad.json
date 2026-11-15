@@ -1116,6 +1116,22 @@
         { "type": "boolean" }
       ]
     },
+    "implementation-container": {
+      "description": "The container image a script runs in, as the image has it, instead of in a Python sandbox: for a script that needs what pip cannot install. The image alone, or a mapping. Pin it - a version or a digest - since it is what the result is cached under",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "properties": {
+            "image": { "type": "string", "minLength": 1, "description": "The image, pinned. It needs a python3 on its PATH, and for a part type OCP importable by the interpreter the script runs with" },
+            "name": { "type": "string", "minLength": 1, "description": "What the container is for: the second word of its name, partcad-plugin-<name>-..." },
+            "command": { "type": "string", "minLength": 1, "description": "The name in the image's PC_CONTAINER_ALLOWED_COMMANDS the script runs with. Defaults to 'python'" }
+          },
+          "required": ["image"],
+          "additionalProperties": false
+        }
+      ]
+    },
     "output-type": {
       "oneOf": [
         { "type": "null" },
@@ -3246,6 +3262,7 @@
             "path": { "type": "string", "minLength": 1 },
             "extension": { "type": "string", "minLength": 1, "description": "The extension of the file each part of this type is read from. Declaring one makes the part file-backed: its 'path' is relative to the part's own package and defaults to '<name>.<extension>', 'fileFrom' fetches it, and the script finds it as request['path']" },
             "dockerImage": { "type": "string", "minLength": 1, "description": "The image the 'docker' sandbox runs this partType's script in, where it can be pulled. Defaults to the declaring package's own" },
+            "container": { "$ref": "#/definitions/implementation-container", "description": "The container image this partType's script runs in, as the image has it, instead of in a Python sandbox - for a script that drives a native program the image carries. Wins over 'dockerImage', and 'pythonRequirements' are not installed: the image is what the script has. The image needs a python3 and OCP (build it FROM partcad-container-python with build123d installed). With no container runtime the part fails" },
             "requireSolid": { "type": "boolean", "default": false, "description": "Whether every part of this type is a solid, so that one that is not - no solid in it, faces that bound nothing, an open or invalid solid, one with no volume - fails to build instead of being built with a warning. Declare it for a type that reads or generates bodies, such as a converter from a native CAD format, where such a part is one it read wrongly" },
             "reportsDependencies": { "type": "boolean", "default": false, "description": "Whether the script reports, in output[\"dependencies\"], the other files it read as it built a part - the layers an OpenUSD stage composes, the textures it names - so that the part is built again when one of them changes, with nothing to list under dependencies" },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } }

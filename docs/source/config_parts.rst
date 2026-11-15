@@ -1284,6 +1284,23 @@ the ``partType`` or on its package, is the image the ``docker`` sandbox runs the
 script in when it can be pulled, read from the implementing package as it is for
 an output implementation (see :ref:`output-files`) rather than from the part's.
 
+A ``partType`` can instead say the program is in an image, with ``container:``
+-- the image alone, or ``image``, ``name`` and ``command`` -- and its script then
+runs in that image as it is, with nothing installed into it and no sandbox
+around it: ``dockerImage`` and ``pythonRequirements`` are not read for it, and a
+machine with no container runtime cannot build its parts. The image needs a
+``python3`` and OCP, and the part is keyed on the image as declared, so it has to
+be pinned. :doc:`/plugins/part_types` says what the image needs and how the
+part's file and ``cache_dir`` reach it.
+
+.. code-block:: yaml
+
+  partTypes:
+    rhino:
+      path: read_part.py
+      extension: 3dm
+      container: ghcr.io/example/rhino-tools:1.2.3
+
 Every part is held to one definition of a solid as it is built, whatever made
 it: it has a solid in it, no faces that bound nothing, no open or invalid solid,
 none with no volume. A part that misses it is built anyway and reported, because

@@ -24,6 +24,13 @@ and, for a type that says ``reportsDependencies``, the ones its script reports
 reading as it builds the part (see 'partcad.discovered_dependencies').
 That is what makes a format a package can teach PartCAD to read: 'fcstd' in
 '//builtin/import', and the ones a plugin package supplies.
+
+A partType that declares ``container:`` runs its script in that image instead
+of in a Python sandbox: the image as it is, with nothing installed into it, so
+that a script driving a native program finds the program there (see
+'partcad.wrapper_container'). With no container runtime the part fails, saying
+so; ``dockerImage`` and ``pythonRequirements`` are not read for such a type,
+since they describe a sandbox it does not run in.
 """
 
 import base64
@@ -31,10 +38,11 @@ import os
 
 from . import code_version, discovered_dependencies
 from . import logging as pc_logging
-from . import output, request_paths, sandbox_versions, shape_envelope, telemetry, transform, wrapper
+from . import output, request_paths, sandbox_versions, shape_envelope, telemetry, transform, wrapper, wrapper_container
 from .cache_hash import CacheHash
 from .part_factory import PartFactory
 from .process_crash import describe_exit_code
+from .runtime import SandboxUnavailable
 from .runtime_python import environment_requirements
 from .utils import resolve_resource_path
 
@@ -116,6 +124,15 @@ class PartFactoryWrapper(PartFactory):
                 or self.project.docker_image_declared
             )
 
+            # The container the partType's script runs in, if it declared one:
+            # what the part is keyed on instead of the sandbox (see
+            # 'environment_cache_key'). Read again where the part is built, which
+            # is where a declaration that is not one fails the part.
+            try:
+                self.container = wrapper_container.declaration(pt_config.get("container"), "A partType")
+            except ValueError:
+                self.container = None
+
             python_version = self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION
             self.runtime = self.ctx.get_python_runtime(python_version, image=self.docker_image)
             self.session = self.runtime.get_session(source_project.name)
@@ -144,7 +161,13 @@ class PartFactoryWrapper(PartFactory):
         they are what a stack upgrade moves, so keying on them is worth having
         even though a partType changing its own requirements does not move the
         key - no more than a partType changing its wrapper script does today.
+
+        A partType that runs in a container is keyed on the image it named and
+        what it runs there (see 'wrapper_container.cache_key'), and not on any
+        sandbox: none is involved.
         """
+        if self.container is not None:
+            return wrapper_container.cache_key(self.container)
         return sandbox_versions.environment_cache_key(
             "python",
             self.runtime.version,
@@ -288,6 +311,31 @@ class PartFactoryWrapper(PartFactory):
             f.write(content)
         return script_abs
 
+    async def _prepare_sandbox_async(self, pt_project, pt_config) -> None:
+        """Install what the partType's script imports into the Python sandbox it runs in."""
+        # The partType's package dependencies, then whatever the partType
+        # itself declares, then the geometry stack.
+        await self.runtime.prepare_for_package(pt_project, session=self.session)
+        await self.runtime.prepare_for_shape(self.config, session=self.session)
+        for req in pt_config.get("pythonRequirements", []) or []:
+            await self.runtime.ensure_async(req, session=self.session)
+
+        # The geometry stack the sandbox needs so a wrapper can build and
+        # serialize shapes. The versions come from sandbox_versions: a
+        # session v-env is shared by every part of a package, so a factory
+        # that pins its own version corrupts it for all the others. The
+        # core itself never imports OCP - shapes cross the boundary as
+        # BREP envelopes (see shape_envelope).
+        await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE, session=self.session)
+        await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS, session=self.session)
+        await self.runtime.ensure_async(sandbox_versions.OCPSVG, session=self.session)
+        await self.runtime.ensure_async(sandbox_versions.BUILD123D, session=self.session)
+        # The OCP build build123d depends on, which is the one the
+        # sandbox's own environment holds. A partType that imports CadQuery
+        # says so in its 'pythonRequirements', and runs in a layer that
+        # carries CadQuery's own build.
+        await self.runtime.ensure_async(sandbox_versions.OCP, session=self.session)
+
     async def instantiate(self, part):
         with pc_logging.Action("Wrapper", part.project_name, part.name):
             pt_project = self.ctx.get_project(self.part_type_package)
@@ -334,28 +382,18 @@ class PartFactoryWrapper(PartFactory):
                 part.error(str(e))
                 return None
 
-            # Prepare the sandbox: the partType's package dependencies, then
-            # whatever the partType itself declares, then the geometry stack.
-            await self.runtime.prepare_for_package(pt_project, session=self.session)
-            await self.runtime.prepare_for_shape(self.config, session=self.session)
-            for req in pt_config.get("pythonRequirements", []) or []:
-                await self.runtime.ensure_async(req, session=self.session)
+            # Where the script runs: the container the partType names, as the
+            # image has it, or the Python sandbox otherwise.
+            try:
+                container = wrapper_container.declaration(
+                    pt_config.get("container"), "partType '%s'" % self.part_type_name
+                )
+            except ValueError as e:
+                part.error(str(e))
+                return None
 
-            # The geometry stack the sandbox needs so a wrapper can build and
-            # serialize shapes. The versions come from sandbox_versions: a
-            # session v-env is shared by every part of a package, so a factory
-            # that pins its own version corrupts it for all the others. The
-            # core itself never imports OCP - shapes cross the boundary as
-            # BREP envelopes (see shape_envelope).
-            await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE, session=self.session)
-            await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS, session=self.session)
-            await self.runtime.ensure_async(sandbox_versions.OCPSVG, session=self.session)
-            await self.runtime.ensure_async(sandbox_versions.BUILD123D, session=self.session)
-            # The OCP build build123d depends on, which is the one the
-            # sandbox's own environment holds. A partType that imports CadQuery
-            # says so in its 'pythonRequirements', and runs in a layer that
-            # carries CadQuery's own build.
-            await self.runtime.ensure_async(sandbox_versions.OCP, session=self.session)
+            if container is None:
+                await self._prepare_sandbox_async(pt_project, pt_config)
 
             # The request handed to the wrapper script.
             request = {
@@ -375,19 +413,30 @@ class PartFactoryWrapper(PartFactory):
                 request["parameters"][param_name] = param.get("default") if isinstance(param, dict) else param
             # The file goes on the command line as well as in the request, which
             # is what a sandbox that is sent files rather than sharing them sends
-            # and rewrites (see 'request_paths').
+            # and rewrites (see 'request_paths'). In a container the cache does
+            # too: it is where a script keeps what it fetched, and in 'upload'
+            # mode a directory not named there is one the container never sees
+            # and never sends back.
             command = request_paths.carry(
                 [wrapper.get("part_type.py"), os.path.abspath(script_abs), os.path.abspath(pt_project.config_dir)],
                 request,
-                ("path",),
+                ("path", "cache_dir") if container is not None else ("path",),
             )
-            request_serialized = shape_envelope.serialize(request)
 
-            exitcode, response_serialized, errors = await self.runtime.run_async(
-                command,
-                request_serialized,
-                session=self.session,
-            )
+            if container is not None:
+                try:
+                    exitcode, response_serialized, errors = await wrapper_container.run_async(
+                        self.ctx, container, command, request, written=[request["cache_dir"]]
+                    )
+                except SandboxUnavailable as e:
+                    part.error("partType '%s': %s" % (self.part_type_name, e))
+                    return None
+            else:
+                exitcode, response_serialized, errors = await self.runtime.run_async(
+                    command,
+                    shape_envelope.serialize(request),
+                    session=self.session,
+                )
             if exitcode != 0 and not errors:
                 errors = "%s: %s: partType wrapper failed (%s)" % (
                     part.project_name,
@@ -399,6 +448,13 @@ class PartFactoryWrapper(PartFactory):
                     line = line.strip()
                     if line:
                         pc_logging.debug("%s: %s" % (part.name, line))
+
+            if exitcode != 0 and not (response_serialized or "").strip():
+                # Nothing answered: the wrapper did not get as far as the
+                # script - an image that cannot import OCP says so here, and a
+                # deserialization error would say only that there was nothing.
+                part.error(errors)
+                return None
 
             try:
                 response = shape_envelope.deserialize(response_serialized)
