@@ -1917,10 +1917,12 @@ async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_
             shape = prj.get_interface(obj)
             if shape is None:
                 pc.logging.error("%s is not found" % obj)
-            elif not shape.finalized:
-                pc.logging.warning("%s is not finalized" % obj)
             else:
-                tasks.append(shape.test_async())
+                # Under the log wrapper, as every shape below and an interface
+                # in a package's run are. Not asked whether it is 'finalized':
+                # that is a shape's, and an interface has no such attribute,
+                # so asking raised for every interface named on its own.
+                tasks.append(shape.test_log_wrapper_async(ctx, tests_to_run))
         else:
             if kind == "sketch":
                 shape = prj.get_sketch(obj)

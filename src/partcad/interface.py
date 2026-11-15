@@ -683,8 +683,18 @@ class Interface:
         # TODO(clairbee): make interface a Shape and switch to existing sync mechanisms
         with self.lock:
             if self.ports is None:
-                self.instantiate_ports()  # Fill in own ports
-                self.instantiate()  # Get ports from parents
+                try:
+                    self.instantiate_ports()  # Fill in own ports
+                    self.instantiate()  # Get ports from parents
+                except BaseException:
+                    # Not kept half built: 'instantiate_ports()' sets 'ports'
+                    # before it reads the declaration, so a declaration that
+                    # failed left an empty dictionary behind, which every later
+                    # call returned as this object's ports -- and a warm daemon
+                    # qualified it on the second run as an interface with none.
+                    self.ports = None
+                    self.inherits = None
+                    raise
             return self.ports
 
     def instantiate_ports(self):
@@ -1102,11 +1112,31 @@ class Interface:
                 continue
             project.ctx.add_mate(self, target_interface, mate_target_config)
 
-    async def test_async(self):
-        return self.test()
+    # Qualifying an interface is building it: its own ports, then everything it
+    # inherits, implements or mates with. It has no geometry, so none of the
+    # checks of 'partcad.qual' applies to it; 'ctx' and 'tests' are taken so
+    # that it is asked the way a shape is ('Shape.test'), and are not read.
+    # (A part or an assembly is a 'WithPorts', so an 'Interface' too, and
+    # overrides all four of these with the shape's own.)
 
-    def test(self):
-        _ = self.get_ports()
+    async def test_async(self, ctx=None, tests=None) -> bool:
+        return self.test(ctx, tests)
+
+    def test(self, ctx=None, tests=None) -> bool:
+        """Whether this interface can be built, with the reason logged as a qualification failure when not."""
+        try:
+            self.get_ports()
+        except Exception as e:
+            pc_logging.error("Qualification failed: %s: %s" % (self.full_name, e))
+            return False
+        return True
+
+    async def test_log_wrapper_async(self, ctx=None, tests=None) -> bool:
+        with pc_logging.Action("Qual", self.project.name, self.name):
+            return await self.test_async(ctx, tests)
+
+    def test_log_wrapper(self, ctx=None, tests=None) -> bool:
+        return asyncio.run(self.test_log_wrapper_async(ctx, tests))
 
     def info(self):
         info = {

@@ -142,6 +142,11 @@ the ones named:
   pc qual test --fast-only -P //...         # leaving out what says it is slow
   pc --cache-bypass qual test :bracket      # asking again rather than reading the cache
 
+An interface has no geometry for a test to look at, so qualifying one
+(``pc qual test -i <interface>``, and every interface of a package a package's
+run reaches) is building it: its ports and everything it inherits, implements
+or mates with. One that cannot be built fails with the reason, like a test.
+
 ``pc qual add`` declares a test, writing ``<object>.qual.<subtype>.<name>`` into
 the object's package:
 
