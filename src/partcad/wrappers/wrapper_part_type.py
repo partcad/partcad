@@ -160,7 +160,31 @@ def _section(stated, shape):
     return None if section.is_empty() else section
 
 
+def _without_ocp():
+    """What to say when this interpreter cannot import OCP, which a part's shape is handed back in; None if it can.
+
+    Asked before the script runs, so that the failure is about the environment
+    rather than about whatever line of the script first reached for OCP. In a
+    Python sandbox OCP is always there; in the image a partType's 'container:'
+    names, it is there only if the image put it there.
+    """
+    try:
+        import OCP  # noqa: F401
+    except ImportError as e:
+        return (
+            "%s (Python %d.%d) cannot import OCP (%s). A part type's script hands its shape back as an OCP "
+            "shape, so a partType that runs in a 'container:' needs an image with OCP in it: build the image "
+            "FROM ghcr.io/partcad/partcad-container-python and install build123d into it, at the version "
+            "PartCAD pins (see 'Part types' in the plugin documentation)"
+            % (sys.executable, sys.version_info[0], sys.version_info[1], e)
+        )
+    return None
+
+
 def process(path, request):
+    missing = _without_ocp()
+    if missing:
+        return {"success": False, "exception": missing, "shapes": []}
     try:
         result = runpy.run_path(
             path,

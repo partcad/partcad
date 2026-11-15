@@ -104,7 +104,12 @@ on the command line is resolved from where you are standing instead. The differe
 describe the sandbox its script runs in, and they are read from the package that ships the script and from
 nowhere else -- so a plugin's dependencies are the plugin's problem. A plugin needing something ``pip``
 cannot install names a ``dockerImage`` or a ``container:`` instead, and is handed
-``request["cache_dir"]`` to keep what it downloads on first use in.
+``request["cache_dir"]`` to keep what it downloads on first use in. The two are not the same thing:
+``dockerImage`` is the image the ``docker`` sandbox is *built from*, a preference that a machine on another
+sandbox ignores, installing ``pythonRequirements`` instead; ``container:`` runs the script in that image *as
+it is*, with nothing installed, and fails where there is no container runtime. An output implementation
+(``export:``, ``render:``, ``cae:``, ``cam:``) and a part type (``partTypes:``) can each declare either, and
+where both are declared ``container:`` wins.
 
 **What a plugin produces is cached like everything else**, keyed on the object's configuration and on the
 environment that produced it. A script whose behaviour changes says so with a module-level

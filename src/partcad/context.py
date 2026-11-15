@@ -2345,7 +2345,9 @@ class Context:
         # What the implementation runs as, allowed wherever the image's PATH
         # has it. An image built on PartCAD's own pins 'python' to a path of its
         # own, and that pin stands.
-        command = container.get("command") or "python"
+        from . import wrapper_container
+
+        command = wrapper_container.command_of(container)
         key = (image, role, command)
 
         with self.runtimes_container_lock:
