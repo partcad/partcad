@@ -141,15 +141,24 @@ class PartFactoryWrapper(PartFactory):
             self.runtime = None
             self.session = None
             if self.container is None:
-                self._python_sandbox()
+                try:
+                    self._python_sandbox()
+                except Exception as e:
+                    # Not necessarily this part's problem: a partType that could
+                    # not be resolved here may yet turn out to run in a
+                    # container. One that does not fails where it is built, when
+                    # the sandbox is asked for again.
+                    pc_logging.debug("%s: the Python sandbox could not be made: %s" % (config["name"], e))
 
             self._create(config)
+
+    def _python_version(self) -> str:
+        return str(self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION)
 
     def _python_sandbox(self):
         """The Python sandbox this partType's script runs in, made the first time it is asked for."""
         if self.runtime is None:
-            python_version = self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION
-            self.runtime = self.ctx.get_python_runtime(python_version, image=self.docker_image)
+            self.runtime = self.ctx.get_python_runtime(self._python_version(), image=self.docker_image)
             self.session = self.runtime.get_session(self.project.name)
         return self.runtime
 
@@ -184,7 +193,8 @@ class PartFactoryWrapper(PartFactory):
             return wrapper_container.cache_key(self.container)
         return sandbox_versions.environment_cache_key(
             "python",
-            self.runtime.version,
+            # The version asked for, where the sandbox could not be made here.
+            self.runtime.version if self.runtime is not None else self._python_version(),
             environment_requirements(self.project, self.config),
             # What the package declared, never what this machine's sandbox was
             # built in: every sandbox type is expected to produce the same shape,

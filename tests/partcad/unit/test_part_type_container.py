@@ -351,3 +351,25 @@ def test_a_part_type_resolved_late_is_still_keyed_on_its_image(package, tmp_path
     second = _late_key(package, tmp_path, IMAGE.replace("1.2.3", "1.2.4"), monkeypatch)
     assert first is not None and second is not None
     assert first != second
+
+
+def test_a_part_type_resolved_late_needs_no_python_sandbox(package, tmp_path, server, monkeypatch):
+    """Unknown as the part was created, and no sandbox can be made here: the part is still built in its container."""
+    declaration = wrapper_container.declaration
+    creating = [True]
+
+    def not_yet(declared, who):
+        return None if creating[0] else declaration(declared, who)
+
+    monkeypatch.setattr(wrapper_container, "declaration", not_yet)
+    ctx = _context(package, tmp_path)
+
+    def unavailable(*_args, **_kwargs):
+        raise RuntimeError("this machine cannot make that sandbox")
+
+    monkeypatch.setattr(ctx, "get_python_runtime", unavailable)
+    _contained(ctx, server, containers.MOUNT, monkeypatch)
+    part = ctx.get_part(":small")
+    assert part is not None
+    creating[0] = False
+    assert _volume(ctx, ":small") == pytest.approx(7**3)
