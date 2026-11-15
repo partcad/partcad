@@ -133,11 +133,25 @@ class PartFactoryWrapper(PartFactory):
             except ValueError:
                 self.container = None
 
-            python_version = self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION
-            self.runtime = self.ctx.get_python_runtime(python_version, image=self.docker_image)
-            self.session = self.runtime.get_session(source_project.name)
+            # The Python sandbox, for a partType that runs in one. Not made for
+            # one that runs in a container: a sandbox this machine cannot make
+            # (a 'pythonSandbox' whose interpreter is not installed) would fail
+            # a part that never needed it. Made when the part is built instead,
+            # for a partType that could not be resolved here (see 'sandbox').
+            self.runtime = None
+            self.session = None
+            if self.container is None:
+                self._python_sandbox()
 
             self._create(config)
+
+    def _python_sandbox(self):
+        """The Python sandbox this partType's script runs in, made the first time it is asked for."""
+        if self.runtime is None:
+            python_version = self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION
+            self.runtime = self.ctx.get_python_runtime(python_version, image=self.docker_image)
+            self.session = self.runtime.get_session(self.project.name)
+        return self.runtime
 
     def post_create(self) -> None:
         if self.path:
@@ -192,6 +206,15 @@ class PartFactoryWrapper(PartFactory):
         the one the script states, as every wrapper does (see 'code_version').
         """
         await super().prepare_async(part)
+        # A partType that runs in a container and could not be resolved when the
+        # part was created was keyed as a sandboxed one; it is keyed on its image
+        # here, before the cache is read, so that a part built by one image is
+        # never served for another.
+        if self.container is None:
+            container = self._part_type_container()
+            if container is not None:
+                self.container = container
+                part.hash.add_string(wrapper_container.cache_key(container))
         # The file has to be on disk before the cache key means anything: the
         # key hashes its content (see 'PartFactoryFile.prepare_async').
         await self.download_file_async(part)
@@ -221,6 +244,17 @@ class PartFactoryWrapper(PartFactory):
             # same key it would never come to have one.
             part.hash.add_string(output.REPORTS_DEPENDENCIES_KEY)
             await self._key_on_discovered(part)
+
+    def _part_type_container(self):
+        """The partType's 'container:', now that its package can be asked; None where it declares none or is not found."""
+        pt_project = self.ctx.get_project(self.part_type_package)
+        pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
+        if not isinstance(pt_config, dict):
+            return None
+        try:
+            return wrapper_container.declaration(pt_config.get("container"), "A partType")
+        except ValueError:
+            return None  # 'instantiate()' fails the part for it
 
     def _part_type_flag(self, key):
         """The partType's flag 'key': False where it is not declared, None where it is not a flag."""
@@ -393,6 +427,7 @@ class PartFactoryWrapper(PartFactory):
                 return None
 
             if container is None:
+                self._python_sandbox()
                 await self._prepare_sandbox_async(pt_project, pt_config)
 
             # The request handed to the wrapper script.

@@ -307,3 +307,47 @@ def test_an_image_without_ocp_is_told_so(package, tmp_path, server, monkeypatch)
     said = "\n".join(str(error) for error in part.errors)
     assert "cannot import OCP" in said
     assert "partcad-container-python" in said
+
+
+# --------------------------------------------------------------------------- #
+# What it does not need                                                       #
+# --------------------------------------------------------------------------- #
+
+
+def test_no_python_sandbox_is_made_for_a_part_that_runs_in_a_container(package, tmp_path, monkeypatch):
+    """A sandbox this machine cannot make must not fail a part that never uses one."""
+    ctx = _context(package, tmp_path)
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("a Python sandbox was made")
+
+    monkeypatch.setattr(ctx, "get_python_runtime", refuse)
+    part = ctx.get_part(":small")
+    assert part is not None, "the part was not created"
+
+
+def _late_key(package, tmp_path, image, monkeypatch):
+    """The key 'small' is read from the cache under, its partType declaring 'image' and unknown as it was created."""
+    (package / "partcad.yaml").write_text(PARTCAD_YAML.replace(IMAGE, image))
+    declaration = wrapper_container.declaration
+    creating = [True]
+
+    def not_yet(declared, who):
+        # As if the partType's package had not been reachable when the part was made.
+        return None if creating[0] else declaration(declared, who)
+
+    monkeypatch.setattr(wrapper_container, "declaration", not_yet)
+    ctx = _context(package, tmp_path / image.replace("/", "_").replace(":", "_"))
+    part = ctx.get_part(":small")
+    creating[0] = False
+    assert part.environment_cache_key.startswith("python==")
+    asyncio.run(part.prepare_async())
+    return part.hash.get()
+
+
+def test_a_part_type_resolved_late_is_still_keyed_on_its_image(package, tmp_path, monkeypatch):
+    """Keyed on the image before the cache is read, so another image is never served the first one's shape."""
+    first = _late_key(package, tmp_path, IMAGE, monkeypatch)
+    second = _late_key(package, tmp_path, IMAGE.replace("1.2.3", "1.2.4"), monkeypatch)
+    assert first is not None and second is not None
+    assert first != second
