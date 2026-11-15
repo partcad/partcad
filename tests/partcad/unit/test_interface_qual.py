@@ -87,3 +87,34 @@ def test_an_interface_that_does_not_build_fails_every_time_it_is_asked(tmp_path,
     assert pc_logging.had_errors
     with pytest.raises(Exception):
         interface.get_ports()
+
+
+@pytest.mark.parametrize("package", [MISSING_PARENT, INVALID_PORTS], ids=["missing-parent", "invalid-ports"])
+@pytest.mark.parametrize("first", ["get_parents", "compatible_with"])
+def test_a_failed_build_is_forgotten_whichever_question_started_it(tmp_path, package, first):
+    """Asked for its parents first: that builds it too, and a failure there is not kept either."""
+    ctx, project = _project(tmp_path, package)
+    interface = project.get_interface("mount")
+    with pytest.raises(Exception):
+        getattr(interface, first)() if first == "get_parents" else interface.compatible_with
+    assert interface.ports is None and interface.inherits is None
+    assert interface.test() is False
+
+
+# Mates with an interface nobody declares: logged, and passed over by the build.
+MISSING_MATE = {"interfaces": {"mount": {"ports": ["top"], "mates": {"nowhere": {}}}}}
+
+
+def test_what_the_build_passes_over_fails_it_every_time_it_is_asked(tmp_path, monkeypatch):
+    logged = []
+    error = pc_logging.error
+    monkeypatch.setattr(pc_logging, "error", lambda *args, **kwargs: (logged.append(args), error(*args, **kwargs)))
+    ctx, project = _project(tmp_path, MISSING_MATE)
+    assert project.test(ctx) is False
+    assert any("Failed to find the target interface: //:nowhere" in str(args[0]) for args in logged), logged
+    # Built now, so nothing logs the missing mate again but the verdict.
+    logged.clear()
+    pc_logging.reset_errors()
+    assert project.get_interface("mount").test() is False
+    assert pc_logging.had_errors
+    assert any("Qualification failed: //:mount: Failed to find the target interface" in str(a[0]) for a in logged)
