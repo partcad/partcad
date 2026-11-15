@@ -3101,7 +3101,20 @@
                 "fileHash": { "$ref": "#/definitions/file-hash" },
                 "parameters": { "$ref": "#/definitions/shape-parameter" },
                 "dependencies": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Other files the sketch is read from, relative to this package: the sketch is built again when one of them changes" },
-                "unless": { "$ref": "#/definitions/unless" }
+                "unless": { "$ref": "#/definitions/unless" },
+                "private": { "$ref": "#/definitions/object-private" },
+                "qual": { "$ref": "#/definitions/qual" },
+                "images": {
+                  "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "manufacturing": { "$ref": "#/definitions/sketch-manufacturing" },
+                "requirements": { "$ref": "#/definitions/requirements" },
+                "with": { "$ref": "#/definitions/parameter-overrides" }
               },
               "required": ["type"],
               "additionalProperties": true

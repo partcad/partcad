@@ -342,3 +342,40 @@ def test_a_sketch_type_s_script_outside_its_package_is_not_read_for_its_version(
     sketch = ctx.get_sketch(":s")
     assert asyncio.run(sketch.get_wrapped(ctx)) is None
     assert not any("outside.py" in str(p) for p in read), read
+
+
+def test_a_sketch_of_a_type_resolved_late_still_gets_its_file(tmp_path):
+    """A type its package could not tell yet when the sketch was made: the file is found as it is prepared."""
+    _package(
+        tmp_path,
+        """
+        sketchTypes:
+          outline:
+            path: read_outline.py
+            extension: outline
+        sketches:
+          s:
+            type: ":outline"
+        """,
+    )
+    ctx = pc.Context(str(tmp_path))
+    sketch = ctx.get_sketch(":s")
+    factory_ = sketch.instantiate.__closure__[0].cell_contents
+    # As if the type had not been resolvable when the sketch was created.
+    factory_.path = None
+    sketch.path = None
+    sketch.cache_dependencies.clear()
+    factory_._resolve_late_path(sketch)
+    assert sketch.path == str(tmp_path / "s.outline")
+    assert sketch.cache_dependencies == [str(tmp_path / "s.outline")]
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [("private", "yes"), ("images", "not-a-list"), ("render", 3), ("qual", 3)],
+)
+def test_the_schema_checks_a_sketch_type_s_sketch_like_any_sketch(key, value):
+    import jsonschema
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"sketches": {"s": {"type": ":plate", key: value}}}, get_partcad_schema())

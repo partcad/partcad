@@ -133,15 +133,7 @@ class TypeWrapperFactory:
         # The file this object is read from, for a type that reads one, spelled
         # the way this platform spells it: 'path:' is written with forward
         # slashes, and the script gets it as it is.
-        extension = type_config.get("extension")
-        self.path = None
-        if extension:
-            self.path = os.path.normpath(
-                os.path.join(
-                    source_project.config_dir,
-                    config.get("path") or "%s.%s" % (self.orig_name, str(extension).lstrip(".")),
-                )
-            )
+        self.path = self._object_path(type_config, source_project.config_dir, config)
 
         # The other files the object is read from, which its script cannot be
         # asked about before it runs - the layers a USD stage composes, the
@@ -213,6 +205,35 @@ class TypeWrapperFactory:
         except ValueError:
             return None  # 'run_type_async()' fails the object for it
 
+    def _object_path(self, type_config, config_dir, config):
+        """The file the object is read from, for a type with an ``extension``; None for any other."""
+        extension = type_config.get("extension") if isinstance(type_config, dict) else None
+        if not extension:
+            return None
+        return os.path.normpath(
+            os.path.join(
+                config_dir,
+                config.get("path") or "%s.%s" % (self.orig_name, str(extension).lstrip(".")),
+            )
+        )
+
+    def _resolve_late_path(self, shape) -> None:
+        """Set the object's file now, for a type that could not be resolved when the object was created.
+
+        Such an object was made without knowing its type has an ``extension``,
+        so it has no file yet: it gets it here, keyed on it as it would have
+        been (see 'post_create_type'), before anything downloads or reads it.
+        """
+        if self.path is not None:
+            return
+        type_project = self.ctx.get_project(self.type_package)
+        type_config = self._type_config(type_project, self.type_name) if type_project is not None else None
+        self.path = self._object_path(type_config, self.project.config_dir, self.config)
+        if self.path is not None:
+            shape.path = self.path
+            if self.path not in shape.cache_dependencies:
+                shape.cache_dependencies.append(self.path)
+
     def post_create_type(self) -> None:
         """Key the object on the files it is read from (called from 'post_create')."""
         shape = self.shape_object()
@@ -283,6 +304,7 @@ class TypeWrapperFactory:
             if container is not None:
                 self.container = container
                 shape.hash.add_string(wrapper_container.cache_key(container))
+        self._resolve_late_path(shape)
         # The file has to be on disk before the cache key means anything: the
         # key hashes its content (see 'PartFactoryFile.prepare_async').
         await self.download_file_async(shape)
@@ -475,6 +497,7 @@ class TypeWrapperFactory:
         the wrapper's, with 'success' true: what it holds depends on the kind
         of object (see wrappers/wrapper_part_type.py).
         """
+        self._resolve_late_path(shape)
         if self.path:
             try:
                 await self.download_file_async(shape)
