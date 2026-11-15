@@ -373,3 +373,72 @@ def test_a_part_type_resolved_late_needs_no_python_sandbox(package, tmp_path, se
     assert part is not None
     creating[0] = False
     assert _volume(ctx, ":small") == pytest.approx(7**3)
+
+
+# --------------------------------------------------------------------------- #
+# A sketchType, the same way                                                  #
+# --------------------------------------------------------------------------- #
+
+SKETCH_YAML = """\
+sketchTypes:
+  outline:
+    path: outline.py
+    extension: outline
+    container:
+      image: %s
+      name: csg
+sketches:
+  plate:
+    type: ":outline"
+""" % (IMAGE,)
+
+SKETCH_SCRIPT = """\
+import json
+import os
+
+if __name__ == "__partcad_sketch__":
+    from build123d import Rectangle
+
+    with open(request["path"]) as f:  # noqa: F821
+        width, height = (float(value) for value in f.read().split())
+    os.makedirs(request["cache_dir"], exist_ok=True)  # noqa: F821
+    with open(os.path.join(request["cache_dir"], "seen.json"), "w") as f:  # noqa: F821
+        json.dump({"path": request["path"], "kind": request["kind"]}, f)  # noqa: F821
+    output = {"shape": Rectangle(width, height).face()}
+"""
+
+
+@pytest.fixture
+def sketch_package(tmp_path):
+    directory = tmp_path / "sketch-pkg"
+    directory.mkdir()
+    (directory / "partcad.yaml").write_text(SKETCH_YAML)
+    (directory / "outline.py").write_text(SKETCH_SCRIPT)
+    (directory / "plate.outline").write_text("40 20")
+    return directory
+
+
+@pytest.mark.parametrize("mode", [containers.MOUNT, containers.UPLOAD])
+def test_a_sketch_type_runs_in_its_container_too(sketch_package, tmp_path, server, monkeypatch, mode):
+    ctx = _context(sketch_package, tmp_path)
+    made, asked = _contained(ctx, server, mode, monkeypatch)
+    sketch = ctx.get_sketch(":plate")
+    assert sketch.environment_cache_key == wrapper_container.cache_key({"image": IMAGE, "name": "csg"})
+
+    assert asyncio.run(sketch.get_wrapped(ctx)) is not None, sketch.errors
+    assert asked == [{"image": IMAGE, "name": "csg"}]
+    assert os.path.basename(made.endpoint.wire.sent["command"][1]) == "wrapper_part_type.py"
+    seen = json.loads((sketch_package / ".cache" / "seen.json").read_text())
+    assert seen["kind"] == "sketch"
+    assert seen["path"].startswith(str(sketch_package)) is (mode == containers.MOUNT)
+
+
+def test_the_schema_takes_a_sketch_type_s_container():
+    import jsonschema
+
+    from partcad.lint.all import get_partcad_schema
+
+    jsonschema.validate(
+        instance={"sketchTypes": {"outline": {"path": "outline.py", "container": {"image": IMAGE, "name": "csg"}}}},
+        schema=get_partcad_schema(),
+    )

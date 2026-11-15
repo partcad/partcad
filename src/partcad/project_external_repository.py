@@ -356,7 +356,7 @@ class ProjectExternalRepository(ProjectPlugin):
     def _served_kinds(self):
         """The object kinds this package holds, or None if it does not say.
 
-        A package has ten kinds of object (see 'Project.OBJECT_KINDS') and a
+        A package has a dozen kinds of object (see 'Project.OBJECT_KINDS') and a
         consumer that wants to know whether a package holds anything asks after
         four of them - which, for a package served by a plugin, is four separate
         runs of that plugin's script, one per kind, most of them to be told

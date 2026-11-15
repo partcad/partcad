@@ -3,22 +3,38 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Sandbox entry point for a 'wrapper'-kind partType.
+"""Sandbox entry point for a 'wrapper'-kind partType or sketchType.
 
-A partType of kind 'wrapper' is a package-supplied Python script that builds a
-part. This meta-wrapper runs inside the PartCAD sandbox (so it may import OCP /
-build123d), executes that script with 'runpy', and serializes the shape(s) it
-produces back to PartFactoryWrapper.
+A type of kind 'wrapper' is a package-supplied Python script that builds a part
+('partTypes:') or a sketch ('sketchTypes:'). This meta-wrapper runs inside the
+PartCAD sandbox (so it may import OCP / build123d), executes that script with
+'runpy', and serializes the shape(s) it produces back to PartFactoryWrapper or
+SketchFactoryWrapper (see 'partcad.type_wrapper'). Which of the two it is, is
+'request["kind"]': "part" (the default) or "sketch". One wrapper for both, so
+that how a script is run, what it is handed and how it reports a failure cannot
+come to differ between them; what differs is only what is made of its shapes.
 
-The partType script is executed with these globals available:
+The script is executed with these globals available:
 
-    request  -- the part's config/parameters (see PartFactoryWrapper)
+    request  -- the object's config/parameters (see 'TypeWrapperFactory.type_request')
 
 and is expected to leave its result in a global 'output':
 
-    output = {"shape": <TopoDS_Shape>}                # a single shape, or
-    output = {"shapes": [<TopoDS_Shape>, ...]}        # several, or
+    output = {"shape": <shape>}                       # a single shape, or
+    output = {"shapes": [<shape>, ...]}               # several, or
     output = {"exception": "<message>"}               # a failure
+
+where a shape is an OCP 'TopoDS_Shape' or anything that wraps one in its
+'wrapped' attribute (a build123d object), and 'shapes' may nest lists.
+
+For a part, the shapes are compounded into the one part. For a sketch, they
+must be what a sketch is made of -- faces, wires and edges, in the XY plane
+where it is to be extruded -- or compounds and shells of them: a face with holes
+is one face with inner wires, an open curve is a wire or an edge, and lines,
+arcs and Bezier or B-spline curves keep their exact geometry. They are
+compounded into the sketch, each kept as one of its components (see
+wrapper_common.combine), and a solid among them fails the sketch rather than
+being dropped. Everything below about CMF is a part's only.
 
 A single shape may come with what it is in, as plain data the script makes
 without importing anything of PartCAD's (docs/design/cmf.md, section 7):
@@ -47,9 +63,10 @@ is built again when one of them changes, if its partType says
 each absolute or relative to the directory of 'request["path"]'. A script that
 cannot tell what it read says None, and the part is then not cached.
 
-Both '__file__' and the run name '__partcad_part__' are set on the script, so it
-can gate its build logic (``if __name__ == "__partcad_part__":``) and remain
-importable for its own unit tests.
+Both '__file__' and the run name are set on the script -- '__partcad_part__' for
+a part, '__partcad_sketch__' for a sketch -- so it can gate its build logic
+(``if __name__ == "__partcad_part__":``) and remain importable for its own unit
+tests.
 
 A shape handed back as a *closed shell* is stated as the solid it already bounds
 before it is serialized (see wrapper_common.solidify). A partType that meshes
@@ -160,8 +177,12 @@ def _section(stated, shape):
     return None if section.is_empty() else section
 
 
+# The run name a script is executed under, by the kind of object it builds.
+RUN_NAMES = {"part": "__partcad_part__", "sketch": "__partcad_sketch__"}
+
+
 def _without_ocp():
-    """What to say when this interpreter cannot import OCP, which a part's shape is handed back in; None if it can.
+    """What to say when this interpreter cannot import OCP, which a type's shapes are handed back in; None if it can.
 
     Asked before the script runs, so that the failure is about the environment
     rather than about whatever line of the script first reached for OCP. In a
@@ -172,8 +193,8 @@ def _without_ocp():
         import OCP  # noqa: F401
     except ImportError as e:
         return (
-            "%s (Python %d.%d) cannot import OCP (%s). A part type's script hands its shape back as an OCP "
-            "shape, so a partType that runs in a 'container:' needs an image with OCP in it: build the image "
+            "%s (Python %d.%d) cannot import OCP (%s). A type's script hands its shapes back as OCP "
+            "shapes, so a partType or sketchType that runs in a 'container:' needs an image with OCP in it: build the image "
             "FROM ghcr.io/partcad/partcad-container-python and install build123d into it, at the version "
             "PartCAD pins (see 'Part types' in the plugin documentation)"
             % (sys.executable, sys.version_info[0], sys.version_info[1], e)
@@ -182,6 +203,7 @@ def _without_ocp():
 
 
 def process(path, request):
+    kind = request.get("kind") or "part"
     missing = _without_ocp()
     if missing:
         return {"success": False, "exception": missing, "shapes": []}
@@ -189,7 +211,7 @@ def process(path, request):
         result = runpy.run_path(
             path,
             init_globals={"request": request},
-            run_name="__partcad_part__",
+            run_name=RUN_NAMES.get(kind, RUN_NAMES["part"]),
         )
     except Exception as e:
         wrapper_common.handle_exception(e, path)
@@ -201,11 +223,18 @@ def process(path, request):
     if shapes is None:
         shape = output.get("shape")
         shapes = [shape] if shape is not None else []
+    shapes = wrapper_common.unwrapped(list(shapes))
 
     exception = output.get("exception")
     if exception:
         wrapper_common.handle_exception(Exception(str(exception)), path)
-        return {"success": False, "exception": str(exception), "shapes": shapes}
+        return {"success": False, "exception": str(exception), "shapes": []}
+
+    if kind == "sketch":
+        answer = wrapper_common.sketch_answer(shapes)
+        if answer["success"]:
+            wrapper_common.carry_dependencies(output, answer)
+        return answer
 
     # A partType that meshes triangles - which is what the ones in the public
     # index do - naturally builds a shell, and a shell is a skin rather than a
@@ -230,12 +259,7 @@ def process(path, request):
         shapes = wrapper_common.finished_shapes(shapes)
 
     answer = {"success": True, "exception": None, "shapes": shapes}
-    if "dependencies" in output:
-        dependencies = output["dependencies"]
-        if dependencies is None:
-            answer["dependencies"] = None  # not known: see 'PartFactoryWrapper'
-        elif isinstance(dependencies, (list, tuple)):
-            answer["dependencies"] = [str(entry) for entry in dependencies if isinstance(entry, str)]
+    wrapper_common.carry_dependencies(output, answer)
     return answer
 
 

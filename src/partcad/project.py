@@ -119,6 +119,7 @@ OBJECT_KINDS = (
     "repository",
     "software",
     "partType",
+    "sketchType",
 )
 OBJECT_KIND_SECTIONS = {
     # What a part is made of, rather than a part: a 'Material' is not a shape
@@ -147,6 +148,10 @@ OBJECT_KIND_SECTIONS = {
     # is never instantiated: parts whose 'type' references it are constructed by
     # PartFactoryWrapper, which looks the definition up here.
     "partType": "partTypes",
+    # The same for sketches: a 'sketchType' is how a package teaches PartCAD to
+    # build a sketch, and sketches whose 'type' references it are constructed by
+    # SketchFactoryWrapper (see 'partcad.type_wrapper').
+    "sketchType": "sketchTypes",
 }
 
 # The object kinds a package creates on demand rather than when it loads.
@@ -2026,6 +2031,9 @@ class Project(project_config.Configuration):
 
     def get_part_type_config(self, part_type_name):
         return self.object_config("partType", part_type_name)
+
+    def get_sketch_type_config(self, sketch_type_name):
+        return self.object_config("sketchType", sketch_type_name)
 
     def get_object_config(self, object_name, configs: dict[str, dict[str, typing.Any]]):
         if object_name not in configs:

@@ -10,6 +10,7 @@ Plugins
 
    importers.rst
    part_types.rst
+   sketch_types.rst
    output.rst
    analyses.rst
    simulations.rst
@@ -31,7 +32,7 @@ A plugin's script runs in a :doc:`sandbox </maintenance/sandboxes>`, which is wh
 dependencies -- a mesh library, a solver, a vendor's SDK -- without those reaching your package or PartCAD
 itself. What it produces is cached under the environment that produced it, the way everything else is.
 
-The seven kinds
+The eight kinds
 ===============
 
 Each kind of plugin is a differently named section, and each answers a different question. Every one of them
@@ -50,6 +51,9 @@ has a chapter below.
    * - ``partTypes:``
      - how to build a part of a type the package defines
      - :doc:`/plugins/part_types`
+   * - ``sketchTypes:``
+     - how to build a sketch of a type the package defines
+     - :doc:`/plugins/sketch_types`
    * - ``render:`` / ``export:``
      - how to write an output file type
      - :doc:`/plugins/output`
@@ -66,10 +70,10 @@ has a chapter below.
      - where a package's objects come from, when not a file
      - :doc:`/plugins/repositories`
 
-They are not seven unrelated mechanisms. Five of them -- ``render:``, ``export:``, ``cae:``, ``cam:`` and
+They are not eight unrelated mechanisms. Five of them -- ``render:``, ``export:``, ``cae:``, ``cam:`` and
 ``simulation:`` -- are **the same declaration with a different name**: a ``path`` to a script, the sandbox
-that script needs, and the parameters it is handed. ``partTypes:`` and ``import:`` are that declaration
-again, pointed at building a shape and at reading a file. So learning one is most of learning the rest, and
+that script needs, and the parameters it is handed. ``partTypes:``, ``sketchTypes:`` and ``import:`` are that
+declaration again, pointed at building a part, at building a sketch and at reading a file. So learning one is most of learning the rest, and
 the chapters say where each differs rather than repeating the shape.
 
 What they have in common

@@ -10,8 +10,9 @@ needs more -- a native CAD kernel, a solver, a whole application -- names an
 image instead, and PartCAD runs the script there, as the image has it: no
 sandbox environment is built in it and nothing is installed into it. An output
 implementation (``export:``, ``render:``, ``cae:``, ``cam:``) could always say
-so (see `output.Implementation.container`); a ``partTypes:`` entry says it the
-same way, and this module is the half the two share:
+so (see `output.Implementation.container`); a ``partTypes:`` or ``sketchTypes:``
+entry says it the same way (see 'partcad.type_wrapper'), and this module is the
+half they share:
 
 * `declaration` -- what a ``container:`` says, in either of its spellings;
 * `cache_key` -- what a shape built in one is keyed on, in place of the
@@ -23,7 +24,7 @@ What runs in the container is the running PartCAD's own wrapper, sent with the
 command rather than baked into the image (see `tools/containers/README.md`, "Why
 the wrappers are mounted and not baked in"), and the wrapper runs the package's
 script. A wrapper that hands back geometry hands it back as OCP shapes, so an
-image a part type runs in has to carry OCP besides a ``python3``; the wrapper
+image a part or sketch type runs in has to carry OCP besides a ``python3``; the wrapper
 says so in words when it cannot import it, rather than failing on the import.
 
 Files reach the container two ways (``useDockerRemote``):

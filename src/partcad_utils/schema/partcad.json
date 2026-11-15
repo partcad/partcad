@@ -2950,138 +2950,176 @@
       "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
-          "type": "object",
-          "properties": {
-            "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
-            "desc": { "type": "string", "maxLength": 1000 },
-            "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
-            "qual": { "$ref": "#/definitions/qual" },
-            "images": {
-              "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
-              "type": "array",
-              "items": { "type": "string", "minLength": 1 },
-              "uniqueItems": true
-            },
-            "private": { "$ref": "#/definitions/object-private" },
-            "unless": { "$ref": "#/definitions/unless" },
-            "path": { "type": "string", "minLength": 1 },
-            "fileFrom": { "type": "string", "enum": ["url"] },
-            "fileUrl": { "$ref": "#/definitions/url" },
-            "fileHash": { "$ref": "#/definitions/file-hash" },
-            "tolerance": { "type": "number", "minimum": 0 },
-            "parameters": { "$ref": "#/definitions/shape-parameter"},
-            "render": { "$ref": "#/definitions/render" },
-            "export": { "$ref": "#/definitions/output-section" },
-            "manufacturing": { "$ref": "#/definitions/sketch-manufacturing" },
-            "include": {
-              "description": "The layers of the drawing to read, as a layer name or a list of them ('dxf' only). Empty or absent means every layer; names are matched case-insensitively, and only one of 'include' and 'exclude' may be given. It is also an object-type parameter of the same name, so a reference may set it instead: 'bends;include=BEND_UP,BEND_DOWN' reads the one sketch two layers at a time, and the parameter outranks this field where both are given.",
-              "oneOf": [
-                { "type": "string", "minLength": 1 },
-                {
-                  "type": "array",
-                  "items": { "type": "string", "minLength": 1 }, "uniqueItems": true
-                },
-                { "type": "null" }
-              ]
-            },
-            "exclude": {
-              "description": "The layers of the drawing not to read, as a layer name or a list of them ('dxf' only). An object-type parameter as well, exactly like 'include' above, and mutually exclusive with it.",
-              "oneOf": [
-                { "type": "string", "minLength": 1 },
-                {
-                  "type": "array",
-                  "items": { "type": "string", "minLength": 1 }, "uniqueItems": true
-                },
-                { "type": "null" }
-              ]
-            },
-            "units": {
-              "description": "What the drawing's numbers are in ('dxf' only): 'auto', the default, reads it from the drawing's $INSUNITS and scales the sketch to millimetres by it; 'unitless' takes the numbers as millimetres as they are; a unit says what they are where the drawing does not, or says wrong",
-              "type": "string",
-              "enum": ["auto", "unitless", "mm", "cm", "dm", "m", "dam", "hm", "km", "Gm", "um", "nm", "angstrom", "in", "ft", "yd", "mi", "mil", "uin", "us-in", "us-ft", "us-yd", "us-mi", "au", "ly", "pc"]
-            },
-            "use-wires": { "type": "boolean", "default": false },
-            "use-faces": { "type": "boolean", "default": false },
-            "ignore-visibility": { "type": "boolean", "default": false },
-            "flip-y": { "type": "boolean", "default": false },
-            "requirements": { "$ref": "#/definitions/requirements" },
-            "source": { "type": "string", "minLength": 1 },
-            "package": { "type": "string", "minLength": 1 },
-            "circle": {
-              "oneOf": [
-                { "$ref": "#/definitions/sketch-dimension" },
-                {
-                  "type": "object",
-                  "properties": {
-                    "radius": { "$ref": "#/definitions/sketch-dimension" },
-                    "x": { "$ref": "#/definitions/sketch-coordinate" },
-                    "y": { "$ref": "#/definitions/sketch-coordinate" }
-                  },
-                  "required": ["radius"],
-                  "additionalProperties": false
-                }
-              ]
-            },
-            "square": {
-              "oneOf": [
-                { "$ref": "#/definitions/sketch-dimension" },
-                {
-                  "type": "object",
-                  "properties": {
-                    "side": { "$ref": "#/definitions/sketch-dimension" },
-                    "x": { "$ref": "#/definitions/sketch-coordinate" },
-                    "y": { "$ref": "#/definitions/sketch-coordinate" }
-                  },
-                  "required": ["side", "x", "y"],
-                  "additionalProperties": false
-                }
-              ]
-            },
-            "rectangle": {
-              "type": "object",
-              "properties": {
-                "side-x": { "$ref": "#/definitions/sketch-dimension" },
-                "side-y": { "$ref": "#/definitions/sketch-dimension" },
-                "x": { "$ref": "#/definitions/sketch-coordinate" },
-                "y": { "$ref": "#/definitions/sketch-coordinate" }
-              },
-              "required": ["side-x", "side-y"],
-              "additionalProperties": false
-            },
-            "slot": { "$ref": "#/definitions/sketch-slot" },
-            "inner": {
-              "description": "The shapes cut out of the outer one. Each may be given once by its own name, or several at a time in the plural list beside it.",
-              "type": "object",
-              "properties": {
-                "circle": { "$ref": "#/definitions/sketch-inner-circle" },
-                "circles": {
-                  "type": "array",
-                  "items": { "$ref": "#/definitions/sketch-inner-circle" }
-                },
-                "square": { "$ref": "#/definitions/sketch-inner-square" },
-                "squares": {
-                  "type": "array",
-                  "items": { "$ref": "#/definitions/sketch-inner-square" }
-                },
-                "rectangle": { "$ref": "#/definitions/sketch-inner-rectangle" },
-                "rectangles": {
-                  "type": "array",
-                  "items": { "$ref": "#/definitions/sketch-inner-rectangle" }
-                },
-                "slot": { "$ref": "#/definitions/sketch-slot" },
-                "slots": {
-                  "type": "array",
-                  "items": { "$ref": "#/definitions/sketch-slot" }
-                }
-              },
-              "additionalProperties": false
-            },
-            "with": { "$ref": "#/definitions/parameter-overrides" }
-          },
-          "required": ["type"],
           "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
-          "not": { "required": ["include", "exclude"] },
-          "additionalProperties": false
+          "oneOf": [
+            {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
+              "desc": { "type": "string", "maxLength": 1000 },
+              "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
+              "qual": { "$ref": "#/definitions/qual" },
+              "images": {
+                "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "uniqueItems": true
+              },
+              "private": { "$ref": "#/definitions/object-private" },
+              "unless": { "$ref": "#/definitions/unless" },
+              "path": { "type": "string", "minLength": 1 },
+              "fileFrom": { "type": "string", "enum": ["url"] },
+              "fileUrl": { "$ref": "#/definitions/url" },
+              "fileHash": { "$ref": "#/definitions/file-hash" },
+              "tolerance": { "type": "number", "minimum": 0 },
+              "parameters": { "$ref": "#/definitions/shape-parameter"},
+              "render": { "$ref": "#/definitions/render" },
+              "export": { "$ref": "#/definitions/output-section" },
+              "manufacturing": { "$ref": "#/definitions/sketch-manufacturing" },
+              "include": {
+                "description": "The layers of the drawing to read, as a layer name or a list of them ('dxf' only). Empty or absent means every layer; names are matched case-insensitively, and only one of 'include' and 'exclude' may be given. It is also an object-type parameter of the same name, so a reference may set it instead: 'bends;include=BEND_UP,BEND_DOWN' reads the one sketch two layers at a time, and the parameter outranks this field where both are given.",
+                "oneOf": [
+                  { "type": "string", "minLength": 1 },
+                  {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }, "uniqueItems": true
+                  },
+                  { "type": "null" }
+                ]
+              },
+              "exclude": {
+                "description": "The layers of the drawing not to read, as a layer name or a list of them ('dxf' only). An object-type parameter as well, exactly like 'include' above, and mutually exclusive with it.",
+                "oneOf": [
+                  { "type": "string", "minLength": 1 },
+                  {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }, "uniqueItems": true
+                  },
+                  { "type": "null" }
+                ]
+              },
+              "units": {
+                "description": "What the drawing's numbers are in ('dxf' only): 'auto', the default, reads it from the drawing's $INSUNITS and scales the sketch to millimetres by it; 'unitless' takes the numbers as millimetres as they are; a unit says what they are where the drawing does not, or says wrong",
+                "type": "string",
+                "enum": ["auto", "unitless", "mm", "cm", "dm", "m", "dam", "hm", "km", "Gm", "um", "nm", "angstrom", "in", "ft", "yd", "mi", "mil", "uin", "us-in", "us-ft", "us-yd", "us-mi", "au", "ly", "pc"]
+              },
+              "use-wires": { "type": "boolean", "default": false },
+              "use-faces": { "type": "boolean", "default": false },
+              "ignore-visibility": { "type": "boolean", "default": false },
+              "flip-y": { "type": "boolean", "default": false },
+              "requirements": { "$ref": "#/definitions/requirements" },
+              "source": { "type": "string", "minLength": 1 },
+              "package": { "type": "string", "minLength": 1 },
+              "circle": {
+                "oneOf": [
+                  { "$ref": "#/definitions/sketch-dimension" },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "radius": { "$ref": "#/definitions/sketch-dimension" },
+                      "x": { "$ref": "#/definitions/sketch-coordinate" },
+                      "y": { "$ref": "#/definitions/sketch-coordinate" }
+                    },
+                    "required": ["radius"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "square": {
+                "oneOf": [
+                  { "$ref": "#/definitions/sketch-dimension" },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "side": { "$ref": "#/definitions/sketch-dimension" },
+                      "x": { "$ref": "#/definitions/sketch-coordinate" },
+                      "y": { "$ref": "#/definitions/sketch-coordinate" }
+                    },
+                    "required": ["side", "x", "y"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "rectangle": {
+                "type": "object",
+                "properties": {
+                  "side-x": { "$ref": "#/definitions/sketch-dimension" },
+                  "side-y": { "$ref": "#/definitions/sketch-dimension" },
+                  "x": { "$ref": "#/definitions/sketch-coordinate" },
+                  "y": { "$ref": "#/definitions/sketch-coordinate" }
+                },
+                "required": ["side-x", "side-y"],
+                "additionalProperties": false
+              },
+              "slot": { "$ref": "#/definitions/sketch-slot" },
+              "inner": {
+                "description": "The shapes cut out of the outer one. Each may be given once by its own name, or several at a time in the plural list beside it.",
+                "type": "object",
+                "properties": {
+                  "circle": { "$ref": "#/definitions/sketch-inner-circle" },
+                  "circles": {
+                    "type": "array",
+                    "items": { "$ref": "#/definitions/sketch-inner-circle" }
+                  },
+                  "square": { "$ref": "#/definitions/sketch-inner-square" },
+                  "squares": {
+                    "type": "array",
+                    "items": { "$ref": "#/definitions/sketch-inner-square" }
+                  },
+                  "rectangle": { "$ref": "#/definitions/sketch-inner-rectangle" },
+                  "rectangles": {
+                    "type": "array",
+                    "items": { "$ref": "#/definitions/sketch-inner-rectangle" }
+                  },
+                  "slot": { "$ref": "#/definitions/sketch-slot" },
+                  "slots": {
+                    "type": "array",
+                    "items": { "$ref": "#/definitions/sketch-slot" }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "with": { "$ref": "#/definitions/parameter-overrides" }
+            },
+            "required": ["type"],
+            "not": { "required": ["include", "exclude"] },
+            "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A sketch built by a package-defined sketchType (its 'type' references a sketchType: ':name' in the same package, '<package>:name' in any other). sketchType-specific properties are allowed and reach the type's script in request['config'].",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
+                "path": { "type": "string", "minLength": 1, "description": "The file the sketch is read from, for a sketchType that declares an 'extension': relative to this package, '<name>.<extension>' by default" },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "dependencies": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Other files the sketch is read from, relative to this package: the sketch is built again when one of them changes" },
+                "unless": { "$ref": "#/definitions/unless" },
+                "private": { "$ref": "#/definitions/object-private" },
+                "qual": { "$ref": "#/definitions/qual" },
+                "images": {
+                  "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "manufacturing": { "$ref": "#/definitions/sketch-manufacturing" },
+                "requirements": { "$ref": "#/definitions/requirements" },
+                "with": { "$ref": "#/definitions/parameter-overrides" }
+              },
+              "required": ["type"],
+              "additionalProperties": true
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -3265,6 +3303,29 @@
             "container": { "$ref": "#/definitions/implementation-container", "description": "The container image this partType's script runs in, as the image has it, instead of in a Python sandbox - for a script that drives a native program the image carries. Wins over 'dockerImage', and 'pythonRequirements' are not installed: the image is what the script has. The image needs a python3 and OCP (build it FROM partcad-container-python with build123d installed). With no container runtime the part fails" },
             "requireSolid": { "type": "boolean", "default": false, "description": "Whether every part of this type is a solid, so that one that is not - no solid in it, faces that bound nothing, an open or invalid solid, one with no volume - fails to build instead of being built with a warning. Declare it for a type that reads or generates bodies, such as a converter from a native CAD format, where such a part is one it read wrongly" },
             "reportsDependencies": { "type": "boolean", "default": false, "description": "Whether the script reports, in output[\"dependencies\"], the other files it read as it built a part - the layers an OpenUSD stage composes, the textures it names - so that the part is built again when one of them changes, with nothing to list under dependencies" },
+            "pythonRequirements": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "sketchTypes": {
+      "description": "Package-defined ways to construct sketches: the counterpart of 'partTypes'. A sketch whose 'type' is ':<name>' (this package) or '<package>:<name>' (any other, a repository plugin's included) is built by running the sketchType's script in the sandbox; the script hands back the sketch's faces, wires and edges.",
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "type": "object",
+          "properties": {
+            "kind": { "type": "string", "enum": ["wrapper"] },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
+            "unless": { "$ref": "#/definitions/unless" },
+            "path": { "type": "string", "minLength": 1, "description": "The script that builds a sketch of this type, relative to the package that declares it. Defaults to '<name>.py'" },
+            "extension": { "type": "string", "minLength": 1, "description": "The extension of the file each sketch of this type is read from. Declaring one makes the sketch file-backed: its 'path' is relative to the sketch's own package and defaults to '<name>.<extension>', 'fileFrom' fetches it, and the script finds it as request['path']" },
+            "dockerImage": { "type": "string", "minLength": 1, "description": "The image the 'docker' sandbox runs this sketchType's script in, where it can be pulled. Defaults to the declaring package's own" },
+            "container": { "$ref": "#/definitions/implementation-container", "description": "The container image this sketchType's script runs in, as the image has it, instead of in a Python sandbox - for a script that drives a native program the image carries. Wins over 'dockerImage', and 'pythonRequirements' are not installed: the image is what the script has. The image needs a python3 and OCP (build it FROM partcad-container-python with build123d installed). With no container runtime the sketch fails" },
+            "reportsDependencies": { "type": "boolean", "default": false, "description": "Whether the script reports, in output[\"dependencies\"], the other files it read as it built a sketch, so that the sketch is built again when one of them changes" },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } }
           },
           "additionalProperties": false

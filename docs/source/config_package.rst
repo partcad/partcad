@@ -70,7 +70,7 @@ Object IDs
 
 PartCAD packages contain objects of different types: *sketches*, *parts*,
 *assemblies*, *scenes*, *interfaces*, *mates*, *materials*, *providers*,
-*software* and *partTypes*.
+*software*, *partTypes* and *sketchTypes*.
 All of them need to get referenced.
 
 Single object
@@ -586,9 +586,9 @@ The keys address every kind of data uniformly, so serving a new kind of object
 or a new piece of metadata needs no new API:
 
 - ``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}``. The
-  kinds are the ten in ``Project.OBJECT_KINDS``: ``material``, ``interface``,
-  ``sketch``, ``part``, ``assembly``, ``scene``, ``provider``, ``repository``,
-  ``software``, ``partType``
+  kinds are those in ``Project.OBJECT_KINDS``: ``material``, ``color``,
+  ``finish``, ``interface``, ``sketch``, ``part``, ``assembly``, ``scene``,
+  ``provider``, ``repository``, ``software``, ``partType``, ``sketchType``
 - ``objects/<kind>/<name>`` -- a single object's config, fetched without listing
   the whole repository
 - ``deps`` -- the names of the child packages

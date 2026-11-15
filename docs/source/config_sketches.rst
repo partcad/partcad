@@ -24,6 +24,8 @@ arbitrary part metadata like camera view angles and so on).
   - `build123d <https://github.com/gumyr/build123d>`_
   - `CadQuery <https://github.com/CadQuery/cadquery>`_
 
+- Sketch types a package defines itself (``sketchTypes``): see :doc:`/plugins/sketch_types`
+
 
 Sketches are declared in ``partcad.yaml`` using the following syntax:
 
@@ -31,7 +33,7 @@ Sketches are declared in ``partcad.yaml`` using the following syntax:
 
   sketches:
     <sketch-name>:
-      type: <basic|dxf|svg|cadquery|build123d>
+      type: <basic|dxf|svg|cadquery|build123d|:<sketchType>|<package>:<sketchType>>
       desc: <(optional) textual description>
       url: <(optional) where to read about it: a product page, a datasheet, a standard>
       path: <(optional) the source file path, "{sketch name}.{ext}" otherwise>
@@ -337,3 +339,28 @@ CAD Scripts
 ===========
 
 See the "CAD Scripts" section in the "Parts" chapter below.
+
+Sketch types
+============
+
+A sketch whose ``type`` is ``:<name>`` (a ``sketchTypes:`` entry of its own
+package) or ``<package>:<name>`` (one of another package, a repository plugin's
+included) is built by that sketch type's script, which runs in the sandbox with
+the sketch's resolved ``parameters`` and hands back its faces, wires and edges:
+
+.. code-block:: yaml
+
+  sketchTypes:
+    plate:
+      path: plate.py
+
+  sketches:
+    plate:
+      type: ":plate"
+      parameters:
+        width:
+          type: float
+          default: 40
+
+See :doc:`/plugins/sketch_types` for what the script is handed and what it
+hands back, and ``examples/produce_sketch_wrapper`` for the whole of it.

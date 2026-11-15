@@ -105,10 +105,13 @@ Two things to get right:
   It is read from the package that ships the script and from nowhere else, so a
   part type's dependencies never reach the package using it.
 
+.. _part-type-container:
+
 Running in a container
 ======================
 
-A part type whose script drives a **native program** -- a CSG kernel written in
+A part type -- or a sketch type, which declares it the same way (see
+:doc:`/plugins/sketch_types`) -- whose script drives a **native program** -- a CSG kernel written in
 Rust, a converter shipped as a binary, a whole CAD application -- needs more than
 ``pip`` can install. It can download the program into ``request["cache_dir"]`` on
 first use, or it can declare the image that carries it, and have its script run
@@ -255,4 +258,7 @@ declares one part type and one part built with it:
 
 ``box`` is absent from ``pc list parts``, because it is a ``partType`` and not a
 part -- PartCAD counts the two as different kinds of object (``partType`` is one
-of the ten in ``Project.OBJECT_KINDS``), and only one of them is a shape.
+of those in ``Project.OBJECT_KINDS``), and only one of them is a shape.
+
+A sketch is built by a package-defined type the same way, through a
+``sketchTypes:`` section: see :doc:`/plugins/sketch_types`.

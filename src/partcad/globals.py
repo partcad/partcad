@@ -68,6 +68,7 @@ from .sketch_factory_cadquery import SketchFactoryCadquery
 from .sketch_factory_dxf import SketchFactoryDxf
 from .sketch_factory_enrich import SketchFactoryEnrich
 from .sketch_factory_svg import SketchFactorySvg
+from .sketch_factory_wrapper import SketchFactoryWrapper
 from .software_factory_raw import SoftwareFactoryRaw
 from .user_config import UserConfig
 from .user_config import user_config as default_user_config
@@ -85,6 +86,8 @@ factory.register("sketch", "dxf", SketchFactoryDxf)
 factory.register("sketch", "svg", SketchFactorySvg)
 factory.register("sketch", "alias", SketchFactoryAlias)
 factory.register("sketch", "enrich", SketchFactoryEnrich)
+# Constructs sketches whose 'type' references a package-defined sketchType.
+factory.register("sketch", "wrapper", SketchFactoryWrapper)
 # Built in this process from a few numbers, with no sandbox: see 'basic_shapes'.
 factory.register("part", "basic", PartFactoryBasic)
 factory.register("part", "cadquery", PartFactoryCadquery)

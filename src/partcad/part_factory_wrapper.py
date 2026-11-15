@@ -12,229 +12,52 @@ and used to construct the part. Only the default partType kind, 'wrapper', is
 implemented: it runs a package-supplied Python script inside the sandbox, which
 produces the shape(s) (see wrappers/wrapper_part_type.py).
 
-A partType that declares an ``extension`` reads a *file*: each part built with
-it is one file of that format, declared exactly as a STEP or an STL part is --
-``path`` relative to the part's own package, ``<name>.<extension>`` when left
-out, ``fileFrom`` to fetch it. The file is resolved against the package that
-declares the part rather than the one that declares the type, is what the
-part's cache entry depends on, and reaches the script as ``request["path"]``.
-The other files it is read from - the layers a USD stage composes - are its
-``dependencies``, which the cache entry depends on too: those its package lists,
-and, for a type that says ``reportsDependencies``, the ones its script reports
-reading as it builds the part (see 'partcad.discovered_dependencies').
-That is what makes a format a package can teach PartCAD to read: 'fcstd' in
-'//builtin/import', and the ones a plugin package supplies.
-
-A partType that declares ``container:`` runs its script in that image instead
-of in a Python sandbox: the image as it is, with nothing installed into it, so
-that a script driving a native program finds the program there (see
-'partcad.wrapper_container'). With no container runtime the part fails, saying
-so; ``dockerImage`` and ``pythonRequirements`` are not read for such a type,
-since they describe a sandbox it does not run in.
+How a type is resolved, read from a file, keyed and run is shared with
+'sketchTypes' and lives in 'partcad.type_wrapper', which says what a
+file-backed type (one with an ``extension``) and a type that
+``reportsDependencies`` are. What is a part's own is here: ``requireSolid``,
+and that the script's shapes are one part.
 """
 
-import base64
-import os
-
-from . import code_version, discovered_dependencies
 from . import logging as pc_logging
-from . import output, request_paths, sandbox_versions, shape_envelope, telemetry, transform, wrapper, wrapper_container
-from .cache_hash import CacheHash
+from . import output, shape_envelope, telemetry, transform
 from .part_factory import PartFactory
-from .process_crash import describe_exit_code
-from .runtime import SandboxUnavailable
-from .runtime_python import environment_requirements
-from .utils import resolve_resource_path
+from .type_wrapper import TYPE_WRAPPER, TypeWrapperFactory
 
 
 @telemetry.instrument()
-class PartFactoryWrapper(PartFactory):
-    WRAPPERS = ("part_type.py", "transform.py")
+class PartFactoryWrapper(TypeWrapperFactory, PartFactory):
+    WRAPPERS = (TYPE_WRAPPER, "transform.py")
+    TYPE_KIND = "partType"
+    OBJECT_KIND = "part"
 
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitWrapper", target_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config)
-
-            # 'type' is '<package>:<partType>' by the time we get here, or the
-            # bare name of a partType PartCAD ships (see 'factory.instantiate').
-            self.part_type_ref = config["type"]
-            builtin_package = output.builtin_part_type(ctx, self.part_type_ref)
-            if builtin_package is not None:
-                self.part_type_package, self.part_type_name = builtin_package, self.part_type_ref
-            else:
-                self.part_type_package, self.part_type_name = resolve_resource_path(
-                    target_project.name, self.part_type_ref
-                )
-
-            # The partType is resolved here when it can be, because two things
-            # are decided by it before anything is built: whether the part is a
-            # file, and which image its sandbox is built from. From the package
-            # declaring the part, which is still loading (see
-            # 'Context.get_project_from'). A package that cannot be reached yet
-            # is resolved again when the part is built, which is where its
-            # absence is reported.
-            if self.part_type_package == target_project.name:
-                # The package's own partType (':name'): the package in hand,
-                # which is not registered under its name until it has loaded.
-                pt_project = target_project
-            else:
-                try:
-                    pt_project = ctx.get_project_from(target_project, self.part_type_package)
-                except Exception as e:
-                    pc_logging.debug("%s: partType package %s: %s" % (config["name"], self.part_type_package, e))
-                    pt_project = None
-            pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
-            pt_config = pt_config if isinstance(pt_config, dict) else {}
-
-            # The file this part is read from, for a partType that reads one,
-            # spelled the way this platform spells it: 'path:' is written with
-            # forward slashes, and the script gets it as it is.
-            extension = pt_config.get("extension")
-            self.path = None
-            if extension:
-                self.path = os.path.normpath(
-                    os.path.join(
-                        source_project.config_dir,
-                        config.get("path") or "%s.%s" % (self.orig_name, str(extension).lstrip(".")),
-                    )
-                )
-
-            # The other files the part is read from, which its script cannot be
-            # asked about before it runs - the layers a USD stage composes, the
-            # textures it names: each is part of the part's cache key, as the
-            # files an OpenSCAD part includes are, so that changing one builds
-            # the part again rather than serving the shape built before.
-            self.dependencies = [
-                os.path.normpath(os.path.join(source_project.config_dir, str(dependency)))
-                for dependency in config.get("dependencies") or []
-            ]
-            # The part's key without the files its script reported reading the
-            # last time it was built, for a type that reports them: what that
-            # list is kept under, and what the key with them continues (see
-            # 'partcad.discovered_dependencies'). Set as the part is prepared.
-            self._declared_key = None
-
-            # The image is the implementing package's, as it is for an output
-            # implementation (see 'Implementation.docker_image'): which
-            # environment a script needs is known to whoever wrote it. The part's
-            # own package is the last resort, for partTypes that name none.
-            self.docker_image = (
-                pt_config.get("dockerImage")
-                or (pt_project.docker_image_declared if pt_project is not None else None)
-                or self.project.docker_image_declared
-            )
-
-            # The container the partType's script runs in, if it declared one:
-            # what the part is keyed on instead of the sandbox (see
-            # 'environment_cache_key'). Read again where the part is built, which
-            # is where a declaration that is not one fails the part.
-            try:
-                self.container = wrapper_container.declaration(pt_config.get("container"), "A partType")
-            except ValueError:
-                self.container = None
-
-            # The Python sandbox, for a partType that runs in one. Not made for
-            # one that runs in a container: a sandbox this machine cannot make
-            # (a 'pythonSandbox' whose interpreter is not installed) would fail
-            # a part that never needed it. Made when the part is built instead,
-            # for a partType that could not be resolved here (see 'sandbox').
-            self.runtime = None
-            self.session = None
-            if self.container is None:
-                try:
-                    self._python_sandbox()
-                except Exception as e:
-                    # Not necessarily this part's problem: a partType that could
-                    # not be resolved here may yet turn out to run in a
-                    # container. One that does not fails where it is built, when
-                    # the sandbox is asked for again.
-                    pc_logging.debug("%s: the Python sandbox could not be made: %s" % (config["name"], e))
-
+            self.init_type(ctx, source_project, target_project, config)
             self._create(config)
 
-    def _python_version(self) -> str:
-        return str(self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION)
+    def _type_config(self, project, name):
+        return project.get_part_type_config(name)
 
-    def _python_sandbox(self):
-        """The Python sandbox this partType's script runs in, made the first time it is asked for."""
-        if self.runtime is None:
-            self.runtime = self.ctx.get_python_runtime(self._python_version(), image=self.docker_image)
-            self.session = self.runtime.get_session(self.project.name)
-        return self.runtime
+    def _builtin_type_package(self, ctx, name):
+        return output.builtin_part_type(ctx, name)
+
+    def shape_object(self):
+        return self.part
 
     def post_create(self) -> None:
-        if self.path:
-            self.part.path = self.path
-            self.part.cache_dependencies.append(self.path)
-        self.part.cache_dependencies.extend(self.dependencies)
+        self.post_create_type()
         super().post_create()
 
-    async def download_file_async(self, part) -> None:
-        """Fetch what 'fileFrom' points at, for a partType that reads a file."""
-        if self.path and self.fileFactory is not None and not os.path.exists(self.path):
-            with pc_logging.Action("File", self.target_project.name, part.name):
-                await self.fileFactory.download(self.path)
-
-    def environment_cache_key(self) -> str | None:
-        """The interpreter and the dependency versions this part renders with.
-
-        Deliberately partial: the partType's own 'pythonRequirements' come from
-        a package that is only resolved when the part is instantiated, so they
-        cannot be read here. The interpreter and the pinned stack can be, and
-        they are what a stack upgrade moves, so keying on them is worth having
-        even though a partType changing its own requirements does not move the
-        key - no more than a partType changing its wrapper script does today.
-
-        A partType that runs in a container is keyed on the image it named and
-        what it runs there (see 'wrapper_container.cache_key'), and not on any
-        sandbox: none is involved.
-        """
-        if self.container is not None:
-            return wrapper_container.cache_key(self.container)
-        return sandbox_versions.environment_cache_key(
-            "python",
-            # The version asked for, where the sandbox could not be made here.
-            self.runtime.version if self.runtime is not None else self._python_version(),
-            environment_requirements(self.project, self.config),
-            # What the package declared, never what this machine's sandbox was
-            # built in: every sandbox type is expected to produce the same shape,
-            # so a key that named the image a 'docker' or 'remote' sandbox ran
-            # in - or the PartCAD release tagged on it - would key the one shape
-            # differently on conda, and switching sandboxes would orphan every
-            # entry (see 'sandbox_versions.environment_cache_key').
-            image=self.docker_image,
-        )
-
     async def prepare_async(self, part) -> None:
-        """Key the part on the version its partType's code reports, too.
-
-        'code_versions' has the wrappers this factory runs and the plugin that
-        serves the part, but the partType's own script is only known once its
-        package is: the package that declares it may not be this one, and
-        resolving it loads it. Its version is the plugin's when a plugin serves
-        the partType - the script is one of the plugin's files - and otherwise
-        the one the script states, as every wrapper does (see 'code_version').
-        """
+        """Key the part on its type (see 'TypeWrapperFactory.prepare_type_async') and on 'requireSolid'."""
         await super().prepare_async(part)
-        # A partType that runs in a container and could not be resolved when the
-        # part was created was keyed as a sandboxed one; it is keyed on its image
-        # here, before the cache is read, so that a part built by one image is
-        # never served for another.
-        if self.container is None:
-            container = self._part_type_container()
-            if container is not None:
-                self.container = container
-                part.hash.add_string(wrapper_container.cache_key(container))
-        # The file has to be on disk before the cache key means anything: the
-        # key hashes its content (see 'PartFactoryFile.prepare_async').
-        await self.download_file_async(part)
-        versions = self._part_type_versions()
-        if versions is not None:
-            part.add_code_versions(versions)
+        await self.prepare_type_async(part)
         # And on what the part is judged by, which is part of what it is: read
         # here as well as in 'instantiate()', because the cache is read before
         # anything is instantiated (see 'Shape.key_on_required_solid').
-        required = self._part_type_flag(output.REQUIRE_SOLID_KEY)
+        required = self._type_flag(output.REQUIRE_SOLID_KEY)
         if required is None:
             # A value that is not a flag. Keyed as no requirement, the part
             # would be read back from whatever was cached before the value was
@@ -243,159 +66,20 @@ class PartFactoryWrapper(PartFactory):
             part.cacheable = False
         elif required:
             part.key_on_required_solid()
-        # Last, because it is keyed on everything above: the files the part's
-        # script reported reading the last time it was built.
-        reports = self._part_type_flag(output.REPORTS_DEPENDENCIES_KEY)
-        if reports is None:
-            part.cacheable = False
-        elif reports and part.get_cacheable():
-            # Keyed on the type reporting them as well: an entry built before
-            # it did has no list kept beside it, and served from under the
-            # same key it would never come to have one.
-            part.hash.add_string(output.REPORTS_DEPENDENCIES_KEY)
-            await self._key_on_discovered(part)
+        await self._key_on_reported_async(part)
 
-    def _part_type_container(self):
-        """The partType's 'container:', now that its package can be asked; None where it declares none or is not found."""
-        pt_project = self.ctx.get_project(self.part_type_package)
-        pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
-        if not isinstance(pt_config, dict):
-            return None
-        try:
-            return wrapper_container.declaration(pt_config.get("container"), "A partType")
-        except ValueError:
-            return None  # 'instantiate()' fails the part for it
-
-    def _part_type_flag(self, key):
-        """The partType's flag 'key': False where it is not declared, None where it is not a flag."""
-        pt_project = self.ctx.get_project(self.part_type_package)
-        pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
-        if pt_config is None:
-            return False  # 'instantiate()' says so, where it can fail the part
-        try:
-            return output.as_flag(pt_config.get(key), key)
-        except ValueError:
-            return None
-
-    def _discovered_base_dir(self) -> str:
-        """What the files a script reports are relative to: the directory of the part's file, or its package's."""
-        return os.path.dirname(os.path.abspath(self.path)) if self.path else self.project.config_dir
-
-    async def _key_on_discovered(self, part) -> None:
-        """Key 'part' on the files its script reported reading the last time it was built, if it was.
-
-        The list is kept under the part's declared key - everything it is keyed
-        on before this - which is what is looked up here; the part is then keyed
-        on that and on the content of every file in the list (see
-        'partcad.discovered_dependencies').
-        """
-        self._declared_key = part.hash.snapshot()
-        if self._declared_key.get() is None:
-            return
-        found = await self.ctx.cache_shapes.read_data_async(self._declared_key, [discovered_dependencies.KEY])
-        listed = discovered_dependencies.parse(found.get(discovered_dependencies.KEY))
-        if listed:
-            part.hash = discovered_dependencies.keyed_on(self._declared_key, listed, self._discovered_base_dir())
-
-    async def _record_discovered(self, part, reported) -> None:
-        """Keep the files a build of 'part' reported reading, and key the part on them from now on.
-
-        Kept under the declared key, where the next lookup finds them, and the
-        part is keyed on them at once, so that the entry this build writes is
-        the one that lookup asks for.
-        """
-        base_dir = self._discovered_base_dir()
-        listed = discovered_dependencies.normalized(reported, base_dir, own=self.path)
-        await self.ctx.cache_shapes.write_data_async(
-            self._declared_key, {discovered_dependencies.KEY: discovered_dependencies.serialize(listed)}
-        )
-        part.hash = discovered_dependencies.keyed_on(self._declared_key, listed, base_dir)
-
-    def _part_type_versions(self):
-        pt_project = self.ctx.get_project(self.part_type_package)
-        if pt_project is None:
-            return None  # 'instantiate()' says so, where it can fail the part
-        plugin_version = getattr(pt_project, "plugin_cache_version", 0)
-        if plugin_version:
-            # Already in the key when the part is served by the same plugin -
-            # an LDraw part and the partType that builds it are.
-            if getattr(self.project, "plugin_ref", None) == pt_project.plugin_ref:
-                return None
-            return code_version.key([(pt_project.plugin_ref, plugin_version)])
-        pt_config = pt_project.get_part_type_config(self.part_type_name)
-        if pt_config is None:
-            return None
-        script = os.path.join(pt_project.config_dir, pt_config.get("path", self.part_type_name + ".py"))
-        return code_version.key([(self.part_type_ref, code_version.declared(script))])
-
-    async def _materialize_wrapper_script(self, pt_project, script_rel):
-        """Return the on-disk path of the partType's wrapper script.
-
-        For a local package the script is a file in the package. For a
-        plugin-backed package it is fetched from the plugin (like a file-backed
-        object) and written into the package's cache directory.
-        """
-        script_abs = os.path.join(pt_project.config_dir, script_rel)
-        if os.path.exists(script_abs):
-            return script_abs
-
-        get_data_async = getattr(pt_project, "get_data_async", None)
-        if get_data_async is None:
-            raise Exception("partType wrapper script not found: %s" % script_abs)
-
-        data = await get_data_async("files/" + script_rel)
-        if data is None:
-            raise Exception("The repository did not provide the partType wrapper: %s" % script_rel)
-        content = base64.b64decode(data) if isinstance(data, str) else bytes(data)
-
-        dirs = os.path.dirname(script_abs)
-        if dirs and not os.path.exists(dirs):
-            os.makedirs(dirs, exist_ok=True)
-        with open(script_abs, "wb") as f:
-            f.write(content)
-        return script_abs
-
-    async def _prepare_sandbox_async(self, pt_project, pt_config) -> None:
-        """Install what the partType's script imports into the Python sandbox it runs in."""
-        # The partType's package dependencies, then whatever the partType
-        # itself declares, then the geometry stack.
-        await self.runtime.prepare_for_package(pt_project, session=self.session)
-        await self.runtime.prepare_for_shape(self.config, session=self.session)
-        for req in pt_config.get("pythonRequirements", []) or []:
-            await self.runtime.ensure_async(req, session=self.session)
-
-        # The geometry stack the sandbox needs so a wrapper can build and
-        # serialize shapes. The versions come from sandbox_versions: a
-        # session v-env is shared by every part of a package, so a factory
-        # that pins its own version corrupts it for all the others. The
-        # core itself never imports OCP - shapes cross the boundary as
-        # BREP envelopes (see shape_envelope).
-        await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE, session=self.session)
-        await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS, session=self.session)
-        await self.runtime.ensure_async(sandbox_versions.OCPSVG, session=self.session)
-        await self.runtime.ensure_async(sandbox_versions.BUILD123D, session=self.session)
-        # The OCP build build123d depends on, which is the one the
-        # sandbox's own environment holds. A partType that imports CadQuery
-        # says so in its 'pythonRequirements', and runs in a layer that
-        # carries CadQuery's own build.
-        await self.runtime.ensure_async(sandbox_versions.OCP, session=self.session)
+    def type_request(self, shape, type_project) -> dict:
+        request = super().type_request(shape, type_project)
+        # Validated and moved by the wrapper, while the shape is live (see 'Shape.finish_request').
+        request[shape_envelope.KEY_FINISH] = shape.finish_request()
+        return request
 
     async def instantiate(self, part):
         with pc_logging.Action("Wrapper", part.project_name, part.name):
-            pt_project = self.ctx.get_project(self.part_type_package)
-            if pt_project is None:
-                part.error("partType package not found: %s" % self.part_type_package)
+            resolved = self.resolve_type(part)
+            if resolved is None:
                 return None
-
-            pt_config = pt_project.get_part_type_config(self.part_type_name)
-            if pt_config is None:
-                part.error("partType '%s' not found in '%s'" % (self.part_type_name, self.part_type_package))
-                return None
-
-            kind = pt_config.get("kind", "wrapper")
-            if kind != "wrapper":
-                part.error("Unsupported partType kind '%s' (only 'wrapper' is implemented)" % kind)
-                return None
+            pt_project, pt_config = resolved
 
             # A type that builds solids and nothing else says so, and then what
             # every part is judged by fails one of its parts instead of being
@@ -405,125 +89,18 @@ class PartFactoryWrapper(PartFactory):
             try:
                 part.solid_required = output.as_flag(pt_config.get(output.REQUIRE_SOLID_KEY), output.REQUIRE_SOLID_KEY)
             except ValueError as e:
-                part.error("partType '%s': %s" % (self.part_type_name, e))
+                part.error("partType '%s': %s" % (self.type_name, e))
                 return None
 
-            if self.path:
-                try:
-                    await self.download_file_async(part)
-                except Exception as e:
-                    part.error("Failed to fetch %s: %s" % (self.path, e))
-                    return None
-                if not os.path.isfile(self.path):
-                    part.error("The part's file is not found: %s" % self.path)
-                    return None
-
-            # The wrapper script: 'path' or, by default, '<name>.py'.
-            script_rel = pt_config.get("path", self.part_type_name + ".py")
-            try:
-                script_abs = await self._materialize_wrapper_script(pt_project, script_rel)
-            except Exception as e:
-                part.error(str(e))
-                return None
-
-            # Where the script runs: the container the partType names, as the
-            # image has it, or the Python sandbox otherwise.
-            try:
-                container = wrapper_container.declaration(
-                    pt_config.get("container"), "partType '%s'" % self.part_type_name
-                )
-            except ValueError as e:
-                part.error(str(e))
-                return None
-
-            if container is None:
-                self._python_sandbox()
-                await self._prepare_sandbox_async(pt_project, pt_config)
-
-            # The request handed to the wrapper script.
-            request = {
-                "name": "%s:%s" % (part.project_name, part.name),
-                "label": part.name,
-                # Validated and moved by the wrapper, while the shape is live (see 'Shape.finish_request').
-                shape_envelope.KEY_FINISH: part.finish_request(),
-                "orig_name": self.orig_name,
-                "config": self.config,
-                "parameters": {},
-                # Where the partType's package keeps what it fetches for itself.
-                "cache_dir": output.package_cache_dir(self.ctx, pt_project),
-            }
-            if self.path:
-                request["path"] = os.path.abspath(self.path)
-            for param_name, param in (self.config.get("parameters") or {}).items():
-                request["parameters"][param_name] = param.get("default") if isinstance(param, dict) else param
-            # The file goes on the command line as well as in the request, which
-            # is what a sandbox that is sent files rather than sharing them sends
-            # and rewrites (see 'request_paths'). In a container the cache does
-            # too: it is where a script keeps what it fetched, and in 'upload'
-            # mode a directory not named there is one the container never sees
-            # and never sends back.
-            command = request_paths.carry(
-                [wrapper.get("part_type.py"), os.path.abspath(script_abs), os.path.abspath(pt_project.config_dir)],
-                request,
-                ("path", "cache_dir") if container is not None else ("path",),
-            )
-
-            if container is not None:
-                try:
-                    exitcode, response_serialized, errors = await wrapper_container.run_async(
-                        self.ctx, container, command, request, written=[request["cache_dir"]]
-                    )
-                except SandboxUnavailable as e:
-                    part.error("partType '%s': %s" % (self.part_type_name, e))
-                    return None
-            else:
-                exitcode, response_serialized, errors = await self.runtime.run_async(
-                    command,
-                    shape_envelope.serialize(request),
-                    session=self.session,
-                )
-            if exitcode != 0 and not errors:
-                errors = "%s: %s: partType wrapper failed (%s)" % (
-                    part.project_name,
-                    part.name,
-                    describe_exit_code(exitcode),
-                )
-            if errors:
-                for line in errors.split("\n"):
-                    line = line.strip()
-                    if line:
-                        pc_logging.debug("%s: %s" % (part.name, line))
-
-            if exitcode != 0 and not (response_serialized or "").strip():
-                # Nothing answered: the wrapper did not get as far as the
-                # script - an image that cannot import OCP says so here, and a
-                # deserialization error would say only that there was nothing.
-                part.error(errors)
-                return None
-
-            try:
-                response = shape_envelope.deserialize(response_serialized)
-            except Exception as e:
-                part.error("Deserialization error: %s" % e)
-                return None
-
-            if not response.get("success"):
-                part.error(str(response.get("exception")))
+            response = await self.run_type_async(part, pt_project, pt_config)
+            if response is None:
                 return None
 
             shapes = response.get("shapes", [])
             if not shapes:
                 part.error("The partType wrapper produced no shape")
                 return None
-            if self._declared_key is not None:
-                if "dependencies" in response and response["dependencies"] is None:
-                    # The script could not tell what it read: a part kept under
-                    # a key that leaves those files out would be served after
-                    # one of them changed. Not cached, then, and so built again.
-                    pc_logging.warning("%s: what it is read from could not be told, so it is not cached" % part.name)
-                    part.hash = CacheHash(part.hash.name)
-                else:
-                    await self._record_discovered(part, response.get("dependencies") or [])
+            await self.record_reported_async(part, response)
             self.ctx.stats_parts_instantiated += 1
             # One shape, which is what the wrapper hands back for a part however
             # many the script made: it compounds them itself, while they are
