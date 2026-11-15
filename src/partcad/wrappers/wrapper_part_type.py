@@ -181,42 +181,6 @@ def _section(stated, shape):
 RUN_NAMES = {"part": "__partcad_part__", "sketch": "__partcad_sketch__"}
 
 
-def _unwrapped(value):
-    """'value' with every build123d object in it replaced by the OCP shape it wraps; lists are walked."""
-    if isinstance(value, (list, tuple)):
-        return [_unwrapped(item) for item in value]
-    wrapped = getattr(value, "wrapped", None)
-    return value if wrapped is None else wrapped
-
-
-def _flattened(shapes):
-    for shape in shapes:
-        if isinstance(shape, list):
-            yield from _flattened(shape)
-        else:
-            yield shape
-
-
-def _sketch_answer(shapes):
-    """The answer for a sketch: its edges, wires and faces compounded, with the components."""
-    from OCP.TopAbs import TopAbs_SOLID
-    from OCP.TopExp import TopExp_Explorer
-    from OCP.TopoDS import TopoDS_Shape
-
-    for shape in _flattened(shapes):
-        if isinstance(shape, TopoDS_Shape) and not shape.IsNull() and TopExp_Explorer(shape, TopAbs_SOLID).More():
-            message = "A sketch is made of faces, wires and edges, and the sketchType's script handed back a solid"
-            return {"success": False, "exception": message}
-    compound, components = wrapper_common.combine(shapes, "sketch")
-    # 'combine' keeps the nesting of what it was handed, so '[[]]' is a tree of
-    # components with no component in it.
-    if not any(True for _ in _flattened(components)):
-        message = "The sketchType's script handed back no edge, wire or face"
-        return {"success": False, "exception": message}
-    compound, components = wrapper_common.encode_combined(compound, components)
-    return {"success": True, "exception": None, "shape": compound, "components": components}
-
-
 def process(path, request):
     kind = request.get("kind") or "part"
     try:
@@ -235,7 +199,7 @@ def process(path, request):
     if shapes is None:
         shape = output.get("shape")
         shapes = [shape] if shape is not None else []
-    shapes = _unwrapped(list(shapes))
+    shapes = wrapper_common.unwrapped(list(shapes))
 
     exception = output.get("exception")
     if exception:
@@ -243,9 +207,9 @@ def process(path, request):
         return {"success": False, "exception": str(exception), "shapes": []}
 
     if kind == "sketch":
-        answer = _sketch_answer(shapes)
+        answer = wrapper_common.sketch_answer(shapes)
         if answer["success"]:
-            _carry_dependencies(output, answer)
+            wrapper_common.carry_dependencies(output, answer)
         return answer
 
     # A partType that meshes triangles - which is what the ones in the public
@@ -271,18 +235,8 @@ def process(path, request):
         shapes = wrapper_common.finished_shapes(shapes)
 
     answer = {"success": True, "exception": None, "shapes": shapes}
-    _carry_dependencies(output, answer)
+    wrapper_common.carry_dependencies(output, answer)
     return answer
-
-
-def _carry_dependencies(output, answer):
-    """Put what the script reported reading into 'answer', for a type that 'reportsDependencies'."""
-    if "dependencies" in output:
-        dependencies = output["dependencies"]
-        if dependencies is None:
-            answer["dependencies"] = None  # not known: see 'TypeWrapperFactory.record_reported_async'
-        elif isinstance(dependencies, (list, tuple)):
-            answer["dependencies"] = [str(entry) for entry in dependencies if isinstance(entry, str)]
 
 
 path, request = wrapper_common.handle_input()
