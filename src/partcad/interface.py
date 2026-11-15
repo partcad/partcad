@@ -1023,6 +1023,34 @@ class Interface:
                     continue
                 self.params[param_name] = param
 
+    def _aliased(self):
+        """The interface this alias is spelled as inheriting, one step; None when it inherits none."""
+        for inherit in (self.inherits or {}).values():
+            candidate = getattr(inherit, "interface", None)
+            if candidate is not None:
+                return candidate
+        return None
+
+    def alias_target(self):
+        """The interface this one is another name for, through an alias of an alias; None when it is no alias.
+
+        What a connection finds a mating by: it looks a mating up under the
+        names in 'compatible_with' (see 'assembly_connect._mating_between'),
+        which hold the interface an alias stands for and never the alias. So a
+        mating declared against an alias - 'm8-thru' for 'm-thru;size=8' - is
+        filed under this one too ('Context.add_mate'), or nothing would find it.
+        """
+        current, seen = self, {self.full_name}
+        while current.alias is not None:
+            if current.inherits is None:
+                current.instantiate()
+            target = current._aliased()
+            if target is None or target.full_name in seen:
+                break
+            seen.add(target.full_name)
+            current = target
+        return None if current is self else current
+
     def _adopt_alias_target(self):
         """Take from the alias target whatever this interface does not state itself.
 
@@ -1034,12 +1062,7 @@ class Interface:
         business answering differently: which port leads, whether it is
         abstract, and what kind of joint it is.
         """
-        target = None
-        for inherit in (self.inherits or {}).values():
-            candidate = getattr(inherit, "interface", None)
-            if candidate is not None:
-                target = candidate
-                break
+        target = self._aliased()
         if target is None:
             return
 

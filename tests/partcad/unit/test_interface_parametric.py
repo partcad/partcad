@@ -513,6 +513,40 @@ def test_an_alias_has_the_target_s_ports_under_the_same_names(ctx):
     assert alias.desc == target.desc
 
 
+@pytest.mark.parametrize(
+    "hole",
+    [
+        # What the alias stands for, which is what a connection looks the mating up by.
+        ":m-thru;size=3,depth=3",
+        # The alias itself, under which the mating was declared.
+        ":m3-thru-3",
+    ],
+)
+def test_a_mating_declared_against_an_alias_is_found_by_whatever_reaches_the_hole(ctx, hole):
+    """'m3-pin' mates with 'm3-thru-3', which is 'm-thru;size=3,depth=3' under another name.
+
+    A connection finds a mating by the names in 'compatible_with', which hold
+    what an alias stands for and never the alias. Filed under the alias alone,
+    the mating - and with it its 'how', the one thing it is still asked for
+    once the ports have placed the parts - was found by nothing that reached
+    the hole by its other name.
+    """
+    from partcad.assembly_connect import _mating_between
+
+    pin = ctx.get_interface(":m3-pin")
+    pin.test()
+    mating = _mating_between(pin, ctx.get_interface(hole))
+    assert mating is not None
+    assert mating.how == {"pushForceMax": 7}
+    # And the other way round: the hole connected to the pin.
+    assert _mating_between(ctx.get_interface(hole), pin).how == {"pushForceMax": 7}
+
+
+def test_an_interface_that_is_no_alias_stands_for_nothing_else(ctx):
+    assert ctx.get_interface(":m-thru;size=3,depth=3").alias_target() is None
+    assert ctx.get_interface(":m3-thru-3").alias_target().full_name.endswith(":m-thru;depth=3,size=3")
+
+
 def test_an_alias_may_state_a_description_of_its_own(ctx):
     alias = ctx.get_interface(":m4-screw-6")
     assert alias.desc == "6mm long M4 screw, under the name this package has always used"
