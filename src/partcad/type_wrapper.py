@@ -299,8 +299,32 @@ class TypeWrapperFactory:
         type_config = self._type_config(type_project, self.type_name)
         if type_config is None:
             return None
-        script = os.path.join(type_project.config_dir, type_config.get("path", self.type_name + ".py"))
+        try:
+            script = self._script_path(type_project, type_config.get("path", self.type_name + ".py"))
+        except ValueError:
+            return None  # 'instantiate()' says so, where it can fail the object
         return code_version.key([(self.type_ref, code_version.declared(script))])
+
+    def _script_path(self, type_project, script_rel) -> str:
+        """The absolute path of the type's script, or ValueError if it is outside the type's package.
+
+        The script is named by the type's own declaration and is read (for its
+        'CACHE_VERSION') and executed, so it has to come from inside that
+        package, as an output implementation's does (see 'output'): a 'path' of
+        '../../..' would otherwise both read and, for a plugin-backed package,
+        write outside it. Symbolic links are resolved on both sides, so that a
+        directory of the package linked to somewhere else is not a way out.
+        """
+        config_dir = os.path.abspath(type_project.config_dir)
+        script_abs = os.path.abspath(os.path.join(config_dir, script_rel))
+        try:
+            real_dir = os.path.realpath(config_dir)
+            inside = os.path.commonpath([real_dir, os.path.realpath(script_abs)]) == real_dir
+        except ValueError:  # another drive, on Windows
+            inside = False
+        if not inside:
+            raise ValueError("The %s wrapper is outside its package: %s" % (self.TYPE_KIND, script_rel))
+        return script_abs
 
     # ------------------------------------------------------------------ #
     # Running the script                                                 #
@@ -313,21 +337,7 @@ class TypeWrapperFactory:
         plugin-backed package it is fetched from the plugin (like a file-backed
         object) and written into the package's cache directory.
         """
-        # The script is named by the type's own declaration and is about to be
-        # executed, so it has to come from inside that package, as an output
-        # implementation's does (see 'output'): a 'path' of '../../..' would
-        # otherwise both read and, for a plugin-backed package, write outside it.
-        # Symbolic links resolved on both sides, so that a directory of the
-        # package linked to somewhere else is not a way out of it.
-        config_dir = os.path.abspath(type_project.config_dir)
-        script_abs = os.path.abspath(os.path.join(config_dir, script_rel))
-        try:
-            real_dir = os.path.realpath(config_dir)
-            inside = os.path.commonpath([real_dir, os.path.realpath(script_abs)]) == real_dir
-        except ValueError:  # another drive, on Windows
-            inside = False
-        if not inside:
-            raise Exception("The %s wrapper is outside its package: %s" % (self.TYPE_KIND, script_rel))
+        script_abs = self._script_path(type_project, script_rel)  # inside the package, or ValueError
         if os.path.exists(script_abs):
             return script_abs
 

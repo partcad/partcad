@@ -318,3 +318,27 @@ def test_a_sketch_type_s_script_through_a_link_out_of_its_package_is_refused(tmp
     sketch = ctx.get_sketch(":s")
     assert asyncio.run(sketch.get_wrapped(ctx)) is None
     assert any("outside its package" in str(e) for e in sketch.errors), sketch.errors
+
+
+def test_a_sketch_type_s_script_outside_its_package_is_not_read_for_its_version(tmp_path, monkeypatch):
+    """The key reads a script's 'CACHE_VERSION'; one outside the package is not read at all."""
+    from partcad import code_version
+
+    _package(
+        tmp_path / "pkg",
+        """
+        sketchTypes:
+          escape:
+            path: ../outside.py
+        sketches:
+          s:
+            type: ":escape"
+        """,
+    )
+    (tmp_path / "outside.py").write_text("CACHE_VERSION = 7\n")
+    read = []
+    monkeypatch.setattr(code_version, "declared", lambda path: read.append(path) or 0)
+    ctx = pc.Context(str(tmp_path / "pkg"))
+    sketch = ctx.get_sketch(":s")
+    assert asyncio.run(sketch.get_wrapped(ctx)) is None
+    assert not any("outside.py" in str(p) for p in read), read
