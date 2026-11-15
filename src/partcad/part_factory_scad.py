@@ -92,10 +92,15 @@ def _write_render_script(source_path, call_line):
     resolves those relative to the file that contains them, so a copy placed in
     the system temp directory would break them.
     """
-    with open(source_path, "r", encoding="utf-8") as f:
+    # Copied byte for byte, whatever the source's encoding: OpenSCAD reads
+    # UTF-8, but a file saved in a Windows code page (old Notepad's "ANSI")
+    # still renders when its other bytes are only in comments, and the copy must
+    # not be what fails. "surrogateescape" carries a byte UTF-8 cannot decode
+    # through to the copy unchanged, and newline="" its line endings.
+    with open(source_path, "r", encoding="utf-8", errors="surrogateescape", newline="") as f:
         source = f.read()
     fd, tmp_path = tempfile.mkstemp(suffix=".scad", dir=os.path.dirname(source_path) or None)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
+    with os.fdopen(fd, "w", encoding="utf-8", errors="surrogateescape", newline="") as f:
         f.write(source)
         if source and not source.endswith("\n"):
             f.write("\n")

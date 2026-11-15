@@ -20,10 +20,16 @@ finds every text-mode 'open()' in the sources that does not say which encoding.
 
 import ast
 import asyncio
+import importlib.util
 import locale
+import os
 import pathlib
+import sys
 
 import pytest
+from OCP.TopAbs import TopAbs_FACE
+from OCP.TopExp import TopExp
+from OCP.TopTools import TopTools_IndexedMapOfShape
 
 import partcad as pc
 from partcad import document as pc_document
@@ -31,6 +37,7 @@ from partcad_utils import user_config
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 SOURCES = REPO_ROOT / "src"
+WRAPPERS = os.path.join(os.path.dirname(pc.__file__), "wrappers")
 
 TEXT = "Плата 85 × 56 мм, Ø 2.75"
 
@@ -90,6 +97,46 @@ def test_a_configuration_file_an_older_version_wrote_in_the_locales_encoding_sti
     monkeypatch.setattr(locale, "getpreferredencoding", lambda do_setlocale=True: "cp1251")
 
     assert user_config.read_config_text(path) == "cacheDir: C:\\Users\\Иван\\cache\n"
+
+
+#
+# Files somebody else wrote, in whatever encoding they chose
+#
+
+
+def test_a_scad_source_in_a_windows_code_page_is_copied_byte_for_byte(tmp_path):
+    """A '.scad' saved as "ANSI" by an older Notepad renders as it did before PartCAD read UTF-8.
+
+    Only its comment is outside ASCII, which OpenSCAD does not mind; the copy
+    PartCAD renders must not be what fails, nor change a byte of it.
+    """
+    from partcad import part_factory_scad
+
+    source = ("// Плата, размеры в мм\nmodule board() { cube([85, 56, 1.6]); }").encode("cp1251")
+    path = tmp_path / "board.scad"
+    path.write_bytes(source)
+
+    copy = part_factory_scad._write_render_script(str(path), "board();")
+    try:
+        assert pathlib.Path(copy).read_bytes() == source + b"\nboard();\n"
+    finally:
+        os.remove(copy)
+
+
+def test_an_obj_file_with_a_byte_utf_8_cannot_decode_still_reads(tmp_path):
+    """The geometry of an OBJ file is numbers; a Latin-1 comment does not stop it being read."""
+    sys.path.append(WRAPPERS)
+    spec = importlib.util.spec_from_file_location("wrapper_obj_encoding", os.path.join(WRAPPERS, "wrapper_obj.py"))
+    wrapper_obj = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(wrapper_obj)
+    path = tmp_path / "triangle.obj"
+    path.write_bytes("# Dreieck, Größe 1\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n".encode("latin-1"))
+
+    compound = wrapper_obj.process(str(path))
+
+    faces = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(compound, TopAbs_FACE, faces)
+    assert faces.Extent() == 1
 
 
 #
