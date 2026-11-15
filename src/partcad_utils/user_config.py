@@ -11,6 +11,8 @@ import importlib._bootstrap
 import importlib._bootstrap_external
 import importlib.machinery
 import importlib.util
+import io
+import locale
 import math
 import os
 import shutil
@@ -303,6 +305,25 @@ class TelemetryConfig(dict):
             if isinstance(val, property):
                 properties.append((name, val.__get__(self, TelemetryConfig)))
         return str({k: v for k, v in properties})
+
+
+def read_config_text(path) -> str:
+    """The text of a configuration file PartCAD keeps for the user, which it writes as UTF-8.
+
+    It did not always: it used to write and read these files in the encoding of
+    the locale, which on Windows is a code page (1252 in Western Europe, 1251
+    for Cyrillic, ...) rather than UTF-8. A file written that way with anything
+    outside ASCII in it -- a path under 'C:\\Users\\Иван', say -- does not
+    decode as UTF-8, and refusing it would throw away the user's settings over
+    a change they did not make. So it is read in the locale's encoding as it
+    was written, and the next save writes it as UTF-8.
+    """
+    with open(path, "rb") as f:
+        data = f.read()
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode(locale.getpreferredencoding(False))
 
 
 def _positive_seconds(value):
@@ -794,8 +815,7 @@ class UserConfig(vyper.Vyper):
         config_path = UserConfig.get_config_path()
         if os.path.exists(config_path):
             try:
-                with open(config_path, "r") as f:
-                    self.read_config(f)
+                self.read_config(io.StringIO(read_config_text(config_path)))
             except Exception as e:
                 pc_logging.error("ERROR: Failed to parse %s: %s" % (config_path, str(e)))
 

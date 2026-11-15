@@ -848,7 +848,7 @@ class Shape(ShapeConfiguration):
 
         # Check for a match in other files associated with this shape
         if self.path and os.path.exists(self.path):
-            with open(self.path, errors="replace") as f:
+            with open(self.path, errors="replace", encoding="utf-8") as f:
                 if keyword and keyword.lower() in f.read().lower():
                     return True
         return False

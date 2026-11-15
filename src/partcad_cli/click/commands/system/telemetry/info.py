@@ -18,7 +18,7 @@ def cli(cli_ctx) -> None:
         with pc.logging.Process("SysTelInfo", "global"):
             id_path = pc.user_config.get_generated_id_path()
             if os.path.exists(id_path):
-                with open(id_path, "r") as file:
+                with open(id_path, "r", encoding="utf-8") as file:
                     id_value = file.read()
                     pc.logging.info(f"Telemetry ID: '{id_value}'")
             else:

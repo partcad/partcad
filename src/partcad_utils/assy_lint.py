@@ -321,7 +321,7 @@ def get_schema(filename: str) -> dict:
     -- so it is self-contained. See '_inline_borrowed'.
     """
     if filename not in _schema_cache:
-        with resources.files("partcad_utils.schema").joinpath(filename).open("r") as f:
+        with resources.files("partcad_utils.schema").joinpath(filename).open("r", encoding="utf-8") as f:
             _schema_cache[filename] = _inline_borrowed(json.load(f), filename)
     return _schema_cache[filename]
 

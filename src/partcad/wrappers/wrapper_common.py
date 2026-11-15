@@ -864,7 +864,7 @@ def handle_exception(exc, cqscript=None):
 
             # Attempt to read the file and print the specific line
             try:
-                with open(fname, "r") as fp:
+                with open(fname, "r", encoding="utf-8") as fp:
                     lines = fp.read().split("\n")
                     if tb.tb_lineno - 1 < len(lines):
                         line = lines[tb.tb_lineno - 1]

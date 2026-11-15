@@ -269,7 +269,7 @@ def package_requirements(project) -> list[str]:
         # TODO-218: @alexanderilyin: Add support for --hash=... in requirements.txt
         requirements_path = os.path.join(project.path, "requirements.txt")
         if os.path.exists(requirements_path):
-            with open(requirements_path) as f:
+            with open(requirements_path, encoding="utf-8") as f:
                 requirements_text = f.read()
             requirements_lines = requirements_text.strip().split("\n")
             for line in requirements_lines:
@@ -519,7 +519,7 @@ class PythonRuntime(runtime.Runtime):
             constraints_path = os.path.join(self.path, "partcad-constraints.txt")
             try:
                 os.makedirs(self.path, exist_ok=True)
-                with open(constraints_path, "w") as f:
+                with open(constraints_path, "w", encoding="utf-8") as f:
                     f.write("\n".join(PIP_CONSTRAINTS) + "\n")
                 self.constraints_path = constraints_path
             except OSError as e:

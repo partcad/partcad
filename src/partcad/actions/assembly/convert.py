@@ -451,7 +451,7 @@ SECTION_KINDS = {
 def apply_config(project: Project, sections: dict) -> None:
     """Merge the generated sections into the package's 'partcad.yaml'."""
     yaml = _yaml()
-    with open(project.config_path) as f:
+    with open(project.config_path, encoding="utf-8") as f:
         config = yaml.load(f)
     if config is None:
         config = CommentedMap()
@@ -470,7 +470,7 @@ def apply_config(project: Project, sections: dict) -> None:
     # writing truncates the user's package configuration before the dump runs,
     # and what is in it cannot be recovered from the generated files.
     tmp_path = "%s.tmp" % project.config_path
-    with open(tmp_path, "w") as f:
+    with open(tmp_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f)
     os.replace(tmp_path, project.config_path)
 

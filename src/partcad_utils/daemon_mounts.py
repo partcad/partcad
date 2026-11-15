@@ -237,7 +237,7 @@ def _own_container_sources(client):
     """
     candidates = []
     try:
-        with open("/proc/self/mountinfo") as f:
+        with open("/proc/self/mountinfo", encoding="utf-8") as f:
             candidates += _CONTAINER_ID.findall(f.read())
     except OSError:
         pass
@@ -279,7 +279,7 @@ def _probe_mounts(client, image: str, sources=None, python: str = "python3") -> 
 
     with tempfile.TemporaryDirectory() as probe:
         marker = os.path.join(probe, _PROBE_FILE)
-        with open(marker, "w") as written:
+        with open(marker, "w", encoding="utf-8") as written:
             written.write("partcad")
         # Readable by anyone, because the question is where the daemon looks and
         # not who may read what it finds. A temporary directory is 0700, and on

@@ -945,7 +945,7 @@ def pipe_holders(files):
                     continue
                 # The writing end only. Something holding the reading end of
                 # these is a copy of the reader, not a reason it waits.
-                with open("/proc/%s/fdinfo/%s" % (entry, descriptor)) as info:
+                with open("/proc/%s/fdinfo/%s" % (entry, descriptor), encoding="utf-8") as info:
                     flags = next((line.split()[1] for line in info if line.startswith("flags:")), "0")
                 if int(flags, 8) & os.O_ACCMODE == os.O_RDONLY:
                     continue

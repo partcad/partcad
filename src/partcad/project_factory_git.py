@@ -710,7 +710,7 @@ def _fetched_commit(repo: pygit2.Repository, revision: str) -> pygit2.Oid:
     entries = []
     fetch_head = os.path.join(repo.path, "FETCH_HEAD")
     if os.path.exists(fetch_head):
-        with open(fetch_head, "r") as f:
+        with open(fetch_head, "r", encoding="utf-8") as f:
             entries = [line.split("\t") for line in f.read().splitlines() if line.strip()]
 
     for fields in entries:
@@ -1229,7 +1229,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         except GIT_ERRORS:
             return False
         self.ctx.stats_git_ops += 1
-        with open(guard_path, "w") as f:
+        with open(guard_path, "w", encoding="utf-8") as f:
             f.write(str(repo.head.target))
         pc_logging.info("Cloned %s with the ambient git config ignored", self.import_config_url)
         return True
@@ -1305,7 +1305,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
             # The revision a package read out of this copy reports is cached by
             # the repository's path, and the path has not changed.
             pc_revision.reset_cache()
-        with open(guard_path, "w") as f:
+        with open(guard_path, "w", encoding="utf-8") as f:
             f.write(str(after))
 
     def _move_to_commit(self, repo_url, repo, cache_path, commit) -> pygit2.Repository:
@@ -1602,7 +1602,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
                     # The commit, whatever the revision named: a copy named after
                     # a branch moves from commit to commit.
-                    with open(guard_path, "w") as f:
+                    with open(guard_path, "w", encoding="utf-8") as f:
                         f.write(str(repo.head.target))
                     break
                 except GIT_ERRORS as e:

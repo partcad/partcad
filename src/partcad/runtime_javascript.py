@@ -347,7 +347,7 @@ class JavaScriptRuntime(runtime.Runtime):
 
         existing = {}
         try:
-            with open(manifest_path, "r") as f:
+            with open(manifest_path, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
             if isinstance(loaded, dict):
                 existing = loaded
@@ -373,7 +373,7 @@ class JavaScriptRuntime(runtime.Runtime):
             return
 
         try:
-            with open(manifest_path, "w") as f:
+            with open(manifest_path, "w", encoding="utf-8") as f:
                 json.dump(manifest, f, indent=2)
                 f.write("\n")
         except OSError as e:

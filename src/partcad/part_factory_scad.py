@@ -92,10 +92,10 @@ def _write_render_script(source_path, call_line):
     resolves those relative to the file that contains them, so a copy placed in
     the system temp directory would break them.
     """
-    with open(source_path, "r") as f:
+    with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
     fd, tmp_path = tempfile.mkstemp(suffix=".scad", dir=os.path.dirname(source_path) or None)
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(source)
         if source and not source.endswith("\n"):
             f.write("\n")

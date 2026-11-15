@@ -240,7 +240,7 @@ def build(vertices, faces):
 
 def process(path):
     """The OBJ file at 'path' as a compound of OCCT faces, saying on standard error what was left out."""
-    with open(path, "r") as file:
+    with open(path, "r", encoding="utf-8") as file:
         vertices, faces = parse(file)
     compound, skipped = build(vertices, faces)
     if skipped:
