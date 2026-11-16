@@ -317,13 +317,13 @@ def test_a_part_a_plugin_serves_is_keyed_on_the_plugin_s_version_end_to_end(tmp_
 
 def _part_type_factory(part_project, pt_project, ref="//types:thing"):
     factory = PartFactoryWrapper.__new__(PartFactoryWrapper)
-    factory.part_type_ref = ref
-    factory.part_type_package, factory.part_type_name = ref.split(":")
+    factory.type_ref = ref
+    factory.type_package, factory.type_name = ref.split(":")
     factory.project = part_project
 
     class Ctx:
         def get_project(self, name):
-            return pt_project if name == factory.part_type_package else None
+            return pt_project if name == factory.type_package else None
 
     factory.ctx = Ctx()
     return factory
@@ -339,7 +339,7 @@ def test_a_local_part_type_reports_the_version_its_script_states(tmp_path):
         def get_part_type_config(self, name):
             return {} if name == "thing" else None
 
-    assert _part_type_factory(_Project(), Types())._part_type_versions() == "//types:thing@3"
+    assert _part_type_factory(_Project(), Types())._type_versions() == "//types:thing@3"
 
 
 def test_a_part_type_a_plugin_serves_reports_the_plugin_s_version():
@@ -348,9 +348,9 @@ def test_a_part_type_a_plugin_serves_reports_the_plugin_s_version():
         plugin_ref = "//types:repo"
         plugin_cache_version = 5
 
-    assert _part_type_factory(_Project(), Served())._part_type_versions() == "//types:repo@5"
+    assert _part_type_factory(_Project(), Served())._type_versions() == "//types:repo@5"
     # The part is served by the same plugin: its key has the version already.
-    assert _part_type_factory(Served(), Served())._part_type_versions() is None
+    assert _part_type_factory(Served(), Served())._type_versions() is None
 
 
 # --------------------------------------------------------------------------- #

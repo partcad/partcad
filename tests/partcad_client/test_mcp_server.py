@@ -187,6 +187,15 @@ def test_a_kind_is_the_flag_pc_sets_and_parameters_are_assignments(tmp_path):
     assert request["params"] == ["width=10", "hollow=true"]
 
 
+@pytest.mark.parametrize("kind", ["material", "color", "finish"])
+def test_info_is_told_a_name_is_a_cmf_declaration_with_the_flag_pc_sets(tmp_path, kind):
+    """'pc info -m', '--color' and '--finish': the one way to reach a declaration an object shares a name with."""
+    daemon, server = serve(tmp_path, {"info.object": lambda params, emit: None})
+    call(server, "info", {"object": "//pub/std/manufacturing/material/plastic:pla", "kind": kind})
+    (request,) = requests(daemon, "info.object")
+    assert request[kind] is True
+
+
 def test_a_list_value_is_written_the_way_a_name_spells_it(tmp_path):
     """'{"include": ["UP", "DOWN"]}' is 'include=UP,DOWN', not "include=['UP', 'DOWN']"."""
     daemon, server = serve(tmp_path, {"bom": lambda params, emit: None})

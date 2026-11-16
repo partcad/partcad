@@ -341,6 +341,13 @@ class FakeProject:
         """A colour, material or finish of this package, as 'Project.get_cmf()' answers it."""
         return getattr(self, self._sections[kind]).get(name)
 
+    def declares_cmf(self, kind, name):
+        """Whether this package declares that colour, material or finish, as 'Project.declares_cmf()' answers it.
+
+        What 'pc info' asks of a name no object of the package has.
+        """
+        return name.partition(";")[0] in getattr(self, self._sections[kind])
+
     def get_child_project_names(self):
         return list(self.children)
 

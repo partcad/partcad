@@ -39,6 +39,46 @@ Feature: `pc lint` command
     And STDOUT should not contain "is not of type 'object'"
 
   @success
+  Scenario: A sketch built by the package's own sketch type is clean
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package that teaches PartCAD a sketch type
+      sketchTypes:
+        plate:
+          desc: A plate with holes
+          path: plate.py
+      sketches:
+        plate:
+          type: ":plate"
+          parameters:
+            width:
+              type: float
+              default: 40
+      """
+    And a file named "plate.py" with content:
+      """
+      CACHE_VERSION = 1
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @success
+  Scenario: A sketch type does not take `requireSolid`
+    # It is a part's: no sketch is held to being closed or planar. An unknown
+    # key is a warning, as it is anywhere else in the file.
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A sketch type that asks for solids
+      sketchTypes:
+        plate:
+          path: plate.py
+          requireSolid: true
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "unexpected property 'requireSolid'"
+
+  @success
   Scenario: Jinja2 in `partcad.yaml` is not mistaken for broken YAML
     # A package configuration is a Jinja2 template as much as an ASSY file is -
     # it even has an 'includePaths' of its own to pull fragments in.

@@ -585,10 +585,18 @@ package where the original object is declared. This allows for the same parametr
         <param name>:
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
+          min: <(optional, int and float only) the smallest value>
+          max: <(optional, int and float only) the largest value>
           default: <default value>
 
 The short form ``<param name>: <default value>`` may be used whenever the type
 can be inferred from the value.
+
+An ``int`` or a ``float`` parameter may state the range it may take, both ends
+included, in ``min`` and ``max``, and any parameter the values it may take, in
+``enum``. A value outside them -- given by a reference, by an override, or as
+the default -- is refused with the parameter, the value, the bound or the
+allowed values, and the object named; see :ref:`parameters`.
 
 Assemblies declare parameters the same way. Their values are passed to the
 ``.assy`` file as ``param_<param name>`` when its Jinja templates are resolved:

@@ -483,6 +483,13 @@ A walk over a named object (`_targets()`) asks each package what its own object 
 `(package, name, kind)`: the `bolt` of one package can be a part and the `bolt` of the next an assembly. A kind
 said with a flag narrows the walk to objects of that kind instead.
 
+`info.object` alone also reports on a colour, a material or a finish named where an object's name goes. Objects
+are asked first, so a name an object has means what it meant; a name none has is every CMF declaration of the
+package that has it (`_cmf_kinds()`, from `Project.declares_cmf`, building nothing), because the three kinds keep
+namespaces of their own. The `color`, `material` and `finish` flags (`_info_kind()`) say which, and `_targets(...,
+cmf=True)` does the same on a walk. A declaration is printed as an object is, `CONFIGURATION:` and `INFO:` lines,
+from `partcad.cmf.declaration_info` -- an alias as itself, with the facts of what it resolves to.
+
 ### `params`: the values an object is asked for with
 
 An object with particular parameter values *is* a name -- `bolt;length=10` -- and every method that takes an

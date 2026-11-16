@@ -203,6 +203,11 @@ booleans they always were; `click/object_kind.py` holds the words every command 
 they say the same thing everywhere. A command does not resolve the kind itself, for the reason it does not parse
 `...` either: there are three clients of the daemon, and only the daemon has the package graph to ask.
 
+`pc info` also takes the name of a colour, a material or a finish -- CMF declarations, which keep a namespace per
+kind beside the objects'. The daemon looks for one only where no object of the package has the name, and reports
+every kind that has it; `--color`, `-m`/`--material` and `--finish` say which kind it is, and are the way to a
+declaration that shares its name with an object (`operations._info_kind`, `_cmf_kinds`).
+
 ## `...`: the package name that means "and everything below it"
 
 `//pub/examples...` is that package and every package below it — the same request `-r` makes, written where

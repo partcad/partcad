@@ -225,6 +225,17 @@ def _located(dependency_config: dict, path: str) -> dict:
     return located
 
 
+def _stands_for(interface):
+    """The interface 'interface' is another name for, or 'interface' itself when it is no alias.
+
+    Read through 'getattr', since a mating is filed between whatever a caller
+    hands over, including the stand-ins a test uses.
+    """
+    alias_target = getattr(interface, "alias_target", None)
+    target = alias_target() if callable(alias_target) else None
+    return target if target is not None else interface
+
+
 class Context:
     """Stores and caches all imported objects.
 
@@ -1266,19 +1277,18 @@ class Context:
         )
 
     def add_mate(self, source_interface, target_interface, mate_target_config: dict):
-        self._add_mate(
-            source_interface,
-            target_interface,
-            mate_target_config,
-            reverse=False,
-        )
-        if target_interface != source_interface:
-            self._add_mate(
-                target_interface,
-                source_interface,
-                mate_target_config,
-                reverse=True,
-            )
+        pairs = [(source_interface, target_interface)]
+        # A mating declared against an alias - 'm8-thru' for 'm-thru;size=8' -
+        # is filed under what the alias stands for as well: a connection looks
+        # matings up by the names in 'compatible_with', which hold that one and
+        # never the alias (see 'Interface.alias_target').
+        stands_for = (_stands_for(source_interface), _stands_for(target_interface))
+        if stands_for != pairs[0]:
+            pairs.append(stands_for)
+        for source, target in pairs:
+            self._add_mate(source, target, mate_target_config, reverse=False)
+            if target != source:
+                self._add_mate(target, source, mate_target_config, reverse=True)
 
     def _add_mate(
         self,
@@ -2345,7 +2355,9 @@ class Context:
         # What the implementation runs as, allowed wherever the image's PATH
         # has it. An image built on PartCAD's own pins 'python' to a path of its
         # own, and that pin stands.
-        command = container.get("command") or "python"
+        from . import wrapper_container
+
+        command = wrapper_container.command_of(container)
         key = (image, role, command)
 
         with self.runtimes_container_lock:

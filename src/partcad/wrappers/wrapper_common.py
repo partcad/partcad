@@ -727,6 +727,62 @@ def _finish(shape, finish):
     return shape, done
 
 
+def unwrapped(value):
+    """'value' with every build123d object in it replaced by the OCP shape it wraps; lists are walked.
+
+    What a type's script hands back (see wrapper_part_type.py) may be OCP
+    shapes or anything holding one in 'wrapped', so a script need not unwrap
+    its build123d objects itself.
+    """
+    if isinstance(value, (list, tuple)):
+        return [unwrapped(item) for item in value]
+    wrapped = getattr(value, "wrapped", None)
+    return value if wrapped is None else wrapped
+
+
+def flattened(shapes):
+    """The leaves of a tree of shapes (lists may nest), in order."""
+    for shape in shapes:
+        if isinstance(shape, list):
+            yield from flattened(shape)
+        else:
+            yield shape
+
+
+def sketch_answer(shapes):
+    """The answer for a sketch built by a sketchType: its edges, wires and faces compounded, with the components.
+
+    A solid among 'shapes' fails the sketch rather than being dropped by
+    'combine', and so does a tree with no edge, wire or face in it.
+    """
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS_Shape
+
+    for shape in flattened(shapes):
+        if isinstance(shape, TopoDS_Shape) and not shape.IsNull() and TopExp_Explorer(shape, TopAbs_SOLID).More():
+            message = "A sketch is made of faces, wires and edges, and the sketchType's script handed back a solid"
+            return {"success": False, "exception": message}
+    compound, components = combine(shapes, "sketch")
+    # 'combine' keeps the nesting of what it was handed, so '[[]]' is a tree of
+    # components with no component in it.
+    if not any(True for _ in flattened(components)):
+        message = "The sketchType's script handed back no edge, wire or face"
+        return {"success": False, "exception": message}
+    compound, components = encode_combined(compound, components)
+    return {"success": True, "exception": None, "shape": compound, "components": components}
+
+
+def carry_dependencies(output, answer):
+    """Put what a type's script reported reading into 'answer', for a type that 'reportsDependencies'."""
+    if "dependencies" in output:
+        dependencies = output["dependencies"]
+        if dependencies is None:
+            answer["dependencies"] = None  # not known: see 'TypeWrapperFactory.record_reported_async'
+        elif isinstance(dependencies, (list, tuple)):
+            answer["dependencies"] = [str(entry) for entry in dependencies if isinstance(entry, str)]
+
+
 def combine(shapes, kind):
     """Compound the script's result shapes and collect its components.
 

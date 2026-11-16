@@ -86,6 +86,15 @@ its own scripts; removing `python` is not — it is the name the `remote` sandbo
 and the path it is pinned to is how the image says which interpreter is its own. An image with no `python3`
 cannot run the service, and serves no sandbox at all.
 
+An image that a `container:` declaration names -- an output implementation's, or a part or sketch type's (`partTypes:`, `sketchTypes:`) --
+is run **as it is**: PartCAD builds no sandbox environment in it and installs nothing into it, and runs its own
+wrapper there with the image's `python` (or the allowlisted name `command:` gives). So whatever that wrapper and
+the package's script import has to be in the image already. For a part or sketch type that includes **OCP**, since the
+wrapper hands the object back as OCP shapes: install build123d at the version PartCAD pins
+(`sandbox_versions.BUILD123D`), which brings the OCP build the wrappers use. An image without it fails each part
+with a message saying so rather than an import error. See `docs/source/plugins/part_types.rst`, "Running in a
+container".
+
 The base image also carries **cadmpeg** at `/usr/local/bin/cadmpeg`: the native program PartCAD reads
 FreeCAD, Fusion 360, SolidWorks, Inventor, CATIA, ACIS, Creo View and IGES files with. It is not part of the
 contract — an image without it still serves every sandbox, and PartCAD downloads cadmpeg into its cache the

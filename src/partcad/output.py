@@ -871,28 +871,23 @@ class Implementation:
                   image: ghcr.io/example/solver:1a2b3c4d5e6f
 
         which is how a plugin becomes responsible for its own dependencies
-        rather than asking every user to install them. `port` defaults to the
-        5000 that `tools/containers/_common/pc-container-json-rpc.py` listens
-        on; `name` defaults to one derived from the image, so that two packages
-        naming the same image share a container rather than starting two.
+        rather than asking every user to install them. `name` is what the
+        container is for, the second word of its name (it defaults to none, so
+        that two packages naming the same image share a container rather than
+        starting two), and `command` the name in the image's allowlist the
+        wrapper runs with, `python` by default. There is no `port`: PartCAD
+        runs its own service in every container and chooses where to reach it
+        (see `partcad_utils.containers`). A `partTypes:` entry declares one the
+        same way (see `partcad.wrapper_container`).
 
         The implementing package's declaration and nobody else's, for the reason
         `python_version()` gives at length: this describes what *that* package's
         script needs to run, and a caller asking for an analysis has no opinion
         about it worth reading.
         """
-        declared = self._declared("container")
-        if not declared:
-            return None
-        if isinstance(declared, str):
-            # The short form: the image and nothing else.
-            declared = {"image": declared}
-        if not isinstance(declared, dict) or not declared.get("image"):
-            raise ValueError(
-                "The '%s' implementation declares a 'container:' that names no 'image:': %r"
-                % (self.format_name, declared)
-            )
-        return dict(declared)
+        from . import wrapper_container
+
+        return wrapper_container.declaration(self._declared("container"), "The '%s' implementation" % self.format_name)
 
     @property
     def docker_image(self) -> Optional[str]:
@@ -1179,13 +1174,29 @@ def builtin_part_type(ctx, name):
     'factory.instantiate()' only once no registered factory claimed the name, so
     a built-in factory always wins.
     """
+    return _builtin_type(ctx, "partTypes", name)
+
+
+def builtin_sketch_type(ctx, name):
+    """The package path declaring a built-in ``sketchType`` called ``name``, or None.
+
+    The counterpart of 'builtin_part_type()' for sketches: a sketch names a
+    'sketchTypes' entry of '//builtin/import' by its bare name. PartCAD ships
+    none today; the lookup is here so that adding one is a declaration and
+    nothing else.
+    """
+    return _builtin_type(ctx, "sketchTypes", name)
+
+
+def _builtin_type(ctx, section, name):
+    """The path of '//builtin/import' if its 'section' declares 'name', or None."""
     if not isinstance(name, str) or not name or ":" in name or ctx is None:
         return None
     project = builtin_project(ctx, IMPORT)
     if project is None:
         return None
-    part_types = project.config_obj.get("partTypes")
-    if isinstance(part_types, dict) and name in part_types:
+    declared = project.config_obj.get(section)
+    if isinstance(declared, dict) and name in declared:
         return project.name
     return None
 

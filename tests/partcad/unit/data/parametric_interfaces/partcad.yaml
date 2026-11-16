@@ -132,6 +132,18 @@ interfaces:
   # The short form, which is how a sketch and a part spell an alias too.
   m5-thru-2: "m-thru;size=5,depth=2"
 
+  # Mates by the name an alias gives the hole, as a package written before the
+  # family became parametric does: the mating is the hole's, whichever of its
+  # names a connection reaches it by.
+  m3-pin:
+    desc: A 3mm pin, pushed into a 3mm thick 3mm hole
+    ports:
+      tip:
+        sketch: m-boundary
+    mates:
+      m3-thru-3:
+        how: {pushForceMax: 7}
+
   vocabulary:
     # Every way a part may declare a parameter, declared on an interface, in
     # the same section as a freedom-of-movement parameter.

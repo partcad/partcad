@@ -83,7 +83,8 @@ at all).
 - **A name is one object of its package, whatever its kind** (`partcad_utils/object_names.py`,
   `Project.object_kind`, `Project._refuse_duplicate_names`). Parts, interfaces, assemblies, sketches, scenes and
   software share one namespace per package -- materials, providers, repositories and part types keep their own,
-  since nothing names one of those without saying what it is -- and that is what lets a command take a bare name
+  since nothing names one of those without saying what it is (`pc info` is the exception, and looks a colour,
+  material or finish up only where no object has the name) -- and that is what lets a command take a bare name
   and find out what it is instead of being told with `-a`/`-s`/`-i`/`-S`/`-w`. `NAMED_OBJECT_KINDS` is both the
   set and the order a name is looked for in, the most frequent first.
 
@@ -319,6 +320,16 @@ at all).
   asked of Windows (`GetFileInformationByHandleEx`); where it cannot be had, nothing is remembered. A test that
   changes a file it has declared settled waits for the file system's clock to move first. `code_version`
   remembers a script's `CACHE_VERSION` by the same rule, and `source_key` goes by the same `RACY_NS`.
+
+- **A part type and a sketch type are one mechanism** (`type_wrapper.TypeWrapperFactory`). `PartFactoryWrapper`
+  (`partTypes:`) and `SketchFactoryWrapper` (`sketchTypes:`) mix in the same class for resolving the type
+  (`:name`, `<package>:name`, a bare name `//builtin/import` declares), the file a type with an `extension` reads,
+  the image and sandbox its script runs in, what the object is keyed on, and running the script; and the scripts of
+  both run through one wrapper, `wrapper_part_type.py`, which shapes the answer by `request["kind"]` (a part is
+  compounded and finished, a sketch is its faces, wires and edges with their components). A factory says only which
+  section its types are in and what it makes of the answer, plus what is its own kind's (`requireSolid` is a
+  part's). So a feature added to how a type's script runs -- a container, a new key -- is added in `type_wrapper`,
+  once, and not to one kind of type.
 
 - **A file a part was read from that nothing declared is keyed on once a build has reported it**
   (`discovered_dependencies`). A part's key has to be known before it is built, and the layers an OpenUSD stage
@@ -1998,8 +2009,12 @@ at all).
   the construction values a reference sets — because "the same way as for a part" is the point of the
   feature. The split is `interface_config.is_movement_parameter`, and it is safe because the two
   vocabularies do not overlap: a movement parameter is one of the six predefined names, a `[min, max,
-  default]` list, or states `min`/`max`/`dir` or `type: move`/`turn`; a part's parameter states none of
-  those. Every movement parameter the schema has ever accepted is caught — a custom name is *required* to
+  default]` list, or states `min`/`max`/`dir` or `type: move`/`turn`. A construction parameter may state
+  `min`/`max` too, now that every numeric parameter may be bounded (`partcad_utils.parameters.value_problem`,
+  which also holds every value to a declared `enum`),
+  and what tells it apart is that it states the type of a value (`type: float`), which a movement parameter
+  never does -- so an interface's bounded construction parameter has to state its `type`, and the schema's
+  `if` says the same. Every movement parameter the schema has ever accepted is caught — a custom name is *required* to
   state its `dir` — so nothing written before this changes meaning. `WithPorts` overrides both accessors:
   for a shape that section has only ever meant construction values, so none of it is movement.
 
@@ -2065,6 +2080,31 @@ at all).
   defence is that no name on that list leads anywhere. `format` is off it deliberately: `"{0.__class__}"
   .format(x)` traverses attributes by name at run time, which is the whole of what the list prevents. Adding
   a name to it is a decision about what a package may run at *load* time, not a convenience.
+
+  The table functions in `SAFE_NAMES` (`clamp`, `lerp`, `interpolate`, `pick`, `color_mix`,
+  `interpolate_color`) are ordinary Python in `expr.py`, and each checks what it is handed before using it --
+  numbers where a number belongs, stops strictly increasing, one value per stop -- because they are called with
+  whatever a declaration wrote, and an error has to say what is wrong with the table. `NUMERIC_FUNCTIONS` lists
+  the ones that answer a number whatever they are given, and `_is_numeric` treats `pick` as one only when its
+  values are written out as numbers: the multiplication check is what keeps `'x' * 10**9` from allocating, and
+  `pick` from a list of text would be that.
+
+- **Computed and stacked CMF declarations** (`cmf.py`, `material.py`, `Project._make_cmf` / `_get_enrich`). A
+  colour's, a material's or a finish's fields are rendered with its parameters (`cmf.with_parameters`), and a
+  material's numbers are then held to the ranges the schema gives them (`material.NUMBERS`, which a test holds
+  to the schema): a computed density that came out negative, or an expression that could not be evaluated and is
+  still text, refuses that instance by name. `type: enrich` is a declaration of its own made from another
+  instance (`cmf.enriched`, `ENRICH_EXCLUDED`): its reference is its own, it takes no `ids`/`aliases` (an id
+  names one declaration, and `cmf_conventions` counts an enrich's own), and references it takes are made
+  absolute against the source's package. Enriches are the one CMF declaration not made as the package loads
+  (`init_materials` skips them): the context has not registered the package yet, and the source may be in a
+  package nothing else loads. They are made outside the declaration's `MaterialLock`, because making one asks
+  for its source, which may be an enrich asking for this one; a thread-local stack (`_ENRICHING`) is what
+  notices that, and `EnrichCycleError` reaches the outermost one to report the whole chain once. A name asked for
+  that is one of a declaration's `aliases:` is handed to that declaration before any lock is taken, for the same
+  reason: the declaration may be an enrich of that very name. Why an
+  instance could not be made is kept in `Project.cmf_failures`, for `cmf.why_unresolved` and for an enrich of
+  it to say rather than "declares no material".
 
 - **What a `partcad.yaml` is rendered with** (`./src/partcad/config_template.py`): the file is a Jinja2 template
   rendered to YAML before it is parsed, and this is the context. Beside the package name and the constants a CAD

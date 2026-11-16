@@ -103,6 +103,9 @@ Using file formats:
 - DXF
 - SVG
 
+Using a sketch type the package defines itself (``sketchTypes``), including one that reads a file format of
+its own (see :doc:`/plugins/sketch_types`).
+
 ====================
 Assembly models (3D)
 ====================

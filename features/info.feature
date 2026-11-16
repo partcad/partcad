@@ -363,6 +363,82 @@ Feature: `pc info` command
     And OUTPUT should contain "Failed to create the sketch '//:m3': 'm3' is already the name of an interface"
     And STDOUT should contain "Abstract 3mm circular interface"
 
+  @success @pc-info @materials
+  Scenario: `pc info` on a material, an alias of one and a parametric one
+    Given a file named "partcad.yaml" with content:
+      """
+      colors:
+        natural: "#A8A9AD"
+        Zinc-Plated: "#BCC4CC"
+      materials:
+        steel-1018:
+          formal: AISI 1018
+          full: Low-carbon steel AISI 1018
+          density: 7870
+          youngsModulus: 2.0e+11
+          poissonsRatio: 0.29
+          yieldStrength: 3.7e+8
+          thermalConductivity: 51.9
+          mu: 0.6
+          color: ":natural"
+          tags: [metal, weldable]
+        1018 Steel:
+          type: alias
+          source: ":steel-1018"
+        resin:
+          parameters:
+            density: {type: float, default: 1100}
+          full: Resin at %density% kg/m^3
+          density: "%density%"
+        block:
+          desc: The material called block
+          density: 1000
+      finishes:
+        Zinc-Plated:
+          desc: Zinc plated
+          display: {roughness: 0.3, metallic: 1}
+      parts:
+        block:
+          type: basic
+          cuboid: [10, 20, 30]
+      """
+    When I run "pc info steel-1018"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Kind: 'material'"
+    And STDOUT should contain "Density: '7870 kg/m^3'"
+    And STDOUT should contain "Youngs modulus: '2e+11 Pa'"
+    And STDOUT should contain "Thermal conductivity: '51.9 W/(m*K)'"
+    And STDOUT should contain "Mu: '0.6'"
+    When I run command:
+      """
+      pc info ":1018 Steel"
+      """
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Alias of: ':steel-1018'"
+    And STDOUT should contain "Resolves to: '//:steel-1018'"
+    And STDOUT should contain "Density: '7870 kg/m^3'"
+    When I run command:
+      """
+      pc info "resin;density=1250"
+      """
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Density: '1250 kg/m^3'"
+    And STDOUT should contain "Resin at 1250 kg/m^3"
+    # A colour and a finish may share a name: the name is both of them.
+    When I run "pc info Zinc-Plated"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "COLOR: //:Zinc-Plated"
+    And STDOUT should contain "FINISH: //:Zinc-Plated"
+    # A name an object has is that object; '-m' reaches the material.
+    When I run "pc info block"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Volume: 6000.0"
+    And STDOUT should not contain "The material called block"
+    When I run "pc info -m block"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "The material called block"
+    And STDOUT should contain "Density: '1000 kg/m^3'"
+
   @success @pc-info @joints
   Scenario: `pc info -a` lists the joints of an assembly
     Given a file named "partcad.yaml" with content:

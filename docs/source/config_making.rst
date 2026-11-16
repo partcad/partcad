@@ -988,8 +988,9 @@ can do applies to it. What it is, is a set of facts about a substance:
       tags: <(optional) a list of free-form tags, or a single tag>
 
 A material is one of the three kinds of CMF declaration, and takes the fields they share -- ``display``,
-``manufacturable``, ``ids``, ``aliases``, ``parameters``, ``type: alias`` -- and a ``color`` it claims for its natural
-surface: see :ref:`cmf-declarations`.
+``manufacturable``, ``ids``, ``aliases``, ``parameters``, ``type: alias`` and ``type: enrich`` -- and a ``color`` it
+claims for its natural surface: see :ref:`cmf-declarations`. Each of its numbers may be computed from its parameters,
+and is held to the same range written out or computed: see :ref:`cmf-parametric`.
 
 The short form gives the full name and nothing else:
 
@@ -1092,6 +1093,22 @@ part in one package names a material catalogued in another:
 
 List what a package catalogues with ``pc list materials`` (and
 ``pc list materials //...`` to walk the packages it imports).
+
+``pc info`` on a material shows what it states, by the name a part would give
+it::
+
+  pc info //pub/std/manufacturing/material/plastic:pla
+  pc info :pla                     # from inside the package that catalogues it
+  pc info "resin;density=1250"     # an instance of a parametric one
+
+It prints the declaration and then its formal and full names, its description,
+its density, a fluid's viscosity, its Young's modulus, Poisson's ratio and
+yield strength, its thermal conductivity, ``mu``, the colour it claims, its
+tags and its URL -- the same facts a part made of it reports under
+``Material``, without a part to ask. An alias says what it is an alias of and
+what it resolves to, with the facts of that one. A name an object of the
+package also has is that object, so ``pc info -m <name>`` is how to reach a
+material that shares its name with a part (see :ref:`pc-info`).
 
 Standard catalogues
 -------------------
@@ -1322,6 +1339,8 @@ Providers are declared in ``partcad.yaml`` using the following syntax:
         <param name>:
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
+          min: <(optional, int and float only) the smallest value>
+          max: <(optional, int and float only) the largest value>
           default: <default value>
 
     <enriched provider name>:

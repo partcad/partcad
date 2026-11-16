@@ -371,6 +371,8 @@ Define parts with CodeCAD scripts using the following syntax:
         <param name>:
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
+          min: <(optional, int and float only) the smallest value>
+          max: <(optional, int and float only) the largest value>
           default: <default value>
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
@@ -1400,6 +1402,23 @@ the ``partType`` or on its package, is the image the ``docker`` sandbox runs the
 script in when it can be pulled, read from the implementing package as it is for
 an output implementation (see :ref:`output-files`) rather than from the part's.
 
+A ``partType`` can instead say the program is in an image, with ``container:``
+-- the image alone, or ``image``, ``name`` and ``command`` -- and its script then
+runs in that image as it is, with nothing installed into it and no sandbox
+around it: ``dockerImage`` and ``pythonRequirements`` are not read for it, and a
+machine with no container runtime cannot build its parts. The image needs a
+``python3`` and OCP, and the part is keyed on the image as declared, so it has to
+be pinned. :doc:`/plugins/part_types` says what the image needs and how the
+part's file and ``cache_dir`` reach it.
+
+.. code-block:: yaml
+
+  partTypes:
+    rhino:
+      path: read_part.py
+      extension: 3dm
+      container: ghcr.io/example/rhino-tools:1.2.3
+
 Every part is held to one definition of a solid as it is built, whatever made
 it: it has a solid in it, no faces that bound nothing, no open or invalid solid,
 none with no volume. A part that misses it is built anyway and reported, because
@@ -1512,7 +1531,8 @@ Each part may have a list of parameters that are passed into the scripts to
 modify the part.
 The parameters can be of types ``string``, ``float``, ``int``, ``bool`` and ``array``.
 The parameter values can be restricted by specifying the list of possible values
-in ``enum``.
+in ``enum``, and an ``int`` or a ``float`` parameter by the range it may take in
+``min`` and ``max``. Both are enforced, the same way (below).
 The initial parameter value is set using ``default``.
 
 .. code-block:: yaml
@@ -1524,7 +1544,26 @@ The initial parameter value is set using ``default``.
         <param name>:
           type: <string|float|int|bool|array>
           enum: <(optional) list of possible values>
+          min: <(optional, int and float only) the smallest value it may take>
+          max: <(optional, int and float only) the largest value it may take>
           default: <default value>
+
+``min`` and ``max`` are both included: ``min: 1`` takes 1 and refuses 0.9. They
+say where whatever the parameter feeds stops making sense -- the smallest plate
+a hole pattern fits, the last grade a material's numbers were measured for --
+and a value outside them is refused wherever it comes from: a reference
+(``plate;holes=11``), an ASSY link's ``params:``, an override in the user's
+configuration, or the declared ``default``. A value that is not one of what
+``enum`` lists is refused the same way (``bolt;finish=gold`` of an ``enum:
+[plain, zinc]``). The message names the parameter, the value, the bound or the
+allowed values, and the object, and a reference outside them costs that one
+instance, while a default outside them is a declaration no value can fix, and
+refuses the object. ``pc lint`` reports that last case, and a ``min`` above the
+``max``, where they are written. The same holds for every kind of
+object that declares parameters -- a sketch, an assembly, a scene, a provider,
+a colour, a material, a finish, and the construction parameters of an
+interface, which state their ``type`` to be told apart from a freedom of
+movement (see :ref:`interface-parameters`).
 
 An ``array`` is a list however a reference hands it over -- ``holes=30,40`` in a
 name or on the command line, ``holes: [30, 40]`` in an ASSY file's ``params:``,

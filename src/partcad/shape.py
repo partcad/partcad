@@ -36,7 +36,7 @@ from . import render_overlay
 from . import runtime as pc_runtime
 from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key
 from . import surface as pc_surface
-from . import sync_threads, wrapper
+from . import sync_threads, wrapper, wrapper_container
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import TRANSFORM_KEYS, ShapeConfiguration, final_config
@@ -2678,7 +2678,7 @@ class Shape(ShapeConfiguration):
                 # allowlist maps the name to the executable, which is what keeps
                 # a caller from naming one (see PC_CONTAINER_ALLOWED_COMMANDS in
                 # tools/containers/_common/pc-container-json-rpc.py).
-                command.insert(0, container.get("command") or "python")
+                command.insert(0, wrapper_container.command_of(container))
             # Only the container runtime is handed these. 'PythonRuntime' and
             # 'JavaScriptRuntime' both override 'run_async' with a narrower
             # signature -- (cmd, stdin, cwd, session, timeout) -- so the base

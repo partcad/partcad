@@ -16,12 +16,31 @@ nothing else.
 The words are here so that every command says it the same way. The flags
 themselves still go over the wire as the booleans they always were, and the
 daemon reads them in one place (`operations._object_kind`).
+
+`pc info` also reports on a colour, a material or a finish, which are no
+objects: a package's CMF declarations keep a namespace per kind, beside its
+objects'. A name is looked for among them only where no object of the package
+has it, so what any name meant before still means the same; `--color`, `-m` and
+`--finish` say the name is one of them, and are what reaches a declaration that
+shares its name with an object (`operations._info_kind`).
 """
 
 # Said once, in the help of each command that takes an OBJECT.
 LOOKED_UP = "OBJECT is found by its name, whatever kind of object it is; a flag saying the kind skips looking it up"
 
 
+# Said once, by 'pc info', which also takes the name of a colour, a material or a finish.
+CMF_LOOKED_UP = (
+    "A name no object of the package has is looked for among its colours, materials and finishes, and is every one "
+    "of them that has it; --color, -m and --finish say which, and reach one that shares its name with an object"
+)
+
+
 def flag_help(kind: str) -> str:
     """The help of one kind flag: 'a sketch', 'an interface', ..."""
     return "The object is %s (optional: saying it skips looking the kind up)" % kind
+
+
+def cmf_flag_help(kind: str) -> str:
+    """The help of one CMF kind flag: 'a material', 'a colour', 'a finish'."""
+    return "OBJECT is %s rather than an object (needed only where an object has the same name)" % kind
