@@ -3823,8 +3823,12 @@ class Project(project_config.Configuration):
                         continue
                     yield obj
 
+        # An interface has no geometry for a check to look at: qualifying it is
+        # building it ('Interface.test'), under the same log wrapper as a shape.
+        interface_method = "test_log_wrapper_async" if use_wrapper else "test_async"
         tasks.extend(
-            asyncio.create_task(obj.test_async()) for obj in get_objects(self.interface_configs, self.get_interface)
+            asyncio.create_task(getattr(obj, interface_method)(ctx, tests))
+            for obj in get_objects(self.interface_configs, self.get_interface)
         )
 
         for config_dict, getter in [

@@ -252,7 +252,10 @@ def test_qualifying_a_package_passes_over_what_it_refuses(ctx):
     project = ctx.get_project("//")
     # Raised "dictionary changed size during iteration" when it went over the
     # package's own dictionary of declarations, which refusing one shrinks.
-    project.test(ctx, tests=[])
+    # What is refused is refused as it is asked for, with an error logged then
+    # (which is what fails 'pc qual test'); the run is over what is left, and
+    # the one object of it that is asked anything with no tests is 'm-hole'.
+    assert project.test(ctx, tests=[]) is True
     assert "defaults to 'gold'" in project.get_broken_object_reason("part", "gold-bolt")
     assert "defaults to 200" in project.get_broken_object_reason("part", "too-wide")
     # Asked for after the first of them was refused.
