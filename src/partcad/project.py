@@ -4916,10 +4916,16 @@ class Project(project_config.Configuration):
             lines += [""]
             return lines
 
-        if self.assemblies and "assemblies" not in exclude:
+        # The heading only where the package declares an assembly: a check
+        # registers the ones it leaves behind in the package too (an artifact,
+        # see 'declared'), so 'self.assemblies' is not empty after one has run on
+        # a package that declares none, and the README would come out with a
+        # heading or without one by what ran before it in the process.
+        assembly_names = declared(self.assemblies) if "assemblies" not in exclude else []
+        if assembly_names:
             lines += ["## Assemblies"]
             lines += [""]
-            shape_names = declared(self.assemblies)
+            shape_names = assembly_names
             for name in shape_names:
                 shape = self.assemblies[name]
                 if shape.config["type"] == "alias":
