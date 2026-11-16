@@ -79,14 +79,22 @@ elevation tile is kept in `~/.cache/partcad/landscape`, so a second fetch of the
 same place asks only Overpass again. When Overpass is busy the helper tries the
 other public servers, then says so; wait a minute rather than retrying in a loop.
 
-**When the user already has the data** - an elevation model (a GeoTIFF, an
-ESRI ASCII grid, a 16-bit height map), or a lidar or photogrammetry scan (LAS,
-LAZ, PLY) - declare it as a part rather than fetching anything: a `heightmap`
-part, or a `pointcloud` part (`classes: 2` keeps a lidar scan's ground; see
-"Height maps, point clouds and voxels" in PartCAD's documentation of parts). It
-is a solid on a flat base at z = 0, centred on the origin, and is placed in a
-scene of the user's own as the ground; `landscape.py` is for a place whose data
-has to be fetched, and its `place` and `height` read only a `site.json`.
+**When the user already has the data**, declare it as a part rather than
+fetching anything (see "Height maps, point clouds and voxels" in PartCAD's
+documentation of parts):
+
+- a georeferenced elevation model - a GeoTIFF, an SRTM `.hgt`, DTED, anything
+  GDAL reads - is a `dem` part: its cell size comes from its georeferencing, and
+  its no-data cells are filled. Not a `heightmap`, which would take a 30 m cell
+  for 1 m and a GeoTIFF's integer heights for image levels;
+- an ESRI ASCII grid, or a height map as an image (16-bit gray, Terrarium,
+  Terrain-RGB), is a `heightmap` part;
+- a lidar or photogrammetry scan (LAS, LAZ, PLY, text) is a `pointcloud` part
+  (`classes: 2` keeps a lidar scan's ground), and an E57 scan an `e57` part.
+
+Each is a solid on a flat base at z = 0, centred on the origin, and is placed in
+a scene of the user's own as the ground; `landscape.py` is for a place whose
+data has to be fetched, and its `place` and `height` read only a `site.json`.
 
 **Google's data is never written into the package**: Google's terms forbid
 storing it, so `landscape.py` takes nothing from Google. A Google Maps link's

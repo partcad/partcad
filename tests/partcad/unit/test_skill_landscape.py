@@ -442,3 +442,28 @@ def test_place_stands_an_object_on_what_covers_the_ground(landscape, tmp_path, c
     assert "on a road, a path or water, 100 mm thick" in said
     landscape.place(SimpleNamespace(site=str(site), x=30000.0, y=20000.0, footprint=[1000.0, 1000.0], heading=0.0))
     assert "it is in: building - move it" in capsys.readouterr().out
+
+
+def test_a_ground_with_nothing_mapped_on_it_is_the_terrain_alone(landscape, ocp, tmp_path):
+    """'fetch --no-osm': no layer at all, and still one valid solid - not a General Fuse of one argument."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    (tmp_path / "partcad.yaml").write_text("name: //\n")
+    site = site_json(landscape, tmp_path)
+    data = json.loads(site.read_text())
+    data["features"] = {key: [] for key in data["features"]} if isinstance(data["features"], dict) else []
+    site.write_text(json.dumps(data))
+    out = tmp_path / "place"
+    landscape.package(package_args(site, out, no_looks=True))
+
+    whole = run_ground(out / "ground.py", "all")
+
+    assert BRepCheck_Analyzer(whole["result"]).IsValid()
+    solids, count = TopExp_Explorer(whole["result"], TopAbs_SOLID), 0
+    while solids.More():
+        count += 1
+        solids.Next()
+    assert count == 1
+    assert set(whole["painted"]) == {":ground"}

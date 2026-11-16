@@ -1609,22 +1609,34 @@ def ground():
             items.append((("surface", LAYERS[name]["thickness"]), PAINT.get(name), union(LAYERS[name])))
 
     area = _polygon([(X0, Y0), (X1, Y0), (X1, Y1), (X0, Y1)])
-    arguments = TopTools_ListOfShape()
-    arguments.Append(area)
-    for _, _, faces in items:
-        for f in faces:
-            arguments.Append(f)
-    cut = BRepAlgoAPI_BuilderAlgo()
-    cut.SetArguments(arguments)
-    cut.SetFuzzyValue(1e-3)
-    cut.Build()
-    plan = cut.Shape()
+    if any(faces for _, _, faces in items):
+        arguments = TopTools_ListOfShape()
+        arguments.Append(area)
+        for _, _, faces in items:
+            for f in faces:
+                arguments.Append(f)
+        cut = BRepAlgoAPI_BuilderAlgo()
+        cut.SetArguments(arguments)
+        cut.SetFuzzyValue(1e-3)
+        cut.Build()
+        if not cut.IsDone():
+            raise RuntimeError("the map's footprints could not be cut into the ground's plan")
+        plan = cut.Shape()
+
+        def images(f):
+            made = _listed(cut.Modified(f))
+            return made if made else [f]
+
+    else:
+        # Nothing mapped ('--no-osm', or a place with nothing on it): the
+        # plan is the area alone, and there is nothing to cut it with.
+        plan = area
+
+        def images(f):
+            return [f]
+
     pieces = TopTools_IndexedMapOfShape()
     TopExp.MapShapes_s(plan, TopAbs_FACE, pieces)
-
-    def images(f):
-        made = _listed(cut.Modified(f))
-        return made if made else [f]
 
     inside = set(pieces.FindIndex(f) for f in images(area))
     owner = {}
