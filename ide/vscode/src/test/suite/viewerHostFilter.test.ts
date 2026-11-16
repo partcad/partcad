@@ -546,6 +546,46 @@ suite('The Digital Thread host, and the view panel', () => {
         }
     });
 
+    test("the Requirements tab's changes are the daemon's, and its answer or refusal goes back", async () => {
+        const asked: Record<string, unknown>[] = [];
+        let refuse = false;
+        const registration = vscode.commands.registerCommand(
+            'partcad.requirementsEdit',
+            (args: Record<string, unknown>) => {
+                asked.push(args);
+                if (refuse) {
+                    throw new Error("The physical property 'mass' is required already: say '--replace' to replace it");
+                }
+                return { object: '//pkg:bracket', kind: 'part', changed: "the physical property 'mass'" };
+            },
+        );
+        try {
+            const { viewer, host, posted } = bracket();
+            const edit = host as unknown as { editRequirement(token: number, edit: unknown): Promise<void> };
+            const change = { op: 'add', requirement: 'physics', name: 'mass', value: '>0', text: true };
+            await edit.editRequirement(12, change);
+            assert.deepStrictEqual(asked[0], {
+                pkg: '//pkg',
+                name: 'bracket;length=10',
+                kind: 'assembly',
+                edit: change,
+            });
+            assert.deepStrictEqual(posted[posted.length - 1], {
+                type: 'requirementEdited',
+                token: 12,
+                changed: "the physical property 'mass'",
+            });
+            refuse = true;
+            await edit.editRequirement(13, change);
+            const refusal = posted[posted.length - 1];
+            assert.strictEqual(refusal.type, 'requirementEdited');
+            assert.match(String(refusal.error), /required already/);
+            viewer.dispose();
+        } finally {
+            registration.dispose();
+        }
+    });
+
     test('a show says what it was cut to - absent from a PartCAD that cannot cut - as it came', () => {
         const { viewer, posted } = bracket();
         viewer.handle({ type: 'show', name: 'bracket', kind: 'part', package: '//pkg', object: null, section: null });

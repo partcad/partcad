@@ -534,6 +534,59 @@ Object commands
   items and where each is placed. ``pc add part`` declares a file where it lies, as it always has, whatever it
   holds.
 
+.. _pc-req:
+
+``pc req list``, ``pc req add``, ``pc req remove`` and ``pc req test``
+  What an object is required to be: its ``requirements:`` section (see :ref:`requirements`), listed, changed
+  one requirement at a time, and tested.
+
+  ``pc req list <object>`` prints the section as PartCAD reads it, as YAML -- or JSON with ``--json``;
+  ``--yaml`` asks for the default by name. ``--kind`` keeps only the requirements of a kind (``feature``,
+  ``port``, ``interface``, ``physics``, ``match``, ``has``; repeat it for several), and ``--verify`` adds
+  ``checks:``, each requirement with whether the model meets it. An alias's requirements are its source's,
+  which ``from:`` names. What it prints reads back: any part of it is what ``pc req add --stdin`` takes.
+
+  ``pc req add <kind> <object> <name>`` writes one requirement into the object's package, a command per kind
+  since each is written differently::
+
+    pc req add feature bracket mount "Takes an M3 screw from either side"
+    pc req add port bracket top --direction 0 0 -1                 # faces down
+    pc req add port bracket side --position null null '>=5' --angle 90 --boundary m3-hole
+    pc req add interface bracket m3-hole --instance left --instance right
+    pc req add interface bracket m3-hole --direction 0 0 1         # some instance faces up
+    pc req add physics bracket mass --value '>0,<=0.05'            # kg
+    pc req add physics bracket centerOfMass --vector null null '<5'
+    pc req add physics bracket inertia.ixx --value '>0'
+    pc req add match bracket :bracket-v1 --mass 5 --volume 10%
+    pc req add has bracket material                                # has_material: true
+    pc req add has bracket private_dependencies --not              # has_private_dependencies: false
+
+  Everything can be said with options, and each value given on the command line is one word, read as the same
+  text is read in ``partcad.yaml`` -- ``5`` is the number, ``null`` no value -- except that it needs no YAML
+  quoting: ``'>5'`` is quoted only for the shell. ``--stdin`` reads the requirement from standard input
+  instead, as the YAML (or, with ``--json``, the JSON) of what its place in the section holds, with YAML's
+  quoting (see :ref:`quoting a comparison <requirements-quoting>`)::
+
+    echo "[null, null, '<5']" | pc req add physics bracket centerOfMass --stdin
+    echo '{"position": [0, 0, ">=5"]}' | pc req add port bracket side --stdin --json
+
+  A requirement that is there already is refused unless ``--replace``. An interface is looked up, and the
+  object of a ``match`` found, before anything is written, and one that is not there is refused; so is a value
+  PartCAD could not read, and the file is left as it was. The options of a kind may come anywhere after the
+  kind: ``pc req add port --replace bracket top --direction 0 0 -1``.
+
+  ``pc req remove <kind> <object> <name>`` (or ``pc req rm``) takes one out: ``--instance`` only that instance
+  of an interface, ``--volume``, ``--displacement`` or ``--mass`` only that amount of a match. A feature that a
+  simulation or an analysis scenario names (``feature:``) is refused unless ``--with-references``, which takes
+  it out of those as well.
+
+  ``pc req test`` is ``pc qual test --basic --filter requirements``: the ``requirements`` check alone, with
+  every option of ``pc qual test`` that does not choose the tests.
+
+  An alias or an enrich is refused: its requirements are read off what it points at, so they are changed
+  there. So is an object its package's ``partcad.yaml`` does not declare, and a ``partcad.yaml`` that is a
+  Jinja2 template. The rest of the file is kept as it was written.
+
 ``pc qual test``
   Run the qualification tests of a part, an assembly, a scene or a sketch -- or of every object of a package
   with ``-P <package>...`` (see :ref:`recursive-names`). Every test is of one of four subtypes, told apart by
@@ -647,7 +700,9 @@ Object commands
   a plugin supplies, resolved before anything is written; ``pc qual add --topology --set minArea=1.0 bracket
   tolerance-surfaces`` sets a built-in test's parameters; ``pc qual add --simulation --path <package>:<plugin>
   --set validation=... block stands`` declares a simulation. ``--set KEY=VALUE`` may be repeated, each value
-  read as YAML.
+  read as the same text is read in ``partcad.yaml`` (a value YAML would refuse or misread there, such as
+  ``>5``, is the text itself). A test the object declares under that name already is refused unless
+  ``--replace``.
 
 .. _pc-info:
 
@@ -776,7 +831,8 @@ Object commands
   ``--max-mass-difference`` (in percent of the reference's) when they are given. Held to nothing, it is a
   report and exits zero. ``--json`` prints the whole comparison as one JSON object on standard output. The same
   limits can be written into the current object's declaration, as a ``match:`` requirement that ``pc qual test``
-  checks -- see :ref:`requirements`.
+  checks -- ``pc req add match <current> <reference> --mass 5 --volume 10`` writes one (see :ref:`pc-req` and
+  :ref:`requirements`).
 
 ``pc bom``
   Print the bill of materials of a part, an assembly or a scene: what has to be procured to have it, with how

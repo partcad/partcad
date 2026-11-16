@@ -123,6 +123,9 @@ const SHOW_SECTION = 'partcad.showSection';
 /** The CAM tab's Save: write its settings into the part's declaration ('cam.save'). */
 const SAVE_CAM = 'partcad.camSave';
 
+/** The Requirements tab's forms: add a requirement, or remove one ('requirements.add', 'requirements.remove'). */
+const EDIT_REQUIREMENT = 'partcad.requirementsEdit';
+
 /** What the host is told of a reshow besides its section: how it is drawn, and what of it. */
 interface DrawingRequest {
     extraDetails?: boolean;
@@ -762,6 +765,38 @@ export class PartcadViewer implements vscode.Disposable {
         }
     }
 
+    /**
+     * The Requirements tab's Save or Remove: one requirement written into the
+     * object's declaration, or taken out ('pc req add', 'pc req remove'). The
+     * daemon says what it changed, or why it changed nothing, and the tab says
+     * it: a refusal is an answer about the requirement, not a failure of the
+     * extension, so it is not raised as an error notification too.
+     */
+    private async editRequirement(token: number, edit: unknown): Promise<void> {
+        const post = (payload: { changed?: string | null; error?: string }) =>
+            void this.panel?.webview.postMessage({ type: 'requirementEdited', token, ...payload });
+        const target = this.lastShow;
+        if (!target?.package || !target.name) {
+            post({ error: 'PartCAD did not say which package this object belongs to.' });
+            return;
+        }
+        try {
+            if (!(await vscode.commands.getCommands(true)).includes(EDIT_REQUIREMENT)) {
+                throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
+            }
+            const data = (await vscode.commands.executeCommand(EDIT_REQUIREMENT, {
+                pkg: target.package,
+                name: target.name,
+                kind: target.kind,
+                edit,
+            })) as { changed?: string } | null | undefined;
+            post({ changed: data?.changed ?? null });
+        } catch (error: any) {
+            traceError(`Digital Thread: failed to change a requirement: ${error?.message ?? error}`);
+            post({ error: `${error?.message ?? error}` });
+        }
+    }
+
     /** Answer the Draft tab: which file types a drawing package renders to. */
     private async fetchFormats(token: number, plugin: string): Promise<void> {
         const post = (payload: { formats?: unknown; error?: string }) =>
@@ -1055,6 +1090,7 @@ export class PartcadViewer implements vscode.Disposable {
                     what?: string;
                     machine?: string;
                     settings?: unknown;
+                    edit?: unknown;
                 } & Partial<ViewerStateReply>,
             ) => {
                 if (message.type === 'state') {
@@ -1117,6 +1153,8 @@ export class PartcadViewer implements vscode.Disposable {
                     });
                 } else if (message.type === 'saveCam') {
                     void this.saveCam(message.token ?? 0, message.machine, message.settings);
+                } else if (message.type === 'editRequirement') {
+                    void this.editRequirement(message.token ?? 0, message.edit);
                 } else if (message.type === 'videoFullscreen') {
                     void this.videoFullscreen(message.on === true);
                 } else {

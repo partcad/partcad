@@ -403,7 +403,25 @@ at all).
   ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
   is made of. The fifth section, `match`, holds the volume, the displacement and the mass to within a percentage of
   another object's, and reads both by `compare.py`'s rules (`within()`), so `pc qual test` and `pc compare` cannot disagree
-  about what "within 5%" means.
+  about what "within 5%" means. The yes-or-no `has_` requirements include two about what an object is *built from*
+  rather than what it is in: `has_dependencies` and `has_private_dependencies` (a package outside `//pub`), worked
+  out by `object_dependencies.py` -- an alias's source, every part of an assembly, the colours, materials and
+  finishes recorded with a part's geometry, the interfaces implemented, all the way down; `//builtin` is PartCAD
+  and counts as nothing.
+
+- **Changing the section is one module too** (`requirements_edit.py`), behind `pc req add`/`pc req remove` and the
+  Requirements tab's forms (`requirements.add`, `requirements.remove`): one requirement written or taken out by
+  kind and name, on the object's own declaration through `Project.edit_object_declaration` (ruamel, so the rest of
+  the file is kept as written; a template is refused; the file is replaced only once the new one is written in
+  full). It holds an edit to exactly one rule, the reader's: a section that `requirements.parse` reads with a
+  problem it did not have before, or that the schema now refuses, is not written -- so there is no validator of
+  its own to disagree with the reader. An edit is tried on a copy first, so a refused one leaves nothing behind.
+  Adding refuses what is there unless `replace` (so does `pc qual add` now), and removing a feature that a
+  simulation or an analysis scenario names is refused unless `with_references` takes those names out too. An alias
+  or an enrich is refused: its requirements are read off its source, so what was written on it would never be read.
+  A value typed on the command line or into a form is read by `partcad_utils.config_yaml.scalar` -- as the same
+  text in `partcad.yaml` is read, except that what YAML would refuse or misread there (`>0`, `!0`, `>5`) is the text
+  itself.
 
 - **Two objects read against each other is one module** (`compare.py`, with `wrappers/wrapper_compare.py` for the
   surface): what `pc compare <reference> <current>` reports -- the volumes and masses (`physics.amounts_async()`,

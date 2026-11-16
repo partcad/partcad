@@ -4183,7 +4183,228 @@ def requirements_check(session, params):
                 _stage_subassemblies(session, ctx, other)
     with pc.logging.Process("Requirements", package, name):
         report = asyncio.run(requirements.check_async(ctx, obj, verify=verify))
-    return report.to_dict()
+    answer = report.to_dict()
+    answer.update(_requirements_sections(ctx, package, kind, name, obj))
+    return answer
+
+
+# The kinds of object a 'requirements:' section is read of, and so can be written to.
+_REQUIRED_KINDS = ("part", "assembly", "scene", "sketch")
+
+
+def _requirements_sections(ctx, package, kind, name, obj) -> dict:
+    """What the object's requirements are as written, and whether 'requirements.add' can change them here.
+
+    ``declared`` is the section the object is read with ('final_config', so an
+    alias's is its source's), and ``section`` the one its own declaration holds:
+    what 'pc req list' prints and what the IDE's forms are filled from. Both as
+    a mapping, a paragraph or a list written before the section had structure
+    being the features it is read as.
+    ``editable`` is null when 'requirements.add' would write, and otherwise says
+    why it would not -- so the IDE offers nothing it would then refuse. And what
+    the forms offer: the physical properties a requirement may name, and the
+    yes-or-no requirements.
+    """
+    from partcad import requirements_edit
+    from partcad.shape_config import final_config
+
+    config = getattr(obj, "config", None)
+    config = config if isinstance(config, dict) else {}
+    resolved = final_config(obj)
+    own = config.get("requirements")
+    declared = resolved.get("requirements") if isinstance(resolved, dict) else None
+    try:
+        fields = requirements_edit.physics_fields()
+    except Exception:  # pylint: disable=broad-except
+        fields = {}
+
+    def structured(section):
+        # The free-form shapes the section had before it had structure, as the
+        # features they are read as -- and as 'requirements.add' would write
+        # them -- so a reader of this has one shape to know.
+        return None if section is None else requirements_edit.section_as_data(requirements_edit.structured(section))
+
+    return {
+        "section": structured(own),
+        "declared": structured(declared),
+        "source": config.get("source_resolved"),
+        "editable": _requirements_not_editable(ctx, package, kind, name, obj),
+        "physics_fields": fields,
+        "has_names": requirements_edit.has_names(),
+    }
+
+
+def _requirements_not_editable(ctx, package, kind, name, obj):
+    """Why the requirements of an object cannot be written where it is declared, or None when they can."""
+    from partcad import reference
+
+    if kind not in _REQUIRED_KINDS:
+        return "a %s declares no requirements" % kind
+    config = getattr(obj, "config", None)
+    config = config if isinstance(config, dict) else {}
+    if config.get("type") in reference.REFERENCE_TYPES:
+        # Its requirements are read off what it points at ('final_config'), so
+        # what is written on it would be written and then never read.
+        return "it is %s '%s', and its requirements are what that one requires: change them there" % (
+            "an alias of" if config.get("type") == "alias" else "a reference to",
+            config.get("source_resolved") or config.get("source") or "another object",
+        )
+    project = ctx.get_project(package)
+    if project is None:
+        return "the package %s is not loaded" % package
+    from partcad.project import OBJECT_KIND_SECTIONS
+
+    section = OBJECT_KIND_SECTIONS.get(kind)
+    declarations = project.config_obj.get(section) if isinstance(project.config_obj, dict) else None
+    if not isinstance(declarations, dict) or not isinstance(declarations.get(name), dict):
+        return "it is not declared in its package's 'partcad.yaml', so there is nowhere to write its requirements"
+    try:
+        with open(project.config_path, encoding="utf-8") as fp:
+            text = fp.read()
+    except OSError as e:
+        return "its package's 'partcad.yaml' cannot be read: %s" % e
+    if any(opening in text for opening in ("{{", "{%", "{#")):
+        return "its package's 'partcad.yaml' is a Jinja2 template, which is written by hand"
+    return None
+
+
+def _requirement_object(session, params):
+    """(ctx, package, kind, name, object) for 'requirements.add' and 'requirements.remove'; None when not loaded."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    getters = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene, "sketch": ctx.get_sketch}
+    refusal = "Only parts, assemblies, scenes and sketches declare requirements; '%s' is none of them"
+    _refuse_said_kind(params, getters, refusal)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, name = resolved
+    kind = _resolve_kind(ctx, params, package, name, getters, refusal)
+    obj = getters[kind](_qualified(package, name))
+    if obj is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), _qualified(package, name)))
+    why = _requirements_not_editable(ctx, package, kind, name, obj)
+    if why is not None:
+        raise JsonRpcError(
+            USAGE_ERROR, "The requirements of %s cannot be changed: %s" % (_qualified(package, name), why)
+        )
+    return ctx, package, kind, name, obj
+
+
+def _typed(value):
+    """'value' with every string in it read as the same text typed into 'partcad.yaml' would be.
+
+    What 'requirements.add' does with ``text: true``: a form has fields of text,
+    and '5' typed into one is the number, as it is on the command line (see
+    'config_yaml.scalar', which both go through).
+    """
+    from partcad_utils import config_yaml
+
+    if isinstance(value, dict):
+        return {key: _typed(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_typed(item) for item in value]
+    return config_yaml.scalar(value) if isinstance(value, str) else value
+
+
+def requirements_add(session, params):
+    """Write one requirement into an object's declaration: ``pc req add``.
+
+    ``requirement`` is its kind -- feature, port, interface, physics, match or
+    has -- and ``name`` what it is called within it (a physical property as
+    ``inertia.ixx``, a match by the object matched, a yes-or-no requirement as
+    ``material``). ``value`` is what its place in the section holds, as YAML
+    holds it, or each string in it read as YAML reads that text when ``text``
+    says the strings are what somebody typed. ``instances`` writes ``value`` as
+    where each of those instances of an interface has to be. One that is there
+    already is refused unless ``replace``. See 'partcad.requirements_edit'.
+
+    An interface is looked up, and an object to match is found, before anything
+    is written: a requirement naming nothing would only fail every check after.
+    """
+    import asyncio
+
+    from partcad import requirements, requirements_edit
+
+    found = _requirement_object(session, params)
+    if found is None:
+        return None
+    ctx, package, kind, name, obj = found
+    requirement = params.get("requirement")
+    target = params.get("name")
+    value = params.get("value")
+    if params.get("text"):
+        value = _typed(value)
+    instances = [str(instance) for instance in params.get("instances") or []]
+
+    if requirement == "interface" and isinstance(target, str):
+        project = ctx.get_project(package)
+        full = project.normalize(target) if project is not None else target
+        if ctx.get_interface(full) is None:
+            raise JsonRpcError(USAGE_ERROR, "The interface '%s' is not found (as %s)" % (target, full))
+    if requirement == "match" and isinstance(target, str):
+        other, why = asyncio.run(requirements.matched_object_async(ctx, obj, target))
+        if other is None:
+            raise JsonRpcError(USAGE_ERROR, "The object to match, '%s', is not found: %s" % (target, why))
+
+    project = ctx.get_project(package)
+    try:
+        said = project.edit_object_declaration(
+            kind,
+            name,
+            lambda declaration: requirements_edit.add(
+                declaration,
+                requirement,
+                target,
+                value,
+                instances=instances or None,
+                replace=bool(params.get("replace")),
+            ),
+            "its requirements",
+        )
+    except (requirements_edit.EditError, ValueError) as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    _invalidate_context(session, params)
+    session.partcad.logging.info("Required of %s: %s" % (_qualified(package, name), said))
+    return {"object": _qualified(package, name), "kind": kind, "changed": said}
+
+
+def requirements_remove(session, params):
+    """Take one requirement out of an object's declaration: ``pc req remove``.
+
+    Addressed as 'requirements.add' addresses it. ``instances`` takes only those
+    instances of an interface out, ``amounts`` only those amounts of a match. A
+    feature a 'qual: sim:' entry or an analysis scenario names is refused unless
+    ``with_references``, which takes it out of those as well.
+    """
+    from partcad import requirements_edit
+
+    found = _requirement_object(session, params)
+    if found is None:
+        return None
+    ctx, package, kind, name, _obj = found
+    project = ctx.get_project(package)
+    try:
+        said = project.edit_object_declaration(
+            kind,
+            name,
+            lambda declaration: requirements_edit.remove(
+                declaration,
+                params.get("requirement"),
+                params.get("name"),
+                instances=[str(instance) for instance in params.get("instances") or []] or None,
+                amounts=list(params.get("amounts") or []) or None,
+                with_references=bool(params.get("with_references")),
+            ),
+            "its requirements",
+        )
+    except (requirements_edit.EditError, ValueError) as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    _invalidate_context(session, params)
+    session.partcad.logging.info("No longer required of %s: %s" % (_qualified(package, name), said))
+    return {"object": _qualified(package, name), "kind": kind, "changed": said}
 
 
 def qual_report(session, params):
@@ -4246,7 +4467,8 @@ def qual_add(session, params):
     a plugin supplies (``path`` names the plugin), a simulation (``subtype``
     ``sim``, ``path`` naming the simulation plugin), or the parameters of a
     built-in check (``name`` is the check's, and there is no ``path``). Every
-    other key of ``entry`` is written beside them as it is. A plugin's check is
+    other key of ``entry`` is written beside them as it is. An entry of that
+    name that is there already is refused unless ``replace``. A plugin's check is
     resolved before anything is written, so that a declaration naming a plugin
     that is not there, or one of another subtype, is refused here rather than
     reported by the next run.
@@ -4310,7 +4532,7 @@ def qual_add(session, params):
             % (name, subtype, ", ".join(builtin) or "there are none"),
         )
 
-    if not package_obj.add_qual_config(kind, object_name, subtype, name, entry):
+    if not package_obj.add_qual_config(kind, object_name, subtype, name, entry, replace=bool(params.get("replace"))):
         raise JsonRpcError(USAGE_ERROR, "Nothing was written: the reason is reported above")
     _invalidate_context(session, params)
     pc.logging.info(

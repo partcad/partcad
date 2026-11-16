@@ -490,12 +490,17 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
                 "parameters, or a simulation's 'scene', 'offset', 'validation', 'params' and 'feature'."
             ),
         ] = None,
+        replace: Annotated[
+            bool,
+            Field(description="Replace a test of that name the object declares already; otherwise one is refused."),
+        ] = False,
         kind: Annotated[Optional[ObjectKind], Field(description=_KIND)] = None,
         package: PackageName = None,
     ) -> CallToolResult:
         """Declare a qualification test of an object, in its package's partcad.yaml: '<object>.qual.<subtype>.<name>'.
 
-        `pc qual add`. A plugin's test is resolved before anything is written.
+        `pc qual add`. A plugin's test is resolved before anything is written, and one of that name that is
+        declared already is refused unless `replace`.
         """
         request = {
             "package": package,
@@ -504,6 +509,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             "name": name,
             "path": path,
             "entry": dict(entry or {}),
+            "replace": replace,
             **_kind_flag(kind),
         }
         return await run(ctx, "qual.add", request)

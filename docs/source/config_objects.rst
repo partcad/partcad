@@ -277,6 +277,7 @@ manufacturing, say -- but those are not part of this section.
         has_material: true    # every solid in a material that can be had
         has_color: true       # every face in a colour that can be had
         has_weight: true      # a mass PartCAD knows
+        has_private_dependencies: false  # everything it is built from is in //pub
 
 ``features``
   What the object has to have or do: a name for each, and a sentence saying
@@ -354,9 +355,30 @@ manufacturing, say -- but those are not part of this section.
   since its vendor decides what it is in, and a maintainer who wants each of
   them to say what that is requires it here.
 
+``has_dependencies`` and ``has_private_dependencies``
+  Yes-or-no requirements on what the object is *built from*, in the same way:
+
+  * ``has_dependencies``: the object draws on a package other than its own --
+    what an alias or an enrich is of, every part, assembly and scene an
+    assembly or a scene holds, the colours, materials and finishes a part's
+    faces and solids are in, the interfaces it implements and every one they
+    inherit, and a scene's medium -- followed all the way down, so a part of a
+    sub-assembly from another package counts.
+  * ``has_private_dependencies``: the same, of the packages outside ``//pub``,
+    the public index. ``has_private_dependencies: false`` says that whoever can
+    get this object can get everything it needs, which is what a package about
+    to be published wants to be true and cannot see from its own
+    ``partcad.yaml``.
+
+  PartCAD's own ``//builtin`` packages are part of PartCAD, and are no
+  dependency. A part is built to be asked, since what it is in is recorded with
+  its geometry; one that does not build fails either requirement as "not
+  known", as for the ones above.
+
 ``pc qual test`` checks every one of these but ``features`` against the model --
-its ``requirements`` check, ``pc qual test -f requirements`` to run it alone --
-and says, for each one that is not met, what it found instead.
+its ``requirements`` check, ``pc req test`` to run it alone -- and says, for each
+one that is not met, what it found instead. ``pc req add`` and ``pc req remove``
+change the section one requirement at a time (see :ref:`pc-req`).
 
 Required values
 ^^^^^^^^^^^^^^^
@@ -380,8 +402,29 @@ has to be one of the constants *and* meet every comparison.
   maxContacts: "1,2,4"   # one of the three
   maxContacts: "1,2,3,!2" # 1 or 3
 
-Quote a comparison: YAML reads ``>`` and ``!`` at the start of a value as
-syntax of its own.
+.. _requirements-quoting:
+
+**Quote a comparison.** YAML reads a few characters at the start of a value as
+syntax of its own, and the comparisons start with two of them:
+
+* ``>`` (and ``|``) opens a block of text. ``mass: >0`` and ``mass: >=1`` are
+  refused -- the file does not load -- and ``mass: >5`` is worse: YAML reads it
+  as an *empty* block, so the value is the empty string rather than ``>5``.
+* ``!`` is a tag. ``mass: !0`` is refused: no tag ``!0`` is defined.
+
+Write each of them in quotes, single or double: ``mass: '>5'``, ``mass:
+"!0"``. ``<`` and ``=`` mean nothing to YAML at the start of a value, so ``mass:
+<0.5`` reads as it is written -- quoting it does no harm, and is the habit that
+keeps the rest right. The same holds for the other characters YAML reserves at
+the start of a value (``&``, ``*``, ``%``, ``@``, a backtick, ``[`` and ``{``),
+though no comparison starts with one. PartCAD names the fix when it meets an
+unquoted one: loading the package says to quote it, and ``pc lint`` points at
+the value, the misread ``>5`` included.
+
+On the command line no quoting for YAML is needed (see :ref:`pc-req`): ``pc req
+add`` reads each word as one value, so ``--value '>5'`` is quoted only for the
+shell, which would otherwise read ``>`` as a redirection. What ``pc req add
+--stdin`` reads *is* YAML (or JSON with ``--json``), and is quoted as above.
 
 Where a port or an interface instance is
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

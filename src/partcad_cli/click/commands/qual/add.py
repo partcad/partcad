@@ -14,24 +14,24 @@ Writes `<object>.qual.<subtype>.<name>`:
 A check a plugin supplies needs `--path`, the plugin, and is resolved before
 anything is written; a built-in check takes no `--path`, and what is written is
 its parameters. Every `--set KEY=VALUE` is one more key of the entry, its value
-read as YAML (`--set minArea=1.0` is a number, `--set general=false` a
-boolean). Daemon work (`qual.add`), because it writes a declaration the warm
-context then has to read again, as `pc add` does.
+read as the same text is read in `partcad.yaml` (`--set minArea=1.0` is a
+number, `--set general=false` a boolean, `--set limit='>5'` the text: see
+'config_yaml.scalar'). An entry of that name that is there already is refused
+unless `--replace`. Daemon work (`qual.add`), because it writes a declaration
+the warm context then has to read again, as `pc add` does.
 """
 
 import rich_click as click
-import yaml
+
+from partcad_utils import config_yaml
 
 from ... import object_kind
 from ...service import run
 
 
 def _value(text: str):
-    """A '--set' value, as YAML reads it: numbers, booleans and lists as themselves, anything else as text."""
-    try:
-        return yaml.safe_load(text)
-    except yaml.YAMLError:
-        return text
+    """A '--set' value, as the same text in 'partcad.yaml' reads: numbers, booleans and lists as themselves."""
+    return config_yaml.scalar(text)
 
 
 @click.command(
@@ -59,6 +59,11 @@ def _value(text: str):
     help="A key of the entry and its value, read as YAML: a parameter, or a simulation's 'scene', 'validation'...",
 )
 @click.option("--desc", type=str, default=None, help="What the test is for, in words")
+@click.option(
+    "--replace",
+    is_flag=True,
+    help="Replace the test if OBJECT declares one of that NAME already; without this, one that is there is refused",
+)
 @click.option("--package", "-P", type=str, default="", show_envvar=True, help="Package to find the object in")
 @click.option("--assembly", "-a", is_flag=True, help=object_kind.flag_help("an assembly"))
 @click.option("--scene", "-S", is_flag=True, help=object_kind.flag_help("a scene"))
@@ -66,7 +71,7 @@ def _value(text: str):
 @click.argument("object", type=str)
 @click.argument("name", type=str)
 @click.pass_obj
-def cli(cli_ctx, subtype, path, settings, desc, package, assembly, scene, sketch, object, name):
+def cli(cli_ctx, subtype, path, settings, desc, replace, package, assembly, scene, sketch, object, name):
     entry = {}
     if desc:
         entry["desc"] = desc
@@ -88,6 +93,7 @@ def cli(cli_ctx, subtype, path, settings, desc, package, assembly, scene, sketch
             "name": name,
             "path": path,
             "entry": entry,
+            "replace": replace,
         },
         needs_context=True,
     )

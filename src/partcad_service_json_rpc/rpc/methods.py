@@ -68,9 +68,14 @@ _OPERATIONS = {
     # cluster -- what the IDE's 3D view writes when "Materials" is ticked, and
     # what 'pc render --with-materials' writes on a picture.
     "cmf.clusters": operations.cmf_clusters,
-    # Not a CLI command: what the IDE's Requirements tab is drawn from. Its
-    # verdicts are 'pc qual test -f requirements', by the same code.
+    # What the IDE's Requirements tab is drawn from, and 'pc req list'. Its
+    # verdicts are 'pc req test' ('pc qual test --basic -f requirements'), by
+    # the same code.
     "requirements.check": operations.requirements_check,
+    # 'pc req add' and 'pc req remove' (and the Requirements tab's forms): one
+    # requirement of an object, written into its declaration or taken out.
+    "requirements.add": operations.requirements_add,
+    "requirements.remove": operations.requirements_remove,
     # Not a CLI command: what the IDE's Qualification tabs are drawn from --
     # 'pc qual test <object>', one line per check rather than a log, by the same
     # checks; a tab asks for its own 'subtypes'.

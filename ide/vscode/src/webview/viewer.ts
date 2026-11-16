@@ -32,12 +32,15 @@
 // since every object has tests. Operations holds nothing yet either, and is
 // always disabled.
 //
-// Requirements comes before all of them, and only for an object that declares
-// a 'requirements:' section: it is what the object was asked to be, which is
-// read before what it is. Whether there is one is a question for the daemon, so
-// it is asked on every show - a read of the declaration, nothing built - and the
-// strip is rebuilt when the answer arrives. Opening the tab is what asks for the
-// verdicts, which are 'pc qual test -f requirements' (see 'requirements.ts').
+// Requirements comes before all of them, for every object that can declare a
+// 'requirements:' section - a part, an assembly, a scene, a sketch - and is
+// always enabled for one: it is what the object was asked to be, which is read
+// before what it is, and an object that declares nothing yet is where the first
+// requirement is added. It is 'secondary', so a show still opens on Design: it
+// is opened by a click, and kept from one object to the next once it has been.
+// What is declared is asked on every show - a read of the declaration, nothing
+// built - and opening the tab is what asks for the verdicts, which are 'pc req
+// test'; its forms are 'pc req add' and 'pc req remove' (see 'requirements.ts').
 //
 // A colour, a material or a finish opened from the explorer is none of that: it
 // is what an object is in, and has no shape to turn, analyse, make or test. It
@@ -107,6 +110,7 @@ import {
     reportError,
     reportFailure,
     saveCam,
+    editRequirement,
     saveChoices,
     saveRendered,
     sendState,
@@ -142,6 +146,8 @@ import {
     RENDER_TABS,
     RenderData,
     RenderFormat,
+    RequirementEdit,
+    RequirementEditedMessage,
     RequirementsData,
     SectionShownMessage,
     ShowMessage,
@@ -307,7 +313,9 @@ for (const tab of ANALYSIS_TABS) {
         (host) => (caeResults[tab] = new CaeResult(host, tab)),
     );
 }
-const requirementsView = new RequirementsView(panes.requirements);
+const requirementsView = new RequirementsView(panes.requirements, {
+    onEdit: (edit) => sendRequirementEdit(edit),
+});
 /**
  * The Qualification tabs drawn from 'qual.report', one per subtype of
  * qualification: what 'pc qual test --basic', '--topology' and '--other' say.
@@ -1626,10 +1634,48 @@ function identify(message: ShowMessage | undefined): string {
     return message === undefined ? '' : `${message.package ?? ''}\n${message.name ?? ''}\n${message.kind ?? ''}`;
 }
 
-/** The requirements of the object on screen, if it declares any. */
+/** What the object on screen is required to be, once the daemon has said - nothing at all, as often as not. */
 function requirementsShown(): RequirementsData | undefined {
     const known = requirements !== undefined && requirements.object === identify(shown) ? requirements : undefined;
-    return known !== undefined && known.data.defined ? known.data : undefined;
+    return known?.data;
+}
+
+/** Whether the object a show is about has a Requirements tab: whether it is a kind that can declare any. */
+function requirementsOffered(message: ShowMessage | undefined): boolean {
+    return message !== undefined && !!message.package && REQUIRED_KINDS.includes(message.kind ?? '');
+}
+
+/** The change to a requirement waiting for its answer, by its token. */
+let requirementEditing: number | undefined;
+
+/** A form of the Requirements tab was saved, or a row removed: 'pc req add' or 'pc req remove', by the host. */
+function sendRequirementEdit(edit: RequirementEdit): void {
+    if (shown === undefined) {
+        return;
+    }
+    lastToken += 1;
+    requirementEditing = lastToken;
+    editRequirement({ type: 'editRequirement', token: lastToken, edit });
+}
+
+/**
+ * The change has been made, or refused: say so on the tab, and once it is made,
+ * check the model again against what is now required - which is what the tab
+ * shows, and what it was showing for the requirements as they were.
+ */
+function onRequirementEdited(message: RequirementEditedMessage): void {
+    if (message.token !== requirementEditing) {
+        // Sent for an object no longer on screen: it was made all the same.
+        return;
+    }
+    requirementEditing = undefined;
+    if (message.error !== undefined) {
+        requirementsView.editFailed(message.error);
+        return;
+    }
+    requirementsView.edited(message.changed);
+    requested.delete('requirements');
+    verifyRequirements();
 }
 
 function byId(id: string): HTMLElement {
@@ -1660,13 +1706,12 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
         // choice, so the strip is not drawn and the group is simply open.
         return [{ id: 'design', label: 'Design', pane: panes.design }];
     }
-    // In front of the rest, and only when there is something to show: an
-    // object that states no requirements has nothing for the tab to say, and a
-    // disabled tab in front of the strip would only push the others along.
-    const required: TabSpec[] =
-        message !== undefined && requirementsShown() !== undefined
-            ? [{ id: 'requirements', label: 'Requirements', pane: panes.requirements }]
-            : [];
+    // In front of the rest, for every object that can declare requirements, and
+    // always enabled for one: one that declares none is where the first is
+    // added. Secondary, so that a show opens on Design rather than on it.
+    const required: TabSpec[] = requirementsOffered(message)
+        ? [{ id: 'requirements', label: 'Requirements', pane: panes.requirements, secondary: true }]
+        : [];
     return [
         ...required,
         { id: 'design', label: 'Design', pane: panes.design },
@@ -2002,10 +2047,11 @@ async function show(message: ShowMessage): Promise<void> {
         requested.add('bvb');
         request('bvb');
     }
-    // So is whether there is a Requirements tab at all: a read of the
-    // declaration. The verdicts wait for the tab to be opened.
+    // So is what it is required to be: a read of the declaration, which the
+    // tab draws while the verdicts wait for it to be opened.
     if (requirements !== undefined && requirements.object !== identify(message)) {
         requirements = undefined;
+        requirementEditing = undefined;
     }
     if (requirements === undefined) {
         requirementsView.setBusy('Asking PartCAD what this is required to be…');
@@ -2914,21 +2960,17 @@ function pending(data: RequirementsData): RequirementsData['requirements'] {
 }
 
 /**
- * What the object is required to be has arrived: remember it, draw it, and
- * rebuild the strip it decides.
+ * What the object is required to be has arrived: remember it, and draw it.
  *
- * Asked on every show, so a refusal on the way to deciding whether there is a
- * tab - a daemon too old to know the question - means no tab rather than an
- * error. Once the tab has been opened, a refusal is the tab's answer.
- *
- * Not with 'keepCurrent', as for Build vs Buy: a reader who chose this tab for
- * the last object lands on it again for this one, once it is known to be there.
+ * Asked on every show, so a refusal before the tab has been opened - a daemon
+ * too old to know the question - is kept to itself; once the tab has been
+ * opened, a refusal is the tab's answer. Whether there is a tab does not depend
+ * on it (see 'requirementsOffered'), so the strip is not rebuilt for it.
  */
 function onRequirements(data: RequirementsData | undefined, error: string | undefined): void {
     if (shown === undefined) {
         return;
     }
-    const offered = requirementsShown() !== undefined;
     if (error !== undefined || data === undefined || data === null) {
         if (requested.has('requirements')) {
             requirementsView.showError(error ?? 'PartCAD had nothing to say about what this is required to be.');
@@ -2943,9 +2985,6 @@ function onRequirements(data: RequirementsData | undefined, error: string | unde
             requirementsView.showError(`Failed to display this: ${e}`);
             reportError(`failed to render the 'requirements' tab: ${e}`);
         }
-    }
-    if ((requirementsShown() !== undefined) !== offered) {
-        tabs.setTabs(tabsFor(shown));
     }
 }
 
@@ -3226,6 +3265,8 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
         onSectionShown(message);
     } else if (message.type === 'camSaved') {
         onCamSaved(message);
+    } else if (message.type === 'requirementEdited') {
+        onRequirementEdited(message);
     } else if (message.type === 'clear') {
         clear();
     } else if (message.type === 'show') {

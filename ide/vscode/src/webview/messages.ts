@@ -577,6 +577,15 @@ export interface SectionShownMessage {
     stats?: CamStats | null;
 }
 
+/** Host to renderer: a requirement has been changed, or could not be, and 'error' is why. */
+export interface RequirementEditedMessage {
+    type: 'requirementEdited';
+    token: number;
+    /** What was changed, in words: 'requirements.add''s 'changed'. */
+    changed?: string | null;
+    error?: string;
+}
+
 /** Host to renderer: the CAM tab's Save has been done, or could not be, and 'error' is why. */
 export interface CamSavedMessage {
     type: 'camSaved';
@@ -589,6 +598,7 @@ export type HostMessage =
     | StateRequestMessage
     | SectionShownMessage
     | CamSavedMessage
+    | RequirementEditedMessage
     | ShowMessage
     | ClearMessage
     | TabDataMessage
@@ -764,6 +774,13 @@ export interface ShowSectionMessage {
     cam?: CamRequest | null;
     /** What is being asked for, in a few words, for the notification that says it is loading. */
     what?: string;
+}
+
+/** Renderer to host: change one requirement of the object on screen ('requirements.add', 'requirements.remove'). */
+export interface EditRequirementMessage {
+    type: 'editRequirement';
+    token: number;
+    edit: RequirementEdit;
 }
 
 /** Renderer to host: write the CAM tab's settings into the part's declaration ('cam.save'). */
@@ -1443,6 +1460,45 @@ export interface RequirementCheck {
     requirement: string;
     passed: boolean | null;
     detail?: string | null;
+    /**
+     * Which entry of the section the check is of, as 'requirements.add' and
+     * 'requirements.remove' address it: what the row's Edit and Remove act on.
+     * Absent from a check of no entry -- a 'feature:' that names nothing -- and
+     * from a daemon from before the tab could edit.
+     */
+    address?: RequirementAddress | null;
+}
+
+/** The kinds of requirement, as 'pc req add <kind>' and 'requirements.add' name them. */
+export type RequirementKind = 'feature' | 'port' | 'interface' | 'physics' | 'match' | 'has';
+
+/** One requirement: its kind and name, and for an interface or a match the one instance or amount of it. */
+export interface RequirementAddress {
+    requirement: RequirementKind;
+    name: string;
+    instance?: string | null;
+    amount?: string | null;
+}
+
+/**
+ * A change to the requirements: 'requirements.add' ('pc req add') or 'requirements.remove' ('pc req remove').
+ *
+ * What a form says is sent as the text typed into it ('text'), and the daemon
+ * reads each field as the same text in 'partcad.yaml' is read: '5' is the
+ * number, '>5' the comparison. A feature's sentence is sent as it is, being
+ * prose rather than a value.
+ */
+export interface RequirementEdit {
+    op: 'add' | 'remove';
+    requirement: RequirementKind;
+    name: string;
+    value?: unknown;
+    text?: boolean;
+    instances?: string[];
+    amounts?: string[];
+    replace?: boolean;
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    with_references?: boolean;
 }
 
 /** One feature: its name, what it is, and the 'qual: sim:' entries and analysis scenarios that name it. */
@@ -1468,6 +1524,25 @@ export interface RequirementsData {
     verified: boolean;
     features: RequirementFeature[];
     requirements: RequirementCheck[];
+    /**
+     * The 'requirements:' section the object's own declaration holds, as a
+     * mapping (a paragraph written before the section had structure being the
+     * features it is read as): what an edit form is filled from. Null when it
+     * declares none; absent from a daemon from before the tab could edit.
+     */
+    section?: Record<string, unknown> | null;
+    /** The section as the object is read with it: an alias's is its source's. */
+    declared?: Record<string, unknown> | null;
+    /** What an alias or an enrich is of, as '<package>:<name>'. */
+    source?: string | null;
+    /** Null when the requirements can be changed here, and otherwise why not. Absent: they cannot. */
+    editable?: string | null;
+    /** The physical properties a requirement may name: 'value', 'vector', or the members of a mapping. */
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    physics_fields?: Record<string, 'value' | 'vector' | string[]>;
+    /** The yes-or-no requirements, as 'has_<name>' names them: 'material', 'private_dependencies', ... */
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    has_names?: string[];
 }
 
 /** One simulation an object declares, as 'qual.simulations' answers: its 'qual: sim:' entry. */

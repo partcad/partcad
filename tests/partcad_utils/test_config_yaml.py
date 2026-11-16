@@ -114,3 +114,56 @@ def test_lint_context_reads_the_file_as_partcad_does(tmp_path):
     (tmp_path / "partcad.yaml").write_text("dependencies:\n  dep:\n    type: git\n    track: 1_000\n")
     read = lint_context._load(str(tmp_path / "partcad.yaml"), [str(tmp_path)])
     assert spelling(read["dependencies"]["dep"]["track"]) == "1_000"
+
+
+# --- a leading '>', '|' or '!' ------------------------------------------------
+#
+# A requirement's comparison ('>0', '>=1,<10', '!0') is the common case of a value
+# that starts with a character YAML reads as syntax. YAML is right to read it so;
+# what is pinned here is that PartCAD says what to do about it, and that the one
+# case YAML reads without complaint -- '>5', an empty folded block -- is found.
+
+
+@pytest.mark.parametrize("value", [">0", ">=1,<10", "!0", "!=0", "|0"])
+def test_a_document_that_yaml_refuses_for_it_says_to_quote_it(value):
+    with pytest.raises(yaml.MarkedYAMLError) as raised:
+        config_yaml.load("physics:\n  mass: %s\n" % value)
+    assert config_yaml.QUOTING_HINT in str(raised.value)
+
+
+def test_any_other_yaml_error_is_left_as_it_was():
+    with pytest.raises(yaml.MarkedYAMLError) as raised:
+        config_yaml.load("a: [1, 2\n")
+    assert config_yaml.QUOTING_HINT not in str(raised.value)
+
+
+@pytest.mark.parametrize("value", [">5", "|2"])
+def test_the_value_yaml_misreads_rather_than_refuses_is_found(value):
+    """'mass: >5' is a folded block with an indentation of 5 and nothing in it: the value is ''."""
+    text = "physics:\n  mass: %s\n  density: 1\nfeatures:\n  long: >\n    text that is there\n" % value
+    assert config_yaml.load(text)["physics"]["mass"] == ""
+    assert config_yaml.empty_block_scalars(text) == [(1, 8, value)]
+
+
+@pytest.mark.parametrize(
+    "typed, read",
+    [
+        ("5", 5),
+        ("0.25", 0.25),
+        ("true", True),
+        ("null", None),
+        ("", None),
+        ("<5", "<5"),
+        ("5%", "5%"),
+        ("[1, 2]", [1, 2]),
+        ("'5'", "5"),
+        # What YAML refuses or misreads is the text itself: there is no document to be mistaken about.
+        (">0", ">0"),
+        (">5", ">5"),
+        (">=1,<10", ">=1,<10"),
+        ("!0", "!0"),
+        ("!=0", "!=0"),
+    ],
+)
+def test_a_value_typed_on_its_own_is_read_as_the_same_text_in_partcad_yaml(typed, read):
+    assert config_yaml.scalar(typed) == read

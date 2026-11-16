@@ -3820,7 +3820,18 @@ def _requirements_session(monkeypatch, kind="part", name="plate", physics=(), ma
                 "check_async": check_async,
                 "of_shape": of_shape,
                 "matched_object_async": matched_object_async,
-            }
+            },
+            # What the answer says besides the report: the section as written,
+            # and whether 'requirements.add' could change it.
+            "partcad.requirements_edit": {
+                "section_as_data": lambda section: section,
+                "structured": lambda section: section,
+                "physics_fields": lambda: {},
+                "has_names": lambda: [],
+            },
+            "partcad.shape_config": {"final_config": lambda obj: getattr(obj, "config", None) or {}},
+            "partcad.reference": {"REFERENCE_TYPES": frozenset({"alias", "enrich", "compound"})},
+            "partcad.project": {"OBJECT_KIND_SECTIONS": {"part": "parts", "assembly": "assemblies"}},
         },
     )
     session, _ = make_session()
@@ -3838,8 +3849,11 @@ def test_requirements_check_reads_the_declaration_unless_asked_to_verify(monkeyp
     )
 
     assert asked == [(plate, False), (plate, True)]
-    assert declared == {"object": "//:plate", "verified": False}
-    assert verified == {"object": "//:plate", "verified": True}
+    assert {key: declared[key] for key in ("object", "verified")} == {"object": "//:plate", "verified": False}
+    assert {key: verified[key] for key in ("object", "verified")} == {"object": "//:plate", "verified": True}
+    # And what is written, which the fake package does not declare, so that it cannot be changed either.
+    assert declared["section"] is None
+    assert declared["editable"].startswith("it is not declared in its package")
 
 
 @pytest.mark.parametrize("kind", ["assembly", "scene", "sketch"])
@@ -3904,7 +3918,7 @@ def test_requirements_check_reports_a_match_whose_object_cannot_be_looked_up_rat
         session, {"package": "//", "object": "bracket", "kind": "part", "verify": True}
     )
 
-    assert report == {"object": "//:bracket", "verified": True}
+    assert {key: report[key] for key in ("object", "verified")} == {"object": "//:bracket", "verified": True}
     assert asked == [(bracket, True)]
 
 

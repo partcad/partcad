@@ -177,6 +177,33 @@ def test_yaml_error_on_a_templated_line_is_only_a_warning():
     assert diagnostic.code == CODE_YAML
 
 
+def _configuration(requirement_value: str) -> str:
+    return "parts:\n  b:\n    type: basic\n    cuboid: 1\n    requirements:\n      physics:\n        mass: %s\n" % (
+        requirement_value
+    )
+
+
+@pytest.mark.parametrize("value", [">0", "!0"])
+def test_a_comparison_yaml_refuses_says_to_quote_it(value):
+    (diagnostic,) = validate_source(_configuration(value), get_schema(PARTCAD_SCHEMA))
+    assert diagnostic.code == CODE_YAML
+    assert "quote it" in diagnostic.message
+
+
+def test_a_comparison_yaml_misreads_as_an_empty_block_is_found_where_it_is_written():
+    """'mass: >5' parses, the schema takes the empty string it reads as, and the value is not what was written."""
+    (diagnostic,) = validate_source(_configuration(">5"), get_schema(PARTCAD_SCHEMA))
+    assert (diagnostic.severity, diagnostic.code) == (SEVERITY_ERROR, CODE_YAML)
+    assert (diagnostic.line, diagnostic.column, diagnostic.end_column) == (6, 14, 16)
+    assert "quote it ('>5')" in diagnostic.message
+
+
+def test_a_quoted_comparison_and_a_folded_block_with_text_in_it_are_fine():
+    assert validate_source(_configuration("'>5'"), get_schema(PARTCAD_SCHEMA)) == []
+    text = "parts:\n  b:\n    type: basic\n    cuboid: 1\n    desc: >\n      Folded,\n      on purpose.\n"
+    assert validate_source(text, get_schema(PARTCAD_SCHEMA)) == []
+
+
 # ---- schema violations -----------------------------------------------------
 
 
