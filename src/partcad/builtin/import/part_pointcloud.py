@@ -249,7 +249,9 @@ def read_las(path, limit=None):
             )
             if coloured:
                 parts["rgb"].append(
-                    numpy.column_stack([numpy.asarray(chunk.red), numpy.asarray(chunk.green), numpy.asarray(chunk.blue)])
+                    numpy.column_stack(
+                        [numpy.asarray(chunk.red), numpy.asarray(chunk.green), numpy.asarray(chunk.blue)]
+                    )
                 )
             if "classification" in names:
                 parts["classes"].append(numpy.asarray(chunk.classification).astype(int))
