@@ -205,7 +205,9 @@ def test_on_disk_cache_persists_across_instances():
         first, fake1 = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache), FakeRepository(data)
         first._repository = fake1
         assert first.object_names("part") == ["bolt"]
-        assert fake1.keys == ["objects/part"]  # fetched from the repository
+        # Fetched from the repository, and the metadata with it, before the
+        # answer is written: it is what says whether the answer may be.
+        assert fake1.keys == ["objects/part", "meta"]
 
         # A fresh in-memory instance sharing the on-disk cache; its repository
         # would return nothing, so a correct read must come from disk.
@@ -241,7 +243,7 @@ def test_the_users_overrides_of_the_plugin_are_part_of_the_cache_key(monkeypatch
         overrides["//site:site_repo"] = {"token": "t"}
         signed_in = package({"objects/part": {"original": {"type": "step"}}})
         assert signed_in.object_names("part") == ["original"]
-        assert signed_in._repository.keys == ["objects/part"]
+        assert signed_in._repository.keys == ["objects/part", "meta"]
         # Another plugin's overrides are not this one's business.
         overrides["//other:repo"] = {"token": "u"}
         again = package({})
@@ -275,6 +277,45 @@ def test_a_package_that_says_persist_false_keeps_its_answers_for_the_process_onl
         assert second.object_names("part") == ["place"]
         assert second._repository.keys == ["objects/part"]
         assert second.persists() is False
+    finally:
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_an_object_asked_for_before_the_metadata_is_not_written_where_the_metadata_forbids_it():
+    """A fresh cache, or a forced refresh: the metadata is fetched before the first answer would be written."""
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_persist_first_%s" % uuid.uuid4().hex, ctx.user_config)
+    try:
+        meta = {"objectKinds": ["part"], "persist": False}
+        data = {"meta": meta, "objects/part/place": {"type": "heightmap", "cache": False}}
+
+        def package():
+            repo = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+            repo._repository = FakeRepository(data)
+            return repo
+
+        first = package()
+        assert asyncio.run(first.get_data_async("objects/part/place")) == data["objects/part/place"]
+        assert first._repository.keys == ["objects/part/place", "meta"]
+        assert first.persists() is False
+        # Another process finds the metadata on disk, and not the object.
+        second = package()
+        asyncio.run(second.get_data_async("objects/part/place"))
+        assert second._repository.keys == ["objects/part/place"]
+
+        # A forced refresh reads nothing from disk, and still writes nothing it may not.
+        ctx.user_config.force_update = True
+        try:
+            third = package()
+            asyncio.run(third.get_data_async("objects/part/place"))
+            assert third._repository.keys == ["objects/part/place", "meta"]
+        finally:
+            ctx.user_config.force_update = False
+        fourth = package()
+        asyncio.run(fourth.get_data_async("objects/part/place"))
+        assert fourth._repository.keys == ["objects/part/place"]
     finally:
         for backend in cache.backends:
             if isinstance(backend, FilesCacheBackend):

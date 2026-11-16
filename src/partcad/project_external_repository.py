@@ -348,13 +348,13 @@ class ProjectExternalRepository(ProjectPlugin):
 
         # Persist a successful fetch so it survives across runs - unless the
         # package said its answers are for this run only (see '_persists').
-        if value is not None and self._cache is not None and await self._persists_async(scoped):
+        if value is not None and self._cache is not None and await self._persists_async(scoped, fetch=True):
             await self._write_cache(scoped, value)
 
         with self._request_lock:
             return self._request_cache.setdefault(scoped, value)
 
-    async def _persists_async(self, scoped: str) -> bool:
+    async def _persists_async(self, scoped: str, fetch: bool = False) -> bool:
         """Whether the answer to 'scoped' may be kept on disk, across runs.
 
         A package's 'meta' may say ``"persist": false``: what its plugin serves
@@ -365,17 +365,22 @@ class ProjectExternalRepository(ProjectPlugin):
         The metadata itself is always kept: it says what the package is, and
         is the one answer that says whether the others may be.
 
-        Read from the metadata as this process has it, or as the disk does, and
-        never fetched for the purpose - the same rule as '_served_kinds'. A
-        package that says so has its metadata read before anything else of it
-        in any case: an object is reached through 'objectKinds',
-        'instanceKinds' or 'searchKinds', each read from it.
+        Read from the metadata as this process has it, or as the disk does.
+        Asked before an answer is *read* from disk, that is all, since nothing
+        was written there that the metadata forbade. Asked before one is
+        *written* ('fetch'), the metadata is fetched from the plugin when
+        neither has it: an object looked up by name in a fresh cache, or on a
+        forced refresh (which reads nothing from disk), can come before
+        anything has read the metadata, and an answer written then would be
+        written before the package could say it may not be.
         """
         meta_key = self._scope("meta")
         if scoped == meta_key:
             return True
         if self._peek_data("meta") is _MISSING and self._cache is not None:
             await self._cached_async(meta_key)
+        if fetch and self._peek_data("meta") is _MISSING:
+            await self.get_data_async("meta")
         return self.persists()
 
     def persists(self) -> bool:
