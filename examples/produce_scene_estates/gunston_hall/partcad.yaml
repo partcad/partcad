@@ -64,6 +64,7 @@ docs:
     - Porch floor height (1100) comes from the elevation's top step; the HABS first-floor datum is 965 - treat the 135 mm difference as a threshold step.
     - Stoop on the NE gable and the SW cellar bulkhead are approximate outlines.
     - Landscape items come from the 1"=60' site plan (171 mm/px) and are +/- 2 m.
+    - The rooms' walls are whole: a `walls` scene stands a wall on every edge of its outline and has no doorways yet, so a room's doors are measured - its furniture keeps clear of them - but not cut through its walls.
 
     ### Sources
 

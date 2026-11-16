@@ -168,12 +168,32 @@ def _oriented(ring, outer):
     return ring if (area > 0) == outer else list(reversed(ring))
 
 
-def _polygon(points):
+def _wire(points):
     made = BRepBuilderAPI_MakePolygon()
     for x, y in points:
         made.Add(gp_Pnt(x, y, 0.0))
     made.Close()
-    return BRepBuilderAPI_MakeFace(made.Wire(), True).Face()
+    return made.Wire()
+
+
+def _polygon(points):
+    return BRepBuilderAPI_MakeFace(_wire(points), True).Face()
+
+
+def _area_rings(area):
+    # An area as the site wrote it: an outline - a list of points - or, where it has holes, its rings, the
+    # outline first.
+    return [area] if area and isinstance(area[0][0], (int, float)) else list(area)
+
+
+def _area_face(area):
+    # The face of an area on the plan, its holes cut out of it.
+    rings = [_clean(ring) for ring in _area_rings(area)]
+    rings = [_oriented(ring, index == 0) for index, ring in enumerate(rings) if len(ring) >= 3]
+    made = BRepBuilderAPI_MakeFace(_wire(rings[0]), True)
+    for hole in rings[1:]:
+        made.Add(_wire(hole))
+    return made.Face()
 
 
 def _band(width, points):
@@ -218,9 +238,9 @@ def union(spec):
     faces = []
     for width, points in spec["lines"]:
         faces.extend(_band(width, points))
-    for outline in spec["areas"]:
+    for item in spec["areas"]:
         try:
-            faces.append(_polygon(outline))
+            faces.append(_area_face(item))
         except Exception:  # an outline the map draws crossing itself: left out
             pass
     if not faces:
@@ -276,7 +296,7 @@ def draped(spec):
 
 def buildings(spec):
     return compound(
-        between([outline], ("surface", 0.0), ("plane", roof)) for outline, roof in zip(spec["areas"], spec["tops"])
+        between(_area_rings(item), ("surface", 0.0), ("plane", roof)) for item, roof in zip(spec["areas"], spec["tops"])
     )
 
 
@@ -323,9 +343,9 @@ def ground():
     items = []
     spec = LAYERS.get("buildings")
     if spec:
-        for outline, roof in zip(spec["areas"], spec["tops"]):
+        for item, roof in zip(spec["areas"], spec["tops"]):
             try:
-                items.append((("plane", roof), PAINT.get("buildings"), [_polygon(_clean(outline))]))
+                items.append((("plane", roof), PAINT.get("buildings"), [_area_face(item)]))
             except Exception:  # an outline the map draws crossing itself: left out
                 pass
     for name in PRIORITY[1:]:
@@ -333,22 +353,34 @@ def ground():
             items.append((("surface", LAYERS[name]["thickness"]), PAINT.get(name), union(LAYERS[name])))
 
     area = _polygon([(X0, Y0), (X1, Y0), (X1, Y1), (X0, Y1)])
-    arguments = TopTools_ListOfShape()
-    arguments.Append(area)
-    for _, _, faces in items:
-        for f in faces:
-            arguments.Append(f)
-    cut = BRepAlgoAPI_BuilderAlgo()
-    cut.SetArguments(arguments)
-    cut.SetFuzzyValue(1e-3)
-    cut.Build()
-    plan = cut.Shape()
+    if any(faces for _, _, faces in items):
+        arguments = TopTools_ListOfShape()
+        arguments.Append(area)
+        for _, _, faces in items:
+            for f in faces:
+                arguments.Append(f)
+        cut = BRepAlgoAPI_BuilderAlgo()
+        cut.SetArguments(arguments)
+        cut.SetFuzzyValue(1e-3)
+        cut.Build()
+        if not cut.IsDone():
+            raise RuntimeError("the map's footprints could not be cut into the ground's plan")
+        plan = cut.Shape()
+
+        def images(f):
+            made = _listed(cut.Modified(f))
+            return made if made else [f]
+
+    else:
+        # Nothing mapped ('--no-osm', or a place with nothing on it): the
+        # plan is the area alone, and there is nothing to cut it with.
+        plan = area
+
+        def images(f):
+            return [f]
+
     pieces = TopTools_IndexedMapOfShape()
     TopExp.MapShapes_s(plan, TopAbs_FACE, pieces)
-
-    def images(f):
-        made = _listed(cut.Modified(f))
-        return made if made else [f]
 
     inside = set(pieces.FindIndex(f) for f in images(area))
     owner = {}

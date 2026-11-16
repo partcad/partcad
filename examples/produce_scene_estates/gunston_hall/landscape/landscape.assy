@@ -27,7 +27,7 @@ links:
   - part: tree
     name: tree-5
     params: {height: 10000}
-    location: [[-35290.9, 53419.2, 27127.5], [0, 0, 1], 178.4]
+    location: [[-35290.9, 53419.2, 27127.6], [0, 0, 1], 178.4]
     fixed: true
   - part: tree
     name: tree-6
@@ -177,7 +177,7 @@ links:
   - part: tree
     name: tree-35
     params: {height: 10000}
-    location: [[-61601.7, 36934.6, 27128], [0, 0, 1], 104.3]
+    location: [[-61601.7, 36934.6, 27128.1], [0, 0, 1], 104.3]
     fixed: true
   - part: tree
     name: tree-36

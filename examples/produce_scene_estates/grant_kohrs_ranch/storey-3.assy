@@ -11,15 +11,15 @@ links:
     fixed: true
   - part: stove
     name: room-3-1-stove-1
-    location: [[7273.8, 24211.5, 3663], [0, 0, 1], 180]
+    location: [[7275.3, 24211.5, 3663], [0, 0, 1], 180]
     fixed: true
   - part: eastrural-chair
     name: room-3-1-eastrural-chair-1
-    location: [[8226, 24124, 3655], [0, 0, 1], 180]
+    location: [[8227.5, 24124, 3655], [0, 0, 1], 180]
     fixed: true
   - part: eastrural-chair
     name: room-3-1-eastrural-chair-2
-    location: [[6276, 24124, 3655], [0, 0, 1], 180]
+    location: [[6277.5, 24124, 3655], [0, 0, 1], 180]
     fixed: true
   - scene: room-3-2
     name: room-3-2
@@ -33,15 +33,15 @@ links:
     fixed: true
   - part: crestwood-sofa
     name: room-3-3-crestwood-sofa-1
-    location: [[7733.5, 20819.2, 3651.2], [0, 0, 1], 180]
+    location: [[7735, 20819.2, 3651.2], [0, 0, 1], 180]
     fixed: true
   - part: appleseed-coffeetable
     name: room-3-3-appleseed-coffeetable-1
-    location: [[7750.5, 21928.5, 3651], [0, 0, 1], 0]
+    location: [[7751.2, 21928.5, 3651], [0, 0, 1], 0]
     fixed: true
   - part: crestwood-chair
     name: room-3-3-crestwood-chair-1
-    location: [[5895.4, 21885, 3651.2], [0, 0, 1], 90]
+    location: [[5896.9, 21885, 3651.2], [0, 0, 1], 90]
     fixed: true
   - part: eurekaconsole
     name: room-3-3-eurekaconsole-1
@@ -54,11 +54,11 @@ links:
     fixed: true
   - part: daybed
     name: room-3-4-daybed-1
-    location: [[7733.4, 15862.2, 3649.8], [0, 0, 1], 180]
+    location: [[7734.8, 15862.2, 3649.8], [0, 0, 1], 180]
     fixed: true
   - part: appleseed-endtable
     name: room-3-4-appleseed-endtable-1
-    location: [[6204.8, 15449.9, 3651], [0, 0, 1], 180]
+    location: [[6206.3, 15449.9, 3651], [0, 0, 1], 180]
     fixed: true
   - part: cabinet-b01
     name: room-3-4-cabinet-b01-1
@@ -66,7 +66,7 @@ links:
     fixed: true
   - part: sappington-chair
     name: room-3-4-sappington-chair-1
-    location: [[9434.5, 15615.5, 3651], [0, 0, 1], 180]
+    location: [[9436, 15615.5, 3651], [0, 0, 1], 180]
     fixed: true
   - scene: room-3-5
     name: room-3-5
@@ -75,11 +75,11 @@ links:
     fixed: true
   - part: daybed
     name: room-3-5-daybed-1
-    location: [[7733.4, 11966.2, 3649.8], [0, 0, 1], 180]
+    location: [[7734.8, 11966.2, 3649.8], [0, 0, 1], 180]
     fixed: true
   - part: appleseed-endtable
     name: room-3-5-appleseed-endtable-1
-    location: [[6204.8, 11553.9, 3651], [0, 0, 1], 180]
+    location: [[6206.3, 11553.9, 3651], [0, 0, 1], 180]
     fixed: true
   - part: cabinet-b01
     name: room-3-5-cabinet-b01-1
@@ -87,7 +87,7 @@ links:
     fixed: true
   - part: sappington-chair
     name: room-3-5-sappington-chair-1
-    location: [[9434.5, 11719.5, 3651], [0, 0, 1], 180]
+    location: [[9436, 11719.5, 3651], [0, 0, 1], 180]
     fixed: true
   - scene: room-3-6
     name: room-3-6
@@ -96,11 +96,11 @@ links:
     fixed: true
   - part: daybed
     name: room-3-6-daybed-1
-    location: [[7733.4, 7164.2, 3649.8], [0, 0, 1], 180]
+    location: [[7734.8, 7186.7, 3649.8], [0, 0, 1], 180]
     fixed: true
   - part: appleseed-endtable
     name: room-3-6-appleseed-endtable-1
-    location: [[6204.8, 6751.9, 3651], [0, 0, 1], 180]
+    location: [[6206.3, 6774.4, 3651], [0, 0, 1], 180]
     fixed: true
   - part: cabinet-b01
     name: room-3-6-cabinet-b01-1
@@ -108,7 +108,7 @@ links:
     fixed: true
   - part: sappington-chair
     name: room-3-6-sappington-chair-1
-    location: [[9434.5, 6917.6, 3651], [0, 0, 1], 180]
+    location: [[9436, 6940.1, 3651], [0, 0, 1], 180]
     fixed: true
   - scene: room-3-7
     name: room-3-7
@@ -117,9 +117,9 @@ links:
     fixed: true
   - part: jennings-bench
     name: room-3-7-jennings-bench-1
-    location: [[11667.9, 15997.3, 3651], [0, 0, 1], 270]
+    location: [[11667.9, 16019.8, 3651], [0, 0, 1], 270]
     fixed: true
   - part: aftonconsole
     name: room-3-7-aftonconsole-1
-    location: [[11675.5, 17792.6, 3651], [0, 0, 1], 270]
+    location: [[11675.5, 14215.1, 3651], [0, 0, 1], 270]
     fixed: true

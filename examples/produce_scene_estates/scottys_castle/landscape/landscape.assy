@@ -7,12 +7,12 @@ links:
   - part: tree
     name: tree-1
     params: {height: 10000}
-    location: [[53010.7, 25314.1, 12229.5], [0, 0, 1], 48.4]
+    location: [[53010.7, 25314.1, 12229.1], [0, 0, 1], 48.4]
     fixed: true
   - part: tree
     name: tree-2
     params: {height: 10000}
-    location: [[46560.1, 46943.8, 14909.5], [0, 0, 1], 305.1]
+    location: [[46560.1, 46943.8, 14907.5], [0, 0, 1], 305.1]
     fixed: true
   - part: tree
     name: tree-3
@@ -182,7 +182,7 @@ links:
   - part: tree
     name: tree-36
     params: {height: 10748}
-    location: [[-10417.4, -47331.3, 8275.7], [0, 0, 1], 174.4]
+    location: [[-10417.4, -47331.3, 8282.3], [0, 0, 1], 174.4]
     fixed: true
   - part: tree
     name: tree-37
@@ -207,7 +207,7 @@ links:
   - part: tree
     name: tree-41
     params: {height: 9831}
-    location: [[29118.1, -42225.6, 7974.3], [0, 0, 1], 99.8]
+    location: [[29118.1, -42225.6, 7974.7], [0, 0, 1], 99.8]
     fixed: true
   - part: tree
     name: tree-42
@@ -232,7 +232,7 @@ links:
   - part: tree
     name: tree-46
     params: {height: 10172}
-    location: [[38681.3, -35658.7, 8582.5], [0, 0, 1], 247.7]
+    location: [[38681.3, -35658.7, 8582.7], [0, 0, 1], 247.7]
     fixed: true
   - part: tree
     name: tree-47
@@ -272,7 +272,7 @@ links:
   - part: tree
     name: tree-54
     params: {height: 9174}
-    location: [[20141.2, -42908.8, 7827], [0, 0, 1], 321.8]
+    location: [[20141.2, -42908.8, 7836.1], [0, 0, 1], 321.8]
     fixed: true
   - part: tree
     name: tree-55
@@ -422,7 +422,7 @@ links:
   - part: tree
     name: tree-84
     params: {height: 10913}
-    location: [[7455.7, -43652, 8037.5], [0, 0, 1], 218.3]
+    location: [[7455.7, -43652, 8151.7], [0, 0, 1], 218.3]
     fixed: true
   - part: tree
     name: tree-85
@@ -537,7 +537,7 @@ links:
   - part: tree
     name: tree-107
     params: {height: 11193}
-    location: [[25539, -39872.4, 8038.4], [0, 0, 1], 261.3]
+    location: [[25539, -39872.4, 8051.8], [0, 0, 1], 261.3]
     fixed: true
   - part: tree
     name: tree-108
@@ -552,7 +552,7 @@ links:
   - part: tree
     name: tree-110
     params: {height: 10987}
-    location: [[-17800.6, -46757.3, 8648.2], [0, 0, 1], 349.5]
+    location: [[-17800.6, -46757.3, 8651.7], [0, 0, 1], 349.5]
     fixed: true
   - part: tree
     name: tree-111

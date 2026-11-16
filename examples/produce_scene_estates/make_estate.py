@@ -616,6 +616,58 @@ def block_of(m, x, y):
     return None
 
 
+def convex(points):
+    turns = [(bx - ax) * (cy - by) - (by - ay) * (cx - bx) for (ax, ay), (bx, by), (cx, cy) in zip(points, points[1:] + points[:1], points[2:] + points[:2])]
+    return all(turn >= -1e-6 for turn in turns) or all(turn <= 1e-6 for turn in turns)
+
+
+def clip(points, window):
+    """'points' clipped to the convex, counter-clockwise polygon 'window' (Sutherland and Hodgman)."""
+    found = list(points)
+    for (ax, ay), (bx, by) in segments(window):
+        def side(p):
+            return (bx - ax) * (p[1] - ay) - (by - ay) * (p[0] - ax)
+
+        def meet(p, q):
+            sp, sq = side(p), side(q)
+            t = sp / (sp - sq)
+            return (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t)
+
+        given, found = found, []
+        for p, q in segments(given) if given else []:
+            if side(q) >= 0.0:
+                if side(p) < 0.0:
+                    found.append(meet(p, q))
+                found.append(q)
+            elif side(p) >= 0.0:
+                found.append(meet(p, q))
+    return found
+
+
+def within_walls(m, room, t):
+    """'room', or the part of it inside the inner face of the outside walls of the one block it is drawn in.
+
+    A room's walls may stand in the outside wall, and are carved out of it (see 'shell_data'), as long as
+    the outside is left: a room drawn out to its block's outline - the survey's dimension of a small wing is
+    often its outside - would have its walls carved through it, and from outside the house would have a
+    hole there. So a room inside one block is kept back from that block's outline by its walls, a gap, and
+    the thinnest wall there is (MIN_WALL) of the outside left standing. A room across two blocks, or in a
+    block that is not convex, is left as it is drawn.
+    """
+    index = block_of(m, *centroid(room))
+    if index is None:
+        return room
+    block = m.blocks[index]
+    outline = ccw([tuple(p) for p in block["outline"]])
+    if not convex(outline) or not all(inside(outline, x, y) or min(to_segment((x, y), *e) for e in segments(outline)) < 1.0 for x, y in room):
+        return room
+    window = inset_polygon(outline, t + GAP + MIN_WALL)
+    if all(inside(window, x, y) for x, y in room):
+        return room
+    kept = clip(room, window)
+    return ccw(kept) if len(kept) >= 3 and area(ccw(kept)) > 0.0 else room
+
+
 def plan(m):
     """Each storey's rooms' wall thickness, which blocks its floor is in, and each room's height.
 
@@ -639,6 +691,11 @@ def plan(m):
         for k, by in short.items():
             print("note: %s: %s moved in %s mm, clear of a room drawn against it" % (st["name"], st["rooms"][k]["name"], fmt(by)), file=sys.stderr)
             rooms[k] = inset_polygon(rooms[k], by)
+        for k, room in enumerate(rooms):
+            kept = within_walls(m, room, t)
+            if kept is not room:
+                print("note: %s: %s kept back from the outside, which its walls would carve through" % (st["name"], st["rooms"][k]["name"]), file=sys.stderr)
+                rooms[k] = kept
         st["outlines"] = rooms
         st["thickness"] = t
         st["blocks"] = []
@@ -672,16 +729,16 @@ def plan(m):
 
 
 def sample_ring(points, t):
-    """Points along an outline and along it moved out by 't': where the walls standing on it reach."""
+    """Points along an outline and along the outer face of the walls standing on it, 't' thick: where they reach.
+
+    The outer face is the outline moved out along every edge, its corners mitred as the walls' are - a corner
+    of it reaches farther out than any point moved out from the middle does - and every corner is sampled.
+    """
     found = []
-    cx, cy = centroid(points)
-    for (ax, ay), (bx, by) in segments(points):
-        for i in range(11):
-            x, y = ax + (bx - ax) * i / 10.0, ay + (by - ay) * i / 10.0
-            found.append((x, y))
-            dx, dy = x - cx, y - cy
-            n = math.hypot(dx, dy) or 1.0
-            found.append((x + dx / n * t, y + dy / n * t))
+    for ring in (points, inset_polygon(ccw(points), -t)):
+        for (ax, ay), (bx, by) in segments(ring):
+            for i in range(10):
+                found.append((ax + (bx - ax) * i / 10.0, ay + (by - ay) * i / 10.0))
     return found
 
 
@@ -1023,20 +1080,25 @@ def grade(surface, footprint):
 
         return g(i, nx, x0, x1), g(j, ny, y0, y1)
 
-    pad = grow(footprint, PAD_SPANS * span)
-    blend = grow(footprint, (PAD_SPANS + 2.0) * span)
+    # The pad is every pole within PAD_SPANS spans of the footprint, measured from its outline - not the
+    # footprint's corners pushed away from its middle, which moves the long sides of a long house hardly at
+    # all - and the blend the two spans past that.
+    pad, blend = PAD_SPANS * span, (PAD_SPANS + 2.0) * span
+
+    def reach(x, y):
+        return 0.0 if inside(footprint, x, y) else min(to_segment((x, y), a, b) for a, b in segments(footprint))
+
     under = sorted(poles[i][j] for i in range(nx) for j in range(ny) if inside(footprint, *at(i, j)))
     if not under:
-        under = sorted(poles[i][j] for i in range(nx) for j in range(ny) if inside(pad, *at(i, j)))
+        under = sorted(poles[i][j] for i in range(nx) for j in range(ny) if reach(*at(i, j)) <= pad)
     level = round(under[len(under) // 2], 1)
     for i in range(nx):
         for j in range(ny):
-            x, y = at(i, j)
-            if inside(pad, x, y):
+            d = reach(*at(i, j))
+            if d <= pad:
                 poles[i][j] = level
-            elif inside(blend, x, y):
-                d = min(to_segment((x, y), a, b) for a, b in segments(pad))
-                w = min(1.0, d / (2.0 * span))
+            elif d <= blend:
+                w = min(1.0, (d - pad) / (2.0 * span))
                 poles[i][j] = round(level * (1.0 - w) + poles[i][j] * w, 1)
     return level
 
@@ -1501,9 +1563,14 @@ def usage_of(m, graded, estate_dir):
     moved = [(st["name"], r["name"]) for st in m.storeys for r, o in zip(st["rooms"], st["outlines"]) if o != ccw([tuple(p) for p in r["polygon"]])]
     if moved:
         lines.append(
-            "- %d rooms drawn edge to edge, or nearer each other than two thin walls, are moved in by up to a few"
-            " centimetres, so that each has walls of its own." % len(moved)
+            "- %d rooms drawn edge to edge, nearer each other than two thin walls, or out to the house's own outline,"
+            " are moved in by up to a few centimetres, so that each has walls of its own and the outside stays whole."
+            % len(moved)
         )
+    lines.append(
+        "- The rooms' walls are whole: a `walls` scene stands a wall on every edge of its outline and has no doorways"
+        " yet, so a room's doors are measured - its furniture keeps clear of them - but not cut through its walls."
+    )
     lines += ["", "### Sources", ""]
     import re
 

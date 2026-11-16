@@ -60,7 +60,8 @@ Its frame is this landscape's - X east, Y north, the house's middle at the origi
 - Interior door positions marked 'approx.' were inferred from door swings that are hard to read at this scale.
 - Tower Y position, chimney Y positions and eaves height (7000) are estimates; the ridge (8408) is from the section's dimension string.
 - The annex (north, across the patio) is only given as an outline from OSM; HABS has separate sheets for it (CA-2257-B) which were not used.
-- 4 rooms drawn edge to edge, or nearer each other than two thin walls, are moved in by up to a few centimetres, so that each has walls of its own.
+- 4 rooms drawn edge to edge, nearer each other than two thin walls, or out to the house's own outline, are moved in by up to a few centimetres, so that each has walls of its own and the outside stays whole.
+- The rooms' walls are whole: a `walls` scene stands a wall on every edge of its outline and has no doorways yet, so a room's doors are measured - its furniture keeps clear of them - but not cut through its walls.
 
 ### Sources
 

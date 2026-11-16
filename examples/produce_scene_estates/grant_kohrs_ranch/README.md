@@ -59,7 +59,8 @@ Its frame is this landscape's - X east, Y north, the house's middle at the origi
 - Side windows of the front block were read on the north elevation and assumed the same on the south end (the parlor fireplace sits between them, as the plan shows).
 - Wing south-side windows on the second floor are placed one per room at mid-length (not read individually). Chimney positions along the wing are approximate.
 - Orientation (105 deg) is from imagery, not a survey; OSM has only a point for the house.
-- 21 rooms drawn edge to edge, or nearer each other than two thin walls, are moved in by up to a few centimetres, so that each has walls of its own.
+- 23 rooms drawn edge to edge, nearer each other than two thin walls, or out to the house's own outline, are moved in by up to a few centimetres, so that each has walls of its own and the outside stays whole.
+- The rooms' walls are whole: a `walls` scene stands a wall on every edge of its outline and has no doorways yet, so a room's doors are measured - its furniture keeps clear of them - but not cut through its walls.
 
 ### Sources
 
