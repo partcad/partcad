@@ -200,6 +200,18 @@ partTypes:
     requireSolid: true
     pythonRequirements:
       - pillow==12.2.0
+  dem:
+    desc: |
+      A digital elevation model in any raster format GDAL reads - a GeoTIFF
+      (`.tif`), an SRTM tile (`.hgt`), DTED (`.dt0`, `.dt1`, `.dt2`), ERDAS
+      Imagine (`.img`) - as the solid under it, at the cell its georeferencing
+      says, holes filled; `bounds` takes the part of it a scene needs. Read
+      with rasterio, whose wheels carry GDAL.
+    path: part_dem.py
+    extension: hgt
+    requireSolid: true
+    pythonRequirements:
+      - rasterio==1.4.4
   pointcloud:
     desc: |
       Points a scanner or a lidar measured, made a solid: a height field of the
@@ -213,15 +225,32 @@ partTypes:
     pythonRequirements:
       - laspy==2.7.0
       - lazrs==0.8.2
+  e57:
+    desc: |
+      A terrestrial or mobile laser scan (ASTM E57, `.e57`): every scan in
+      it, each moved by its pose, in its colours - made a solid as a
+      `pointcloud` is (`as: heightfield` or `as: voxels`). A type of its own
+      because pye57, which reads it, has no wheel for Linux on ARM or for
+      macOS on Intel, where every other point cloud is still read.
+    path: part_pointcloud.py
+    extension: e57
+    requireSolid: true
+    pythonRequirements:
+      - pye57==0.4.19
   voxels:
     desc: |
       A grid of filled cells as the exact solids they make, a solid per colour
       or label: a MagicaVoxel model (`.vox`), its palette claimable under the
-      `vox` convention; a binvox grid (`.binvox`); or a 3D NumPy array
-      (`.npy`) of occupancy, labels, or densities filled at a `threshold`.
+      `vox` convention; a binvox grid (`.binvox`); or a 3D array of
+      occupancy, labels, or densities filled at a `threshold` - NumPy
+      (`.npy`), NRRD (`.nrrd`, `.nhdr`) or NIfTI (`.nii`, `.nii.gz`), the last
+      two at the voxel size their headers say.
     path: part_voxels.py
     extension: vox
     requireSolid: true
+    pythonRequirements:
+      - pynrrd==1.1.3
+      - nibabel==5.3.2
 
 import:
   # A native CAD document read as an assembly, through cadmpeg: every format

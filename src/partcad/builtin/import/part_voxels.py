@@ -22,7 +22,14 @@ label. What is read, by the file's extension:
     of integers, a solid per value other than nought - the labels of a
     segmentation - unless a 'threshold' says the integers are densities; of
     floats, filled at 'threshold' (0.5) and above - a CT scan, a simulation's
-    density field.
+    density field;
+  * '.nrrd', '.nhdr' - a volume as research and medical imaging tools write
+    one (3D Slicer, ITK), read with pynrrd; and '.nii', '.nii.gz' - NIfTI, read
+    with nibabel. Either is an array read as a '.npy' is, its voxels the size
+    its header says along each axis - in the unit a NIfTI header says, and in
+    millimetres for NRRD, which says none. The array's axes are the grid's,
+    i along X, j along Y and k along Z; the file's orientation in the patient
+    or the scanner is not applied.
 
 The grid's axes are X, Y and Z, Z up, unless 'up: y' says it is a Y-up model -
 binvox files made of meshes often are - which is turned onto Z. The grid's
@@ -240,14 +247,24 @@ def read_binvox(path):
 def read_npy(path, threshold):
     import numpy
 
-    name = os.path.basename(path)
-    array = numpy.load(path, allow_pickle=False)
+    return grid_of(numpy.load(path, allow_pickle=False), threshold, os.path.basename(path))
+
+
+def grid_of(array, threshold, name, size=None, what="array"):
+    """The Grid of a three-dimensional array: booleans, integer labels, or a density filled at 'threshold'."""
+    import numpy
+
+    array = numpy.asarray(array)
+    if array.ndim == 4 and array.shape[3] == 1:
+        array = array[..., 0]
     if array.ndim != 3:
         raise ValueError("%s holds a %d-dimensional array, and voxels are three" % (name, array.ndim))
     if threshold is not None:
-        return Grid((array >= float(threshold)).astype(numpy.int32), what="array, filled at %s and above" % threshold)
+        return Grid(
+            (array >= float(threshold)).astype(numpy.int32), size, what="%s, filled at %s and above" % (what, threshold)
+        )
     if array.dtype == bool:
-        return Grid(array.astype(numpy.int32), what="array of booleans")
+        return Grid(array.astype(numpy.int32), size, what="%s of booleans" % what)
     if numpy.issubdtype(array.dtype, numpy.integer):
         found = numpy.unique(array)
         found = found[found != 0]
@@ -259,8 +276,55 @@ def read_npy(path, threshold):
         labels = numpy.zeros(array.shape, dtype=numpy.int32)
         for index, value in enumerate(found, 1):
             labels[array == value] = index
-        return Grid(labels, what="array of %d labels" % len(found))
-    return Grid((array >= 0.5).astype(numpy.int32), what="array, filled at 0.5 and above")
+        return Grid(labels, size, what="%s of %d labels" % (what, len(found)))
+    return Grid((array >= 0.5).astype(numpy.int32), size, what="%s, filled at 0.5 and above" % what)
+
+
+def _spacing(spacings):
+    """A voxel's size (x, y, z) in mm, from the three a header says; None where it says none that is usable."""
+    import numpy
+
+    if spacings is None or len(spacings) < 3:
+        return None
+    spacings = tuple(abs(float(v)) for v in list(spacings)[:3])
+    return spacings if all(numpy.isfinite(v) and v > 0.0 for v in spacings) else None
+
+
+def read_nrrd(path, threshold):
+    import numpy
+
+    try:
+        import nrrd
+    except ImportError:  # pragma: no cover - the type installs it
+        raise ValueError("reading NRRD takes pynrrd, which this sandbox does not have")
+    name = os.path.basename(path)
+    data, header = nrrd.read(path)
+    spacings = header.get("spacings")
+    if spacings is None and header.get("space directions") is not None:
+        spacings = [
+            numpy.linalg.norm(v) for v in header["space directions"] if v is not None and not numpy.isnan(v).any()
+        ]
+    return grid_of(data, threshold, name, _spacing(spacings), what="NRRD")
+
+
+NIFTI_UNITS = {"mm": 1.0, "meter": 1000.0, "micron": 0.001}
+
+
+def read_nifti(path, threshold):
+    import numpy
+
+    try:
+        import nibabel
+    except ImportError:  # pragma: no cover - the type installs it
+        raise ValueError("reading NIfTI takes nibabel, which this sandbox does not have")
+    name = os.path.basename(path)
+    image = nibabel.load(path)
+    # The stored values, not 'get_fdata()': a label map stays integers, and a scaled scan is scaled as the file says.
+    slope, inter = image.header.get_slope_inter()
+    data = numpy.asanyarray(image.dataobj) if slope in (None, 1.0) and inter in (None, 0.0) else image.get_fdata()
+    unit = NIFTI_UNITS.get(image.header.get_xyzt_units()[0], 1.0)
+    size = _spacing([v * unit for v in image.header.get_zooms()[:3]])
+    return grid_of(data, threshold, name, size, what="NIfTI")
 
 
 # -- The part ----------------------------------------------------------------------------------------------------
@@ -272,14 +336,23 @@ def read(path, parameters):
         return read_vox(path)
     if extension == ".binvox":
         return read_binvox(path)
+    threshold = parameters.get("threshold")
+    threshold = None if threshold in (None, "") else threshold
     if extension == ".npy":
-        threshold = parameters.get("threshold")
-        return read_npy(path, None if threshold in (None, "") else threshold)
-    raise ValueError("voxels are a .vox, a .binvox or a .npy, and %s is none of them" % os.path.basename(path))
+        return read_npy(path, threshold)
+    if extension in (".nrrd", ".nhdr"):
+        return read_nrrd(path, threshold)
+    if extension == ".nii" or path.lower().endswith(".nii.gz"):
+        return read_nifti(path, threshold)
+    raise ValueError(
+        "voxels are a .vox, a .binvox, a .npy, a .nrrd or a .nii, and %s is none of them" % os.path.basename(path)
+    )
 
 
 def _size(value, stated):
     if value in (None, "", 0, "0"):
+        if isinstance(stated, tuple):
+            return stated
         return (stated,) * 3 if stated else (1.0, 1.0, 1.0)
     if isinstance(value, str):
         value = [v for v in value.replace(",", " ").split() if v]

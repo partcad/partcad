@@ -88,7 +88,9 @@ def test_every_format_cadmpeg_reads_into_solids_is_a_builtin_part_type(builtin):
         "iges": "iges",
         "usd": "usd",
         "heightmap": "asc",
+        "dem": "hgt",
         "pointcloud": "las",
+        "e57": "e57",
         "voxels": "vox",
     }
 
@@ -99,7 +101,9 @@ def test_every_one_of_them_fails_a_part_that_is_not_a_solid(builtin):
         "fcstd": "part_fcstd.py",
         "iges": "part_iges.py",
         "heightmap": "part_heightmap.py",
+        "dem": "part_dem.py",
         "pointcloud": "part_pointcloud.py",
+        "e57": "part_pointcloud.py",
         "voxels": "part_voxels.py",
     }
     for name, config in builtin["partTypes"].items():

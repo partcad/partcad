@@ -734,18 +734,20 @@ Height maps, point clouds and voxels
 
 Measured data bounds no solid as it is: a height map is pixels, a scan is points, a voxel grid is cells. Each of
 these types makes one, exact or smooth rather than a triangle per sample, so that a STEP file, a hidden-line drawing,
-a boolean and a mass are what they would be for a part modelled by hand. All three are ``partTypes`` of
-``//builtin/import`` that ``requireSolid``, and read several formats each, by the file's extension; a file of
-another name than the type's own extension is named with ``path``.
+a boolean and a mass are what they would be for a part modelled by hand. All five -- ``heightmap``, ``dem``,
+``pointcloud``, ``e57`` and ``voxels`` -- are ``partTypes`` of ``//builtin/import`` that ``requireSolid``, and read
+several formats each, by the file's extension; a file of another name than the type's own extension is named with
+``path``. What a format takes a library for, the type installs into its sandbox with pip; the native code those
+libraries need -- GDAL, libE57Format -- comes inside their wheels, so nothing is installed beside PartCAD.
 
 .. code-block:: yaml
 
   parts:
     terrain:
-      type: heightmap
-      path: srtm_tile.tif            # floating-point heights, in metres
+      type: dem
+      path: N38W078.hgt              # an SRTM tile, georeferenced
       parameters:
-        cell: {type: float, default: 30000}   # a pixel is 30 m
+        bounds: {type: string, default: "-77.45 38.50 -77.40 38.55"}  # the part of it to take
     site:
       type: pointcloud               # reads site.las
       parameters:
@@ -778,9 +780,23 @@ The first row of a raster is its north edge, as an image is drawn, so the part l
 pixel is ``cell`` mm (one number, or two: along X and along Y), the grid's own where it says one, and a metre
 otherwise. Georeferencing is not read: the part is in its own frame.
 
+A ``dem`` is an elevation model as surveys publish one, in any raster format GDAL reads -- a GeoTIFF (``.tif``), an
+SRTM tile (``.hgt``, named for its south-west corner, ``N38W078.hgt``), DTED (``.dt0``, ``.dt1``, ``.dt2``), ERDAS
+Imagine (``.img``), an ESRI BIL (``.bil``) -- read with `rasterio <https://rasterio.readthedocs.io>`_. It is a
+``heightmap``'s solid with what the file knows about itself: the cell from its georeferencing, in the units of a
+projected reference system (feet included) or, in a geographic one, its degrees made metres at the raster's middle
+latitude; its holes from its no-data value; which edge is north. ``band`` is the band read (1), and ``bounds`` --
+``west south east north``, in the raster's own reference system -- takes the part of it a scene needs, since a tile is
+usually far more: a whole SRTM tile is a degree a side. Heights are in ``unit`` (``m``); ``base``, ``exaggeration``
+and ``maxPoles`` are a ``heightmap``'s.
+
 A ``pointcloud`` reads LAS and LAZ (``.las``, ``.laz``, with `laspy <https://laspy.readthedocs.io>`_ and lazrs, which
 the type installs into its sandbox), PLY (``.ply``, ASCII or binary; a mesh's faces are not read) and text (``.xyz``,
-``.txt``, ``.csv``, ``.pts``: a point a line, x y z, then r g b). Its coordinates are in ``unit`` (``m``), at most
+``.txt``, ``.csv``, ``.pts``: a point a line, x y z, then r g b). An ``e57`` is a terrestrial or mobile laser scan
+(ASTM E57, ``.e57``), read with `pye57 <https://github.com/davidcaron/pye57>`_: every scan in the file, each moved
+by its pose into the file's frame, in its colours where it has them; it takes everything a ``pointcloud`` takes, and
+is a type of its own only because pye57 publishes no wheel for Linux on ARM or for macOS on Intel, where every other
+point cloud is still read. Coordinates are in ``unit`` (``m``), at most
 ``maxPoints`` (20 000 000) are read, evenly through the file, and lidar is filtered by its points' classes:
 ``classes: 2`` keeps the ground, ``6`` the buildings, ``"3,4,5"`` the vegetation. What it makes is its ``as``:
 
@@ -808,7 +824,12 @@ fine to fuse in reasonable time. A ``voxels`` part reads:
 - a binvox grid (``.binvox``), as mesh voxelizers write one, at its own scale unless ``size`` says otherwise;
 - a three-dimensional NumPy array (``.npy``): booleans, filled where true; integers, a solid per value other than
   nought -- the labels of a segmentation -- unless a ``threshold`` says they are densities; floats, filled at
-  ``threshold`` (0.5) and above, a CT scan's or a simulation's density field.
+  ``threshold`` (0.5) and above, a CT scan's or a simulation's density field;
+- a volume as research and medical imaging tools write one, read the way an array is: NRRD (``.nrrd``, ``.nhdr``, as
+  3D Slicer and ITK write it, with `pynrrd <https://github.com/mhe/pynrrd>`_) and NIfTI (``.nii``, ``.nii.gz``, with
+  `nibabel <https://nipy.org/nibabel/>`_), each voxel the size its header says along each axis -- in the unit a NIfTI
+  header states, and in millimetres for NRRD, which states none. The array's axes are the grid's; the volume's
+  orientation in the scanner is not applied.
 
 A voxel is ``size`` mm (one number, or three), 1 mm unless the file says otherwise. The grid is cut to its filled
 cells, its middle put over the origin and its bottom on z = 0 (``origin: file`` keeps it where the file has it), and

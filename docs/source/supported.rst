@@ -76,10 +76,11 @@ Using CAD files:
 - ACIS and ShapeManager (``.sat``, ``.sab``, ``.smt``, ``.smb``)
 - Creo View (``.pvz``)
 - OpenUSD (``.usd``, ``.usda``, ``.usdc``, ``.usdz``), as the meshes a stage shows
-- Height maps (ESRI ASCII grids ``.asc``, gray, floating-point and Terrarium / Terrain-RGB images, 2D NumPy arrays)
-  and point clouds (LAS and LAZ, PLY, ``.xyz`` and other text), as height-field solids
-- Voxels (MagicaVoxel ``.vox``, ``.binvox``, 3D NumPy arrays), as exact solids in their palette's colours; and point
-  clouds as voxels
+- Height maps (ESRI ASCII grids ``.asc``, gray, floating-point and Terrarium / Terrain-RGB images, 2D NumPy arrays),
+  elevation models in any raster format GDAL reads (GeoTIFF, SRTM ``.hgt``, DTED, ERDAS Imagine), and point clouds
+  (LAS and LAZ, E57, PLY, ``.xyz`` and other text), as height-field solids
+- Voxels (MagicaVoxel ``.vox``, ``.binvox``, 3D NumPy arrays, NRRD and NIfTI volumes), as exact solids in their
+  palette's colours; and point clouds as voxels
 - `KiCad EDA`_ PCBs
 
 Using a part type the package defines itself (``partTypes``), including one that reads a file format of its

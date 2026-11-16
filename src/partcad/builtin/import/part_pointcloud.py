@@ -33,7 +33,12 @@ What is read, by the file's extension:
   * '.las', '.laz' - lidar, read with laspy (and lazrs, for the compressed
     form): x, y and z as the file scales them, its colours, and its points'
     classes, which 'classes' filters on - '2' is the ground, '6' buildings,
-    '3,4,5' vegetation.
+    '3,4,5' vegetation;
+  * '.e57' - a terrestrial or mobile scan (ASTM E57), read with pye57: every
+    scan in the file, each moved by its pose into the file's frame, with its
+    colours where it has them. That is the 'e57' partType, which runs this
+    script with pye57 installed: pye57 publishes no wheel for every platform
+    the others run on, so it is not one of this type's requirements.
 
 Coordinates are in 'unit' (metres, unless the part says otherwise) and are
 moved so that the cloud's middle is over the origin and its lowest point is at
@@ -210,6 +215,31 @@ def read_las(path):
     return Cloud(xyz, rgb, classes, what="LAS %s, point format %d" % (las.header.version, las.point_format.id))
 
 
+def read_e57(path):
+    import numpy
+
+    try:
+        import pye57
+    except ImportError:  # pragma: no cover - the 'e57' type installs it
+        raise ValueError("reading an E57 scan takes pye57: declare the part with 'type: e57'")
+    e57 = pye57.E57(path)
+    points, colours, coloured = [], [], True
+    for index in range(e57.scan_count):
+        scan = e57.read_scan(index, colors=True, ignore_missing_fields=True, transform=True)
+        xyz = numpy.column_stack([scan["cartesianX"], scan["cartesianY"], scan["cartesianZ"]]).astype(float)
+        points.append(xyz)
+        if coloured and all(key in scan for key in ("colorRed", "colorGreen", "colorBlue")):
+            colours.append(numpy.column_stack([scan["colorRed"], scan["colorGreen"], scan["colorBlue"]]).astype(float))
+        else:
+            coloured = False
+    if not points:
+        raise ValueError("%s holds no scan" % os.path.basename(path))
+    rgb = numpy.concatenate(colours) if coloured else None
+    if rgb is not None and rgb.max() > 255.0:
+        rgb = rgb * (255.0 / rgb.max())
+    return Cloud(numpy.concatenate(points), rgb, what="E57, %d scan(s)" % len(points))
+
+
 def _number(text):
     try:
         float(text)
@@ -224,10 +254,12 @@ def read(path):
         return read_ply(path)
     if extension in (".las", ".laz"):
         return read_las(path)
+    if extension == ".e57":
+        return read_e57(path)
     if extension in TEXT:
         return read_text(path)
     raise ValueError(
-        "a point cloud is a .ply, a .las or .laz, or text (%s), and %s is none of them"
+        "a point cloud is a .ply, a .las or .laz, an .e57, or text (%s), and %s is none of them"
         % (", ".join(TEXT), os.path.basename(path))
     )
 

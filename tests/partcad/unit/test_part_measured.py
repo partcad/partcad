@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The built-in 'heightmap', 'pointcloud' and 'voxels' part types: measured data, made solid.
+"""The built-in measured-data part types - 'heightmap', 'dem', 'pointcloud', 'e57', 'voxels' - made solid.
 
 What a reader gets wrong is a plausible part: a height map upside down, a voxel
 model one cell off, a side of a terrain twisted so that it bounds a fifth less
@@ -11,7 +11,9 @@ than it should while OCCT still calls it valid. So each fact is held to an answe
 worked out by hand - the volume of so many voxels, the area of a side under a
 known curve, which edge of an image is north - on files these tests write.
 Checked in this process, with numpy and OCP, as 'test_part_usd.py' checks the
-'usd' type's script; LAS is read only where laspy is installed, as the type's
+'usd' type's script; what a type reads with a library of its own - LAS with
+laspy, an elevation model with rasterio, E57 with pye57, NRRD with pynrrd,
+NIfTI with nibabel - only where that library is installed, as the type's
 sandbox has it.
 """
 
@@ -49,6 +51,7 @@ def _module(script):
 heightfield = _module("heightfield.py")
 voxel_solid = _module("voxel_solid.py")
 part_heightmap = _module("part_heightmap.py")
+part_dem = _module("part_dem.py")
 part_pointcloud = _module("part_pointcloud.py")
 part_voxels = _module("part_voxels.py")
 
@@ -87,7 +90,9 @@ def test_the_types_are_declared_as_solids_of_their_own_scripts():
         declared = yaml.safe_load(f)["partTypes"]
     for name, script, extension in (
         ("heightmap", "part_heightmap.py", "asc"),
+        ("dem", "part_dem.py", "hgt"),
         ("pointcloud", "part_pointcloud.py", "las"),
+        ("e57", "part_pointcloud.py", "e57"),
         ("voxels", "part_voxels.py", "vox"),
     ):
         assert declared[name]["path"] == script
@@ -97,6 +102,13 @@ def test_the_types_are_declared_as_solids_of_their_own_scripts():
     assert "pillow==12.2.0" in declared["heightmap"]["pythonRequirements"]
     assert any(r.startswith("laspy==") for r in declared["pointcloud"]["pythonRequirements"])
     assert any(r.startswith("lazrs==") for r in declared["pointcloud"]["pythonRequirements"])
+    # Each library is the requirement of the type that reads with it, and of no other: pye57 has no wheel for
+    # some platforms every other point cloud is read on, and rasterio is heavier than a height map needs.
+    assert declared["dem"]["pythonRequirements"] == ["rasterio==1.4.4"]
+    assert declared["e57"]["pythonRequirements"] == ["pye57==0.4.19"]
+    assert not any("pye57" in r for r in declared["pointcloud"]["pythonRequirements"])
+    assert not any("rasterio" in r for r in declared["heightmap"]["pythonRequirements"])
+    assert sorted(declared["voxels"]["pythonRequirements"]) == ["nibabel==5.3.2", "pynrrd==1.1.3"]
 
 
 # -- The height field --------------------------------------------------------------------------------------------
@@ -438,3 +450,145 @@ def test_unit_names():
     with pytest.raises(ValueError, match="unit"):
         heightfield.unit_scale("furlong")
     assert math.isfinite(heightfield.unit_scale("us-ft"))
+
+
+# -- Elevation models, through GDAL ------------------------------------------------------------------------------
+
+
+def test_a_degree_is_as_many_metres_as_the_ellipsoid_says():
+    # WGS 84: a degree of latitude is 110 574 m at the equator and 111 694 m at a pole; of longitude, 111 320 m
+    # at the equator and 78 847 m at 45 degrees.
+    assert part_dem.metres_per_degree(0.0) == pytest.approx((111320.0, 110574.0), abs=2.0)
+    assert part_dem.metres_per_degree(45.0) == pytest.approx((78847.0, 111132.0), abs=2.0)
+    assert part_dem.metres_per_degree(90.0)[1] == pytest.approx(111694.0, abs=2.0)
+
+
+def write_raster(path, grid, crs, transform, nodata=None, driver="GTiff"):
+    rasterio = pytest.importorskip("rasterio")
+    with rasterio.open(
+        str(path),
+        "w",
+        driver=driver,
+        width=grid.shape[1],
+        height=grid.shape[0],
+        count=1,
+        dtype=grid.dtype,
+        crs=crs,
+        transform=transform,
+        nodata=nodata,
+    ) as raster:
+        raster.write(grid, 1)
+
+
+def test_a_geotiff_is_read_at_its_georeferenced_cell_north_up_with_its_holes_filled(tmp_path):
+    pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    # 4 x 3 cells of 10 m in UTM, the north row highest, and a hole in the middle.
+    grid = numpy.array([[30.0, 30.0, 30.0, 30.0], [20.0, -9999.0, 20.0, 20.0], [10.0, 10.0, 10.0, 10.0]], "float32")
+    write_raster(tmp_path / "dem.tif", grid, "EPSG:32618", from_origin(320000, 4290000, 10, 10), nodata=-9999)
+    heights, cell, what = part_dem.read(str(tmp_path / "dem.tif"), {})
+    assert cell == pytest.approx((10000.0, 10000.0)) and heights.shape == (4, 3) and "GTiff" in what
+    # [x][y], y north: the north edge is the highest, and the hole is left for the builder to fill.
+    assert heights[0].tolist()[0] == 10000.0 and heights[0].tolist()[2] == 30000.0
+    assert math.isnan(heights[1, 1])
+    shape = built(part_dem.run({"path": str(tmp_path / "dem.tif"), "parameters": {"base": 1000}}))
+    xmin, ymin, zmin, xmax, ymax, zmax = box(shape)
+    assert (xmin, ymin, xmax, ymax) == pytest.approx((-20000, -15000, 20000, 15000))
+    assert zmin == pytest.approx(0.0, abs=1e-3) and zmax == pytest.approx(21000.0, rel=0.05)
+
+
+def test_feet_are_feet(tmp_path):
+    pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    # New York's state plane, in US survey feet: a cell of 10 of them.
+    grid = numpy.arange(12, dtype="float32").reshape(3, 4)
+    write_raster(tmp_path / "ny.tif", grid, "EPSG:2263", from_origin(980000, 200000, 10, 10))
+    _, cell, _ = part_dem.read(str(tmp_path / "ny.tif"), {"unit": "us-ft"})
+    assert cell == pytest.approx((3048.006, 3048.006), abs=1e-3)
+
+
+def test_a_geographic_raster_is_metres_at_its_latitude_and_bounds_take_part_of_it(tmp_path):
+    pytest.importorskip("rasterio")
+
+    # An SRTM tile, as USGS publishes one: 1201 x 1201 big-endian heights over a degree, named for its south-west
+    # corner, which is how GDAL knows it.
+    rows = numpy.linspace(400, 0, 1201)[:, None] + numpy.zeros((1, 1201))
+    (tmp_path / "N38W078.hgt").write_bytes(rows.astype(">i2").tobytes())
+    heights, cell, what = part_dem.read(str(tmp_path / "N38W078.hgt"), {"bounds": "-77.5 38.5 -77.49 38.51"})
+    assert "SRTM" in what
+    east, north = part_dem.metres_per_degree(38.505)
+    # Three arc seconds a cell, at the window's latitude; the window is a hundredth of a degree, twelve cells.
+    assert cell == pytest.approx((east * 3.0 / 3.6, north * 3.0 / 3.6), rel=1e-4)
+    assert heights.shape == (12, 12)
+    # The heights fall to the south, a third of a metre a row.
+    assert heights[0, -1] - heights[0, 0] == pytest.approx(11 * 400.0 / 1200.0 * 1000.0, abs=1000.0)
+    said = part_dem.run({"path": str(tmp_path / "N38W078.hgt"), "parameters": {"bounds": "10 10 11 11"}})
+    assert "not over" in said["exception"]
+
+
+def test_a_raster_that_runs_south_to_north_is_turned(tmp_path):
+    pytest.importorskip("rasterio")
+    from affine import Affine
+
+    grid = numpy.array([[0.0, 0.0], [5.0, 5.0], [9.0, 9.0]], "float32")  # first row south, as the transform says
+    write_raster(tmp_path / "up.tif", grid, "EPSG:32618", Affine(10, 0, 320000, 0, 10, 4290000))
+    heights, _, _ = part_dem.read(str(tmp_path / "up.tif"), {})
+    assert heights[0].tolist() == [0.0, 5000.0, 9000.0]
+
+
+# -- E57, NRRD and NIfTI -----------------------------------------------------------------------------------------
+
+
+def test_an_e57_scan_is_every_scan_in_it_where_its_pose_puts_it_in_its_colours(tmp_path):
+    pye57 = pytest.importorskip("pye57")
+    e57 = pye57.E57(str(tmp_path / "site.e57"), mode="w")
+    one = {
+        "cartesianX": numpy.array([0.5, 0.5]),
+        "cartesianY": numpy.array([0.5, 0.5]),
+        "cartesianZ": numpy.array([0.5, 0.6]),
+        "colorRed": numpy.array([255, 255], numpy.uint8),
+        "colorGreen": numpy.array([0, 0], numpy.uint8),
+        "colorBlue": numpy.array([0, 0], numpy.uint8),
+    }
+    e57.write_scan_raw(one)
+    # The same points, scanned from 3 m east: the pose puts them there.
+    two = dict(one, colorRed=numpy.array([0, 0], numpy.uint8), colorBlue=numpy.array([255, 255], numpy.uint8))
+    e57.write_scan_raw(two, translation=numpy.array([3.0, 0.0, 0.0]))
+    e57.close()
+    cloud = part_pointcloud.read(str(tmp_path / "site.e57"))
+    assert len(cloud.xyz) == 4 and "2 scan" in cloud.what
+    assert sorted(cloud.xyz[:, 0].tolist()) == pytest.approx([0.5, 0.5, 3.5, 3.5])
+    result = part_pointcloud.run({"path": str(tmp_path / "site.e57"), "parameters": {"as": "voxels", "cell": 1000}})
+    shape = built(result)
+    assert count(shape, TopAbs_SOLID) == 2 and box(shape)[3] - box(shape)[0] == pytest.approx(4000.0)
+    assert sorted(s["color"] for s in result["cmf"]["solids"]) == ["#0000FF", "#FF0000"]
+
+
+def test_an_nrrd_volume_is_read_at_its_spacings(tmp_path):
+    nrrd = pytest.importorskip("nrrd")
+    labels = numpy.zeros((4, 4, 4), numpy.uint8)
+    labels[0:2, 0:2, 0:1] = 1
+    labels[2:4, 2:4, 3:4] = 2
+    nrrd.write(str(tmp_path / "seg.nrrd"), labels, {"spacings": [2.0, 3.0, 4.0]})
+    grid = part_voxels.read(str(tmp_path / "seg.nrrd"), {})
+    assert grid.size == (2.0, 3.0, 4.0) and "NRRD of 2 labels" == grid.what
+    result = part_voxels.run({"path": str(tmp_path / "seg.nrrd"), "parameters": {}})
+    shape = built(result)
+    assert count(shape, TopAbs_SOLID) == 2 and volume(shape) == pytest.approx(8 * 2.0 * 3.0 * 4.0)
+    assert box(shape) == pytest.approx((-4.0, -6.0, 0.0, 4.0, 6.0, 16.0))
+
+
+def test_a_nifti_volume_is_read_in_its_unit(tmp_path):
+    nibabel = pytest.importorskip("nibabel")
+    density = numpy.zeros((3, 3, 3), numpy.float32)
+    density[1, 1, :] = 0.9
+    image = nibabel.Nifti1Image(density, numpy.diag([0.5, 0.5, 0.5, 1.0]))
+    image.header.set_xyzt_units("meter")
+    nibabel.save(image, str(tmp_path / "scan.nii.gz"))
+    grid = part_voxels.read(str(tmp_path / "scan.nii.gz"), {"threshold": 0.5})
+    # Half a metre a voxel, as the header says in its own unit.
+    assert grid.size == (500.0, 500.0, 500.0)
+    shape = built(part_voxels.run({"path": str(tmp_path / "scan.nii.gz"), "parameters": {"threshold": 0.5}}))
+    assert box(shape) == pytest.approx((-250.0, -250.0, 0.0, 250.0, 250.0, 1500.0))
