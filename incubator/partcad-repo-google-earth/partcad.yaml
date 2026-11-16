@@ -20,7 +20,7 @@ url: https://earth.google.com
 
 # The first PartCAD with the 'heightmap' part type, and that keeps what a
 # '"persist": false' package serves for the process only.
-partcad: ">=0.10.21"
+partcad: ">=0.10.26"
 
 manufacturable: false
 
