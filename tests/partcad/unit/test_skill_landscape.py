@@ -467,3 +467,158 @@ def test_a_ground_with_nothing_mapped_on_it_is_the_terrain_alone(landscape, ocp,
         solids.Next()
     assert count == 1
     assert set(whole["painted"]) == {":ground"}
+
+
+# -- Multipolygons ------------------------------------------------------------------------------------------------
+
+
+def lake_answer(frame):
+    """A lake mapped as OpenStreetMap maps one with an island: a relation, its tags its own, its rings untagged ways."""
+
+    def geometry(points):
+        return [{"lat": frame.geo(x, y)[0], "lon": frame.geo(x, y)[1]} for x, y in points]
+
+    # The outer ring in two ways, the second drawn the other way round; the island one closed way.
+    south = [(-60.0, -60.0), (60.0, -60.0), (60.0, 60.0)]
+    north = [(-60.0, -60.0), (-60.0, 60.0), (60.0, 60.0)]
+    island = [(-10.0, -10.0), (10.0, -10.0), (10.0, 10.0), (-10.0, 10.0), (-10.0, -10.0)]
+    return {
+        "elements": [
+            {
+                "type": "relation",
+                "id": 7,
+                "tags": {"type": "multipolygon", "natural": "water"},
+                "members": [
+                    {"type": "way", "ref": 1, "role": "outer", "geometry": geometry(south)},
+                    {"type": "way", "ref": 2, "role": "outer", "geometry": geometry(north)},
+                    {"type": "way", "ref": 3, "role": "inner", "geometry": geometry(island)},
+                ],
+            }
+        ]
+    }
+
+
+def test_rings_are_joined_from_ways_either_way_round(landscape):
+    a, b, c, d = (0, 0), (1, 0), (1, 1), (0, 1)
+    assert landscape.rings_of([[a, b, c], [a, d, c]]) == [[a, b, c, d]]
+    (ring,) = landscape.rings_of([[c, d], [a, b], [b, c], [a, d]])
+    # The same square, from whichever corner: each corner once, each next to its neighbours.
+    assert sorted(ring) == [a, d, b, c] and all(
+        {ring[i - 1], ring[i]} in ({a, b}, {b, c}, {c, d}, {d, a}) for i in range(4)
+    )
+    # A ring a map leaves open is no ring.
+    assert landscape.rings_of([[a, b, c]]) == []
+
+
+def test_a_multipolygon_is_read_with_its_holes_and_an_island_is_land(landscape):
+    frame = landscape.Frame(47.0, 8.0)
+    found = landscape.features(lake_answer(frame), frame, (-100.0, -100.0, 100.0, 100.0))
+
+    (lake,) = found["areas"]
+    assert lake["kind"] == "water" and lake["osm"] == "relation/7"
+    assert len(lake["holes"]) == 1
+    assert landscape.in_area(30.0, 30.0, lake) and not landscape.in_area(0.0, 0.0, lake)
+    feats = landscape.scaled(found, 1000.0)
+    assert feats["areas"][0]["holes"][0][0] == pytest.approx([-10000.0, -10000.0], abs=1.0)
+    cover = landscape.Cover(feats)
+    assert cover.thickness(30000.0, 30000.0) == 50.0 and cover.thickness(0.0, 0.0) == 0.0
+    occupancy = landscape.Occupancy(feats, 0.0)
+    assert not occupancy.free(30000.0, 30000.0, 100.0)
+    assert occupancy.free(5000.0, 0.0, 100.0)  # the island, clear of its shore (the middle is kept clear anyway)
+    assert not occupancy.free(9700.0, 0.0, 100.0)  # on the island, at its shore
+
+
+def test_the_ground_cuts_an_island_out_of_its_water(landscape, ocp, tmp_path):
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    (tmp_path / "partcad.yaml").write_text("name: //\n")
+    site = site_json(landscape, tmp_path, plane=(0.0, 0.0, 1000.0))
+    data = json.loads(site.read_text())
+    frame = landscape.Frame(47.0, 8.0)
+    data["features"] = landscape.scaled(
+        landscape.features(lake_answer(frame), frame, (-100.0, -100.0, 100.0, 100.0)), 1000.0
+    )
+    site.write_text(json.dumps(data))
+    out = tmp_path / "place"
+    landscape.package(package_args(site, out, no_looks=True))
+
+    water = run_ground(out / "ground.py", "water")
+    assert BRepCheck_Analyzer(water["result"]).IsValid()
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(water["result"], props)
+    # 120 m square, less the 20 m island, 50 mm deep on flat ground.
+    assert props.Mass() == pytest.approx((120000.0**2 - 20000.0**2) * 50.0, rel=1e-6)
+    whole = run_ground(out / "ground.py", "all")
+    assert BRepCheck_Analyzer(whole["result"]).IsValid()
+
+
+# -- Placing: everything under a footprint, not some samples of it -------------------------------------------------
+
+
+def flat_site(landscape, lines=(), areas=()):
+    surface = landscape.Surface(planar_surface(landscape, plane=(0.0, 0.0, 1000.0)))
+    return surface, landscape.Cover({"points": [], "lines": list(lines), "areas": list(areas)})
+
+
+def test_a_path_between_the_samples_is_stood_on(landscape):
+    """The example the review gave: a 20 m footprint over a 1.5 m path at x = 1.25 m, between every sample."""
+    path = {
+        "kind": "path",
+        "layer": "paths",
+        "width": 1500.0,
+        "thickness": 50.0,
+        "points": [[1250.0, -30000.0], [1250.0, 30000.0]],
+    }
+    surface, cover = flat_site(landscape, lines=[path])
+    z, fall = landscape.rest(surface, 0.0, 0.0, (20000.0, 20000.0), 0.0, cover)
+    assert z == pytest.approx(1050.0) and fall == pytest.approx(0.0)
+
+
+def test_a_fence_between_the_samples_is_said_to_be_under_it(landscape):
+    fence = {
+        "kind": "fence",
+        "layer": "fences",
+        "width": 50.0,
+        "thickness": 1200.0,
+        "points": [[1300.0, -30000.0], [1300.0, 30000.0]],
+    }
+    _, cover = flat_site(landscape, lines=[fence])
+    corners = landscape.footprint_corners(0.0, 0.0, (20000.0, 20000.0), 0.0)
+    assert cover.tall_in(corners) == ["fence"]
+    assert cover.tall_in(landscape.footprint_corners(20000.0, 0.0, (20000.0, 20000.0), 0.0)) == []
+
+
+def test_a_building_a_footprint_overlaps_only_at_a_corner_is_under_it(landscape):
+    shed = {
+        "kind": "building",
+        "outline": [[9900.0, 9900.0], [12000.0, 9900.0], [12000.0, 12000.0], [9900.0, 12000.0]],
+        "height": 3000.0,
+    }
+    _, cover = flat_site(landscape, areas=[shed])
+    assert cover.tall_in(landscape.footprint_corners(0.0, 0.0, (20000.0, 20000.0), 0.0)) == ["building"]
+    assert cover.tall_in(landscape.footprint_corners(-1000.0, 0.0, (20000.0, 20000.0), 0.0)) == []
+
+
+def test_on_a_hill_a_footprint_stands_on_a_bound_of_the_ground_not_a_sample(landscape):
+    data = planar_surface(
+        landscape, nu=12, nv=12, extent=(-60000.0, -60000.0, 60000.0, 60000.0), plane=(0.0, 0.0, 1000.0)
+    )
+    poles = data["poles"]
+    for i in range(12):
+        for j in range(12):
+            poles[i][j] += 4000.0 * math.exp(-((i - 5.5) ** 2 + (j - 5.5) ** 2) / 3.0)
+    surface = landscape.Surface(data)
+    for x, y, heading in ((0.0, 0.0, 0.0), (7000.0, -3000.0, 30.0), (-15000.0, 9000.0, 115.0)):
+        footprint = (17000.0, 9000.0)
+        z, _ = landscape.rest(surface, x, y, footprint, heading)
+        # The ground's highest point under it, as near as a fine grid finds it.
+        highest = max(
+            surface.height(
+                *landscape.footprint_point(x, y, footprint, heading, -1.0 + 2.0 * a / 200, -1.0 + 2.0 * b / 200)
+            )
+            for a in range(201)
+            for b in range(201)
+        )
+        assert highest - 1e-6 <= z <= highest + landscape.REST_TOLERANCE + 0.5, (x, y, heading)

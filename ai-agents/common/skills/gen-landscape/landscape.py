@@ -255,6 +255,64 @@ class Surface:
     def inside(self, x, y, margin=0.0):
         return self.x0 + margin <= x <= self.x1 - margin and self.y0 + margin <= y <= self.y1 - margin
 
+    def _second(self):
+        """The control values of the surface's second derivatives, in mm per mm squared: (xx, yy, xy).
+
+        A B-spline's derivative is a B-spline of a degree less, its control values the poles' differences
+        over the knots between them (The NURBS Book, 3.2 and 3.5) - so a bound on a derivative over a region
+        is the largest control value that bears on the region, and no sampling is needed to find it.
+        """
+        if getattr(self, "_derivatives", None) is None:
+            poles, nu, nv = self.poles, self.nu, self.nv
+            tu, tv = knot_vector(nu), knot_vector(nv)
+            wx, wy = self.x1 - self.x0, self.y1 - self.y0
+            qx = [
+                [(poles[i + 1][j] - poles[i][j]) * 3.0 / ((tu[i + 4] - tu[i + 1]) * wx) for j in range(nv)]
+                for i in range(nu - 1)
+            ]
+            qy = [
+                [(poles[i][j + 1] - poles[i][j]) * 3.0 / ((tv[j + 4] - tv[j + 1]) * wy) for j in range(nv - 1)]
+                for i in range(nu)
+            ]
+            xx = [
+                [(qx[i + 1][j] - qx[i][j]) * 2.0 / ((tu[i + 4] - tu[i + 2]) * wx) for j in range(nv)]
+                for i in range(nu - 2)
+            ]
+            yy = [
+                [(qy[i][j + 1] - qy[i][j]) * 2.0 / ((tv[j + 4] - tv[j + 2]) * wy) for j in range(nv - 2)]
+                for i in range(nu)
+            ]
+            xy = [
+                [(qx[i][j + 1] - qx[i][j]) * 3.0 / ((tv[j + 4] - tv[j + 1]) * wy) for j in range(nv - 1)]
+                for i in range(nu - 1)
+            ]
+            self._derivatives = (xx, yy, xy)
+        return self._derivatives
+
+    def curvature(self, x0, y0, x1, y1):
+        """Bounds on |z_xx|, |z_yy| and |z_xy| over the rectangle [x0, x1] x [y0, y1] of the plan."""
+        xx, yy, xy = self._second()
+
+        def first(x, low, high, count):
+            return basis((min(max(x, low), high) - low) / (high - low), count)[0] - DEGREE
+
+        sa, sb = first(x0, self.x0, self.x1, self.nu), first(x1, self.x0, self.x1, self.nu)
+        ta, tb = first(y0, self.y0, self.y1, self.nv), first(y1, self.y0, self.y1, self.nv)
+
+        def most(values, i0, i1, j0, j1):
+            return max(
+                (
+                    abs(values[i][j])
+                    for i in range(i0, min(i1, len(values) - 1) + 1)
+                    for j in range(j0, min(j1, len(values[0]) - 1) + 1)
+                ),
+                default=0.0,
+            )
+
+        # The basis functions not nought in a span are 'degree + 1' from its first: one fewer for each
+        # derivative taken along that axis.
+        return most(xx, sa, sb + 1, ta, tb + 3), most(yy, sa, sb + 3, ta, tb + 1), most(xy, sa, sb + 2, ta, tb + 2)
+
 
 # -- HTTP --------------------------------------------------------------------------------------------------------
 
@@ -453,6 +511,9 @@ OVERPASS_QUERY = """[out:json][timeout:90];
   way["waterway"~"^(river|stream|canal|ditch|drain)$"]({bbox});
   way["landuse"="forest"]({bbox});
   way["natural"="wood"]({bbox});
+  relation["type"="multipolygon"]["building"]({bbox});
+  relation["type"="multipolygon"]["natural"~"^(water|wood)$"]({bbox});
+  relation["type"="multipolygon"]["landuse"~"^(forest|reservoir)$"]({bbox});
 );
 out geom;
 """
@@ -621,6 +682,87 @@ def overpass(bbox, url=None):
     raise SystemExit("OpenStreetMap could not be asked: %s. Try --overpass URL, or --no-osm" % "; ".join(errors))
 
 
+def area_of(tags, rings, rect, reference):
+    """The area the tags make of 'rings' - an outer ring, then its holes - cut to the rectangle, or None.
+
+    'outline' is the outer ring, which is all most readers of an area need; 'holes' are what is inside it
+    and not of it - an island in a lake, a courtyard in a building, a clearing in a wood - where there are
+    any (see 'in_area').
+    """
+    if "building" in tags:
+        levels = number(tags.get("building:levels"))
+        found = {
+            "kind": "building",
+            "height": number(tags.get("height"), (levels or 2.0) * 3.0 + (1.0 if levels else 0.0)),
+        }
+    elif tags.get("natural") == "water" or tags.get("landuse") == "reservoir":
+        found = {"kind": "water"}
+    elif tags.get("landuse") == "forest" or tags.get("natural") == "wood":
+        found = {"kind": "wood", "leaf": tags.get("leaf_type")}
+    else:
+        return None
+    outline = clip_polygon(rings[0], rect)
+    if len(outline) < 3 or abs(area(outline)) <= 1.0:
+        return None
+    found["outline"] = outline
+    holes = [clip_polygon(ring, rect) for ring in rings[1:]]
+    holes = [hole for hole in holes if len(hole) >= 3 and abs(area(hole)) > 1.0]
+    if holes:
+        found["holes"] = holes
+    found["osm"] = reference
+    return found
+
+
+def rings_of(ways):
+    """The closed rings a relation's member ways make, each way joined end to end to the next, either way round.
+
+    A ring a map leaves open - a member missing from the answer - is not a ring, and is left out.
+    """
+    open_ = [list(way) for way in ways if len(way) >= 2]
+    rings = []
+    while open_:
+        ring = open_.pop(0)
+        while ring[0] != ring[-1]:
+            for index, way in enumerate(open_):
+                if way[0] == ring[-1]:
+                    ring.extend(way[1:])
+                elif way[-1] == ring[-1]:
+                    ring.extend(reversed(way[:-1]))
+                elif way[-1] == ring[0]:
+                    ring[:0] = way[:-1]
+                elif way[0] == ring[0]:
+                    ring[:0] = list(reversed(way[1:]))
+                else:
+                    continue
+                del open_[index]
+                break
+            else:
+                ring = None
+                break
+        if ring is not None and len(ring) > 3:
+            rings.append(ring[:-1])
+    return rings
+
+
+def relation_areas(element, frame, rect):
+    """The areas a multipolygon relation maps: each outer ring, with the inner rings inside it as its holes."""
+    tags = element.get("tags") or {}
+    members = {"outer": [], "inner": []}
+    for member in element.get("members") or []:
+        geometry = [(node["lat"], node["lon"]) for node in member.get("geometry") or [] if node]
+        if member.get("type") == "way" and geometry:
+            members["inner" if member.get("role") == "inner" else "outer"].append(geometry)
+    outers = [[frame.local(*point) for point in ring] for ring in rings_of(members["outer"])]
+    inners = [[frame.local(*point) for point in ring] for ring in rings_of(members["inner"])]
+    found = []
+    for outer in outers:
+        holes = [inner for inner in inners if in_polygon(inner[0][0], inner[0][1], outer)]
+        made = area_of(tags, [outer] + holes, rect, "relation/%d" % element["id"])
+        if made is not None:
+            found.append(made)
+    return found
+
+
 def features(answer, frame, rect):
     """{'points': [...], 'lines': [...], 'areas': [...]} in the frame, in metres, cut to the rectangle."""
     points, lines, areas = [], [], []
@@ -638,6 +780,12 @@ def features(answer, frame, rect):
                     point["direction"] = number(tags.get("direction"))
                 points.append(point)
             continue
+        if element["type"] == "relation":
+            # A multipolygon: a lake with islands, a building with a courtyard, a wood with clearings -
+            # the tags are the relation's, and its ways are its rings, untagged.
+            if tags.get("type") == "multipolygon" and tags.get("tunnel") in (None, "no"):
+                areas.extend(relation_areas(element, frame, rect))
+            continue
         if element["type"] != "way" or not element.get("geometry"):
             continue
         geometry = [frame.local(node["lat"], node["lon"]) for node in element["geometry"] if node]
@@ -647,22 +795,15 @@ def features(answer, frame, rect):
         reference = "way/%d" % element["id"]
         if tags.get("tunnel") not in (None, "no") or number(tags.get("layer"), 0) < 0:
             continue
-        if "building" in tags and closed:
-            outline = clip_polygon(geometry[:-1], rect)
-            if len(outline) >= 3 and abs(area(outline)) > 1.0:
-                levels = number(tags.get("building:levels"))
-                height = number(tags.get("height"), (levels or 2.0) * 3.0 + (1.0 if levels else 0.0))
-                areas.append({"kind": "building", "outline": outline, "height": height, "osm": reference})
-            continue
-        if (tags.get("natural") == "water" or tags.get("landuse") == "reservoir") and closed:
-            outline = clip_polygon(geometry[:-1], rect)
-            if len(outline) >= 3 and abs(area(outline)) > 1.0:
-                areas.append({"kind": "water", "outline": outline, "osm": reference})
-            continue
-        if (tags.get("landuse") == "forest" or tags.get("natural") == "wood") and closed:
-            outline = clip_polygon(geometry[:-1], rect)
-            if len(outline) >= 3 and abs(area(outline)) > 1.0:
-                areas.append({"kind": "wood", "outline": outline, "leaf": tags.get("leaf_type"), "osm": reference})
+        areal = (
+            "building" in tags
+            or tags.get("natural") in ("water", "wood")
+            or tags.get("landuse") in ("reservoir", "forest")
+        )
+        if areal and closed:
+            made = area_of(tags, [geometry[:-1]], rect, reference)
+            if made is not None:
+                areas.append(made)
             continue
         line = None
         highway, barrier, waterway = tags.get("highway"), tags.get("barrier"), tags.get("waterway")
@@ -846,6 +987,8 @@ def scaled(found, factor):
                     copy[key] = round(value * factor, 1)
                 elif key in ("points", "outline"):
                     copy[key] = [[round(p[0] * factor, 1), round(p[1] * factor, 1)] for p in value]
+                elif key == "holes":
+                    copy[key] = [[[round(p[0] * factor, 1), round(p[1] * factor, 1)] for p in ring] for ring in value]
                 else:
                     copy[key] = value
             out[group].append(copy)
@@ -994,8 +1137,8 @@ class Cover:
 
     def __init__(self, features):
         self.lines = [line for line in features["lines"] if line.get("layer") and line.get("width", 0) > 0]
-        self.water = [area["outline"] for area in features["areas"] if area["kind"] == "water"]
-        self.buildings = [area["outline"] for area in features["areas"] if area["kind"] == "building"]
+        self.water = [area for area in features["areas"] if area["kind"] == "water"]
+        self.buildings = [area for area in features["areas"] if area["kind"] == "building"]
 
     def thickness(self, x, y):
         found = 0.0
@@ -1006,18 +1149,33 @@ class Cover:
                 and near_line(x, y, line["points"], line["width"] / 2.0)
             ):
                 found = line["thickness"]
-        if found < 50.0 and any(in_polygon(x, y, outline) for outline in self.water):
+        if found < 50.0 and any(in_area(x, y, item) for item in self.water):
             found = 50.0
         return found
 
-    def standing_in(self, x, y):
-        """The tall thing at a point, if any: 'building', 'fence', 'wall', 'hedge', ..."""
-        if any(in_polygon(x, y, outline) for outline in self.buildings):
-            return "building"
+    def thickest(self, polygon):
+        """The thickest flat layer anywhere under the polygon - a road's, a path's, water's - or nought."""
+        found = 0.0
         for line in self.lines:
-            if line["layer"] in TALL and near_line(x, y, line["points"], line["width"] / 2.0):
-                return line["kind"]
-        return None
+            if (
+                line["layer"] in FLAT
+                and line["thickness"] > found
+                and meets_line(polygon, line["points"], line["width"] / 2.0)
+            ):
+                found = line["thickness"]
+        if found < 50.0 and any(meets_area(polygon, item) for item in self.water):
+            found = 50.0
+        return found
+
+    def tall_in(self, polygon):
+        """The tall things anywhere under the polygon: 'building', 'fence', 'wall', 'hedge', ..."""
+        found = set()
+        if any(meets_area(polygon, item) for item in self.buildings):
+            found.add("building")
+        for line in self.lines:
+            if line["layer"] in TALL and meets_line(polygon, line["points"], line["width"] / 2.0):
+                found.add(line["kind"])
+        return sorted(found)
 
 
 # How far above what it stands on a thing is stood: nothing a picture shows,
@@ -1025,33 +1183,73 @@ class Cover:
 # boolean can take for one inside the other - and two that do not.
 CLEARANCE = 1.0
 
-# Points across a footprint, a side's worth of them: 9, so that the edge of a
-# road passing under it is found.
+# The fewest samples a footprint's side is read at: its corners, its middle, and between (see 'rest').
 SAMPLES = [k / 4.0 - 1.0 for k in range(9)]
 
+# How far above the highest ground under it a footprint may be stood, at most, for its sampling: the grid it is
+# sampled on is made fine enough for the ground's curvature to leave no more than this between the samples,
+# and no finer than GRID_MOST samples a side, past which the bound is what it is.
+REST_TOLERANCE = 1.0
+GRID_MOST = 64
 
-def footprint_points(x, y, footprint, heading):
-    """Points across a footprint turned by heading: its corners, its middle, and between."""
-    half_x, half_y = footprint[0] / 2.0, footprint[1] / 2.0
+
+def footprint_corners(x, y, footprint, heading):
+    """The four corners of a footprint turned by heading, counter-clockwise."""
+    return [
+        p
+        for p in (footprint_point(x, y, footprint, heading, fx, fy) for fx, fy in ((-1, -1), (1, -1), (1, 1), (-1, 1)))
+    ]
+
+
+def footprint_point(x, y, footprint, heading, fx, fy):
     c, s = math.cos(math.radians(heading)), math.sin(math.radians(heading))
-    for fx in SAMPLES:
-        for fy in SAMPLES:
-            px, py = fx * half_x, fy * half_y
-            yield x + px * c - py * s, y + px * s + py * c
+    px, py = fx * footprint[0] / 2.0, fy * footprint[1] / 2.0
+    return x + px * c - py * s, y + px * s + py * c
 
 
 def rest(surface, x, y, footprint, heading, cover=None):
-    """The z that stands a footprint turned by heading on the highest ground under it, and the ground's fall there.
+    """The z that stands a footprint turned by heading clear of everything under it, and the ground's fall there.
 
-    On whatever flat layer covers the ground there, with 'cover': a road's top, not the ground under it.
+    Not the highest of some samples - a narrow path, a fence or a crest between two of them would be missed -
+    but a bound:
+
+    * the ground: the highest of a grid of samples across the footprint, plus what the ground can rise
+      between them. Over a cell of a grid h1 by h2, a surface rises above its corners by no more than its
+      bilinear interpolation's error, (h1^2 M1 + h2^2 M2) / 8, where M1 and M2 bound its second derivatives
+      along the footprint's sides ('Surface.curvature', from its control values). The grid is made fine
+      enough for that to be under REST_TOLERANCE; a plane has none, and is stood on exactly;
+    * what covers it: the thickest flat layer - a road, a path, water - anywhere under the footprint, found
+      by where their outlines meet it ('Cover.thickest'), not by whether a sample fell on them.
     """
+    corners = footprint_corners(x, y, footprint, heading)
+    xs, ys = [p[0] for p in corners], [p[1] for p in corners]
+    mxx, myy, mxy = surface.curvature(min(xs), min(ys), max(xs), max(ys))
+    c, s = math.cos(math.radians(heading)), math.sin(math.radians(heading))
+    along = c * c * mxx + 2.0 * abs(c * s) * mxy + s * s * myy
+    across = s * s * mxx + 2.0 * abs(c * s) * mxy + c * c * myy
+    counts = []
+    for length, bend in ((footprint[0], along), (footprint[1], across)):
+        if length <= 0.0:
+            counts.append(1)
+            continue
+        step = math.sqrt(8.0 * REST_TOLERANCE / (2.0 * bend)) if bend > 0.0 else length
+        counts.append(min(GRID_MOST, max(len(SAMPLES), int(math.ceil(length / step)) + 1)))
     heights = []
-    for gx, gy in footprint_points(x, y, footprint, heading):
-        if surface.inside(gx, gy):
-            heights.append(surface.height(gx, gy) + (cover.thickness(gx, gy) if cover else 0.0))
+    for a in range(counts[0]):
+        for b in range(counts[1]):
+            fx = -1.0 + 2.0 * a / (counts[0] - 1) if counts[0] > 1 else 0.0
+            fy = -1.0 + 2.0 * b / (counts[1] - 1) if counts[1] > 1 else 0.0
+            gx, gy = footprint_point(x, y, footprint, heading, fx, fy)
+            if surface.inside(gx, gy):
+                heights.append(surface.height(gx, gy))
     if not heights:
         heights = [surface.height(x, y)]
-    return max(heights), max(heights) - min(heights)
+    h1 = footprint[0] / (counts[0] - 1) if counts[0] > 1 else 0.0
+    h2 = footprint[1] / (counts[1] - 1) if counts[1] > 1 else 0.0
+    top = max(heights) + (h1 * h1 * along + h2 * h2 * across) / 8.0
+    if cover:
+        top += cover.thickest(corners)
+    return top, max(heights) - min(heights)
 
 
 def in_polygon(x, y, polygon):
@@ -1060,6 +1258,74 @@ def in_polygon(x, y, polygon):
         if (ay > y) != (by > y) and x < ax + (y - ay) * (bx - ax) / (by - ay):
             inside = not inside
     return inside
+
+
+def _crosses(a, b, p, q):
+    """Whether the segments ab and pq meet, touching included."""
+
+    def turn(o, u, v):
+        return (u[0] - o[0]) * (v[1] - o[1]) - (u[1] - o[1]) * (v[0] - o[0])
+
+    d1, d2, d3, d4 = turn(p, q, a), turn(p, q, b), turn(a, b, p), turn(a, b, q)
+    if ((d1 > 0) != (d2 > 0) and d1 != 0 and d2 != 0) and ((d3 > 0) != (d4 > 0) and d3 != 0 and d4 != 0):
+        return True
+
+    def on(o, u, v):
+        return (
+            min(o[0], u[0]) - 1e-9 <= v[0] <= max(o[0], u[0]) + 1e-9
+            and min(o[1], u[1]) - 1e-9 <= v[1] <= max(o[1], u[1]) + 1e-9
+        )
+
+    return (
+        (d1 == 0 and on(p, q, a)) or (d2 == 0 and on(p, q, b)) or (d3 == 0 and on(a, b, p)) or (d4 == 0 and on(a, b, q))
+    )
+
+
+def _point_segment(p, a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length2 = dx * dx + dy * dy
+    t = 0.0 if not length2 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length2))
+    return math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1])
+
+
+def _segment_segment(a, b, p, q):
+    if _crosses(a, b, p, q):
+        return 0.0
+    return min(_point_segment(a, p, q), _point_segment(b, p, q), _point_segment(p, a, b), _point_segment(q, a, b))
+
+
+def meets_line(polygon, points, distance):
+    """Whether a line 'distance' either side of 'points' reaches into the polygon."""
+    if len(points) == 1:
+        points = points * 2
+    if any(in_polygon(px, py, polygon) for px, py in points):
+        return True
+    edges = list(zip(polygon, polygon[1:] + polygon[:1]))
+    return any(_segment_segment(a, b, p, q) < distance for p, q in zip(points, points[1:]) for a, b in edges)
+
+
+def meets_area(polygon, item):
+    """Whether an area - its outline less its holes - and the polygon share any of the plan."""
+    if any(in_area(x, y, item) for x, y in polygon):
+        return True
+    if any(in_polygon(x, y, polygon) for x, y in item["outline"]):
+        return True
+    edges = list(zip(polygon, polygon[1:] + polygon[:1]))
+    for ring in [item["outline"]] + list(item.get("holes") or []):
+        for p, q in zip(ring, ring[1:] + ring[:1]):
+            if any(_crosses(a, b, p, q) for a, b in edges):
+                return True
+    return False
+
+
+def in_area(x, y, item):
+    """Whether (x, y) is in an area: in its outline and in none of its holes."""
+    return in_polygon(x, y, item["outline"]) and not any(in_polygon(x, y, hole) for hole in item.get("holes") or [])
+
+
+def borders(item):
+    """An area's edges, as closed lines: its outline's and its holes'."""
+    return [ring + ring[:1] for ring in [item["outline"]] + list(item.get("holes") or [])]
 
 
 def near_line(x, y, points, distance):
@@ -1076,7 +1342,7 @@ class Occupancy:
     """What is taken: the areas, the lines with their widths, and the props placed so far."""
 
     def __init__(self, features, clear):
-        self.areas = [a["outline"] for a in features["areas"] if a["kind"] in ("building", "water")]
+        self.areas = [a for a in features["areas"] if a["kind"] in ("building", "water")]
         self.lines = [(line["points"], line.get("width", 0.0) / 2.0) for line in features["lines"] if "layer" in line]
         self.props = []
         self.clear = clear
@@ -1084,9 +1350,9 @@ class Occupancy:
     def free(self, x, y, radius):
         if math.hypot(x, y) < self.clear + radius:
             return False
-        if any(in_polygon(x, y, outline) for outline in self.areas):
+        if any(in_area(x, y, item) for item in self.areas):
             return False
-        if any(near_line(x, y, outline + outline[:1], radius + 500.0) for outline in self.areas):
+        if any(near_line(x, y, edge, radius + 500.0) for item in self.areas for edge in borders(item)):
             return False
         if any(near_line(x, y, points, half + radius + 500.0) for points, half in self.lines):
             return False
@@ -1161,7 +1427,7 @@ def package(args):
             heading = rng.uniform(0.0, 360.0)
         footprint = footprint_of(kind, height)
         # The map puts a thing inside a building where it was mapped against the wall, or indoors.
-        if any(cover.standing_in(px, py) == "building" for px, py in footprint_points(x, y, footprint, heading)):
+        if "building" in cover.tall_in(footprint_corners(x, y, footprint, heading)):
             inside_buildings.append(kind)
             return False
         z, fall = rest(surface, x, y, footprint, heading, cover)
@@ -1197,7 +1463,7 @@ def package(args):
             if trees >= args.max_trees:
                 break
             x, y = rng.uniform(min(xs), max(xs)), rng.uniform(min(ys), max(ys))
-            if in_polygon(x, y, wood["outline"]) and occupancy.free(x, y, 3000.0):
+            if in_area(x, y, wood) and occupancy.free(x, y, 3000.0):
                 trees += add("tree", x, y, rng.uniform(0.8, 1.2) * PROPS["tree"]["height"])
     for assignment in args.scatter or []:
         kind, _, count = assignment.partition("=")
@@ -1263,13 +1529,15 @@ def draped_layers(site, surface):
         entry["thickness"] = max(entry["thickness"], line["thickness"])
         entry["lines"].append([line["width"], line["points"]])
     for item in site["features"]["areas"]:
+        # An area is its outline, or - where it has holes - its rings: the outline, then the holes.
+        shape = [item["outline"]] + list(item["holes"]) if item.get("holes") else item["outline"]
         if item["kind"] == "water":
             entry = layers.setdefault("water", {"thickness": 50.0, "lines": [], "areas": [], "tops": []})
-            entry["areas"].append(item["outline"])
+            entry["areas"].append(shape)
         elif item["kind"] == "building":
             entry = layers.setdefault("buildings", {"thickness": 0.0, "lines": [], "areas": [], "tops": []})
             ground = max(surface.height(x, y) for x, y in item["outline"] if surface.inside(x, y, -1.0))
-            entry["areas"].append(item["outline"])
+            entry["areas"].append(shape)
             entry["tops"].append(round(ground + item["height"], 1))
     return layers
 
@@ -1444,12 +1712,32 @@ def _oriented(ring, outer):
     return ring if (area > 0) == outer else list(reversed(ring))
 
 
-def _polygon(points):
+def _wire(points):
     made = BRepBuilderAPI_MakePolygon()
     for x, y in points:
         made.Add(gp_Pnt(x, y, 0.0))
     made.Close()
-    return BRepBuilderAPI_MakeFace(made.Wire(), True).Face()
+    return made.Wire()
+
+
+def _polygon(points):
+    return BRepBuilderAPI_MakeFace(_wire(points), True).Face()
+
+
+def _area_rings(area):
+    # An area as the site wrote it: an outline - a list of points - or, where it has holes, its rings, the
+    # outline first.
+    return [area] if area and isinstance(area[0][0], (int, float)) else list(area)
+
+
+def _area_face(area):
+    # The face of an area on the plan, its holes cut out of it.
+    rings = [_clean(ring) for ring in _area_rings(area)]
+    rings = [_oriented(ring, index == 0) for index, ring in enumerate(rings) if len(ring) >= 3]
+    made = BRepBuilderAPI_MakeFace(_wire(rings[0]), True)
+    for hole in rings[1:]:
+        made.Add(_wire(hole))
+    return made.Face()
 
 
 def _band(width, points):
@@ -1494,9 +1782,9 @@ def union(spec):
     faces = []
     for width, points in spec["lines"]:
         faces.extend(_band(width, points))
-    for outline in spec["areas"]:
+    for item in spec["areas"]:
         try:
-            faces.append(_polygon(outline))
+            faces.append(_area_face(item))
         except Exception:  # an outline the map draws crossing itself: left out
             pass
     if not faces:
@@ -1552,7 +1840,7 @@ def draped(spec):
 
 def buildings(spec):
     return compound(
-        between([outline], ("surface", 0.0), ("plane", roof)) for outline, roof in zip(spec["areas"], spec["tops"])
+        between(_area_rings(item), ("surface", 0.0), ("plane", roof)) for item, roof in zip(spec["areas"], spec["tops"])
     )
 
 
@@ -1599,9 +1887,9 @@ def ground():
     items = []
     spec = LAYERS.get("buildings")
     if spec:
-        for outline, roof in zip(spec["areas"], spec["tops"]):
+        for item, roof in zip(spec["areas"], spec["tops"]):
             try:
-                items.append((("plane", roof), PAINT.get("buildings"), [_polygon(_clean(outline))]))
+                items.append((("plane", roof), PAINT.get("buildings"), [_area_face(item)]))
             except Exception:  # an outline the map draws crossing itself: left out
                 pass
     for name in PRIORITY[1:]:
@@ -1947,18 +2235,16 @@ def place(args):
         )
     z, fall = rest(surface, args.x, args.y, args.footprint, args.heading, cover)
     z += CLEARANCE
-    on = sorted(
-        {cover.standing_in(gx, gy) for gx, gy in footprint_points(args.x, args.y, args.footprint, args.heading)}
-        - {None}
-    )
-    flat = cover.thickness(args.x, args.y)
+    corners = footprint_corners(args.x, args.y, args.footprint, args.heading)
+    on = cover.tall_in(corners)
+    flat = cover.thickest(corners)
     print("location: [[%s, %s, %s], [0, 0, 1], %s]" % (fmt(args.x), fmt(args.y), fmt(round(z, 1)), fmt(args.heading)))
     print(
         "# the ground falls %s mm across the footprint: %s"
         % (fmt(round(fall, 1)), "level" if fall < 20 else "it stands on its highest corner")
     )
     if flat:
-        print("# it stands on a road, a path or water, %s mm thick" % fmt(flat))
+        print("# it stands on a road, a path or water, %s mm thick, under some of it at least" % fmt(flat))
     if on:
         print("# it is in: %s - move it" % ", ".join(on))
 
