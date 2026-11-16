@@ -188,6 +188,10 @@ def read_vox(path):
         middle = numpy.array(sizes[model]) // 2
         points.append((voxels[:, :3] - middle) @ rotation.T + translation)
         indices.append(voxels[:, 3])
+    if not points:
+        raise ValueError("%s places no model it holds" % name)
+    # The models drawn, which a scene naming one the file does not hold is not.
+    drawn = len(points)
     points, indices = numpy.concatenate(points), numpy.concatenate(indices)
     low = points.min(axis=0)
     shape = tuple(points.max(axis=0) - low + 1)
@@ -202,7 +206,7 @@ def read_vox(path):
         colours=colours,
         convention="vox",
         corner=tuple(float(v) for v in low),
-        what="MagicaVoxel, %d model%s" % (len(placed), "" if len(placed) == 1 else "s"),
+        what="MagicaVoxel, %d model%s" % (drawn, "" if drawn == 1 else "s"),
     )
 
 
