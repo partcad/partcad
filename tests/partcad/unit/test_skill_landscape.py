@@ -622,3 +622,91 @@ def test_on_a_hill_a_footprint_stands_on_a_bound_of_the_ground_not_a_sample(land
             for b in range(201)
         )
         assert highest - 1e-6 <= z <= highest + landscape.REST_TOLERANCE + 0.5, (x, y, heading)
+
+
+# -- Second round: the edges of things ------------------------------------------------------------------------------
+
+
+def test_cover_finds_the_band_the_ground_builds(landscape, ocp, tmp_path):
+    """A thin line's band reaches past its ends with square corners, as the ground builds it, and is found there."""
+    from OCP.BRep import BRep_Tool
+    from OCP.TopAbs import TopAbs_VERTEX
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    (tmp_path / "partcad.yaml").write_text("name: //\n")
+    site = site_json(landscape, tmp_path)
+    out = tmp_path / "place"
+    landscape.package(package_args(site, out, no_looks=True))
+    scope = run_ground(out / "ground.py", "terrain")
+    for width, points in (
+        (1000.0, [(-5000.0, 0.0), (0.0, 0.0), (0.0, 4000.0)]),
+        (6000.0, [(0.0, 0.0), (9000.0, 0.0), (9000.0, 7000.0)]),
+    ):
+        built = []
+        for f in scope["_band"](width, points):
+            corners = set()
+            explorer = TopExp_Explorer(f, TopAbs_VERTEX)
+            while explorer.More():
+                p = BRep_Tool.Pnt_s(TopoDS.Vertex_s(explorer.Current()))
+                corners.add((round(p.X(), 6), round(p.Y(), 6)))
+                explorer.Next()
+            built.append(corners)
+        mine = [{(round(x, 6), round(y, 6)) for x, y in polygon} for polygon in landscape.band_polygons(width, points)]
+        assert sorted(map(sorted, built)) == sorted(map(sorted, mine)), width
+
+    fence = {
+        "kind": "fence",
+        "layer": "fences",
+        "width": 1000.0,
+        "thickness": 1200.0,
+        "points": [[-5000.0, 0.0], [0.0, 0.0]],
+    }
+    cover = landscape.Cover({"points": [], "lines": [fence], "areas": []})
+    # In the band's square corner past the line's end: 600 mm from its end, more than half its width.
+    assert cover.tall_in(landscape.footprint_corners(450.0, 450.0, (60.0, 60.0), 0.0)) == ["fence"]
+    assert cover.tall_in(landscape.footprint_corners(650.0, 650.0, (60.0, 60.0), 0.0)) == []
+
+
+def test_a_ring_tagged_like_its_multipolygon_is_not_a_second_area(landscape):
+    frame = landscape.Frame(47.0, 8.0)
+    answer = lake_answer(frame)
+    relation = answer["elements"][0]
+    island = relation["members"][2]["geometry"]
+    outer = relation["members"][0]["geometry"] + relation["members"][1]["geometry"][::-1][1:]
+    # The older way of tagging: the outer ring a lake of its own, the island a building.
+    answer["elements"] += [
+        {
+            "type": "way",
+            "id": 1,
+            "nodes": list(range(len(outer))) + [0],
+            "geometry": outer + outer[:1],
+            "tags": {"natural": "water"},
+        },
+        {
+            "type": "way",
+            "id": 3,
+            "nodes": list(range(len(island) - 1)) + [0],
+            "geometry": island,
+            "tags": {"building": "hut"},
+        },
+    ]
+    relation["members"][2]["ref"] = 3
+    found = landscape.features(answer, frame, (-100.0, -100.0, 100.0, 100.0))
+    kinds = sorted(area["kind"] for area in found["areas"])
+    assert kinds == ["building", "water"]
+    assert next(area for area in found["areas"] if area["kind"] == "water")["holes"]
+
+
+def test_a_multipolygon_below_ground_is_not_on_it(landscape):
+    frame = landscape.Frame(47.0, 8.0)
+    answer = lake_answer(frame)
+    answer["elements"][0]["tags"] = {"type": "multipolygon", "building": "parking", "layer": "-1"}
+    assert landscape.features(answer, frame, (-100.0, -100.0, 100.0, 100.0))["areas"] == []
+
+
+def test_a_footprint_over_the_grounds_edge_stands_on_the_edge(landscape):
+    """Ground rising 50 mm a metre to its +X edge at 50 m: a footprint reaching past it stands on the edge's height."""
+    surface = landscape.Surface(planar_surface(landscape, plane=(0.05, 0.0, 1000.0)))
+    z, _ = landscape.rest(surface, 49500.0, 0.0, (2100.0, 1000.0), 0.0)
+    assert z == pytest.approx(0.05 * 50000.0 + 1000.0, abs=1e-6)

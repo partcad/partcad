@@ -682,6 +682,22 @@ def overpass(bbox, url=None):
     raise SystemExit("OpenStreetMap could not be asked: %s. Try --overpass URL, or --no-osm" % "; ".join(errors))
 
 
+def area_kind(tags):
+    """'building', 'water' or 'wood': the kind of area OpenStreetMap tags make, or None."""
+    if "building" in tags:
+        return "building"
+    if tags.get("natural") == "water" or tags.get("landuse") == "reservoir":
+        return "water"
+    if tags.get("landuse") == "forest" or tags.get("natural") == "wood":
+        return "wood"
+    return None
+
+
+def underground(tags):
+    """Whether OpenStreetMap maps it under the ground: a tunnel, or a layer below nought."""
+    return tags.get("tunnel") not in (None, "no") or number(tags.get("layer"), 0) < 0
+
+
 def area_of(tags, rings, rect, reference):
     """The area the tags make of 'rings' - an outer ring, then its holes - cut to the rectangle, or None.
 
@@ -689,15 +705,16 @@ def area_of(tags, rings, rect, reference):
     and not of it - an island in a lake, a courtyard in a building, a clearing in a wood - where there are
     any (see 'in_area').
     """
-    if "building" in tags:
+    kind = area_kind(tags)
+    if kind == "building":
         levels = number(tags.get("building:levels"))
         found = {
             "kind": "building",
             "height": number(tags.get("height"), (levels or 2.0) * 3.0 + (1.0 if levels else 0.0)),
         }
-    elif tags.get("natural") == "water" or tags.get("landuse") == "reservoir":
+    elif kind == "water":
         found = {"kind": "water"}
-    elif tags.get("landuse") == "forest" or tags.get("natural") == "wood":
+    elif kind == "wood":
         found = {"kind": "wood", "leaf": tags.get("leaf_type")}
     else:
         return None
@@ -766,6 +783,19 @@ def relation_areas(element, frame, rect):
 def features(answer, frame, rect):
     """{'points': [...], 'lines': [...], 'areas': [...]} in the frame, in metres, cut to the rectangle."""
     points, lines, areas = [], [], []
+    # The ways a multipolygon is made of, and what it makes of them: a way of a
+    # lake mapped with its own 'natural=water' as well (the older way of
+    # tagging one) is the relation's ring, not a second lake drawn over its
+    # islands. A way whose own tags make another kind of area - a building on
+    # an island in it - is an area of its own all the same.
+    rings_of_kind = {}
+    for element in answer.get("elements", []):
+        tags = element.get("tags") or {}
+        if element["type"] == "relation" and tags.get("type") == "multipolygon" and not underground(tags):
+            kind = area_kind(tags)
+            for member in element.get("members") or []:
+                if kind and member.get("type") == "way" and member.get("ref") is not None:
+                    rings_of_kind.setdefault(member["ref"], set()).add(kind)
     for element in answer.get("elements", []):
         tags = element.get("tags") or {}
         if element["type"] == "node":
@@ -783,7 +813,7 @@ def features(answer, frame, rect):
         if element["type"] == "relation":
             # A multipolygon: a lake with islands, a building with a courtyard, a wood with clearings -
             # the tags are the relation's, and its ways are its rings, untagged.
-            if tags.get("type") == "multipolygon" and tags.get("tunnel") in (None, "no"):
+            if tags.get("type") == "multipolygon" and not underground(tags):
                 areas.extend(relation_areas(element, frame, rect))
             continue
         if element["type"] != "way" or not element.get("geometry"):
@@ -793,17 +823,15 @@ def features(answer, frame, rect):
             continue
         closed = element.get("nodes") and element["nodes"][0] == element["nodes"][-1] and len(geometry) > 3
         reference = "way/%d" % element["id"]
-        if tags.get("tunnel") not in (None, "no") or number(tags.get("layer"), 0) < 0:
+        if underground(tags):
             continue
-        areal = (
-            "building" in tags
-            or tags.get("natural") in ("water", "wood")
-            or tags.get("landuse") in ("reservoir", "forest")
-        )
-        if areal and closed:
-            made = area_of(tags, [geometry[:-1]], rect, reference)
-            if made is not None:
-                areas.append(made)
+        kind = area_kind(tags)
+        if kind and closed:
+            # Not where it is a ring of a multipolygon of the same kind, which makes the area, holes and all.
+            if kind not in rings_of_kind.get(element["id"], ()):
+                made = area_of(tags, [geometry[:-1]], rect, reference)
+                if made is not None:
+                    areas.append(made)
             continue
         line = None
         highway, barrier, waterway = tags.get("highway"), tags.get("barrier"), tags.get("waterway")
@@ -1160,7 +1188,7 @@ class Cover:
             if (
                 line["layer"] in FLAT
                 and line["thickness"] > found
-                and meets_line(polygon, line["points"], line["width"] / 2.0)
+                and meets_band(polygon, line["width"], line["points"])
             ):
                 found = line["thickness"]
         if found < 50.0 and any(meets_area(polygon, item) for item in self.water):
@@ -1173,7 +1201,7 @@ class Cover:
         if any(meets_area(polygon, item) for item in self.buildings):
             found.add("building")
         for line in self.lines:
-            if line["layer"] in TALL and meets_line(polygon, line["points"], line["width"] / 2.0):
+            if line["layer"] in TALL and meets_band(polygon, line["width"], line["points"]):
                 found.add(line["kind"])
         return sorted(found)
 
@@ -1240,10 +1268,10 @@ def rest(surface, x, y, footprint, heading, cover=None):
             fx = -1.0 + 2.0 * a / (counts[0] - 1) if counts[0] > 1 else 0.0
             fy = -1.0 + 2.0 * b / (counts[1] - 1) if counts[1] > 1 else 0.0
             gx, gy = footprint_point(x, y, footprint, heading, fx, fy)
-            if surface.inside(gx, gy):
-                heights.append(surface.height(gx, gy))
-    if not heights:
-        heights = [surface.height(x, y)]
+            # A sample past the ground's edge is taken at the edge: the ground
+            # ends there, and where a footprint reaches over it, the edge is
+            # what it stands on.
+            heights.append(surface.height(min(max(gx, surface.x0), surface.x1), min(max(gy, surface.y0), surface.y1)))
     h1 = footprint[0] / (counts[0] - 1) if counts[0] > 1 else 0.0
     h2 = footprint[1] / (counts[1] - 1) if counts[1] > 1 else 0.0
     top = max(heights) + (h1 * h1 * along + h2 * h2 * across) / 8.0
@@ -1294,14 +1322,50 @@ def _segment_segment(a, b, p, q):
     return min(_point_segment(a, p, q), _point_segment(b, p, q), _point_segment(p, a, b), _point_segment(q, a, b))
 
 
-def meets_line(polygon, points, distance):
-    """Whether a line 'distance' either side of 'points' reaches into the polygon."""
-    if len(points) == 1:
-        points = points * 2
-    if any(in_polygon(px, py, polygon) for px, py in points):
+def band_polygons(width, points):
+    """The polygons a line 'width' wide is on the plan, as the ground builds it ('_band' in GROUND_SCRIPT).
+
+    A rectangle per segment and an octagon at each joint; a thin line (1.5 m or
+    less) has no octagons, and its rectangles reach on past their ends by half
+    its width. The same arithmetic as the ground's, so that what 'Cover' finds
+    under a footprint is what the ground has there - a test holds the two
+    together.
+    """
+    found, half = [], width / 2.0
+    reach = half if width <= 1500.0 else 0.0
+    for (ax, ay), (bx, by) in zip(points, points[1:]):
+        length = math.hypot(bx - ax, by - ay)
+        if length < 1.0:
+            continue
+        dx, dy = (bx - ax) / length * reach, (by - ay) / length * reach
+        ax, ay, bx, by = ax - dx, ay - dy, bx + dx, by + dy
+        nx, ny = -(by - ay) / (length + 2 * reach) * half, (bx - ax) / (length + 2 * reach) * half
+        found.append([(ax + nx, ay + ny), (ax - nx, ay - ny), (bx - nx, by - ny), (bx + nx, by + ny)])
+    radius = half / math.cos(math.pi / 8)
+    for x, y in points[1:-1] if not reach else []:
+        found.append(
+            [
+                (
+                    x + radius * math.cos(k * math.pi / 4 + math.pi / 8),
+                    y + radius * math.sin(k * math.pi / 4 + math.pi / 8),
+                )
+                for k in range(8)
+            ]
+        )
+    return found
+
+
+def polygons_meet(a, b):
+    """Whether two polygons share any of the plan: a corner of one in the other, or edges crossing."""
+    if any(in_polygon(x, y, b) for x, y in a) or any(in_polygon(x, y, a) for x, y in b):
         return True
-    edges = list(zip(polygon, polygon[1:] + polygon[:1]))
-    return any(_segment_segment(a, b, p, q) < distance for p, q in zip(points, points[1:]) for a, b in edges)
+    edges = list(zip(b, b[1:] + b[:1]))
+    return any(_crosses(p, q, c, d) for p, q in zip(a, a[1:] + a[:1]) for c, d in edges)
+
+
+def meets_band(polygon, width, points):
+    """Whether a line's band, as the ground builds it, reaches into the polygon."""
+    return any(polygons_meet(polygon, band) for band in band_polygons(width, points))
 
 
 def meets_area(polygon, item):
