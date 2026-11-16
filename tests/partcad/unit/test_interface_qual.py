@@ -118,3 +118,19 @@ def test_what_the_build_passes_over_fails_it_every_time_it_is_asked(tmp_path, mo
     assert project.get_interface("mount").test() is False
     assert pc_logging.had_errors
     assert any("Qualification failed: //:mount: Failed to find the target interface" in str(a[0]) for a in logged)
+
+
+def test_an_alias_fails_with_what_the_interface_it_names_passed_over(tmp_path):
+    """An alias is that interface under another name, and is not qualified where that one is not."""
+    package = {
+        "interfaces": {
+            **MISSING_MATE["interfaces"],
+            "mount-alias": {"alias": "mount"},
+            # An alias of an alias, asked about before either of the others is built.
+            "mount-alias-2": {"alias": "mount-alias"},
+        }
+    }
+    ctx, project = _project(tmp_path, package)
+    assert project.get_interface("mount-alias-2").test() is False
+    assert project.get_interface("mount-alias").test() is False
+    assert project.get_interface("mount").test() is False

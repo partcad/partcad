@@ -1156,16 +1156,37 @@ class Interface:
     def test(self, ctx=None, tests=None) -> bool:
         """Whether this interface can be built, with the reason logged as a qualification failure when not."""
         try:
-            self.get_ports()
+            problems = self._qualification_problems()
         except Exception as e:
             pc_logging.error("Qualification failed: %s: %s" % (self.full_name, e))
             return False
-        if self.build_problems:
+        if problems:
             # Logged as they were found, which was the first time it was built;
             # said again here, because a warm daemon does not build it twice.
-            pc_logging.error("Qualification failed: %s: %s" % (self.full_name, "; ".join(self.build_problems)))
+            pc_logging.error("Qualification failed: %s: %s" % (self.full_name, "; ".join(problems)))
             return False
         return True
+
+    def _qualification_problems(self, seen=None) -> list:
+        """What building this interface passed over ('build_problems'), and what building the one it is an alias of did.
+
+        An alias is that interface under another name, so what keeps that one
+        from qualifying keeps this one from it too -- a mate it declares with
+        an interface nobody declares, say. Read here rather than copied in as
+        the alias is built: the target is created then but not always built
+        yet, and its problems are known only once it is ('get_ports()' below).
+        """
+        seen = set() if seen is None else seen
+        if self.full_name in seen:
+            return []
+        seen.add(self.full_name)
+        self.get_ports()
+        problems = list(self.build_problems)
+        if self.alias is not None:
+            target = self._aliased()
+            if target is not None:
+                problems += target._qualification_problems(seen)
+        return problems
 
     async def test_log_wrapper_async(self, ctx=None, tests=None) -> bool:
         with pc_logging.Action("Qual", self.project.name, self.name):
