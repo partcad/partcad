@@ -463,6 +463,8 @@ class Interface:
 
         self.ports = None
         self.inherits = None
+        # What its last build logged and passed over ('_build_problem').
+        self.build_problems = []
         self._compatible_with = set()
 
         # pc_logging.debug("Initializing interface: %s" % name)
@@ -683,8 +685,14 @@ class Interface:
         # TODO(clairbee): make interface a Shape and switch to existing sync mechanisms
         with self.lock:
             if self.ports is None:
-                self.instantiate_ports()  # Fill in own ports
-                self.instantiate()  # Get ports from parents
+                try:
+                    self.instantiate_ports()  # Fill in own ports
+                    self.instantiate()  # Get ports from parents
+                except BaseException:
+                    # Not kept half built ('_forget_build'): 'instantiate_ports()'
+                    # sets 'ports' before it reads the declaration.
+                    self._forget_build()
+                    raise
             return self.ports
 
     def instantiate_ports(self):
@@ -827,7 +835,36 @@ class Interface:
         ('adopt_inherit'); then its matings. Run lazily, the first time
         anything asks for what it builds ('get_ports()', 'get_parents()',
         'compatible_with'), and again after 'WithPorts.set_mapped' clears it.
+
+        Not kept half built: whichever of those asked first ('get_ports()',
+        'get_parents()', 'compatible_with', an alias being followed), a build
+        that raised forgets what it had filled in, so the next one builds
+        again and fails again rather than finding an empty 'ports' and
+        'inherits' and taking them for the interface's.
         """
+        try:
+            self._instantiate()
+        except BaseException:
+            self._forget_build()
+            raise
+
+    def _forget_build(self):
+        """Back to never having been built: what 'get_ports()' and 'instantiate()' do on a failure."""
+        self.ports = None
+        self.inherits = None
+
+    def _build_problem(self, message):
+        """Log a problem with this interface's own declaration, which its build passes over.
+
+        Kept on the interface ('build_problems', emptied as each build starts)
+        so that qualifying it fails on it every time, not only the time it was
+        built and the problem logged: a warm daemon builds it once.
+        """
+        self.build_problems.append(message)
+        pc_logging.error(message)
+
+    def _instantiate(self):
+        self.build_problems = []
         self.project.ctx.stats_interfaces_instantiated += 1
         self.inherits = {}
         if self.ports is None:
@@ -850,7 +887,7 @@ class Interface:
         # Initialize inheritance ("inherits" or "implements")
         inherits_config = self.config.get(self.config_section, None)
         if self.alias is not None and inherits_config is not None:
-            pc_logging.error(
+            self._build_problem(
                 "The interface '%s' declares both an alias and a '%s' section; the alias is ignored"
                 % (self.full_name, self.config_section)
             )
@@ -915,7 +952,7 @@ class Interface:
         mates = self.config.get("mates", None)
         if mates is not None:
             if self.abstract:
-                pc_logging.error("Abstract interfaces cannot have mates: %s" % self.name)
+                self._build_problem("Abstract interfaces cannot have mates: %s" % self.name)
                 return
 
             if isinstance(mates, str):
@@ -925,7 +962,7 @@ class Interface:
             elif not isinstance(mates, dict):
                 raise Exception("Invalid 'mates' section in the interface '%s'" % self.name)
 
-            self.add_mates(self.project, mates)
+            self.add_mates(self.project, mates, report=self._build_problem)
 
     def inherited_from_elsewhere(self) -> dict:
         """The interfaces this object gets from somewhere other than its own declaration.
@@ -1075,10 +1112,16 @@ class Interface:
         if self.physics is None:
             self.physics = target.physics
 
-    def add_mates(self, project, mates: dict):
+    def add_mates(self, project, mates: dict, report=None):
         """Handles the "mates" sub-section of this interface's config,
         or the references to this interface in top level "mates" config sections
-        of any project."""
+        of any project.
+
+        'report' is how a mating that cannot be made is reported: logged, and
+        for the interface's own section kept as a problem of its build too.
+        """
+        if report is None:
+            report = pc_logging.error
         for target_interface_name, mate_target_config in mates.items():
             if ":" not in target_interface_name:
                 target_interface_name = project.name + ":" + target_interface_name
@@ -1089,24 +1132,68 @@ class Interface:
             else:
                 target_project = project.ctx.get_project(target_package_name)
             if target_project is None:
-                pc_logging.error(
-                    "Failed to find the target package for %s: %s" % (target_interface_name, target_package_name)
-                )
+                report("Failed to find the target package for %s: %s" % (target_interface_name, target_package_name))
                 continue
             target_interface = target_project.get_interface(short_target_interface_name)
             if target_interface is None:
-                pc_logging.error("Failed to find the target interface: %s" % target_interface_name)
+                report("Failed to find the target interface: %s" % target_interface_name)
                 continue
             if target_interface.abstract:
-                pc_logging.error("Cannot mate with an abstract interface: %s" % target_interface_name)
+                report("Cannot mate with an abstract interface: %s" % target_interface_name)
                 continue
             project.ctx.add_mate(self, target_interface, mate_target_config)
 
-    async def test_async(self):
-        return self.test()
+    # Qualifying an interface is building it: its own ports, then everything it
+    # inherits, implements or mates with. It has no geometry, so none of the
+    # checks of 'partcad.qual' applies to it; 'ctx' and 'tests' are taken so
+    # that it is asked the way a shape is ('Shape.test'), and are not read.
+    # (A part or an assembly is a 'WithPorts', so an 'Interface' too, and
+    # overrides all four of these with the shape's own.)
 
-    def test(self):
-        _ = self.get_ports()
+    async def test_async(self, ctx=None, tests=None) -> bool:
+        return self.test(ctx, tests)
+
+    def test(self, ctx=None, tests=None) -> bool:
+        """Whether this interface can be built, with the reason logged as a qualification failure when not."""
+        try:
+            problems = self._qualification_problems()
+        except Exception as e:
+            pc_logging.error("Qualification failed: %s: %s" % (self.full_name, e))
+            return False
+        if problems:
+            # Logged as they were found, which was the first time it was built;
+            # said again here, because a warm daemon does not build it twice.
+            pc_logging.error("Qualification failed: %s: %s" % (self.full_name, "; ".join(problems)))
+            return False
+        return True
+
+    def _qualification_problems(self, seen=None) -> list:
+        """What building this interface passed over ('build_problems'), and what building the one it is an alias of did.
+
+        An alias is that interface under another name, so what keeps that one
+        from qualifying keeps this one from it too -- a mate it declares with
+        an interface nobody declares, say. Read here rather than copied in as
+        the alias is built: the target is created then but not always built
+        yet, and its problems are known only once it is ('get_ports()' below).
+        """
+        seen = set() if seen is None else seen
+        if self.full_name in seen:
+            return []
+        seen.add(self.full_name)
+        self.get_ports()
+        problems = list(self.build_problems)
+        if self.alias is not None:
+            target = self._aliased()
+            if target is not None:
+                problems += target._qualification_problems(seen)
+        return problems
+
+    async def test_log_wrapper_async(self, ctx=None, tests=None) -> bool:
+        with pc_logging.Action("Qual", self.project.name, self.name):
+            return await self.test_async(ctx, tests)
+
+    def test_log_wrapper(self, ctx=None, tests=None) -> bool:
+        return asyncio.run(self.test_log_wrapper_async(ctx, tests))
 
     def info(self):
         info = {

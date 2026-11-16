@@ -5467,8 +5467,9 @@ class Shape(ShapeConfiguration):
 
     async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
         if not self.finalized:
-            # Skip shapes that are not yet finalized
-            return
+            # Skip shapes that are not yet finalized: nothing is asked of them,
+            # so nothing failed ('Project._run_test_async' passes over them too).
+            return True
 
         if tests is None:
             tests = ctx.get_all_tests()

@@ -808,6 +808,33 @@ Feature: `pc qual test` command
     And STDOUT should contain "it faces [0, 0, 1], and has to face [0, 0, -1]"
     And STDOUT should contain "there is no port 'bottom'"
 
+  @success @pc-qual-test @pc-qual-test-interface
+  Scenario: An interface is qualified by being built, on its own and in its package
+    # '-i' raised "'Interface' object has no attribute 'finalized'" for every
+    # interface, and one that could not be built failed only the first run a
+    # daemon served: the half-built interface was kept, with no ports.
+    Given a file named "partcad.yaml" with content:
+      """
+      interfaces:
+        mount:
+          ports:
+            top:
+              location: [[0, 0, 10], [0, 0, 1], 0]
+        broken:
+          inherits:
+            nowhere: ""
+      """
+    When I run "pc qual test -i mount"
+    Then the command should exit with a status code of "0"
+    And STDOUT should not contain "Qualification failed"
+    When I run "pc qual test -i broken"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "Qualification failed: //:broken: Failed to find the interface to inherit: nowhere"
+    When I run "pc qual test"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "Qualification failed: //:broken"
+    And STDOUT should not contain "Qualification failed: //:mount"
+
   @wip
   Scenario: Test with invalid configuration
     Given I have an invalid PartCAD configuration
