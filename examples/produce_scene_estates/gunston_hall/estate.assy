@@ -1,0 +1,11 @@
+# Gunston Hall where it stands: the landscape around it, graded level under the house, and the house a
+# millimetre above it. Written by '../make_estate.py'.
+links:
+  - package: landscape
+    scene: landscape
+    name: landscape
+    fixed: true
+  - scene: house
+    name: house
+    location: [[1757.697, 11037.414, 26816.2], [0, 0, 1], -133]
+    fixed: true

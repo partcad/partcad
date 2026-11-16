@@ -1,0 +1,8 @@
+# Gunston Hall: its outside, and its inside in the air its outside leaves. Written by '../make_estate.py'.
+links:
+  - part: shell
+    name: shell
+    fixed: true
+  - scene: interior
+    name: interior
+    fixed: true

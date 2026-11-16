@@ -1,0 +1,132 @@
+# First floor of Gunston Hall: its floor, its rooms' walls, its furniture. Written by '../make_estate.py'.
+links:
+  - part: floor
+    name: floor
+    params: {storey: 1}
+    fixed: true
+  - scene: room-1-1
+    name: room-1-1
+    description: "Chamber (front-left, 17'-8\" x 15'-6\")"
+    location: [[0, 0, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-1-1-daybed-1
+    location: [[3927.8, 1256.7, 964.8], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-1-1-appleseed-endtable-1
+    location: [[5549.3, 844.4, 966], [0, 0, 1], 180]
+    fixed: true
+  - part: cabinet-b01
+    name: room-1-1-cabinet-b01-1
+    location: [[2196, 735.5, 968], [0, 0, 1], 270]
+    fixed: true
+  - part: sappington-chair
+    name: room-1-1-sappington-chair-1
+    location: [[3979, 4665.9, 966], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-2
+    name: room-1-2
+    description: "Little Parlor (back-left, 17'-10 5/8\" x 15'-7\")"
+    location: [[0, 0, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-sofa
+    name: room-1-2-crestwood-sofa-1
+    location: [[4320, 7838.6, 966.2], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-coffeetable
+    name: room-1-2-appleseed-coffeetable-1
+    location: [[3938.5, 9640.5, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-2-crestwood-chair-1
+    location: [[3904.5, 11480.1, 966.2], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-2-crestwood-chair-2
+    location: [[2554.5, 11480.1, 966.2], [0, 0, 1], 0]
+    fixed: true
+  - part: eurekaconsole
+    name: room-1-2-eurekaconsole-1
+    location: [[6415.2, 9570, 966], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-1-3
+    name: room-1-3
+    description: "Side (cross) passage to NE door"
+    location: [[0, 0, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-1-3-jennings-bench-1
+    location: [[3601.8, 5688.6, 966], [0, 0, 1], 180]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-3-aftonconsole-1
+    location: [[3525.9, 6779, 966], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-4
+    name: room-1-4
+    description: "Central Passage (12'-8\" x 37'-4 1/4\")"
+    location: [[0, 0, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-1-4-jennings-bench-1
+    location: [[10622.4, 6189.8, 966], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-4-aftonconsole-1
+    location: [[10630, 1685.1, 966], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-1-5
+    name: room-1-5
+    description: "Palladian Room (back-right, 19'-9\" x 18'-7 3/4\")"
+    location: [[0, 0, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-sofa
+    name: room-1-5-crestwood-sofa-1
+    location: [[15220, 6845.6, 966.2], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-coffeetable
+    name: room-1-5-appleseed-coffeetable-1
+    location: [[14343.5, 9144, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-5-crestwood-chair-1
+    location: [[14414.5, 11480.1, 966.2], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-5-crestwood-chair-2
+    location: [[13064.5, 11480.1, 966.2], [0, 0, 1], 0]
+    fixed: true
+  - part: eurekaconsole
+    name: room-1-5-eurekaconsole-1
+    location: [[15786, 11750.2, 966], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-6
+    name: room-1-6
+    description: "Dining Room (front-right, 19'-11\" x 17'-9 5/8\")"
+    location: [[0, 0, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: dellwood-diningtable
+    name: room-1-6-dellwood-diningtable-1
+    location: [[14372.9, 3206, 965.7], [0, 0, 1], 0]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-6-dellwood-diningchair-1
+    location: [[13976.8, 4090.8, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-6-dellwood-diningchair-2
+    location: [[14762.2, 4090.8, 966], [0, 0, 1], 0]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-6-dellwood-diningchair-3
+    location: [[13102.1, 3208.5, 966], [0, 0, 1], 90]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-6-dellwood-diningchair-4
+    location: [[15631.9, 3203.5, 966], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-6-aftonconsole-1
+    location: [[14351.1, 765, 966], [0, 0, 1], 180]
+    fixed: true

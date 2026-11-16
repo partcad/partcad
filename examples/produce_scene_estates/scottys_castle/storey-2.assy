@@ -1,0 +1,150 @@
+# Second floor of Scotty's Castle (Death Valley Ranch, Main House): its floor, its rooms' walls, its furniture. Written by '../make_estate.py'.
+links:
+  - part: floor
+    name: floor
+    params: {storey: 2}
+    fixed: true
+  - scene: room-2-1
+    name: room-2-1
+    description: "Spanish Bedroom (15'-2\" x 15'-4\")"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-2-1-daybed-1
+    location: [[2548.8, 5975.7, 5306.8], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-1-appleseed-endtable-1
+    location: [[1020.3, 5563.4, 5308], [0, 0, 1], 180]
+    fixed: true
+  - part: cabinet-b01
+    name: room-2-1-cabinet-b01-1
+    location: [[2524, 9641.5, 5310], [0, 0, 1], 90]
+    fixed: true
+  - part: sappington-chair
+    name: room-2-1-sappington-chair-1
+    location: [[4250, 5729.1, 5308], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-2-2
+    name: room-2-2
+    description: "Bath (6'-4\" x 10'-0\")"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-2-3
+    name: room-2-3
+    description: "Closets"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-2-4
+    name: room-2-4
+    description: "Spanish Sitting Room (15'-4\" x 25'-0\" per label)"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-sofa
+    name: room-2-4-crestwood-sofa-1
+    location: [[4199, 1131.7, 5308.2], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-coffeetable
+    name: room-2-4-appleseed-coffeetable-1
+    location: [[4205, 2799, 5308], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-chair
+    name: room-2-4-crestwood-chair-1
+    location: [[6101.5, 1093.9, 5308.2], [0, 0, 1], 180]
+    fixed: true
+  - part: crestwood-chair
+    name: room-2-4-crestwood-chair-2
+    location: [[2201.5, 1093.9, 5308.2], [0, 0, 1], 180]
+    fixed: true
+  - part: eurekaconsole
+    name: room-2-4-eurekaconsole-1
+    location: [[4130, 4774.2, 5308], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-2-5
+    name: room-2-5
+    description: "Gallery, west leg"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - part: armchair
+    name: room-2-5-armchair-1
+    location: [[9502.9, 5196.8, 5311.6], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-5-appleseed-endtable-1
+    location: [[9705.1, 6130.8, 5308], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-2-6
+    name: room-2-6
+    description: "Gallery, north"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - part: armchair
+    name: room-2-6-armchair-1
+    location: [[14775.9, 9066.1, 5311.6], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-6-appleseed-endtable-1
+    location: [[15709.8, 8863.9, 5308], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-2-7
+    name: room-2-7
+    description: "Gallery, south"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - part: armchair
+    name: room-2-7-armchair-1
+    location: [[12225.9, 1202.1, 5311.6], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-7-appleseed-endtable-1
+    location: [[17059.8, 999.9, 5308], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-2-8
+    name: room-2-8
+    description: "Gallery, east leg with stair"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-2-8-jennings-bench-1
+    location: [[21125.9, 5295.3, 5308], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-2-8-aftonconsole-1
+    location: [[21133.5, 3490.6, 5308], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-2-9
+    name: room-2-9
+    description: "Bath (6'-4\" x 10'-0\")"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-2-10
+    name: room-2-10
+    description: "Closet (8'-0\" x 10'-0\")"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-2-11
+    name: room-2-11
+    description: "Mr. Johnson's Room (15'-4\" x 15'-4\")"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - part: armchair
+    name: room-2-11-armchair-1
+    location: [[29040.4, 7599.3, 5311.6], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-11-appleseed-endtable-1
+    location: [[29242.6, 8533.3, 5308], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-2-12
+    name: room-2-12
+    description: "Mrs. Johnson's Room (15'-2\" x 25'-10\")"
+    location: [[0, 0, 5308], [0, 0, 1], 0]
+    fixed: true
+  - part: armchair
+    name: room-2-12-armchair-1
+    location: [[25663.2, 1078.6, 5311.6], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-12-appleseed-endtable-1
+    location: [[26597.3, 876.4, 5308], [0, 0, 1], 180]
+    fixed: true
