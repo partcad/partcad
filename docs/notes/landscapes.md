@@ -83,7 +83,8 @@ user with access of their own can build it. In detail:
   their users under those terms, or say they are for education only.
 
 So a landscape committed with a package comes from the open sources above, and a Google Maps link or a KML is used for
-its coordinates. Google's data is reached the other way: `incubator/partcad-repo-google-earth`, published as
+its coordinates. Google's data is reached the other way:
+[partcad-repo-google-earth](https://github.com/partcad/partcad-repo-google-earth), published as
 `//pub/collection/google-earth`, serves a place as parts that are *references* - a kind (`elevation`, `surface`,
 `tiles`), a middle and a size - each fetched when it is built, with the key of whoever builds it, under the terms that
 person accepted to get it. Nothing of Google's is in a package that names one; the plugin's metadata says

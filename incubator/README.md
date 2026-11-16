@@ -149,13 +149,15 @@ Two things PartCAD itself could do better, found on the way:
 
 ## Places in Google Earth
 
-`partcad-repo-google-earth` is a repository plugin of another kind: it serves a place in
-Google Earth - named by its middle and its size - as parts, the ground from Google's Elevation
-API and what stands on it from Google's Photorealistic 3D Tiles, each a solid made when it is
-built, with the user's own Google Maps Platform key (`pc login`). Nothing of Google's is in the
-package, and its metadata says `"persist": false`, so PartCAD keeps none of what it serves
-beyond the process that fetched it. It is published as `//pub/collection/google-earth`, beside
-the other collections; see its README.
+A repository plugin of another kind was incubated here and has moved out, with its history,
+to [partcad/partcad-repo-google-earth](https://github.com/partcad/partcad-repo-google-earth): it
+serves a place in Google Earth - named by its middle and its size - as parts, the ground from
+Google's Elevation API and what stands on it from Google's Photorealistic 3D Tiles, each a solid
+made when it is built, with the user's own Google Maps Platform key (`pc login`). Nothing of
+Google's is in the package, and its metadata says `"persist": false`, so PartCAD keeps none of
+what it serves beyond the process that fetched it. The index publishes it as
+`//pub/collection/google-earth`, beside the other collections, once a PartCAD that keeps a
+package's answers for the process only is released.
 
 ## Into the index
 

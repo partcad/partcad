@@ -102,7 +102,11 @@ linked into the scene in place of `ground` (fixed, at the origin). It is fetched
 with the user's key whenever it is built and kept nowhere; tell them so, and
 that its use is under the terms they accepted for that key. The OSM layers and
 props are still placed on the generated `ground`, so keep `landscape.py`'s
-package beside it for those.
+package beside it for those. Where `pc` cannot find `//pub/collection/google-earth`
+- the public index lists it only from the PartCAD release that keeps a package's
+answers for the process alone - the user's package depends on its repository
+instead (`type: git`, `url: https://github.com/partcad/partcad-repo-google-earth`,
+under a name of their choosing), and the parts are that dependency's `places`.
 
 ## 3. Package
 

@@ -1486,8 +1486,9 @@ def usage_of(m, graded, estate_dir):
         "### The ground from Google Earth instead",
         "",
         "With a Google Maps Platform key of your own (`pc login //pub/collection/google-earth:google_earth_repo`;",
-        "see `incubator/partcad-repo-google-earth`), the ground can be what Google Earth shows here, fetched",
-        "with your key whenever it is built and kept nowhere: link",
+        "see [partcad-repo-google-earth](https://github.com/partcad/partcad-repo-google-earth)), the ground",
+        "can be what Google Earth shows here, fetched with your key whenever it is built and kept nowhere:",
+        "link",
         "`//pub/collection/google-earth/places:surface;lat=%.6f,lon=%.6f,size=%s` in place of `landscape`."
         % (loc["lat"], loc["lon"], fmt(m.size)),
         "Its frame is this landscape's - X east, Y north, the house's middle at the origin - so the house's",
