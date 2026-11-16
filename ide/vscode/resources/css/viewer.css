@@ -1067,6 +1067,135 @@ table.grid .numeric {
 }
 
 /*
+ * Its forms: the strip of kinds to add, a form over the lists, and Edit and
+ * Remove on each row - 'pc req add' and 'pc req remove'. Buttons and fields as
+ * the CAM tab draws its own, in the editor's colours.
+ */
+.requirements-add,
+.requirements-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.3rem 0 0.6rem;
+}
+
+.requirements-add-label {
+    color: var(--vscode-descriptionForeground);
+    margin-right: 0.2rem;
+}
+
+.requirements-button {
+    padding: 0.2em 0.8em;
+    border: none;
+    border-radius: 2px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.requirements-button.secondary {
+    background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+}
+
+.requirements-button.small {
+    padding: 0.05em 0.55em;
+    font-size: 0.9em;
+}
+
+.requirements-button:hover:enabled {
+    background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+
+.requirements-button.secondary:hover:enabled {
+    background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-secondaryBackground));
+}
+
+.requirements-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.requirements-button:focus-visible,
+.requirements-input:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.requirements td.actions {
+    white-space: nowrap;
+    text-align: right;
+}
+
+.requirements td.actions .requirements-button + .requirements-button {
+    margin-left: 0.3rem;
+}
+
+.requirements-note {
+    margin: 0.2rem 0 0.5rem;
+    color: var(--vscode-descriptionForeground);
+}
+
+.requirements-note.error {
+    color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.requirements-form {
+    margin: 0.4rem 0 1rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, transparent));
+    border-radius: 3px;
+    background: var(--vscode-editorWidget-background, transparent);
+}
+
+.requirements-form h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1em;
+}
+
+.requirements-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.4rem 0.8rem;
+}
+
+.requirements-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.requirements-field-label {
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.9em;
+}
+
+.requirements-input {
+    min-width: 0;
+    padding: 0.2em 0.35em;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, transparent));
+    border-radius: 2px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.9em;
+}
+
+textarea.requirements-input {
+    min-height: 3.5em;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.requirements-input:disabled {
+    opacity: 0.6;
+}
+
+/*
  * The Basic, Topology and Other tabs (Qualification): every test of the tab's
  * subtype 'pc qual test' runs on the left, with a mark
  * in the colours the editor's own test explorer uses, and the check selected in
