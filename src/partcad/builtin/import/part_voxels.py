@@ -54,9 +54,14 @@ MAX_LABELS = 255
 
 
 class Grid:
-    """'labels' (x, y, z; 0 empty), the voxel size the file states (mm, or None), its corner, and its colours."""
+    """'labels' (x, y, z; 0 empty), the voxel size the file states (mm, or None), its corner, and its colours.
+
+    'files' are the files read besides the one the part names, for the part to
+    be keyed on (a detached NRRD header's data); None where they cannot be told.
+    """
 
     def __init__(self, labels, size=None, corner=(0.0, 0.0, 0.0), colours=None, convention=None, what=""):
+        self.files = []
         self.labels = labels
         self.size = size
         self.corner = corner
@@ -304,7 +309,33 @@ def read_nrrd(path, threshold):
         spacings = [
             numpy.linalg.norm(v) for v in header["space directions"] if v is not None and not numpy.isnan(v).any()
         ]
-    return grid_of(data, threshold, name, _spacing(spacings), what="NRRD")
+    grid = grid_of(data, threshold, name, _spacing(spacings), what="NRRD")
+    grid.files = detached(path, header)
+    return grid
+
+
+def detached(path, header):
+    """The files a detached NRRD header's data is in ('data file'), which the part is keyed on as well as on the header.
+
+    [] for data in the file itself; None for a 'LIST' of files, which the
+    header lists after itself and which is not told here - the part is then not
+    cached, rather than cached under a key that leaves its data out.
+    """
+    spec = header.get("data file") or header.get("datafile")
+    if not spec:
+        return []
+    here = os.path.dirname(path)
+    words = str(spec).split()
+    if words[0] == "LIST":
+        return None
+    if len(words) >= 4 and "%" in words[0]:
+        # '<format> <min> <max> <step>': a file per slice, by number.
+        first, last, step = int(words[1]), int(words[2]), int(words[3])
+        if step == 0:
+            return None
+        numbers = range(first, last + (1 if step > 0 else -1), step)
+        return [os.path.join(here, words[0] % number) for number in numbers]
+    return [os.path.join(here, str(spec).strip())]
 
 
 NIFTI_UNITS = {"mm": 1.0, "meter": 1000.0, "micron": 0.001}
@@ -384,11 +415,13 @@ def run(request):
             low, high = filled.min(axis=0), filled.max(axis=0) + 1
             labels = labels[low[0] : high[0], low[1] : high[1], low[2] : high[2]]
             corner = corner + low
+        # Along the file's axes, and turned with the grid below.
+        size = _size(parameters.get("size"), grid.size)
         if up == "y":
-            # (x, y, z) Y up is (x, -z, y) Z up.
+            # (x, y, z) Y up is (x, -z, y) Z up: the voxel's Y and Z sides change places with the axes.
             labels = numpy.flip(labels.transpose(0, 2, 1), axis=1)
             corner = numpy.array([corner[0], -(corner[2] + labels.shape[1]), corner[1]])
-        size = _size(parameters.get("size"), grid.size)
+            size = (size[0], size[2], size[1])
         if str(parameters.get("origin") or "center").strip().lower() == "file":
             origin = tuple(corner * numpy.array(size))
         else:
@@ -407,6 +440,8 @@ def run(request):
     output = {"shape": shape}
     if cmf:
         output["cmf"] = cmf
+    if grid.files is None or grid.files:
+        output["dependencies"] = grid.files
     return output
 
 

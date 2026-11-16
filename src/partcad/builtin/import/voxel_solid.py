@@ -45,6 +45,10 @@ def boxes(labels):
     first cell no box holds yet and grows along the last axis, then the middle
     one, then the first, for as long as every cell it would take is of its
     label and free.
+
+    The cells a box may start at are found a plane at a time, not listed for
+    the whole grid at once: a filled 512-cube is 134 million cells, three
+    coordinates each, and is one box.
     """
     labels = numpy.asarray(labels)
     if labels.ndim != 3:
@@ -52,7 +56,7 @@ def boxes(labels):
     nx, ny, nz = labels.shape
     taken = labels == 0
     found = []
-    for i, j, k in numpy.argwhere(~taken):
+    for i, j, k in _free(taken):
         if taken[i, j, k]:
             continue
         label = labels[i, j, k]
@@ -68,6 +72,20 @@ def boxes(labels):
         taken[i:i1, j:j1, k:k1] = True
         found.append((label.item(), (int(i), int(j), int(k)), (int(i1), int(j1), int(k1))))
     return found
+
+
+def _free(taken):
+    """The cells 'taken' does not hold, in the grid's order, a plane of the first axis at a time.
+
+    Each plane is listed as it is reached, so a box grown from an earlier
+    plane has already taken what it took of this one.
+    """
+    for i in range(taken.shape[0]):
+        plane = taken[i]
+        if plane.all():
+            continue
+        for j, k in numpy.argwhere(~plane):
+            yield i, j, k
 
 
 def solids(labels, size, origin=(0.0, 0.0, 0.0), max_boxes=DEFAULT_MAX_BOXES):
@@ -193,9 +211,12 @@ def cmf(per_solid, per_face, colours=None, convention="partcad", named=True):
     'colours' maps a label to '(r, g, b, a)', 0-255 each; a label it does not
     have is drawn in PALETTE. None where a part has one label and no colour of
     its own: there is nothing to say then that its own colour does not. A label
-    that is no name anybody would claim - a colour a scan's points were averaged
-    to - is named by its colour instead ('named' false), '#RRGGBB', as a mesh's
-    colours are: a set with no name says nothing, and is dropped.
+    that is a name - a MagicaVoxel palette index - is stated as the colour, the
+    material and the finish its cells are, so that a package can claim it as
+    any of the three ('ids: {vox: "17"}'). One that is no name anybody would
+    claim - a colour a scan's points were averaged to - is named by its colour
+    instead ('named' false), '#RRGGBB', as a mesh's colours are, and only as a
+    colour: a set with no name says nothing, and is dropped.
     """
     present = sorted({label for label in per_solid if label is not None})
     if not colours and len(present) <= 1:
@@ -208,10 +229,13 @@ def cmf(per_solid, per_face, colours=None, convention="partcad", named=True):
         if rgba is None:
             r, g, b = PALETTE[(int(label) - 1) % len(PALETTE)]
             rgba = (r, g, b, 255)
-        return {
+        found = {
             "color": str(label) if named else "#%02X%02X%02X" % tuple(int(c) for c in rgba[:3]),
             "rgba": [int(rgba[0]), int(rgba[1]), int(rgba[2]), rgba[3] / 255.0],
         }
+        if named:
+            found["material"] = found["finish"] = str(label)
+        return found
 
     return {
         "convention": convention,

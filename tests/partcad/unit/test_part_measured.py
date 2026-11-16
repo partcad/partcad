@@ -592,3 +592,129 @@ def test_a_nifti_volume_is_read_in_its_unit(tmp_path):
     assert grid.size == (500.0, 500.0, 500.0)
     shape = built(part_voxels.run({"path": str(tmp_path / "scan.nii.gz"), "parameters": {"threshold": 0.5}}))
     assert box(shape) == pytest.approx((-250.0, -250.0, 0.0, 250.0, 250.0, 1500.0))
+
+
+# -- Bounds on what a reader holds, and where a part stands -------------------------------------------------------
+
+
+def test_max_points_are_read_evenly_as_the_file_is_read(tmp_path):
+    xyz = numpy.column_stack([numpy.arange(1000.0), numpy.zeros(1000), numpy.arange(1000.0) % 7])
+    write_ply(tmp_path / "binary.ply", xyz)
+    write_ply(tmp_path / "ascii.ply", xyz, form="ascii")
+    (tmp_path / "points.xyz").write_text("# x y z\n" + "".join("%.6f %.6f %.6f\n" % tuple(p) for p in xyz))
+    for name in ("binary.ply", "ascii.ply", "points.xyz"):
+        cloud = part_pointcloud.read(str(tmp_path / name), 100)
+        # Every 10th point, from the first: the file's own order, thinned.
+        assert cloud.xyz[:, 0] == pytest.approx(numpy.arange(0.0, 1000.0, 10.0)), name
+    # At most the limit: every 4th of 1000 is 250, where every 3rd would be 334, more than 300.
+    assert len(part_pointcloud.read(str(tmp_path / "binary.ply"), 300).xyz) == 250
+
+
+def test_max_points_of_lidar_are_read_a_chunk_at_a_time(tmp_path, monkeypatch):
+    laspy = pytest.importorskip("laspy")
+    header = laspy.LasHeader(point_format=3, version="1.2")
+    header.scales = numpy.array([0.01, 0.01, 0.01])
+    las = laspy.LasData(header)
+    las.x = numpy.arange(1000.0)
+    las.y = numpy.zeros(1000)
+    las.z = numpy.zeros(1000)
+    las.classification = numpy.full(1000, 2)
+    las.write(str(tmp_path / "scan.las"))
+    # Chunks that do not divide the step: every 7th point, wherever a chunk starts.
+    monkeypatch.setattr(part_pointcloud, "LAS_CHUNK", 33)
+    cloud = part_pointcloud.read(str(tmp_path / "scan.las"), 143)
+    assert cloud.xyz[:, 0] == pytest.approx(numpy.arange(0.0, 1000.0, 7.0))
+    assert len(cloud.classes) == len(cloud.xyz)
+
+
+def test_origin_file_keeps_a_height_field_at_its_measured_height(tmp_path):
+    # A survey 100 m up, and one below sea level.
+    for lowest in (100.0, -20.0):
+        cells = [(x + 0.5, y + 0.5) for x in range(4) for y in range(4)]
+        xyz = numpy.array([(x, y, lowest + (x > 2)) for x, y in cells])
+        (tmp_path / "survey.xyz").write_text("".join("%.6f %.6f %.6f\n" % tuple(p) for p in xyz))
+        shape = built(
+            part_pointcloud.run(
+                {"path": str(tmp_path / "survey.xyz"), "parameters": {"cell": 1000, "base": 500, "origin": "file"}}
+            )
+        )
+        low, high = box(shape)[2], box(shape)[5]
+        assert low == pytest.approx(lowest * 1000.0 - 500.0, abs=1e-3), lowest
+        assert high == pytest.approx((lowest + 1.0) * 1000.0, abs=1.0), lowest
+
+
+def test_a_voxel_grid_too_large_is_refused_before_it_is_allocated(tmp_path):
+    (tmp_path / "far.xyz").write_text("0 0 0\n10 10 10\n0 10 0\n")
+    said = part_pointcloud.run({"path": str(tmp_path / "far.xyz"), "parameters": {"as": "voxels", "cell": 1}})
+    assert "makes a grid of 10001 x 10001 x 10001 voxels" in said["exception"]
+
+
+def test_up_y_turns_the_voxels_sides_with_the_grid(tmp_path):
+    numpy.save(tmp_path / "block.npy", numpy.ones((2, 3, 4), dtype=bool))
+    shape = built(part_voxels.run({"path": str(tmp_path / "block.npy"), "parameters": {"size": [1, 2, 3], "up": "y"}}))
+    xmin, ymin, zmin, xmax, ymax, zmax = box(shape)
+    # 2 x 3 x 4 voxels of 1 x 2 x 3 mm are 2 x 6 x 12 mm; Y up, that is 2 x 12 x 6.
+    assert (xmax - xmin, ymax - ymin, zmax - zmin) == pytest.approx((2.0, 12.0, 6.0))
+
+
+def test_a_detached_nrrd_header_names_the_data_it_is_read_from():
+    here = os.path.join("scans", "seg.nhdr")
+    assert part_voxels.detached(here, {}) == []
+    assert part_voxels.detached(here, {"data file": "seg.raw.gz"}) == [os.path.join("scans", "seg.raw.gz")]
+    assert part_voxels.detached(here, {"data file": "slice%02d.raw 1 3 1"}) == [
+        os.path.join("scans", "slice0%d.raw" % n) for n in (1, 2, 3)
+    ]
+    assert part_voxels.detached(here, {"data file": "LIST"}) is None
+
+
+def test_a_detached_nrrd_volume_reports_its_data_so_a_change_to_it_builds_the_part_again(tmp_path):
+    nrrd = pytest.importorskip("nrrd")
+    labels = numpy.zeros((2, 2, 2), numpy.uint8)
+    labels[0, 0, 0] = 1
+    nrrd.write(str(tmp_path / "seg.nhdr"), labels, detached_header=True)
+    result = part_voxels.run({"path": str(tmp_path / "seg.nhdr"), "parameters": {}})
+    built(result)
+    # pynrrd gzips detached data unless told otherwise: the file the header names, whatever it is.
+    assert [os.path.basename(path) for path in result["dependencies"]] == ["seg.raw.gz"]
+    assert os.path.isfile(result["dependencies"][0])
+    # An attached volume reports nothing besides itself.
+    nrrd.write(str(tmp_path / "seg.nrrd"), labels)
+    assert "dependencies" not in part_voxels.run({"path": str(tmp_path / "seg.nrrd"), "parameters": {}})
+
+
+def test_boxes_found_a_plane_at_a_time_are_the_greedy_boxes():
+    rng = numpy.random.default_rng(11)
+    labels = rng.integers(0, 3, size=(9, 8, 7)) * (rng.random((9, 8, 7)) > 0.3)
+
+    def reference(labels):
+        # The whole grid's free cells listed at once, as before.
+        nx, ny, nz = labels.shape
+        taken = labels == 0
+        found = []
+        for i, j, k in numpy.argwhere(~taken):
+            if taken[i, j, k]:
+                continue
+            label = labels[i, j, k]
+            k1 = k + 1
+            while k1 < nz and not taken[i, j, k1] and labels[i, j, k1] == label:
+                k1 += 1
+            j1 = j + 1
+            while j1 < ny and not taken[i, j1, k:k1].any() and (labels[i, j1, k:k1] == label).all():
+                j1 += 1
+            i1 = i + 1
+            while i1 < nx and not taken[i1, j:j1, k:k1].any() and (labels[i1, j:j1, k:k1] == label).all():
+                i1 += 1
+            taken[i:i1, j:j1, k:k1] = True
+            found.append((label.item(), (int(i), int(j), int(k)), (int(i1), int(j1), int(k1))))
+        return found
+
+    assert voxel_solid.boxes(labels) == reference(labels)
+    assert voxel_solid.boxes(numpy.ones((6, 5, 4), dtype=int)) == [(1, (0, 0, 0), (6, 5, 4))]
+
+
+def test_a_palette_index_is_claimable_as_a_colour_a_material_and_a_finish():
+    named = voxel_solid.cmf([1, 17], [1, 17], {1: (255, 0, 0, 255), 17: (0, 0, 255, 255)}, "vox")
+    assert named["solids"][1]["color"] == named["solids"][1]["material"] == named["solids"][1]["finish"] == "17"
+    # A colour a scan's points were averaged to is a colour only.
+    anonymous = voxel_solid.cmf([1, 2], [1, 2], {1: (255, 0, 0, 255), 2: (0, 0, 255, 255)}, named=False)
+    assert set(anonymous["solids"][0]) == {"color", "rgba"}

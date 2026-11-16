@@ -42,8 +42,10 @@ What is read, by the file's extension:
 
 Coordinates are in 'unit' (metres, unless the part says otherwise) and are
 moved so that the cloud's middle is over the origin and its lowest point is at
-'base' mm above z = 0 ('origin: file' keeps them where the file has them).
-At most 'maxPoints' points are read, evenly through the file.
+'base' mm above z = 0. 'origin: file' keeps them where the file has them: a
+height field's lowest point at its measured height, its base 'base' mm under
+that. At most 'maxPoints' points are read, evenly through the file, as it is
+read; a 'classes' filter keeps those of them that are of its classes.
 
 Run by 'wrappers/wrapper_part_type.py' with 'request["path"]' set to the file.
 """
@@ -65,6 +67,9 @@ DEFAULT_MAX_POINTS = 20000000
 # height field is averaged down from, and the most voxels along a side.
 MAX_HEIGHTFIELD_CELLS = 2048
 DEFAULT_VOXELS_ALONG = 128
+# The most cells a cloud's voxel grid may have: it is a dense array, 4 bytes a
+# cell, allocated before a single box is made of it - 512 MB at this bound.
+MAX_VOXEL_CELLS = 2**27
 
 PLY_TYPES = {
     "char": "i1",
@@ -96,7 +101,14 @@ class Cloud:
         self.what = what
 
 
-def read_ply(path):
+def _step(count, limit):
+    """Every how many points one is read, for at most 'limit' of 'count': 1 where there is no limit or no count."""
+    if not limit or not count or count <= limit:
+        return 1
+    return int(-(-count // int(limit)))
+
+
+def read_ply(path, limit=None):
     import numpy
 
     name = os.path.basename(path)
@@ -140,14 +152,18 @@ def read_ply(path):
         names = [prop for prop, _ in properties]
         if any(kind is None for _, kind in properties):
             raise ValueError("%s's vertices have a list property, which a point cloud does not" % name)
+        step = _step(count, limit)
         if form == "ascii":
-            lines = [f.readline() for _ in range(count)]
+            lines = [line for index, line in enumerate(f.readline() for _ in range(count)) if index % step == 0]
             data = numpy.loadtxt(lines, dtype=float, ndmin=2)
             columns = {prop: data[:, index] for index, prop in enumerate(names)}
         else:
+            # Mapped rather than read, so that only every step-th vertex is
+            # taken into memory.
             dtype = numpy.dtype([(prop, endian + PLY_TYPES[kind]) for prop, kind in properties])
-            data = numpy.frombuffer(f.read(count * dtype.itemsize), dtype=dtype, count=count)
-            columns = {prop: data[prop].astype(float) for prop in names}
+            data = numpy.memmap(path, dtype=dtype, mode="r", offset=f.tell(), shape=(count,))[::step]
+            columns = {prop: numpy.array(data[prop], dtype=float) for prop in names}
+            del data
     if not all(axis in columns for axis in "xyz"):
         raise ValueError("%s's vertices have no x, y and z" % name)
     xyz = numpy.column_stack([columns["x"], columns["y"], columns["z"]])
@@ -159,7 +175,9 @@ def read_ply(path):
     return Cloud(xyz, rgb, what="PLY (%s)" % form.replace("_", " "))
 
 
-def read_text(path):
+def read_text(path, limit=None):
+    import itertools
+
     import numpy
 
     name = os.path.basename(path)
@@ -180,7 +198,14 @@ def read_text(path):
             header += 1
     if columns is None:
         raise ValueError("%s has no line of three numbers or more: x y z" % name)
-    data = numpy.loadtxt(path, delimiter=delimiter, skiprows=header, comments=("#", "//"), ndmin=2, dtype=float)
+    step = 1
+    if limit:
+        # Counted first, a line at a time, so that only every step-th line is parsed and kept.
+        with open(path, encoding="utf-8", errors="replace") as f:
+            step = _step(sum(1 for _ in f) - header, limit)
+    with open(path, encoding="utf-8", errors="replace") as f:
+        lines = itertools.islice(f, header, None, step)
+        data = numpy.loadtxt(lines, delimiter=delimiter, comments=("#", "//"), ndmin=2, dtype=float)
     rgb = None
     extension = os.path.splitext(path)[1].lower()
     if extension == ".pts" and data.shape[1] >= 7:
@@ -192,30 +217,56 @@ def read_text(path):
     return Cloud(data[:, :3], rgb, what="text, %d columns" % data.shape[1])
 
 
-def read_las(path):
+# How many points of a LAS file are read at a time, when it is read evenly rather than whole.
+LAS_CHUNK = 1000000
+
+
+def read_las(path, limit=None):
     import numpy
 
     try:
         import laspy
     except ImportError:  # pragma: no cover - the type installs it
         raise ValueError("reading lidar takes laspy, which this sandbox does not have")
-    las = laspy.read(path)
-    xyz = numpy.column_stack([numpy.asarray(las.x), numpy.asarray(las.y), numpy.asarray(las.z)])
+    with laspy.open(path) as las:
+        header = las.header
+        names = set(header.point_format.dimension_names)
+        coloured = {"red", "green", "blue"} <= names
+        step = _step(header.point_count, limit)
+        parts = {"xyz": [], "rgb": [], "classes": []}
+        # A chunk at a time, each thinned as it is read, so that a survey is
+        # never in memory whole: every step-th point of the file, wherever
+        # the chunks start.
+        done = 0
+        for chunk in las.chunk_iterator(LAS_CHUNK):
+            first = (-done) % step
+            done += len(chunk)
+            chunk = chunk[first::step]
+            if not len(chunk):
+                continue
+            parts["xyz"].append(
+                numpy.column_stack([numpy.asarray(chunk.x), numpy.asarray(chunk.y), numpy.asarray(chunk.z)])
+            )
+            if coloured:
+                parts["rgb"].append(
+                    numpy.column_stack([numpy.asarray(chunk.red), numpy.asarray(chunk.green), numpy.asarray(chunk.blue)])
+                )
+            if "classification" in names:
+                parts["classes"].append(numpy.asarray(chunk.classification).astype(int))
+        version, form = header.version, header.point_format.id
+    xyz = numpy.concatenate(parts["xyz"]) if parts["xyz"] else numpy.zeros((0, 3))
     rgb = None
-    names = set(las.point_format.dimension_names)
-    if {"red", "green", "blue"} <= names:
-        rgb = numpy.column_stack([numpy.asarray(las.red), numpy.asarray(las.green), numpy.asarray(las.blue)]).astype(
-            float
-        )
+    if coloured and parts["rgb"]:
+        rgb = numpy.concatenate(parts["rgb"]).astype(float)
         # LAS colours are 16-bit; some writers put 8-bit values in them.
         rgb = rgb / 257.0 if rgb.max() > 255.0 else rgb
         if not rgb.any():
             rgb = None
-    classes = numpy.asarray(las.classification).astype(int) if "classification" in names else None
-    return Cloud(xyz, rgb, classes, what="LAS %s, point format %d" % (las.header.version, las.point_format.id))
+    classes = numpy.concatenate(parts["classes"]) if parts["classes"] else None
+    return Cloud(xyz, rgb, classes, what="LAS %s, point format %d" % (version, form))
 
 
-def read_e57(path):
+def read_e57(path, limit=None):
     import numpy
 
     try:
@@ -223,15 +274,28 @@ def read_e57(path):
     except ImportError:  # pragma: no cover - the 'e57' type installs it
         raise ValueError("reading an E57 scan takes pye57: declare the part with 'type: e57'")
     e57 = pye57.E57(path)
+    # pye57 reads a scan whole; each is thinned as soon as it is read, so that
+    # no more than one scan is in memory unthinned.
+    total = 0
+    for index in range(e57.scan_count):
+        try:
+            total += int(e57.get_header(index).point_count)
+        except Exception:
+            total = 0
+            break
+    step = _step(total, limit)
     points, colours, coloured = [], [], True
     for index in range(e57.scan_count):
         scan = e57.read_scan(index, colors=True, ignore_missing_fields=True, transform=True)
-        xyz = numpy.column_stack([scan["cartesianX"], scan["cartesianY"], scan["cartesianZ"]]).astype(float)
+        xyz = numpy.column_stack([scan["cartesianX"], scan["cartesianY"], scan["cartesianZ"]]).astype(float)[::step]
         points.append(xyz)
         if coloured and all(key in scan for key in ("colorRed", "colorGreen", "colorBlue")):
-            colours.append(numpy.column_stack([scan["colorRed"], scan["colorGreen"], scan["colorBlue"]]).astype(float))
+            colours.append(
+                numpy.column_stack([scan["colorRed"], scan["colorGreen"], scan["colorBlue"]]).astype(float)[::step]
+            )
         else:
             coloured = False
+        del scan
     if not points:
         raise ValueError("%s holds no scan" % os.path.basename(path))
     rgb = numpy.concatenate(colours) if coloured else None
@@ -248,16 +312,17 @@ def _number(text):
         return False
 
 
-def read(path):
+def read(path, limit=None):
+    """The cloud in 'path', at most about 'limit' of its points, evenly through it, read as it is read."""
     extension = os.path.splitext(path)[1].lower()
     if extension == ".ply":
-        return read_ply(path)
+        return read_ply(path, limit)
     if extension in (".las", ".laz"):
-        return read_las(path)
+        return read_las(path, limit)
     if extension == ".e57":
-        return read_e57(path)
+        return read_e57(path, limit)
     if extension in TEXT:
-        return read_text(path)
+        return read_text(path, limit)
     raise ValueError(
         "a point cloud is a .ply, a .las or .laz, an .e57, or text (%s), and %s is none of them"
         % (", ".join(TEXT), os.path.basename(path))
@@ -320,6 +385,11 @@ def heightfield_of(xyz, parameters, origin):
         origin=corner,
         max_poles=int(float(parameters.get("maxPoles") or heightfield.DEFAULT_MAX_POLES)),
     )
+    if origin == "file":
+        # Where the file has it in height too: its lowest point at its
+        # measured height, and the base 'base' mm under that - which holds for
+        # a survey below sea level as well, since it is moved after it is built.
+        shape = _moved(shape, float(numpy.nanmin(grid)) - base)
     empty = int(numpy.isnan(grid).sum())
     if empty > grid.size / 2:
         # Said, because it is a choice somebody can make better: most of the
@@ -332,16 +402,35 @@ def heightfield_of(xyz, parameters, origin):
     return shape, None, "%s, %d of its cells empty" % (heightfield.describe(info), empty)
 
 
+def _moved(shape, dz):
+    """'shape' moved 'dz' mm along Z."""
+    from OCP.gp import gp_Trsf, gp_Vec
+    from OCP.TopLoc import TopLoc_Location
+
+    move = gp_Trsf()
+    move.SetTranslation(gp_Vec(0.0, 0.0, dz))
+    return shape.Moved(TopLoc_Location(move))
+
+
 def voxels_of(xyz, rgb, parameters, origin):
     """The solids of the cells the cloud's points fall in, their colours, and a line for the log."""
     import numpy
 
+    import heightfield
     import voxel_solid
 
     low, high = xyz.min(axis=0), xyz.max(axis=0)
     cell = parameters.get("cell")
     cell = float(cell) if cell else max(float((high - low).max()) / DEFAULT_VOXELS_ALONG, 1e-6)
     counts = numpy.floor((high - low) / cell).astype(int) + 1
+    # Refused before the grid is allocated: three points far apart, at a fine
+    # 'cell', would otherwise ask for terabytes to hold three voxels.
+    cells = int(numpy.prod(counts.astype(object)))
+    if cells > MAX_VOXEL_CELLS:
+        raise ValueError(
+            "a 'cell' of %s mm makes a grid of %d x %d x %d voxels, more than %d: make it coarser"
+            % (heightfield._number(cell), counts[0], counts[1], counts[2], MAX_VOXEL_CELLS)
+        )
     index = numpy.clip(((xyz - low) / cell).astype(int), 0, counts - 1)
     flat = numpy.ravel_multi_index(index.T, counts)
     occupied, inverse, hits = numpy.unique(flat, return_inverse=True, return_counts=True)
@@ -383,7 +472,8 @@ def run(request):
     parameters = request.get("parameters") or {}
     name = os.path.basename(request.get("path", ""))
     try:
-        cloud = read(request["path"])
+        limit = int(float(parameters.get("maxPoints") or DEFAULT_MAX_POINTS))
+        cloud = read(request["path"], limit)
         xyz, rgb = cloud.xyz, cloud.rgb
         wanted = _classes(parameters.get("classes"))
         if wanted is not None:
@@ -391,7 +481,7 @@ def run(request):
                 raise ValueError("'classes' filters lidar by its points' classes, and this file has none")
             keep = numpy.isin(cloud.classes, wanted)
             xyz, rgb = xyz[keep], (rgb[keep] if rgb is not None else None)
-        limit = int(float(parameters.get("maxPoints") or DEFAULT_MAX_POINTS))
+        # Read evenly by the reader already, where it can; this is for one that could not.
         if len(xyz) > limit:
             step = int(numpy.ceil(len(xyz) / float(limit)))
             xyz, rgb = xyz[::step], (rgb[::step] if rgb is not None else None)

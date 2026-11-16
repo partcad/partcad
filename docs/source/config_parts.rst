@@ -810,7 +810,11 @@ point cloud is still read. Coordinates are in ``unit`` (``m``), at most
   ``minPoints`` points, as voxels (below). A scan's points lie on surfaces, so this is the scanned skin, a cell thick.
   Where the points have colours, each cell is in its points' mean colour, to 64 shades.
 
-``origin: file`` keeps x and y where the file has them, rather than centring the cloud on the origin.
+``origin: file`` keeps the points where the file has them, rather than centring the cloud on the origin: a height
+field's lowest point at its measured height, and its base ``base`` mm under that. ``maxPoints`` is applied as the file
+is read, so a survey larger than memory is never in memory whole, and ``classes`` keeps those of the points read that
+are of its classes. A voxel grid of more than 2\ :sup:`27` cells is refused, before it is allocated: make the
+``cell`` coarser.
 
 **Voxels** -- what ``voxels`` makes, and ``pointcloud`` with ``as: voxels`` -- are exact: each filled cell is a box,
 the boxes of one colour or label are taken greedily into as few larger boxes as the grid allows and fused into the
@@ -833,9 +837,10 @@ fine to fuse in reasonable time. A ``voxels`` part reads:
   header states, and in millimetres for NRRD, which states none. The array's axes are the grid's; the volume's
   orientation in the scanner is not applied.
 
-A voxel is ``size`` mm (one number, or three), 1 mm unless the file says otherwise. The grid is cut to its filled
-cells, its middle put over the origin and its bottom on z = 0 (``origin: file`` keeps it where the file has it), and
-``up: y`` turns a Y-up model onto Z.
+A voxel is ``size`` mm (one number, or three, along the file's axes), 1 mm unless the file says otherwise. The grid
+is cut to its filled cells, its middle put over the origin and its bottom on z = 0 (``origin: file`` keeps it where
+the file has it), and ``up: y`` turns a Y-up model onto Z, its voxels' sides with it. A detached NRRD header
+(``.nhdr``) is read with the data file it names, and the part is built again when either changes.
 
 .. _gltf-files:
 

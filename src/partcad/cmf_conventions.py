@@ -262,13 +262,32 @@ def convert(ctx, shape, section, convention_name: typing.Optional[str]):
             )
         )
     if unmatched:
-        said = sorted({"%s '%s'" % pair for pair in unmatched})
         pc_logging.warning(
             "%s:%s: nothing in scope claims %s of its source (convention '%s'); a colour is drawn as stated and is "
             "display-only, a material or finish is left for the part's parameters. Declare it with 'ids: {%s: ...}'"
-            % (package, shape.name, ", ".join(said), ", ".join(sorted(conventions)), _ids_key(conventions))
+            % (package, shape.name, _unmatched(unmatched), ", ".join(sorted(conventions)), _ids_key(conventions))
         )
     return cmf_section.Section(sets, section.default, section.solids, section.faces).compacted()
+
+
+def _unmatched(unmatched) -> str:
+    """'(kind, designation)' pairs nothing claims, said once per designation: "color '#123456', material and finish '17'".
+
+    A source that states one designation as several kinds - a MagicaVoxel
+    palette index is a colour, a material and a finish at once - would
+    otherwise be said three times over for every index nobody claims.
+    """
+    kinds_of = {}
+    for kind, stated in unmatched:
+        kinds_of.setdefault(str(stated), set()).add(kind)
+    groups = {}
+    for stated, kinds in kinds_of.items():
+        groups.setdefault(tuple(kind for kind in pc_cmf.KINDS if kind in kinds), []).append(stated)
+    said = []
+    for kinds, designations in sorted(groups.items()):
+        named = kinds[0] if len(kinds) == 1 else ", ".join(kinds[:-1]) + " and " + kinds[-1]
+        said.append("%s %s" % (named, ", ".join("'%s'" % stated for stated in sorted(designations))))
+    return "; ".join(said)
 
 
 def _ids_key(conventions) -> str:
