@@ -66,15 +66,15 @@ answers briefly: prices an hour, products and searches a day.
 ### What was built
 
 Four packages, each one script serving both plugins, on a toolkit they share
-([`_shared/distributor.py`](_shared/README.md)) built on PartCAD's own `plugin_models`. Three
-have repositories of their own now; Mouser is still here.
+([`_shared/distributor.py`](_shared/README.md)) built on PartCAD's own `plugin_models`. All four
+have repositories of their own now; what is left here is the toolkit they share.
 
 | Package | Store | Catalogue | Models |
 | --- | --- | --- | --- |
 | [`partcad-svc-commerce-digikey`](https://github.com/partcad/partcad-svc-commerce-digikey) | DigiKey numbers, and any manufacturer's part by MPN, in your currency | DigiKey's categories, searched | where DigiKey links a model file; else SnapMagic's, by an alias of its `snapmagic` package |
 | [`partcad-svc-commerce-octopart`](https://github.com/partcad/partcad-svc-commerce-octopart) | the cheapest authorized offer among every distributor | Octopart's categories, searched; parts are `<MPN>~<manufacturer>` | the STEP in the KiCad library |
 | [`partcad-svc-commerce-mscmaster-carr`](https://github.com/partcad/partcad-svc-commerce-mscmaster-carr) (McMaster-Carr) | McMaster-Carr numbers, by the pack | by part number | McMaster-Carr's STEP; a mock server to test against |
-| [`partcad-svc-commerce-mouser`](partcad-svc-commerce-mouser/README.md) (here) | Mouser numbers, and any manufacturer's part by MPN | searched, nothing to build | none |
+| [`partcad-svc-commerce-mouser`](https://github.com/partcad/partcad-svc-commerce-mouser) | Mouser numbers, and any manufacturer's part by MPN | searched, nothing to build | none |
 
 What they have in common, and what is new about them:
 
@@ -175,23 +175,25 @@ pins it beside the other stores:
     revision: <commit>
 ```
 
-and the same for `octopart` and `mcmaster` (whose repository's name still has a typo to fix
-first: `partcad-svc-commerce-mscmaster-carr`), and later `mouser`.
+and the same for `octopart`, `mcmaster` (whose repository's name still has a typo to fix
+first: `partcad-svc-commerce-mscmaster-carr`) and `mouser`.
 
 ## Testing
 
-Each package's tests need `pytest` and PartCAD's `plugin_models`, which `conftest.py` finds in
-an installed `partcad` (`pip install --no-deps partcad` is enough), in `$PARTCAD_WRAPPERS`, or
-in a PartCAD checkout - this one, or one beside the package's own:
+Each package's tests run in its own repository's CI, and by hand there with `pytest`; they need
+PartCAD's `plugin_models`, which `conftest.py` finds in an installed `partcad` (`pip install
+--no-deps partcad` is enough), in `$PARTCAD_WRAPPERS`, or in a PartCAD checkout beside the
+package's own. The toolkit's own tests run here:
 
 ```shell
-cd incubator/partcad-svc-commerce-mouser && pytest -c /dev/null --rootdir . .
+cd incubator/_shared && pytest -c /dev/null --rootdir . .
 ```
 
 `-c /dev/null` keeps this repository's own pytest configuration, which is PartCAD's, out of
-it. The shared files are edited in `_shared/` and copied out with `_shared/copy.sh`:
+it. The shared files are edited in `_shared/` and copied out with `_shared/copy.sh`, into
+checkouts of the packages' repositories beside this one:
 
 ```shell
 incubator/_shared/copy.sh ../partcad-svc-commerce-digikey ../partcad-svc-commerce-octopart \
-  ../partcad-svc-commerce-mscmaster-carr
+  ../partcad-svc-commerce-mscmaster-carr ../partcad-svc-commerce-mouser
 ```
