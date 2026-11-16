@@ -774,7 +774,8 @@ def _parse_match(raw, declaration: Declaration) -> None:
                         MATCH,
                         reference,
                         "'%s' and '%s' are both the %s: say it once" % (written[amount], key, amount),
-                        address("match", reference, amount=amount),
+                        # The spelling written second: removing it leaves the first.
+                        address("match", reference, amount=str(key)),
                     )
                 )
                 continue

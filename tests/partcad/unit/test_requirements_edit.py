@@ -206,3 +206,49 @@ def test_an_unknown_kind_is_refused():
 def test_an_empty_value_says_that_yaml_reads_an_unquoted_comparison_so():
     spec = requirements.ValueSpec("")
     assert "quoted in YAML" in spec.error
+
+
+# --- what an independent review of this module found -----------------------------
+
+
+def test_every_entry_the_schema_refuses_is_its_own_and_an_old_one_does_not_hide_a_new_one():
+    """The section's 'oneOf' reported one of them; an edit was then compared with whichever that was."""
+    broken = {"interfaces": {"m3": {"a b": None}}, "ports": {"my port": None}}
+    declaration = _declaration(copy.deepcopy(broken))
+    # Taking one broken entry out is not refused for the other, which was already there.
+    edit.remove(declaration, "interface", "m3")
+    assert declaration["requirements"] == {"ports": {"my port": None}}
+    # And adding a broken entry beside an old broken one is refused all the same.
+    declaration = _declaration({"interfaces": {"m3": {"a b": None}}})
+    with pytest.raises(edit.EditError, match="my port"):
+        edit.add(declaration, "port", "my port", None)
+
+
+def test_a_feature_written_both_ways_is_removed_both_ways():
+    declaration = _declaration({"features": {"mount": "A"}, "mount": "B"})
+    edit.remove(declaration, "feature", "mount")
+    assert "requirements" not in declaration
+
+
+def test_a_requirement_written_twice_loses_only_the_spelling_named():
+    declaration = _declaration({"has_weight": False, "has_mass": True})
+    edit.remove(declaration, "has", "has_mass")
+    assert declaration["requirements"] == {"has_weight": False}
+    declaration = _declaration({"match": {":old": {"mass": 5, "weight": 6}}})
+    problem = requirements.parse(declaration["requirements"]).problems[0]
+    assert problem.address == {"requirement": "match", "name": ":old", "amount": "weight"}
+    edit.remove(declaration, "match", ":old", amounts=[problem.address["amount"]])
+    assert declaration["requirements"] == {"match": {":old": {"mass": 5}}}
+
+
+def test_a_list_of_more_than_names_is_refused_rather_than_crashing():
+    with pytest.raises(edit.EditError, match="not a list of names"):
+        edit.remove(_declaration({"interfaces": ["m3", {"a": 1}]}), "interface", "m3")
+
+
+def test_a_value_json_has_no_type_for_is_handed_over_as_its_text():
+    import datetime
+    import json
+
+    data = edit.section_as_data({"deadline": datetime.date(2026, 3, 1)})
+    assert json.dumps(data) == '{"deadline": "2026-03-01"}'

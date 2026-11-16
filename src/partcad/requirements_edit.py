@@ -119,12 +119,19 @@ def structured(section, like=None):
 
 
 def _plain(value):
-    """'value' as plain data: what the schema and a JSON answer are handed."""
+    """'value' as plain data: what the schema and a JSON answer are handed.
+
+    A scalar YAML reads as something JSON has no type for -- '2026-03-01' is a
+    date -- is the text it was written as, which is also what the schema
+    makes of it.
+    """
     if isinstance(value, dict):
         return {str(key): _plain(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_plain(item) for item in value]
-    return value
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    return str(value)
 
 
 def _holds_mapping(value) -> bool:
@@ -156,10 +163,20 @@ def _schema_errors(section) -> list:
     from partcad_utils import assy_lint
 
     schema = assy_lint.get_schema(assy_lint.PARTCAD_SCHEMA)
+    definitions = schema["definitions"]
     validator_class = jsonschema.validators.validator_for(schema)
-    validator = validator_class({"$ref": "#/definitions/requirements", "definitions": schema["definitions"]})
+    data = _plain(section)
+    target = {"$ref": "#/definitions/requirements"}
+    if isinstance(data, dict):
+        # Against the mapping's own branch of the section's 'oneOf', which
+        # reports each entry that is wrong; the 'oneOf' itself would report one
+        # of them, and an edit would be compared against whichever that was.
+        for branch in definitions["requirements"].get("oneOf", []):
+            if branch.get("type") == "object":
+                target = branch
+    validator = validator_class({**target, "definitions": definitions})
     messages = []
-    for error in validator.iter_errors(_plain(section)):
+    for error in validator.iter_errors(data):
         error = assy_lint._most_specific(error)
         where = ".".join(str(part) for part in error.absolute_path)
         messages.append(("%s: %s" % (where, assy_lint._describe(error))) if where else assy_lint._describe(error))
@@ -517,9 +534,12 @@ def _remove_feature(section, declaration, name, _instances, _amounts, with_refer
         )
     if named_by:
         _unname(declaration, name)
+    # Both, where both are written: a heading of the free-form shape and an
+    # entry of 'features:' are the same feature, and leaving either is
+    # leaving it required.
     if heading:
         del section[name]
-    else:
+    if isinstance(features, dict) and name in features:
         del features[name]
     return "the feature '%s'%s" % (
         name,
@@ -531,13 +551,20 @@ def _remove_feature(section, declaration, name, _instances, _amounts, with_refer
     )
 
 
+def _names(listed, what: str) -> dict:
+    """A list of names, as the mapping it means; refused when it holds anything but names."""
+    if not all(isinstance(item, str) for item in listed):
+        raise EditError("'%s' is not a list of names: rewrite it by hand first" % what)
+    return {item: None for item in listed}
+
+
 def _remove_port(section, _declaration, name, *_rest) -> str:
     ports = section.get(req.PORTS)
     if isinstance(ports, str):
         ports = {ports: None}
         section[req.PORTS] = ports
     elif isinstance(ports, list):
-        ports = {item: None for item in ports}
+        ports = _names(ports, "%s: %s" % (req.SECTION, req.PORTS))
         section[req.PORTS] = ports
     if not isinstance(ports, dict) or name not in ports:
         raise _missing("The port '%s'" % name)
@@ -551,7 +578,7 @@ def _remove_interface(section, declaration, name, instances, *_rest) -> str:
         interfaces = {interfaces: None}
         section[req.INTERFACES] = interfaces
     elif isinstance(interfaces, list):
-        interfaces = {item: None for item in interfaces}
+        interfaces = _names(interfaces, "%s: %s" % (req.SECTION, req.INTERFACES))
         section[req.INTERFACES] = interfaces
     if not isinstance(interfaces, dict) or name not in interfaces:
         raise _missing("The interface '%s'" % name)
@@ -613,6 +640,10 @@ def _remove_match(section, _declaration, name, _instances, amounts, _with) -> st
         present = [spelling for spelling in AMOUNTS[amount] if spelling in limits]
         if not present:
             raise _missing("Matching the %s of '%s'" % (amount, name))
+        if len(present) > 1 and str(key) in present:
+            # Written twice ('mass:' and 'weight:'), which reads as a problem:
+            # the spelling named is the one taken out, and the other stays.
+            present = [str(key)]
         for spelling in present:
             del limits[spelling]
         taken.append(amount)
@@ -627,9 +658,14 @@ def _remove_has(section, _declaration, name, *_rest) -> str:
     present = [spelling for spelling in spellings if spelling in section]
     if not present:
         raise _missing("'%s'" % key)
+    written = str(name).strip().lower().replace("-", "_")
+    if len(present) > 1 and written in present:
+        # Written twice ('has_weight:' and 'has_mass:'), which reads as a
+        # problem: the spelling named is the one taken out, and the other stays.
+        present = [written]
     for spelling in present:
         del section[spelling]
-    return "'%s'" % key
+    return "'%s'" % present[0] if len(present) == 1 else "'%s'" % key
 
 
 def section_as_data(section) -> typing.Any:

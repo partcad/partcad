@@ -41,6 +41,11 @@ assemblies:
     requirements:
       has_dependencies: true
       has_private_dependencies: false
+scenes:
+  # Of nothing but its own part, filled with what another package declares.
+  pool:
+    type: assy
+    medium: lib:water
 """
 
 KIT = """
@@ -51,10 +56,18 @@ links:
 """
 
 LIB = """
+materials:
+  water:
+    density: 1000
 parts:
   block:
     type: basic
     cuboid: 5
+"""
+
+POOL = """
+links:
+  - part: own
 """
 
 
@@ -63,6 +76,7 @@ def ctx(tmp_path_factory):
     path = tmp_path_factory.mktemp("dependencies")
     (path / "partcad.yaml").write_text(textwrap.dedent(PACKAGE))
     (path / "kit.assy").write_text(textwrap.dedent(KIT))
+    (path / "pool.assy").write_text(textwrap.dedent(POOL))
     (path / "lib").mkdir()
     (path / "lib" / "partcad.yaml").write_text(textwrap.dedent(LIB))
     return pc.Context(str(path))
@@ -124,3 +138,16 @@ def test_both_are_read_as_yes_or_no_requirements():
         ("has_private_dependencies", False),
     ]
     assert not declaration.problems
+
+
+def test_a_scene_draws_on_the_package_of_its_medium(ctx):
+    found = asyncio.run(object_dependencies.collect_async(ctx, ctx.get_scene(":pool")))
+    assert "//lib" in found.packages
+    assert any("medium" in use for use in found.packages["//lib"])
+
+
+def test_an_extrude_draws_on_the_package_of_its_sketch():
+    assert object_dependencies._sketch_spec(None, "//", {"package": "lib"}, "outline") == "//lib:outline"
+    assert object_dependencies._sketch_spec(None, "//", {"package": "this"}, "outline") == "//:outline"
+    assert object_dependencies._sketch_spec(None, "//", {}, "outline") == "//:outline"
+    assert object_dependencies._sketch_spec(None, "//a", {"project": "//pub/x"}, "s") == "//pub/x:s"

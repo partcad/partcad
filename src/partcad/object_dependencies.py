@@ -16,12 +16,14 @@ made of, followed all the way down:
     a part                   the colours, materials and finishes its faces and
                              solids are in, as recorded with its geometry (the
                              CMF summary the 'cmf' check and 'has_material'
-                             read), so it is built to be asked;
+                             read), so it is built to be asked; and for an
+                             extrude or a sweep, the sketch it is made from;
     any of them              the interfaces it implements, and every one they
                              inherit;
     a scene                  the medium it is filled with.
 
-What it does not count: PartCAD's own '//builtin' packages, which ship with
+What it does not count: a reference an object type makes in a key of its own
+that is none of the above -- only those are followed; PartCAD's own '//builtin' packages, which ship with
 PartCAD and are part of it rather than something it depends on; and the files
 an object's own package holds, which are the object itself. A Python script's
 pip packages are not PartCAD packages either.
@@ -94,6 +96,23 @@ def _package_of(ctx, owner: str, written: str) -> typing.Optional[str]:
     return package or owner
 
 
+def _sketch_spec(ctx, owner: str, config: dict, sketch: str) -> str:
+    """The '<package>:<sketch>' an extrude's or a sweep's 'sketch:' names, as their factories resolve it."""
+    from .utils import get_child_project_path
+
+    package = config.get("package", config.get("project"))
+    if isinstance(package, str):
+        if package in ("", "this"):
+            package = owner
+        elif not package.startswith("//"):
+            package = get_child_project_path(owner, package)
+        return "%s:%s" % (package, sketch)
+    if ":" in sketch:
+        project = ctx.get_project(owner) if ctx is not None else None
+        return project.normalize(sketch) if project is not None else sketch
+    return "%s:%s" % (owner, sketch)
+
+
 async def _object(ctx, kind: str, path: str):
     if kind == "part":
         return await ctx._get_part_async(path)
@@ -160,7 +179,9 @@ async def collect_async(ctx, shape) -> Dependencies:
             from .assembly_guide import resolve_alias
 
             target = resolve_alias(ctx, obj)
-            medium = getattr(target, "medium_reference", None)
+            # A scene's medium: a method of 'Scene', which an assembly lacks.
+            medium_of = getattr(target, "medium_reference", None)
+            medium = medium_of() if callable(medium_of) else None
             if medium is not None:
                 package = _package_of(ctx, target.project_name, medium)
                 if package is not None:
@@ -177,6 +198,19 @@ async def collect_async(ctx, shape) -> Dependencies:
 
         if getattr(obj, "kind", None) != "part":
             return
+        # The sketch an extrude or a sweep is made from, named the way those
+        # types name it: 'sketch:', and 'package:' (or 'project:') beside it.
+        sketch = config.get("sketch")
+        if isinstance(sketch, str) and sketch:
+            spec = _sketch_spec(ctx, obj.project_name, config, sketch)
+            package, _ = reference.split(spec)
+            found.add(package, "sketch %s (what %s is made from)" % (spec, name))
+            try:
+                drawn = ctx._get_sketch(spec)
+            except Exception:  # pylint: disable=broad-except
+                drawn = None
+            if drawn is not None:
+                await visit(drawn, " (what %s is made from)" % name)
         # What its faces and solids are in, as recorded with its geometry.
         try:
             built = await obj.get_wrapped(ctx)

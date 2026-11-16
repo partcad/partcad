@@ -48,6 +48,7 @@
     "features/qual.feature": 17.0,
     "features/recursive_packages.feature": 122.0,
     "features/render.feature": 1858.5,
+    "features/req.feature": 15.0,
     "features/search/all.feature": 26.4,
     "features/search/assemblies.feature": 9.9,
     "features/search/interfaces.feature": 9.5,
