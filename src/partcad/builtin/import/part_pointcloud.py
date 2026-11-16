@@ -198,13 +198,22 @@ def read_text(path, limit=None):
             header += 1
     if columns is None:
         raise ValueError("%s has no line of three numbers or more: x y z" % name)
+
+    def records(f):
+        # The points' lines: after the header, and neither blank nor a comment,
+        # so that what is counted and what is thinned are the same lines.
+        for line in itertools.islice(f, header, None):
+            text = line.strip()
+            if text and not text.startswith(("#", "//")):
+                yield line
+
     step = 1
     if limit:
-        # Counted first, a line at a time, so that only every step-th line is parsed and kept.
+        # Counted first, a line at a time, so that only every step-th point is parsed and kept.
         with open(path, encoding="utf-8", errors="replace") as f:
-            step = _step(sum(1 for _ in f) - header, limit)
+            step = _step(sum(1 for _ in records(f)), limit)
     with open(path, encoding="utf-8", errors="replace") as f:
-        lines = itertools.islice(f, header, None, step)
+        lines = itertools.islice(records(f), 0, None, step)
         data = numpy.loadtxt(lines, delimiter=delimiter, comments=("#", "//"), ndmin=2, dtype=float)
     rgb = None
     extension = os.path.splitext(path)[1].lower()

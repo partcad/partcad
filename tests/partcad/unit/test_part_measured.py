@@ -718,3 +718,14 @@ def test_a_palette_index_is_claimable_as_a_colour_a_material_and_a_finish():
     # A colour a scan's points were averaged to is a colour only.
     anonymous = voxel_solid.cmf([1, 2], [1, 2], {1: (255, 0, 0, 255), 2: (0, 0, 255, 255)}, named=False)
     assert set(anonymous["solids"][0]) == {"color", "rgba"}
+
+
+def test_comments_and_blank_lines_among_the_points_are_not_counted_or_thinned_as_points(tmp_path):
+    xyz = numpy.column_stack([numpy.arange(100.0), numpy.zeros(100), numpy.zeros(100)])
+    lines = ["# a scan", ""]
+    for point in xyz:
+        lines += ["%.6f %.6f %.6f" % tuple(point), "# a note", ""]
+    (tmp_path / "notes.xyz").write_text("\n".join(lines) + "\n")
+    # 100 points, 10 asked for: every 10th point, not every 10th line of a file three times as long.
+    cloud = part_pointcloud.read(str(tmp_path / "notes.xyz"), 10)
+    assert cloud.xyz[:, 0] == pytest.approx(numpy.arange(0.0, 100.0, 10.0))

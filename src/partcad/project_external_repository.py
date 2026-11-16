@@ -380,7 +380,23 @@ class ProjectExternalRepository(ProjectPlugin):
         if self._peek_data("meta") is _MISSING and self._cache is not None:
             await self._cached_async(meta_key)
         if fetch and self._peek_data("meta") is _MISSING:
-            await self.get_data_async("meta")
+            # Asked directly rather than through 'get_data_async', which takes a
+            # failed request for an answer of None - and None says nothing
+            # forbids keeping anything. A metadata request that fails decides
+            # nothing: this answer is not written, and the metadata is asked
+            # for again next time.
+            repository = self._repository_for(meta_key)
+            if repository is None:
+                return False
+            try:
+                meta = await self._ask(repository, meta_key)
+            except Exception as e:
+                pc_logging.error("%s: failed to fetch '%s' from the repository: %s" % (self.name, meta_key, e))
+                return False
+            if meta is not None and self._cache is not None:
+                await self._write_cache(meta_key, meta)
+            with self._request_lock:
+                self._request_cache.setdefault(meta_key, meta)
         return self.persists()
 
     def persists(self) -> bool:

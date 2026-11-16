@@ -322,6 +322,48 @@ def test_an_object_asked_for_before_the_metadata_is_not_written_where_the_metada
                 shutil.rmtree(backend.cache_dir, ignore_errors=True)
 
 
+def test_an_object_is_not_written_when_the_metadata_cannot_be_had():
+    """A failed metadata request is no answer: nothing is written, and the metadata is asked for again."""
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_persist_failed_%s" % uuid.uuid4().hex, ctx.user_config)
+
+    class Flaky(FakeRepository):
+        def __init__(self, data):
+            super().__init__(data)
+            self.down = True
+
+        async def get_data(self, key):
+            if key == "meta" and self.down:
+                self.keys.append(key)
+                raise ConnectionError("the repository did not answer")
+            return await super().get_data(key)
+
+    try:
+        data = {
+            "meta": {"objectKinds": ["part"], "persist": False},
+            "objects/part/place": {"type": "heightmap"},
+            "objects/part": {"place": {"type": "heightmap"}},
+        }
+        first = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+        first._repository = Flaky(data)
+        assert asyncio.run(first.get_data_async("objects/part/place")) == data["objects/part/place"]
+        assert first._repository.keys == ["objects/part/place", "meta"]
+        # The metadata is still unknown here, and asked for again when the next answer is to be written.
+        first._repository.down = False
+        asyncio.run(first.get_data_async("objects/part"))
+        assert first._repository.keys == ["objects/part/place", "meta", "objects/part", "meta"]
+        assert first.persists() is False
+        # Nothing of either answer reached the disk.
+        second = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+        second._repository = FakeRepository(data)
+        asyncio.run(second.get_data_async("objects/part/place"))
+        assert second._repository.keys == ["objects/part/place"]
+    finally:
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
 def test_a_file_a_non_persisting_package_serves_is_removed_when_the_process_exits(tmp_path, monkeypatch):
     import base64
 
