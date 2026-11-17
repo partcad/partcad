@@ -393,3 +393,14 @@ def test_a_package_that_states_no_requirements_has_none(ctx):
     report = asyncio.run(requirements.check_package_async(ctx, ctx.root, verify=True)).to_dict()
 
     assert report["defined"] is False
+
+
+def test_a_yes_or_no_requirement_of_a_package_with_no_parts_holds(tmp_path):
+    _write(tmp_path / "empty" / "partcad.yaml", {"name": "//", "requirements": {"has_weight": True}})
+    context = pc.Context(str(tmp_path / "empty"), search_root=False)
+
+    report = asyncio.run(requirements.check_package_async(context, context.root, verify=True)).to_dict()
+
+    assert report["verified"] is True
+    assert [(check["name"], check["passed"]) for check in report["requirements"]] == [("has_weight", True)]
+    assert report["requirements"][0]["detail"] == "the package declares no parts"
