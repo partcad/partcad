@@ -4,33 +4,25 @@ url: https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Main_House,_Dea
 
 docs:
   name: "Scotty's Castle (Death Valley Ranch, Main House)"
-  usage: |
+  intro: |
     Scotty's Castle (Death Valley Ranch, Main House): 1778 acres, at 37.03226, -117.34146 (Wikipedia infobox for Scotty's Castle: historic district 719.57 ha).
     Its house as the Historic American Buildings Survey measured it, everything worked out by
     `../make_estate.py` from `estate.json` - what was read off the survey's drawings - and the ground
     around it from the gen-landscape skill.
 
-    ![The estate where it stands: the house on its graded pad, in the landscape around it.](./images/outside.png)
-
-    ![The house: its outside, one solid painted face by face.](./images/shell.png)
-
-    ![Second floor, furnished, drawn through the walls nearest the camera.](./images/storey-2.png)
-
-    ![Second floor from above: its rooms' walls and furniture.](./images/plan-2.png)
-
-    ```shell
-    pc render -t png --style shaded -S estate     # the house where it stands
-    pc render -t png --style shaded -S interior   # its rooms, furnished
-    pc qual test -S house                         # nothing inside it shares space with anything else
-    ```
+    Its scenes nest, and each is pictured below: `estate`, the whole of it where it stands, then the house,
+    then each storey furnished and the same storey from above (`storey-<n>`, `storey-<n>-above`);
+    each storey's plan is a sketch, `plan-<n>`.
 
     - `shell` is the outside, one solid painted face by face: everything solid of the house -
       walls, roof, chimneys, dormers, porches, steps - less the air its rooms stand in, with every door
       and window cut through it. It is the house as it looks from outside, and stays as it is.
-    - Each room is a `walls` scene on its floor's outline (`room-<storey>-<n>`, on the sketch
-      `plan-<storey>-<n>`): its walls as thick as its storey's thinnest partition lets them be, and
-      under a roof only as high as the roof lets them stand. Where a room's walls reach into the outside
-      walls, they are carved out of the shell, so the two never share space.
+    - Each storey's plan, `plan-<storey>`, is the outlines of all of its rooms, which are on its
+      level; `plan-<storey>;room=<storey>-<n>` is one of them alone.
+    - Each room is a `walls` scene on its outline (`room-<storey>-<n>`): its walls as thick as its
+      storey's thinnest partition lets them be, and under a roof only as high as the roof lets them
+      stand. Where a room's walls reach into the outside walls, they are carved out of the shell, so the
+      two never share space.
     - Its furniture is NVIDIA's ArchVis and SimReady models from `//pub/collection/openusd`: each a
       `basic` part as large as `pc info` measured it and where it is - what a check collides with and a
       simulation moves - drawn as the model, set against the walls by what each room is for, clear of
@@ -38,19 +30,6 @@ docs:
     - `landscape` is the ground around it and what OpenStreetMap maps on it (the gen-landscape
       skill), less the house's own outline, with a level pad graded under the house at 11832.1 mm.
       The house stands a millimetre above it.
-
-    The scenes declare `timeout:`, so the examples' CI sweep (`--fast-only`) passes them over: render
-    them here, where nothing is left out: `./render_images.sh scottys_castle 2`, beside `make_estate.py`.
-
-    ### The ground from Google Earth instead
-
-    With a Google Maps Platform key of your own (`pc login //pub/collection/google-earth:google_earth_repo`;
-    see [partcad-repo-google-earth](https://github.com/partcad/partcad-repo-google-earth)), the ground
-    can be what Google Earth shows here, fetched with your key whenever it is built and kept nowhere:
-    link
-    `//pub/collection/google-earth/places:surface;lat=37.032260,lon=-117.341460,size=400` in place of `landscape`.
-    Its frame is this landscape's - X east, Y north, the house's middle at the origin - so the house's
-    `location` holds; stand it at the height `pc info` measures for the surface there.
 
     ### What is approximate
 
@@ -64,6 +43,27 @@ docs:
     - The annex (north, across the patio) is only given as an outline from OSM; HABS has separate sheets for it (CA-2257-B) which were not used.
     - 4 rooms drawn edge to edge, nearer each other than two thin walls, or out to the house's own outline, are moved in by up to a few centimetres, so that each has walls of its own and the outside stays whole.
     - The rooms' walls are whole: a `walls` scene stands a wall on every edge of its outline and has no doorways yet, so a room's doors are measured - its furniture keeps clear of them - but not cut through its walls.
+  usage: |
+    ```shell
+    pc render -t png --style shaded -S estate     # the house where it stands
+    pc render -t png --style shaded -S interior   # its rooms, furnished
+    pc qual test -S house                         # nothing inside it shares space with anything else
+    ```
+
+    The scenes declare `timeout:`, so the examples' CI sweep (`--fast-only`) passes over them and their
+    pictures: render them here, where nothing is left out, with `./render_images.sh scottys_castle`, beside
+    `make_estate.py`. Each picture is a `render:` on the object it is of: `house` and `estate` leave
+    the inside out of theirs (`filter:`), which nobody outside sees.
+
+    ### The ground from Google Earth instead
+
+    With a Google Maps Platform key of your own (`pc login //pub/collection/google-earth:google_earth_repo`;
+    see [partcad-repo-google-earth](https://github.com/partcad/partcad-repo-google-earth)), the ground
+    can be what Google Earth shows here, fetched with your key whenever it is built and kept nowhere:
+    link
+    `//pub/collection/google-earth/places:surface;lat=37.032260,lon=-117.341460,size=400` in place of `landscape`.
+    Its frame is this landscape's - X east, Y north, the house's middle at the origin - so the house's
+    `location` holds; stand it at the height `pc info` measures for the surface there.
 
     ### Sources
 
@@ -114,144 +114,28 @@ colors:
     manufacturable: false
 
 sketches:
-  plan-1-1:
+  plan-1:
     type: build123d
     path: rooms.py
-    desc: "Scotty's Bedroom (14'-10\" x 25'-9\"), first floor: its floor's outline."
+    desc: "First floor, its plan: the outlines of its rooms, which their walls stand on - 1-1 Scotty's Bedroom (14'-10\" x 25'-9\"); 1-2 Lower Music Room (15'-2\" x 25'-2\"); 1-3 West passage (north); 1-4 Scotty's Bath; 1-5 West passage (south); 1-6 Living Hall (31'-1\" x 31'-8\"); 1-7 Stair hall (main stair, fountain alcove); 1-8 Service passage / telephone; 1-9 Kitchen (15'-3\" x 25'-7\"); 1-10 Dining Room (15'-1\" x 25'-10\"); 1-11 Solarium (17'-3\" x 17'-3\", octagonal)."
     parameters:
-      room: {type: string, default: "1-1"}
-  plan-1-2:
+      storey: {type: int, default: 1, desc: "Which storey's plan, from 1 to 2."}
+      room: {type: string, default: "", desc: "One room of it alone, as '1-1'; every room by default."}
+    render:
+      svg:
+        prefix: images
+        reproducible: true
+  plan-2:
     type: build123d
     path: rooms.py
-    desc: "Lower Music Room (15'-2\" x 25'-2\"), first floor: its floor's outline."
+    desc: "Second floor, its plan: the outlines of its rooms, which their walls stand on - 2-1 Spanish Bedroom (15'-2\" x 15'-4\"); 2-2 Bath (6'-4\" x 10'-0\"); 2-3 Closets; 2-4 Spanish Sitting Room (15'-4\" x 25'-0\" per label); 2-5 Gallery, west leg; 2-6 Gallery, north; 2-7 Gallery, south; 2-8 Gallery, east leg with stair; 2-9 Bath (6'-4\" x 10'-0\"); 2-10 Closet (8'-0\" x 10'-0\"); 2-11 Mr. Johnson's Room (15'-4\" x 15'-4\"); 2-12 Mrs. Johnson's Room (15'-2\" x 25'-10\")."
     parameters:
-      room: {type: string, default: "1-2"}
-  plan-1-3:
-    type: build123d
-    path: rooms.py
-    desc: "West passage (north), first floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "1-3"}
-  plan-1-4:
-    type: build123d
-    path: rooms.py
-    desc: "Scotty's Bath, first floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "1-4"}
-  plan-1-5:
-    type: build123d
-    path: rooms.py
-    desc: "West passage (south), first floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "1-5"}
-  plan-1-6:
-    type: build123d
-    path: rooms.py
-    desc: "Living Hall (31'-1\" x 31'-8\"), first floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "1-6"}
-  plan-1-7:
-    type: build123d
-    path: rooms.py
-    desc: "Stair hall (main stair, fountain alcove), first floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "1-7"}
-  plan-1-8:
-    type: build123d
-    path: rooms.py
-    desc: "Service passage / telephone, first floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "1-8"}
-  plan-1-9:
-    type: build123d
-    path: rooms.py
-    desc: "Kitchen (15'-3\" x 25'-7\"), first floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "1-9"}
-  plan-1-10:
-    type: build123d
-    path: rooms.py
-    desc: "Dining Room (15'-1\" x 25'-10\"), first floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "1-10"}
-  plan-1-11:
-    type: build123d
-    path: rooms.py
-    desc: "Solarium (17'-3\" x 17'-3\", octagonal), first floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "1-11"}
-  plan-2-1:
-    type: build123d
-    path: rooms.py
-    desc: "Spanish Bedroom (15'-2\" x 15'-4\"), second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-1"}
-  plan-2-2:
-    type: build123d
-    path: rooms.py
-    desc: "Bath (6'-4\" x 10'-0\"), second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-2"}
-  plan-2-3:
-    type: build123d
-    path: rooms.py
-    desc: "Closets, second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-3"}
-  plan-2-4:
-    type: build123d
-    path: rooms.py
-    desc: "Spanish Sitting Room (15'-4\" x 25'-0\" per label), second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-4"}
-  plan-2-5:
-    type: build123d
-    path: rooms.py
-    desc: "Gallery, west leg, second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-5"}
-  plan-2-6:
-    type: build123d
-    path: rooms.py
-    desc: "Gallery, north, second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-6"}
-  plan-2-7:
-    type: build123d
-    path: rooms.py
-    desc: "Gallery, south, second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-7"}
-  plan-2-8:
-    type: build123d
-    path: rooms.py
-    desc: "Gallery, east leg with stair, second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-8"}
-  plan-2-9:
-    type: build123d
-    path: rooms.py
-    desc: "Bath (6'-4\" x 10'-0\"), second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-9"}
-  plan-2-10:
-    type: build123d
-    path: rooms.py
-    desc: "Closet (8'-0\" x 10'-0\"), second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-10"}
-  plan-2-11:
-    type: build123d
-    path: rooms.py
-    desc: "Mr. Johnson's Room (15'-4\" x 15'-4\"), second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-11"}
-  plan-2-12:
-    type: build123d
-    path: rooms.py
-    desc: "Mrs. Johnson's Room (15'-2\" x 25'-10\"), second floor: its floor's outline."
-    parameters:
-      room: {type: string, default: "2-12"}
+      storey: {type: int, default: 2, desc: "Which storey's plan, from 1 to 2."}
+      room: {type: string, default: "", desc: "One room of it alone, as '2-1'; every room by default."}
+    render:
+      svg:
+        prefix: images
+        reproducible: true
 
 parts:
   shell:
@@ -264,6 +148,7 @@ parts:
     desc: A storey's floor, inside the shell.
     parameters:
       storey: {type: int, default: 1, desc: "Which storey's, from 1 to 2."}
+      part: {type: string, default: "", desc: "All of it, or a part a storey too large for one picture is pictured in: 'main', 'wings', 'wing' or 'additions'."}
       color: {type: string, default: ":floorboards"}
   aftonconsole:
     type: basic
@@ -398,7 +283,7 @@ scenes:
   room-1-1:
     type: walls
     desc: "The walls of Scotty's Bedroom (14'-10\" x 25'-9\"), first floor."
-    sketch: plan-1-1
+    sketch: "plan-1;room=1-1"
     height: 3439
     thickness: 76
     parameters:
@@ -406,7 +291,7 @@ scenes:
   room-1-2:
     type: walls
     desc: "The walls of Lower Music Room (15'-2\" x 25'-2\"), first floor."
-    sketch: plan-1-2
+    sketch: "plan-1;room=1-2"
     height: 3439
     thickness: 76
     parameters:
@@ -414,7 +299,7 @@ scenes:
   room-1-3:
     type: walls
     desc: "The walls of West passage (north), first floor."
-    sketch: plan-1-3
+    sketch: "plan-1;room=1-3"
     height: 3439
     thickness: 76
     parameters:
@@ -422,7 +307,7 @@ scenes:
   room-1-4:
     type: walls
     desc: "The walls of Scotty's Bath, first floor."
-    sketch: plan-1-4
+    sketch: "plan-1;room=1-4"
     height: 3439
     thickness: 76
     parameters:
@@ -430,7 +315,7 @@ scenes:
   room-1-5:
     type: walls
     desc: "The walls of West passage (south), first floor."
-    sketch: plan-1-5
+    sketch: "plan-1;room=1-5"
     height: 3439
     thickness: 76
     parameters:
@@ -438,7 +323,7 @@ scenes:
   room-1-6:
     type: walls
     desc: "The walls of Living Hall (31'-1\" x 31'-8\"), first floor."
-    sketch: plan-1-6
+    sketch: "plan-1;room=1-6"
     height: 3439
     thickness: 76
     parameters:
@@ -446,7 +331,7 @@ scenes:
   room-1-7:
     type: walls
     desc: "The walls of Stair hall (main stair, fountain alcove), first floor."
-    sketch: plan-1-7
+    sketch: "plan-1;room=1-7"
     height: 3439
     thickness: 76
     parameters:
@@ -454,7 +339,7 @@ scenes:
   room-1-8:
     type: walls
     desc: "The walls of Service passage / telephone, first floor."
-    sketch: plan-1-8
+    sketch: "plan-1;room=1-8"
     height: 3439
     thickness: 76
     parameters:
@@ -462,7 +347,7 @@ scenes:
   room-1-9:
     type: walls
     desc: "The walls of Kitchen (15'-3\" x 25'-7\"), first floor."
-    sketch: plan-1-9
+    sketch: "plan-1;room=1-9"
     height: 3439
     thickness: 76
     parameters:
@@ -470,7 +355,7 @@ scenes:
   room-1-10:
     type: walls
     desc: "The walls of Dining Room (15'-1\" x 25'-10\"), first floor."
-    sketch: plan-1-10
+    sketch: "plan-1;room=1-10"
     height: 3439
     thickness: 76
     parameters:
@@ -478,7 +363,7 @@ scenes:
   room-1-11:
     type: walls
     desc: "The walls of Solarium (17'-3\" x 17'-3\", octagonal), first floor."
-    sketch: plan-1-11
+    sketch: "plan-1;room=1-11"
     height: 3439
     thickness: 76
     parameters:
@@ -486,7 +371,7 @@ scenes:
   room-2-1:
     type: walls
     desc: "The walls of Spanish Bedroom (15'-2\" x 15'-4\"), second floor."
-    sketch: plan-2-1
+    sketch: "plan-2;room=2-1"
     height: 2847
     thickness: 76
     parameters:
@@ -494,7 +379,7 @@ scenes:
   room-2-2:
     type: walls
     desc: "The walls of Bath (6'-4\" x 10'-0\"), second floor."
-    sketch: plan-2-2
+    sketch: "plan-2;room=2-2"
     height: 2847
     thickness: 76
     parameters:
@@ -502,7 +387,7 @@ scenes:
   room-2-3:
     type: walls
     desc: "The walls of Closets, second floor."
-    sketch: plan-2-3
+    sketch: "plan-2;room=2-3"
     height: 2847
     thickness: 76
     parameters:
@@ -510,7 +395,7 @@ scenes:
   room-2-4:
     type: walls
     desc: "The walls of Spanish Sitting Room (15'-4\" x 25'-0\" per label), second floor."
-    sketch: plan-2-4
+    sketch: "plan-2;room=2-4"
     height: 2847
     thickness: 76
     parameters:
@@ -518,7 +403,7 @@ scenes:
   room-2-5:
     type: walls
     desc: "The walls of Gallery, west leg, second floor."
-    sketch: plan-2-5
+    sketch: "plan-2;room=2-5"
     height: 2847
     thickness: 76
     parameters:
@@ -526,7 +411,7 @@ scenes:
   room-2-6:
     type: walls
     desc: "The walls of Gallery, north, second floor."
-    sketch: plan-2-6
+    sketch: "plan-2;room=2-6"
     height: 2847
     thickness: 76
     parameters:
@@ -534,7 +419,7 @@ scenes:
   room-2-7:
     type: walls
     desc: "The walls of Gallery, south, second floor."
-    sketch: plan-2-7
+    sketch: "plan-2;room=2-7"
     height: 2847
     thickness: 76
     parameters:
@@ -542,7 +427,7 @@ scenes:
   room-2-8:
     type: walls
     desc: "The walls of Gallery, east leg with stair, second floor."
-    sketch: plan-2-8
+    sketch: "plan-2;room=2-8"
     height: 2847
     thickness: 76
     parameters:
@@ -550,7 +435,7 @@ scenes:
   room-2-9:
     type: walls
     desc: "The walls of Bath (6'-4\" x 10'-0\"), second floor."
-    sketch: plan-2-9
+    sketch: "plan-2;room=2-9"
     height: 2847
     thickness: 76
     parameters:
@@ -558,7 +443,7 @@ scenes:
   room-2-10:
     type: walls
     desc: "The walls of Closet (8'-0\" x 10'-0\"), second floor."
-    sketch: plan-2-10
+    sketch: "plan-2;room=2-10"
     height: 2847
     thickness: 76
     parameters:
@@ -566,7 +451,7 @@ scenes:
   room-2-11:
     type: walls
     desc: "The walls of Mr. Johnson's Room (15'-4\" x 15'-4\"), second floor."
-    sketch: plan-2-11
+    sketch: "plan-2;room=2-11"
     height: 2847
     thickness: 76
     parameters:
@@ -574,7 +459,7 @@ scenes:
   room-2-12:
     type: walls
     desc: "The walls of Mrs. Johnson's Room (15'-2\" x 25'-10\"), second floor."
-    sketch: plan-2-12
+    sketch: "plan-2;room=2-12"
     height: 2847
     thickness: 76
     parameters:
@@ -585,12 +470,52 @@ scenes:
     desc: "First floor, furnished: its floor, its rooms' walls, its furniture."
     # Furnished: longer to build and to check than PartCAD waits by default.
     timeout: 1800
+    render:
+      png:
+        prefix: images
+        style: shaded
+        size: 1600x1000
+        viewport_origin: [100, -100, 100]
+        viewport_up: [0, 0, 1]
+  storey-1-above:
+    type: assy
+    path: storey-1-above.assy
+    desc: "First floor from above: its rooms' walls and furniture, as a plan."
+    # Furnished: longer to build and to check than PartCAD waits by default.
+    timeout: 1800
+    render:
+      png:
+        prefix: images
+        style: shaded
+        size: 1600x1000
+        viewport_origin: [0, 0, 100]
+        viewport_up: [0, 1, 0]
   storey-2:
     type: assy
     path: storey-2.assy
     desc: "Second floor, furnished: its floor, its rooms' walls, its furniture."
     # Furnished: longer to build and to check than PartCAD waits by default.
     timeout: 1800
+    render:
+      png:
+        prefix: images
+        style: shaded
+        size: 1600x1000
+        viewport_origin: [100, -100, 100]
+        viewport_up: [0, 0, 1]
+  storey-2-above:
+    type: assy
+    path: storey-2-above.assy
+    desc: "Second floor from above: its rooms' walls and furniture, as a plan."
+    # Furnished: longer to build and to check than PartCAD waits by default.
+    timeout: 1800
+    render:
+      png:
+        prefix: images
+        style: shaded
+        size: 1600x1000
+        viewport_origin: [0, 0, 100]
+        viewport_up: [0, 1, 0]
   interior:
     type: assy
     path: interior.assy
@@ -600,9 +525,17 @@ scenes:
   house:
     type: assy
     path: house.assy
-    desc: "Scotty's Castle (Death Valley Ranch, Main House): its outside, and its furnished inside within it."
+    desc: "Scotty's Castle (Death Valley Ranch, Main House): its outside, one solid painted face by face, and its furnished inside within it."
     # Furnished: longer to build and to check than PartCAD waits by default.
     timeout: 1800
+    render:
+      png:
+        prefix: images
+        style: shaded
+        size: 1600x1000
+        viewport_origin: [100, -100, 100]
+        viewport_up: [0, 0, 1]
+        filter: {shell: null}
   estate:
     type: assy
     path: estate.assy
@@ -610,12 +543,14 @@ scenes:
     gravity: [0, 0, -9.81]
     # Furnished: longer to build and to check than PartCAD waits by default.
     timeout: 1800
-  outside:
-    type: assy
-    path: outside.assy
-    desc: "Scotty's Castle (Death Valley Ranch, Main House) seen from outside: the landscape and the house's shell, without its inside."
-    # Furnished: longer to build and to check than PartCAD waits by default.
-    timeout: 1800
+    render:
+      png:
+        prefix: images
+        style: shaded
+        size: 1600x1000
+        viewport_origin: [100, -100, 100]
+        viewport_up: [0, 0, 1]
+        filter: {landscape: null, house: {shell: null}}
 
 render:
   readme:

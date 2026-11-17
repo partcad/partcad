@@ -3,11 +3,13 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-# A room's floor, seen from above: the outline its walls stand on, as HABS
-# measured it. Written by '../make_estate.py' from 'estate.json'; run that again
-# rather than edit it.
+# A storey's plan, seen from above: the outlines of its rooms, which their walls
+# stand on, as HABS measured them - every room of the storey, all of them on its
+# level, or the one 'room' names ('2-3' is the third of the second storey).
+# Written by '../make_estate.py' from 'estate.json'; run that again rather than
+# edit it.
 
-from build123d import Polygon
+from build123d import Compound, Polygon
 
 ROOMS = {'1-1': [[199.0, 282.0], [5760.0, 282.0], [5760.0, 6087.0], [199.0, 6087.0]],
  '1-10': [[15418.0, 6412.0], [19984.0, 6412.0], [19984, 9794], [15418, 9794]],
@@ -40,8 +42,24 @@ ROOMS = {'1-1': [[199.0, 282.0], [5760.0, 282.0], [5760.0, 6087.0], [199.0, 6087
  '3-6': [[5366.0, 6415.0], [10136.5, 6415.0], [10136.5, 10106.5], [5366.0, 10106.5]],
  '3-7': [[10227.5, 6415.0], [11955.5, 6415.0], [11955.5, 25600.5], [10227.5, 25600.5]]}
 
-room = "1-1"
-result = Polygon(*[tuple(p) for p in ROOMS[room]], align=None)
+storey = 1
+room = ""
+
+
+def outline(name):
+    return Polygon(*[tuple(p) for p in ROOMS[name]], align=None)
+
+
+def order(name):
+    return tuple(int(n) for n in name.split("-"))
+
+
+if room:
+    result = outline(room)
+else:
+    # Side by side: an outline is its room's inside face, and walls stand
+    # between rooms, so no two outlines touch.
+    result = Compound([outline(name) for name in sorted(ROOMS, key=order) if order(name)[0] == int(storey)])
 
 if "show_object" in locals():
-    show_object(result, name=room)  # noqa: F821
+    show_object(result, name=room or "plan-%s" % storey)  # noqa: F821

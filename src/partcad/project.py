@@ -4976,21 +4976,22 @@ class Project(project_config.Configuration):
                 lines += ["## Parts", ""]
                 lines += part_lines
 
-        if self.interfaces and "interfaces" not in exclude:
-            lines += ["## Interfaces"]
-            lines += [""]
-            shape_names = declared(self.interfaces)
-            for name in shape_names:
-                shape = self.interfaces[name]
-                lines += add_section(name, name, shape, render_cfg)
-
-        if self.sketches and "sketches" not in exclude:
-            lines += ["## Sketches"]
-            lines += [""]
-            shape_names = declared(self.sketches)
-            for name in shape_names:
-                shape = self.sketches[name]
-                lines += add_section(name, name, shape, render_cfg)
+        # Interfaces and sketches as parts are: the heading only over what came of
+        # it. A package that pictures none of its sketches - it keeps them to
+        # build its parts and scenes from - got a "## Sketches" heading with
+        # nothing under it.
+        for kind, heading, objects in (
+            ("interfaces", "## Interfaces", self.interfaces),
+            ("sketches", "## Sketches", self.sketches),
+        ):
+            if not objects or kind in exclude:
+                continue
+            kind_lines = []
+            for name in declared(objects):
+                kind_lines += add_section(name, name, objects[name], render_cfg)
+            if kind_lines:
+                lines += [heading, ""]
+                lines += kind_lines
 
         if self.software and "software" not in exclude:
             # A table rather than the per-object sections above: software has no

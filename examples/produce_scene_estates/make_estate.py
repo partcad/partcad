@@ -27,12 +27,13 @@ What is written, and why it is the way it is:
   * the house's outside ('shell', from shell_template.py): one solid, every face
     painted, with the house's air taken out of it - the footprint inset by the
     shell's thickness, up to the underside of the roof;
-  * its inside: a floor per storey, and the walls of every room - a 'walls'
-    scene on the room's outline, the room's walls standing outside it - in that
-    air. The shell keeps what is left of each outer wall once the rooms' walls
-    stand against it, and each storey's rooms' walls are as thick as its
-    thinnest partition allows. Under a roof, a room's walls stop below it, as a
-    knee wall does;
+  * its inside: a floor per storey, its plan - one sketch of the outlines of
+    every room on its level - and the walls of every room, a 'walls' scene on
+    the room's outline in that plan, standing outside it, in that air. The
+    shell keeps what is left of each outer wall once the rooms' walls stand
+    against it, and each storey's rooms' walls are as thick as its thinnest
+    partition allows. Under a roof, a room's walls stop below it, as a knee
+    wall does;
   * its furniture: models of NVIDIA's ArchVis and SimReady collections, each a
     'basic' part of its measured size - what is collided with, weighed and
     exported - drawn as the model ('visual:'), set against the walls of the
@@ -40,6 +41,14 @@ What is written, and why it is the way it is:
 
 So the house, its rooms, its furniture and the ground share no space, and a
 scene of all of them is one an interference check passes.
+
+The scenes nest, each one a picture in the package's README: 'estate' (the
+landscape and the house) holds 'house' (the shell and the interior), which holds
+a scene per storey, each with a view of it from above beside it; each storey's
+plan is a drawing. A storey with more furniture than one picture has memory for
+is two scenes - its main block, and the rest - which the storey's scene places,
+and each is pictured. What each picture is, and where it goes, is a 'render:' on
+the object pictured, and 'render_images.sh' renders them, one at a time.
 """
 
 import argparse
@@ -241,8 +250,6 @@ PROFILES = {
             "wing_north_side": ("x", "max", 1),
         },
         "paint": {"walls": "clapboard", "roof": "shingle", "trim": "trim", "stone": "fieldstone"},
-        # The storey the README pictures: the first floor's furniture is more than one render has memory for.
-        "picture": 3,
         "block_walls": {"rear wing": "brick"},
         "colours": {
             "clapboard": ("#EAE3D2", "Painted clapboard over the hewn logs of the 1862 house."),
@@ -255,7 +262,6 @@ PROFILES = {
     },
     "scottys-castle": {
         "sides": {"front_south": ("y", "min", 0)},
-        "picture": 2,
         "skip_kinds": ("porch arcade", "open loggia"),
         "paint": {"walls": "stucco", "roof": "clay-tile", "trim": "timber", "stone": "flagstone"},
         "colours": {
@@ -1169,7 +1175,10 @@ FLOOR_SCRIPT = """#
 # Licensed under Apache License, Version 2.0.
 #
 # A storey's floor: the blocks its rooms are in, inside their walls and a
-# millimetre clear of them, %(slab)s mm thick under the storey's level. Written by
+# millimetre clear of them, %(slab)s mm thick under the storey's level - or one of
+# the parts of it a storey too large for one picture is pictured in ('main', the
+# main block's, then 'wings', the rest - or 'wing', the largest wing, before
+# them). Written by
 # '../make_estate.py' from 'estate.json'; run that again rather than edit it.
 
 from build123d import Kind, Location, Polygon, extrude, offset
@@ -1177,6 +1186,7 @@ from build123d import Kind, Location, Polygon, extrude, offset
 DATA = %(data)s
 
 storey = 1
+part = ""
 
 
 def floor(index):
@@ -1186,7 +1196,23 @@ def floor(index):
         face = offset(Polygon(*[tuple(p) for p in outline], align=None), amount=-inset, kind=Kind.INTERSECTION)
         slab = extrude(face.moved(Location((0, 0, level - DATA["slab"]))), amount=DATA["slab"])
         found = slab if found is None else found + slab
-    return found
+    if not part:
+        return found
+    # Part by part: each the floor within its blocks' outlines, less what the parts before it took, and the last
+    # whatever is left - so that the parts are the whole floor, and share nothing.
+    parts = DATA["parts"][index]
+    taken = None
+    for name, outlines in parts:
+        region = None
+        for outline in outlines:
+            face = Polygon(*[tuple(p) for p in outline], align=None).moved(Location((0, 0, level - DATA["slab"] - 1)))
+            prism = extrude(face, amount=DATA["slab"] + 2)
+            region = prism if region is None else region + prism
+        if name == part:
+            piece = found if name == parts[-1][0] else found & region
+            return piece if taken is None else piece - taken
+        taken = region if taken is None else taken + region
+    raise ValueError("storey %%s is not pictured in parts, and has no part '%%s'" %% (storey, part))
 
 
 result = floor(int(storey) - 1)
@@ -1200,19 +1226,37 @@ ROOMS_SCRIPT = """#
 #
 # Licensed under Apache License, Version 2.0.
 #
-# A room's floor, seen from above: the outline its walls stand on, as HABS
-# measured it. Written by '../make_estate.py' from 'estate.json'; run that again
-# rather than edit it.
+# A storey's plan, seen from above: the outlines of its rooms, which their walls
+# stand on, as HABS measured them - every room of the storey, all of them on its
+# level, or the one 'room' names ('2-3' is the third of the second storey).
+# Written by '../make_estate.py' from 'estate.json'; run that again rather than
+# edit it.
 
-from build123d import Polygon
+from build123d import Compound, Polygon
 
 ROOMS = %(rooms)s
 
-room = %(first)s
-result = Polygon(*[tuple(p) for p in ROOMS[room]], align=None)
+storey = 1
+room = ""
+
+
+def outline(name):
+    return Polygon(*[tuple(p) for p in ROOMS[name]], align=None)
+
+
+def order(name):
+    return tuple(int(n) for n in name.split("-"))
+
+
+if room:
+    result = outline(room)
+else:
+    # Side by side: an outline is its room's inside face, and walls stand
+    # between rooms, so no two outlines touch.
+    result = Compound([outline(name) for name in sorted(ROOMS, key=order) if order(name)[0] == int(storey)])
 
 if "show_object" in locals():
-    show_object(result, name=room)  # noqa: F821
+    show_object(result, name=room or "plan-%%s" %% storey)  # noqa: F821
 """
 
 
@@ -1223,10 +1267,15 @@ def package(estate_dir):
     with open(os.path.join(HERE, "shell_template.py"), encoding="utf-8") as f:
         template = f.read()
     write(os.path.join(estate_dir, "shell.py"), template.replace('"@DATA@"', literal(shell_data(m))))
+    furniture = furnish(m, sizes)
     floors = {
         "levels": [st["level"] for st in m.storeys],
         "outlines": [[m.blocks[i]["outline"] for i in st["blocks"]] for st in m.storeys],
         "insets": [[m.blocks[i]["thick"] + GAP for i in st["blocks"]] for st in m.storeys],
+        "parts": [
+            [[part, [m.blocks[b]["outline"] for b in blocks]] for part, _, blocks, _ in parts_of(m, st, k, furniture) if part]
+            for k, st in enumerate(m.storeys, 1)
+        ],
         "slab": SLAB,
     }
     write(os.path.join(estate_dir, "floor.py"), FLOOR_SCRIPT % {"slab": fmt(SLAB), "data": literal(floors)})
@@ -1234,8 +1283,7 @@ def package(estate_dir):
     for k, st in enumerate(m.storeys, 1):
         for i, outline in enumerate(st["outlines"], 1):
             rooms["%d-%d" % (k, i)] = [[round(x, 1), round(y, 1)] for x, y in outline]
-    write(os.path.join(estate_dir, "rooms.py"), ROOMS_SCRIPT % {"rooms": literal(rooms), "first": json.dumps(sorted(rooms)[0])})
-    furniture = furnish(m, sizes)
+    write(os.path.join(estate_dir, "rooms.py"), ROOMS_SCRIPT % {"rooms": literal(rooms)})
     graded = landscape_level(estate_dir)
     write_scenes(m, estate_dir, furniture, graded, sizes)
     write(os.path.join(estate_dir, "partcad.yaml"), package_yaml(m, estate_dir, furniture, sizes, graded))
@@ -1259,40 +1307,123 @@ def location(x, y, z, angle=0.0):
     return "[[%s, %s, %s], [0, 0, 1], %s]" % (fmt(x), fmt(y), fmt(z), fmt(angle))
 
 
-def write_scenes(m, estate_dir, furniture, graded, sizes):
-    for k, st in enumerate(m.storeys, 1):
-        lines = [
-            "# %s of %s: its floor, its rooms' walls, its furniture. Written by '../make_estate.py'." % (st["name"], m.estate["name"]),
-            "links:",
-            "  - part: floor",
-            "    name: floor",
-            "    params: {storey: %d}" % k,
+def room_links(st, k, i, furniture, sizes):
+    """The links of room 'i' (1 is the first) of storey 'k': its walls, and its furniture where it stands."""
+    room = st["rooms"][i - 1]
+    lines = []
+    lines += [
+        "  - scene: room-%d-%d" % (k, i),
+        "    name: room-%d-%d" % (k, i),
+        "    description: %s" % yaml_string(room["name"]),
+        "    location: %s" % location(0, 0, st["level"] + GAP),
+        "    fixed: true",
+    ]
+    counts = {}
+    for part, x, y, z, heading in furniture.get((k - 1, i - 1), []):
+        name = short(part)
+        counts[name] = counts.get(name, 0) + 1
+        # Placed by its model's origin: the middle of its footprint, less the turned offset of its box.
+        x0, y0, z0, x1, y1, z1 = sizes[full(part)]
+        a = math.radians(heading)
+        bx, by = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+        ox, oy = x - (math.cos(a) * bx - math.sin(a) * by), y - (math.sin(a) * bx + math.cos(a) * by)
+        lines += [
+            "  - part: %s" % name,
+            "    name: room-%d-%d-%s-%d" % (k, i, name, counts[name]),
+            "    location: %s" % location(round(ox, 1), round(oy, 1), round(z - z0, 1), heading),
             "    fixed: true",
         ]
-        for i, room in enumerate(st["rooms"], 1):
-            lines += [
-                "  - scene: room-%d-%d" % (k, i),
-                "    name: room-%d-%d" % (k, i),
-                "    description: %s" % yaml_string(room["name"]),
-                "    location: %s" % location(0, 0, st["level"] + GAP),
+    return lines
+
+
+# What one picture has memory for: a furnished storey is drawn with every model of its furniture loaded at once - 29
+# pieces took 11 GB, and 32, Scotty's Castle's first floor, are the most drawn here in 16 (34 of Grant-Kohrs' were
+# not). A storey with more is pictured a part at a time, each part a scene of its own, which the storey's scene
+# places: its rooms in the house's main block ('main'), then the rest ('wings') - or, where the rest is more than
+# that still, its largest wing ('wing') before the rest. Named so that the README, which sorts them, lists them so.
+MAX_PICTURED = 32
+
+
+def block_label(m, b):
+    """A block's name, short: 'rear wing (1890 kohrs addition, ...)' is the rear wing."""
+    return m.blocks[b]["name"].split("(")[0].split(",")[0].strip()
+
+
+def parts_of(m, st, k, furniture):
+    """'[(part, room indices, blocks, label)]': the scenes storey 'k' is pictured as; one, with part None, if whole."""
+    rooms = list(range(len(st["rooms"])))
+
+    def pieces(chosen):
+        return sum(len(furniture.get((k - 1, i), [])) for i in chosen)
+
+    by_block = {}
+    for i in rooms:
+        by_block.setdefault(st["room_blocks"][i], []).append(i)
+    if pieces(rooms) <= MAX_PICTURED or 0 not in by_block or None in by_block or len(by_block) < 2:
+        return [(None, rooms, sorted(by_block, key=str), st["name"])]
+    others = sorted((b for b in by_block if b != 0), key=lambda b: (-pieces(by_block[b]), b))
+    rest = sorted(i for b in others for i in by_block[b])
+    parts = [("main", by_block[0], [0], "main block")]
+    if pieces(rest) <= MAX_PICTURED or len(others) < 2:
+        return parts + [("wings", rest, others, "wings")]
+    wing, small = others[0], others[1:]
+    return parts + [
+        ("wing", by_block[wing], [wing], block_label(m, wing)),
+        ("wings", sorted(i for b in small for i in by_block[b]), small, "other wings"),
+    ]
+
+
+def part_title(st, part, label):
+    return st["name"] if part is None else "%s (%s)" % (st["name"], label)
+
+
+def above(estate_dir, m, scene, title):
+    """The scene of 'scene' seen from above: it alone, for a picture of it as a plan."""
+    write(
+        os.path.join(estate_dir, "%s-above.assy" % scene),
+        "\n".join(
+            [
+                "# %s of %s, seen from above: for a picture of it as a plan. Written by '../make_estate.py'." % (title, m.estate["name"]),
+                "links:",
+                "  - scene: %s" % scene,
+                "    name: %s" % scene,
                 "    fixed: true",
             ]
-            counts = {}
-            for part, x, y, z, heading in furniture.get((k - 1, i - 1), []):
-                name = short(part)
-                counts[name] = counts.get(name, 0) + 1
-                # Placed by its model's origin: the middle of its footprint, less the turned offset of its box.
-                x0, y0, z0, x1, y1, z1 = sizes[full(part)]
-                a = math.radians(heading)
-                bx, by = (x0 + x1) / 2.0, (y0 + y1) / 2.0
-                ox, oy = x - (math.cos(a) * bx - math.sin(a) * by), y - (math.sin(a) * bx + math.cos(a) * by)
-                lines += [
-                    "  - part: %s" % name,
-                    "    name: room-%d-%d-%s-%d" % (k, i, name, counts[name]),
-                    "    location: %s" % location(round(ox, 1), round(oy, 1), round(z - z0, 1), heading),
-                    "    fixed: true",
-                ]
-        write(os.path.join(estate_dir, "storey-%d.assy" % k), "\n".join(lines) + "\n")
+        )
+        + "\n",
+    )
+    return "%s-above.assy" % scene
+
+
+def write_scenes(m, estate_dir, furniture, graded, sizes):
+    written = set()
+    for k, st in enumerate(m.storeys, 1):
+        parts = parts_of(m, st, k, furniture)
+        for part, rooms, _, label in parts:
+            scene = "storey-%d" % k if part is None else "storey-%d-%s" % (k, part)
+            title = part_title(st, part, label)
+            lines = [
+                "# %s of %s: its floor, its rooms' walls, its furniture. Written by '../make_estate.py'." % (title, m.estate["name"]),
+                "links:",
+                "  - part: floor",
+                "    name: floor",
+                "    params: {storey: %d}" % k if part is None else "    params: {storey: %d, part: %s}" % (k, part),
+                "    fixed: true",
+            ]
+            for i in rooms:
+                lines += room_links(st, k, i + 1, furniture, sizes)
+            write(os.path.join(estate_dir, "%s.assy" % scene), "\n".join(lines) + "\n")
+            written |= {"%s.assy" % scene, above(estate_dir, m, scene, title)}
+        if parts[0][0] is not None:
+            lines = ["# %s of %s: its parts. Written by '../make_estate.py'." % (st["name"], m.estate["name"]), "links:"]
+            for part, *_ in parts:
+                lines += ["  - scene: storey-%d-%s" % (k, part), "    name: storey-%d-%s" % (k, part), "    fixed: true"]
+            write(os.path.join(estate_dir, "storey-%d.assy" % k), "\n".join(lines) + "\n")
+            written.add("storey-%d.assy" % k)
+    # What an earlier run wrote of a storey and this one did not.
+    for name in os.listdir(estate_dir):
+        if name.startswith("storey-") and name.endswith(".assy") and name not in written:
+            os.remove(os.path.join(estate_dir, name))
     lines = ["# The inside of %s: every storey. Written by '../make_estate.py'." % m.estate["name"], "links:"]
     for k, st in enumerate(m.storeys, 1):
         lines += ["  - scene: storey-%d" % k, "    name: storey-%d" % k, "    fixed: true"]
@@ -1313,28 +1444,13 @@ def write_scenes(m, estate_dir, furniture, graded, sizes):
         )
         + "\n",
     )
+    # Retired: 'estate' is pictured as this was, by leaving out of its picture the inside nobody outside sees.
+    retired = os.path.join(estate_dir, "outside.assy")
+    if os.path.exists(retired):
+        os.remove(retired)
     if graded is None:
         return
     tx, ty = to_land(m, 0.0, 0.0)
-    write(
-        os.path.join(estate_dir, "outside.assy"),
-        "\n".join(
-            [
-                "# %s seen from outside: the landscape and the house's shell, without the inside nobody outside" % m.estate["name"],
-                "# sees - which is most of what there is to draw. Written by '../make_estate.py'.",
-                "links:",
-                "  - package: landscape",
-                "    scene: landscape",
-                "    name: landscape",
-                "    fixed: true",
-                "  - part: shell",
-                "    name: shell",
-                "    location: %s" % location(tx, ty, graded + GAP, turn(m)),
-                "    fixed: true",
-            ]
-        )
-        + "\n",
-    )
     write(
         os.path.join(estate_dir, "estate.assy"),
         "\n".join(
@@ -1360,6 +1476,34 @@ def yaml_string(text):
     return json.dumps(text)
 
 
+# The pictures in the README, each a 'render:' on the object pictured: rendered by 'render_images.sh', one at a time,
+# since the scenes declare 'timeout:' and the examples' CI sweep ('--fast-only') passes them over. A furnished storey
+# is drawn through the walls nearest the camera (see '//builtin/building:wall'), from the front right, above.
+PICTURE_SIZE = "1600x1000"
+VIEWS = {"iso": ([100, -100, 100], [0, 0, 1]), "top": ([0, 0, 100], [0, 1, 0])}
+
+
+def picture(view, keep=None):
+    """The lines of a scene's 'render:': a shaded PNG from 'view', of the links 'keep' names ('pc render --filter')."""
+    origin, up = VIEWS[view]
+    lines = [
+        "    render:",
+        "      png:",
+        "        prefix: images",
+        "        style: shaded",
+        "        size: %s" % PICTURE_SIZE,
+        "        viewport_origin: %s" % json.dumps(origin),
+        "        viewport_up: %s" % json.dumps(up),
+    ]
+    if keep:
+        lines += ["        filter: %s" % keep]
+    return lines
+
+
+# A plan is a drawing, and is rendered by the examples' CI as everything else there is: the same bytes every time.
+DRAWING = ["    render:", "      svg:", "        prefix: images", "        reproducible: true"]
+
+
 def package_yaml(m, estate_dir, furniture, sizes, graded):
     e = m.estate
     out = [
@@ -1369,9 +1513,11 @@ def package_yaml(m, estate_dir, furniture, sizes, graded):
         "",
         "docs:",
         "  name: %s" % yaml_string(e["name"]),
-        "  usage: |",
     ]
-    out += ["    " + line if line else "" for line in usage_of(m, graded, estate_dir).split("\n")]
+    split = [st["name"] for k, st in enumerate(m.storeys, 1) if parts_of(m, st, k, furniture)[0][0] is not None]
+    intro, usage = usage_of(m, graded, estate_dir, split)
+    out += ["  intro: |"] + ["    " + line if line else "" for line in intro.split("\n")]
+    out += ["  usage: |"] + ["    " + line if line else "" for line in usage.split("\n")]
     out += [
         "",
         "# A house that stands, painted to be looked at: nothing here is made.",
@@ -1383,15 +1529,17 @@ def package_yaml(m, estate_dir, furniture, sizes, graded):
         out += ["  %s:" % name, "    desc: %s" % yaml_string(desc), '    display: "%s"' % display, "    manufacturable: false"]
     out += ["", "sketches:"]
     for k, st in enumerate(m.storeys, 1):
-        for i, room in enumerate(st["rooms"], 1):
-            out += [
-                "  plan-%d-%d:" % (k, i),
-                "    type: build123d",
-                "    path: rooms.py",
-                "    desc: %s" % yaml_string("%s, %s: its floor's outline." % (room["name"], st["name"].lower())),
-                "    parameters:",
-                '      room: {type: string, default: "%d-%d"}' % (k, i),
-            ]
+        # One plan for the storey: its rooms are all on its level (each stands at the storey's 'level').
+        rooms = "; ".join("%d-%d %s" % (k, i, room["name"]) for i, room in enumerate(st["rooms"], 1))
+        out += [
+            "  plan-%d:" % k,
+            "    type: build123d",
+            "    path: rooms.py",
+            "    desc: %s" % yaml_string("%s, its plan: the outlines of its rooms, which their walls stand on - %s." % (st["name"], rooms)),
+            "    parameters:",
+            "      storey: {type: int, default: %d, desc: %s}" % (k, yaml_string("Which storey's plan, from 1 to %d." % len(m.storeys))),
+            '      room: {type: string, default: "", desc: "One room of it alone, as \'%d-1\'; every room by default."}' % k,
+        ] + DRAWING
     out += [
         "",
         "parts:",
@@ -1408,6 +1556,7 @@ def package_yaml(m, estate_dir, furniture, sizes, graded):
         "    desc: A storey's floor, inside the shell.",
         "    parameters:",
         "      storey: {type: int, default: 1, desc: %s}" % yaml_string("Which storey's, from 1 to %d." % len(m.storeys)),
+        '      part: {type: string, default: "", desc: "All of it, or a part a storey too large for one picture is pictured in: \'main\', \'wing\' or \'wings\'."}',
         '      color: {type: string, default: ":floorboards"}',
     ]
     used = sorted({short(p) for items in furniture.values() for p, *_ in items})
@@ -1435,27 +1584,52 @@ def package_yaml(m, estate_dir, furniture, sizes, graded):
                 "  room-%d-%d:" % (k, i),
                 "    type: walls",
                 "    desc: %s" % yaml_string("The walls of %s, %s." % (room["name"], st["name"].lower())),
-                "    sketch: plan-%d-%d" % (k, i),
+                "    sketch: %s" % yaml_string("plan-%d;room=%d-%d" % (k, k, i)),
                 "    height: %s" % fmt(st["heights"][i - 1]),
                 "    thickness: %s" % fmt(st["thickness"]),
                 "    parameters:",
                 '      color: {type: string, default: ":%s"}' % WALL_PLASTER,
             ]
-    slow = "    # Furnished: longer to build and to check than PartCAD waits by default.\n    timeout: 1800"
+    slow = ["    # Furnished: longer to build and to check than PartCAD waits by default.", "    timeout: 1800"]
     for k, st in enumerate(m.storeys, 1):
-        out += [
-            "  storey-%d:" % k,
-            "    type: assy",
-            "    path: storey-%d.assy" % k,
-            "    desc: %s" % yaml_string("%s, furnished: its floor, its rooms' walls, its furniture." % st["name"]),
-        ] + slow.split("\n")
-    out += ["  interior:", "    type: assy", "    path: interior.assy", "    desc: Every storey, furnished."] + slow.split("\n")
+        parts = parts_of(m, st, k, furniture)
+        if parts[0][0] is not None:
+            # Too much furniture for one picture: the storey places its parts, and they are pictured.
+            out += [
+                "  storey-%d:" % k,
+                "    type: assy",
+                "    path: storey-%d.assy" % k,
+                "    desc: %s" % yaml_string(
+                    "%s, furnished, as the scenes of its parts - %s - one picture having memory for none of it whole."
+                    % (st["name"], ", ".join(label for _, _, _, label in parts))
+                ),
+            ] + slow
+        for part, _, _, label in parts:
+            scene = "storey-%d" % k if part is None else "storey-%d-%s" % (k, part)
+            title = part_title(st, part, label)
+            out += [
+                "  %s:" % scene,
+                "    type: assy",
+                "    path: %s.assy" % scene,
+                "    desc: %s" % yaml_string("%s, furnished: its floor, its rooms' walls, its furniture." % title),
+            ]
+            out += slow + picture("iso")
+            out += [
+                "  %s-above:" % scene,
+                "    type: assy",
+                "    path: %s-above.assy" % scene,
+                "    desc: %s" % yaml_string("%s from above: its rooms' walls and furniture, as a plan." % title),
+            ]
+            out += slow + picture("top")
+    out += ["  interior:", "    type: assy", "    path: interior.assy", "    desc: Every storey, furnished."] + slow
+    # The house as it is seen: its shell. Its inside is built, and left out of the picture, which it is not in.
     out += [
         "  house:",
         "    type: assy",
         "    path: house.assy",
-        "    desc: %s" % yaml_string("%s: its outside, and its furnished inside within it." % e["name"]),
-    ] + slow.split("\n")
+        "    desc: %s" % yaml_string("%s: its outside, one solid painted face by face, and its furnished inside within it." % e["name"]),
+    ]
+    out += slow + picture("iso", "{shell: null}")
     if graded is not None:
         out += [
             "  estate:",
@@ -1463,13 +1637,8 @@ def package_yaml(m, estate_dir, furniture, sizes, graded):
             "    path: estate.assy",
             "    desc: %s" % yaml_string("%s where it stands: the landscape, graded under the house, and the house." % e["name"]),
             "    gravity: [0, 0, -9.81]",
-        ] + slow.split("\n")
-        out += [
-            "  outside:",
-            "    type: assy",
-            "    path: outside.assy",
-            "    desc: %s" % yaml_string("%s seen from outside: the landscape and the house's shell, without its inside." % e["name"]),
-        ] + slow.split("\n")
+        ]
+        out += slow + picture("iso", "{landscape: null, house: {shell: null}}")
     out += ["", "render:", "  readme:", ""]
     return "\n".join(out)
 
@@ -1482,20 +1651,12 @@ def desc_of(m):
     )
 
 
-IMAGES = [
-    ("outside", "The estate where it stands: the house on its graded pad, in the landscape around it."),
-    ("shell", "The house: its outside, one solid painted face by face."),
-    ("storey", "%s, furnished, drawn through the walls nearest the camera."),
-    ("plan", "%s from above: its rooms' walls and furniture."),
-]
+def usage_of(m, graded, estate_dir, split=()):
+    """'(intro, usage)': the README's text before its usage, and the usage, each within what the schema takes.
 
-
-def picture_storey(m):
-    """Which storey the README pictures (1 is the first): the profile's, or the first."""
-    return PROFILES[m.estate["slug"]].get("picture", 1)
-
-
-def usage_of(m, graded, estate_dir):
+    The intro is what the estate is - what of it is where, and what of it is approximate - and the usage how it
+    is used, rendered and replaced, with the sources everything was read from.
+    """
     e = m.estate
     loc = e["location"]
     lines = [
@@ -1504,29 +1665,29 @@ def usage_of(m, graded, estate_dir):
         "`../make_estate.py` from `estate.json` - what was read off the survey's drawings - and the ground",
         "around it from the gen-landscape skill.",
         "",
-    ]
-    k = picture_storey(m)
-    for name, caption in IMAGES:
-        if name == "outside" and graded is None:
-            continue
-        if name in ("storey", "plan"):
-            caption = caption % m.storeys[k - 1]["name"]
-            name = "%s-%d" % (name, k)
-        lines += ["![%s](./images/%s.png)" % (caption, name), ""]
-    lines += [
-        "```shell",
-        "pc render -t png --style shaded -S estate     # the house where it stands",
-        "pc render -t png --style shaded -S interior   # its rooms, furnished",
-        "pc qual test -S house                         # nothing inside it shares space with anything else",
-        "```",
+        "Its scenes nest, and each is pictured below: %s," % ("`estate`, the whole of it where it stands, then the house" if graded is not None else "the house"),
+        "then each storey furnished and the same storey from above (`storey-<n>`, `storey-<n>-above`);",
+        "each storey's plan is a sketch, `plan-<n>`.",
         "",
+    ]
+    if split:
+        lines += [
+            "%s %s more furniture than one picture has memory for, and %s pictured in parts, each a scene"
+            % (" and ".join(split), "has" if len(split) == 1 else "have", "is" if len(split) == 1 else "are"),
+            "which the storey's own places: its rooms in the house's main block (`storey-<n>-main`), its",
+            "largest wing (`-wing`) where the rest is more than one picture too, and the rest (`-wings`).",
+            "",
+        ]
+    lines += [
         "- `shell` is the outside, one solid painted face by face: everything solid of the house -",
         "  walls, roof, chimneys, dormers, porches, steps - less the air its rooms stand in, with every door",
         "  and window cut through it. It is the house as it looks from outside, and stays as it is.",
-        "- Each room is a `walls` scene on its floor's outline (`room-<storey>-<n>`, on the sketch",
-        "  `plan-<storey>-<n>`): its walls as thick as its storey's thinnest partition lets them be, and",
-        "  under a roof only as high as the roof lets them stand. Where a room's walls reach into the outside",
-        "  walls, they are carved out of the shell, so the two never share space.",
+        "- Each storey's plan, `plan-<storey>`, is the outlines of all of its rooms, which are on its",
+        "  level; `plan-<storey>;room=<storey>-<n>` is one of them alone.",
+        "- Each room is a `walls` scene on its outline (`room-<storey>-<n>`): its walls as thick as its",
+        "  storey's thinnest partition lets them be, and under a roof only as high as the roof lets them",
+        "  stand. Where a room's walls reach into the outside walls, they are carved out of the shell, so the",
+        "  two never share space.",
         "- Its furniture is NVIDIA's ArchVis and SimReady models from `//pub/collection/openusd`: each a",
         "  `basic` part as large as `pc info` measured it and where it is - what a check collides with and a",
         "  simulation moves - drawn as the model, set against the walls by what each room is for, clear of",
@@ -1536,29 +1697,10 @@ def usage_of(m, graded, estate_dir):
         lines += [
             "- `landscape` is the ground around it and what OpenStreetMap maps on it (the gen-landscape",
             "  skill)%s, less the house's own outline, with a level pad graded under the house at %s mm."
-            % (", with what the survey's site plan shows of the grounds," if m.extras else "", fmt(graded)),
+            % (", with what the survey's site plan shows of the grounds" if m.extras else "", fmt(graded)),
             "  The house stands a millimetre above it.",
         ]
-    lines += [
-        "",
-        "The scenes declare `timeout:`, so the examples' CI sweep (`--fast-only`) passes them over: render",
-        "them here, where nothing is left out: `./render_images.sh %s %d`, beside `make_estate.py`."
-        % (os.path.basename(os.path.abspath(estate_dir)), picture_storey(m)),
-        "",
-        "### The ground from Google Earth instead",
-        "",
-        "With a Google Maps Platform key of your own (`pc login //pub/collection/google-earth:google_earth_repo`;",
-        "see [partcad-repo-google-earth](https://github.com/partcad/partcad-repo-google-earth)), the ground",
-        "can be what Google Earth shows here, fetched with your key whenever it is built and kept nowhere:",
-        "link",
-        "`//pub/collection/google-earth/places:surface;lat=%.6f,lon=%.6f,size=%s` in place of `landscape`."
-        % (loc["lat"], loc["lon"], fmt(m.size)),
-        "Its frame is this landscape's - X east, Y north, the house's middle at the origin - so the house's",
-        "`location` holds; stand it at the height `pc info` measures for the surface there.",
-        "",
-        "### What is approximate",
-        "",
-    ]
+    lines += ["", "### What is approximate", ""]
     lines += ["- " + note for note in e["notes"]]
     moved = [(st["name"], r["name"]) for st in m.storeys for r, o in zip(st["rooms"], st["outlines"]) if o != ccw([tuple(p) for p in r["polygon"]])]
     if moved:
@@ -1571,6 +1713,31 @@ def usage_of(m, graded, estate_dir):
         "- The rooms' walls are whole: a `walls` scene stands a wall on every edge of its outline and has no doorways"
         " yet, so a room's doors are measured - its furniture keeps clear of them - but not cut through its walls."
     )
+    intro = "\n".join(lines)
+    lines = [
+        "```shell",
+        "pc render -t png --style shaded -S estate     # the house where it stands",
+        "pc render -t png --style shaded -S interior   # its rooms, furnished",
+        "pc qual test -S house                         # nothing inside it shares space with anything else",
+        "```",
+        "",
+        "The scenes declare `timeout:`, so the examples' CI sweep (`--fast-only`) passes over them and their",
+        "pictures: render them here, where nothing is left out, with `./render_images.sh %s`, beside"
+        % os.path.basename(os.path.abspath(estate_dir)),
+        "`make_estate.py`. Each picture is a `render:` on the object it is of: `house` and `estate` leave",
+        "the inside out of theirs (`filter:`), which nobody outside sees.",
+        "",
+        "### The ground from Google Earth instead",
+        "",
+        "With a Google Maps Platform key of your own (`pc login //pub/collection/google-earth:google_earth_repo`;",
+        "see [partcad-repo-google-earth](https://github.com/partcad/partcad-repo-google-earth)), the ground",
+        "can be what Google Earth shows here, fetched with your key whenever it is built and kept nowhere:",
+        "link",
+        "`//pub/collection/google-earth/places:surface;lat=%.6f,lon=%.6f,size=%s` in place of `landscape`."
+        % (loc["lat"], loc["lon"], fmt(m.size)),
+        "Its frame is this landscape's - X east, Y north, the house's middle at the origin - so the house's",
+        "`location` holds; stand it at the height `pc info` measures for the surface there.",
+    ]
     lines += ["", "### Sources", ""]
     import re
 
@@ -1578,7 +1745,7 @@ def usage_of(m, graded, estate_dir):
         # The drawing's file where it was read is no use to a reader: what it is and where it is published are.
         what = re.sub(r"\s*\((local: ?)?[\w.-]+\.(png|jpe?g|tiff?)\)$", "", source["what"].split(" (local")[0])
         lines.append("- [%s](%s): %s" % (what[0].upper() + what[1:], source["url"], source.get("licence", "")))
-    return "\n".join(lines)
+    return intro, "\n".join(lines)
 
 
 def main():

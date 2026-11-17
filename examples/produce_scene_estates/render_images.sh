@@ -1,19 +1,20 @@
 #!/bin/sh
-# Renders an estate's README images into <estate>/images, one at a time: a furnished storey's models are
-# memory enough for one render. Run by hand, where nothing is left out - the scenes declare 'timeout:', so CI's
-# '--fast-only' sweep does not render them. PNG size is a render option of the package, given for this run only.
+# Renders an estate's pictures, and then its README: one picture at a time, since a furnished storey's models are
+# memory enough for one render. Run by hand, where nothing is left out - the scenes declare 'timeout:', so the
+# examples' CI sweep ('--fast-only') passes over them. What each picture is - of which object, from where, how large
+# and of which of its links ('filter:') - is the 'render:' of the object pictured in the estate's partcad.yaml, as
+# make_estate.py writes it; this only goes through them.
 #
-#   ./render_images.sh <estate> [storey]     # the storey its README pictures (make_estate.py's 'picture'), 1 by default
+#   ./render_images.sh <estate>
 set -e
-storey="${2:-1}"
 cd "$1"
-cp partcad.yaml partcad.yaml.orig
-trap 'mv partcad.yaml.orig partcad.yaml' EXIT
-printf '  png:\n    width: 1600\n    height: 1000\n' >> partcad.yaml
-mkdir -p images
-pc() { "${PC:-pc}" --no-ansi render -t png --style shaded -O images "$@"; }
-pc --view iso -S outside
-pc --view iso shell
-pc --view top -S "storey-$storey"
-mv "images/storey-$storey.png" "images/plan-$storey.png"
-pc --view iso -S "storey-$storey"
+pc() { "${PC:-pc}" --no-ansi "$@"; }
+# Every scene and sketch with a 'render:' of its own, in the order partcad.yaml declares them.
+awk '/^[a-z]+:/ { kind = $1 } /^  [a-z0-9-]+:$/ { name = $1 } /^    render:$/ { print kind, name }' partcad.yaml |
+    while read -r kind name; do
+        case "$kind" in
+        scenes:) pc render -S "${name%:}" ;;
+        sketches:) pc render -s "${name%:}" ;;
+        esac
+    done
+pc render -t readme

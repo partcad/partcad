@@ -1,0 +1,104 @@
+# First floor (main block) of Grant-Kohrs Ranch, Ranch House: its floor, its rooms' walls, its furniture. Written by '../make_estate.py'.
+links:
+  - part: floor
+    name: floor
+    params: {storey: 1, part: main}
+    fixed: true
+  - scene: room-1-1
+    name: room-1-1
+    description: "Parlor (19'-4\" x 18'-0\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-sofa
+    name: room-1-1-crestwood-sofa-1
+    location: [[5191.4, 3251, 301.2], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-coffeetable
+    name: room-1-1-appleseed-coffeetable-1
+    location: [[2979.5, 3184.5, 301], [0, 0, 1], 90]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-1-crestwood-chair-1
+    location: [[5229.1, 1253.5, 301.2], [0, 0, 1], 270]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-1-crestwood-chair-2
+    location: [[5229.1, 5153.5, 301.2], [0, 0, 1], 270]
+    fixed: true
+  - part: eurekaconsole
+    name: room-1-1-eurekaconsole-1
+    location: [[459.8, 3187, 301], [0, 0, 1], 90]
+    fixed: true
+  - scene: room-1-2
+    name: room-1-2
+    description: "Music Room (19'-4\" x 10'-3\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-sofa
+    name: room-1-2-crestwood-sofa-1
+    location: [[7449, 5518.4, 301.2], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-2-crestwood-chair-1
+    location: [[8387.1, 3203.5, 301.2], [0, 0, 1], 270]
+    fixed: true
+  - part: eurekaconsole
+    name: room-1-2-eurekaconsole-1
+    location: [[7395, 542.8, 301], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-1-3
+    name: room-1-3
+    description: "Front Hall with stair"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-1-3-jennings-bench-1
+    location: [[10921.4, 3136.8, 301], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-3-aftonconsole-1
+    location: [[9299, 3236.9, 301], [0, 0, 1], 90]
+    fixed: true
+  - scene: room-1-4
+    name: room-1-4
+    description: "Office (13'-6\" x 14'-9\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: desk-01
+    name: room-1-4-desk-01-1
+    location: [[13571.8, 664.9, 301.5], [0, 0, 1], 270]
+    fixed: true
+  - part: chair-desk
+    name: room-1-4-chair-desk-1
+    location: [[12151.2, 671, 301], [0, 0, 1], 180]
+    fixed: true
+  - part: cornershelf-square
+    name: room-1-4-cornershelf-square-1
+    location: [[14830.3, 460.3, 301], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-1-5
+    name: room-1-5
+    description: "Store Room"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-6
+    name: room-1-6
+    description: "Master Bedroom (19'-4\" x 13'-6\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-1-6-daybed-1
+    location: [[19159.3, 3084.8, 299.8], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-1-6-appleseed-endtable-1
+    location: [[19571.6, 4706.3, 301], [0, 0, 1], 270]
+    fixed: true
+  - part: cabinet-b01
+    name: room-1-6-cabinet-b01-1
+    location: [[19680.5, 1353, 303], [0, 0, 1], 0]
+    fixed: true
+  - part: sappington-chair
+    name: room-1-6-sappington-chair-1
+    location: [[19406, 5536, 301], [0, 0, 1], 270]
+    fixed: true

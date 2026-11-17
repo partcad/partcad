@@ -167,6 +167,40 @@ def test_the_package_readme_lists_its_scenes(tmp_path):
     assert "## Scenes" not in (out / "README.md").read_text().splitlines()
 
 
+def test_sketches_and_interfaces_with_no_picture_have_no_heading(tmp_path):
+    """A package that pictures none of its sketches or interfaces has no heading for them.
+
+    The estates under 'examples/produce_scene_estates' keep a sketch per room to
+    stand its walls on and picture none of them, and their READMEs ended with a
+    "## Sketches" heading and nothing under it. The heading is there over a
+    sketch that has a picture, as a part's and a scene's are.
+    """
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "partcad.yaml").write_text(
+        "sketches:\n"
+        "  plan:\n    type: basic\n    desc: A square\n    square:\n      side: 10.0\n"
+        "  hidden:\n    type: basic\n    square:\n      side: 10.0\n"
+        "interfaces:\n  port:\n    ports:\n      in: {}\n"
+        "render:\n  readme:\n  svg:\n    prefix: ./\n"
+    )
+    out = tmp_path / "out"
+    out.mkdir()
+    prj = pc.Context(str(package)).get_project("//")
+
+    prj.render_readme_async(prj.config_obj.get("render"), str(out))
+    lines = (out / "README.md").read_text().splitlines()
+    assert "## Sketches" not in lines and "## Interfaces" not in lines
+
+    (out / "plan.svg").write_text("<svg/>")
+    (out / "port.svg").write_text("<svg/>")
+    prj.render_readme_async(prj.config_obj.get("render"), str(out))
+    lines = (out / "README.md").read_text().splitlines()
+    assert "## Sketches" in lines and "### plan" in lines and "### hidden" not in lines
+    assert "## Interfaces" in lines and "### port" in lines
+    assert lines.index("## Interfaces") < lines.index("## Sketches")
+
+
 def test_an_assembly_a_check_left_behind_is_no_section_of_the_readme(tmp_path):
     """A package that declares no assembly has no 'Assemblies' heading, whatever checks ran before.
 

@@ -2,33 +2,24 @@
 
 Scotty's Castle (Death Valley Ranch, Main House) (1778 acres), its house as the Historic American Buildings Survey measured it: the outside one solid, the inside its rooms' walls and furniture, on the ground where it stands.
 
-## Usage
 Scotty's Castle (Death Valley Ranch, Main House): 1778 acres, at 37.03226, -117.34146 (Wikipedia infobox for Scotty's Castle: historic district 719.57 ha).
 Its house as the Historic American Buildings Survey measured it, everything worked out by
 `../make_estate.py` from `estate.json` - what was read off the survey's drawings - and the ground
 around it from the gen-landscape skill.
 
-![The estate where it stands: the house on its graded pad, in the landscape around it.](./images/outside.png)
-
-![The house: its outside, one solid painted face by face.](./images/shell.png)
-
-![Second floor, furnished, drawn through the walls nearest the camera.](./images/storey-2.png)
-
-![Second floor from above: its rooms' walls and furniture.](./images/plan-2.png)
-
-```shell
-pc render -t png --style shaded -S estate     # the house where it stands
-pc render -t png --style shaded -S interior   # its rooms, furnished
-pc qual test -S house                         # nothing inside it shares space with anything else
-```
+Its scenes nest, and each is pictured below: `estate`, the whole of it where it stands, then the house,
+then each storey furnished and the same storey from above (`storey-<n>`, `storey-<n>-above`);
+each storey's plan is a sketch, `plan-<n>`.
 
 - `shell` is the outside, one solid painted face by face: everything solid of the house -
   walls, roof, chimneys, dormers, porches, steps - less the air its rooms stand in, with every door
   and window cut through it. It is the house as it looks from outside, and stays as it is.
-- Each room is a `walls` scene on its floor's outline (`room-<storey>-<n>`, on the sketch
-  `plan-<storey>-<n>`): its walls as thick as its storey's thinnest partition lets them be, and
-  under a roof only as high as the roof lets them stand. Where a room's walls reach into the outside
-  walls, they are carved out of the shell, so the two never share space.
+- Each storey's plan, `plan-<storey>`, is the outlines of all of its rooms, which are on its
+  level; `plan-<storey>;room=<storey>-<n>` is one of them alone.
+- Each room is a `walls` scene on its outline (`room-<storey>-<n>`): its walls as thick as its
+  storey's thinnest partition lets them be, and under a roof only as high as the roof lets them
+  stand. Where a room's walls reach into the outside walls, they are carved out of the shell, so the
+  two never share space.
 - Its furniture is NVIDIA's ArchVis and SimReady models from `//pub/collection/openusd`: each a
   `basic` part as large as `pc info` measured it and where it is - what a check collides with and a
   simulation moves - drawn as the model, set against the walls by what each room is for, clear of
@@ -36,19 +27,6 @@ pc qual test -S house                         # nothing inside it shares space w
 - `landscape` is the ground around it and what OpenStreetMap maps on it (the gen-landscape
   skill), less the house's own outline, with a level pad graded under the house at 11832.1 mm.
   The house stands a millimetre above it.
-
-The scenes declare `timeout:`, so the examples' CI sweep (`--fast-only`) passes them over: render
-them here, where nothing is left out: `./render_images.sh scottys_castle 2`, beside `make_estate.py`.
-
-### The ground from Google Earth instead
-
-With a Google Maps Platform key of your own (`pc login //pub/collection/google-earth:google_earth_repo`;
-see [partcad-repo-google-earth](https://github.com/partcad/partcad-repo-google-earth)), the ground
-can be what Google Earth shows here, fetched with your key whenever it is built and kept nowhere:
-link
-`//pub/collection/google-earth/places:surface;lat=37.032260,lon=-117.341460,size=400` in place of `landscape`.
-Its frame is this landscape's - X east, Y north, the house's middle at the origin - so the house's
-`location` holds; stand it at the height `pc info` measures for the surface there.
 
 ### What is approximate
 
@@ -62,6 +40,29 @@ Its frame is this landscape's - X east, Y north, the house's middle at the origi
 - The annex (north, across the patio) is only given as an outline from OSM; HABS has separate sheets for it (CA-2257-B) which were not used.
 - 4 rooms drawn edge to edge, nearer each other than two thin walls, or out to the house's own outline, are moved in by up to a few centimetres, so that each has walls of its own and the outside stays whole.
 - The rooms' walls are whole: a `walls` scene stands a wall on every edge of its outline and has no doorways yet, so a room's doors are measured - its furniture keeps clear of them - but not cut through its walls.
+
+
+## Usage
+```shell
+pc render -t png --style shaded -S estate     # the house where it stands
+pc render -t png --style shaded -S interior   # its rooms, furnished
+pc qual test -S house                         # nothing inside it shares space with anything else
+```
+
+The scenes declare `timeout:`, so the examples' CI sweep (`--fast-only`) passes over them and their
+pictures: render them here, where nothing is left out, with `./render_images.sh scottys_castle`, beside
+`make_estate.py`. Each picture is a `render:` on the object it is of: `house` and `estate` leave
+the inside out of theirs (`filter:`), which nobody outside sees.
+
+### The ground from Google Earth instead
+
+With a Google Maps Platform key of your own (`pc login //pub/collection/google-earth:google_earth_repo`;
+see [partcad-repo-google-earth](https://github.com/partcad/partcad-repo-google-earth)), the ground
+can be what Google Earth shows here, fetched with your key whenever it is built and kept nowhere:
+link
+`//pub/collection/google-earth/places:surface;lat=37.032260,lon=-117.341460,size=400` in place of `landscape`.
+Its frame is this landscape's - X east, Y north, the house's middle at the origin - so the house's
+`location` holds; stand it at the height `pc info` measures for the surface there.
 
 ### Sources
 
@@ -79,7 +80,67 @@ Its frame is this landscape's - X east, Y north, the house's middle at the origi
 - [Terrain samples](https://epqs.nationalmap.gov/v1/json): Public domain (USGS 3DEP)
 
 
+## Scenes
+
+### estate
+<table><tr>
+<td valign=top><a href="estate.assy"><img src="./images/estate.png" alt="estate" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>Scotty's Castle (Death Valley Ranch, Main House) where it stands: the landscape, graded under the house, and the house.</td>
+</tr></table>
+
+### house
+<table><tr>
+<td valign=top><a href="house.assy"><img src="./images/house.png" alt="house" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>Scotty's Castle (Death Valley Ranch, Main House): its outside, one solid painted face by face, and its furnished inside within it.</td>
+</tr></table>
+
+### storey-1
+<table><tr>
+<td valign=top><a href="storey-1.assy"><img src="./images/storey-1.png" alt="storey-1" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>First floor, furnished: its floor, its rooms' walls, its furniture.</td>
+</tr></table>
+
+### storey-1-above
+<table><tr>
+<td valign=top><a href="storey-1-above.assy"><img src="./images/storey-1-above.png" alt="storey-1-above" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>First floor from above: its rooms' walls and furniture, as a plan.</td>
+</tr></table>
+
+### storey-2
+<table><tr>
+<td valign=top><a href="storey-2.assy"><img src="./images/storey-2.png" alt="storey-2" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>Second floor, furnished: its floor, its rooms' walls, its furniture.</td>
+</tr></table>
+
+### storey-2-above
+<table><tr>
+<td valign=top><a href="storey-2-above.assy"><img src="./images/storey-2-above.png" alt="storey-2-above" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>Second floor from above: its rooms' walls and furniture, as a plan.</td>
+</tr></table>
+
 ## Sketches
+
+### plan-1
+<table><tr>
+<td valign=top><a href="rooms.py"><img src="./images/plan-1.svg" alt="plan-1" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>First floor, its plan: the outlines of its rooms, which their walls stand on - 1-1 Scotty's Bedroom (14'-10" x 25'-9"); 1-2 Lower Music Room (15'-2" x 25'-2"); 1-3 West passage (north); 1-4 Scotty's Bath; 1-5 West passage (south); 1-6 Living Hall (31'-1" x 31'-8"); 1-7 Stair hall (main stair, fountain alcove); 1-8 Service passage / telephone; 1-9 Kitchen (15'-3" x 25'-7"); 1-10 Dining Room (15'-1" x 25'-10"); 1-11 Solarium (17'-3" x 17'-3", octagonal).</td>
+<td valign=top>Parameters:<br/><ul>
+<li>storey: 1</li>
+<li>room: </li>
+</ul>
+</td>
+</tr></table>
+
+### plan-2
+<table><tr>
+<td valign=top><a href="rooms.py"><img src="./images/plan-2.svg" alt="plan-2" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>Second floor, its plan: the outlines of its rooms, which their walls stand on - 2-1 Spanish Bedroom (15'-2" x 15'-4"); 2-2 Bath (6'-4" x 10'-0"); 2-3 Closets; 2-4 Spanish Sitting Room (15'-4" x 25'-0" per label); 2-5 Gallery, west leg; 2-6 Gallery, north; 2-7 Gallery, south; 2-8 Gallery, east leg with stair; 2-9 Bath (6'-4" x 10'-0"); 2-10 Closet (8'-0" x 10'-0"); 2-11 Mr. Johnson's Room (15'-4" x 15'-4"); 2-12 Mrs. Johnson's Room (15'-2" x 25'-10").</td>
+<td valign=top>Parameters:<br/><ul>
+<li>storey: 2</li>
+<li>room: </li>
+</ul>
+</td>
+</tr></table>
 
 <br/><br/>
 

@@ -1,0 +1,5 @@
+# Second floor, rear wing of Grant-Kohrs Ranch, Ranch House, seen from above: for a picture of it as a plan. Written by '../make_estate.py'.
+links:
+  - scene: storey-3
+    name: storey-3
+    fixed: true
