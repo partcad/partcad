@@ -282,6 +282,39 @@ def test_qual_add_refuses_text_partcad_yaml_would_render(session, package):
     assert (package / "partcad.yaml").read_text() == before
 
 
+@pytest.mark.parametrize(
+    "requirements, params, left, gone",
+    [
+        # The spelling named goes; the other, written 'yes' by hand, stays as it was written.
+        (
+            "      has_weight: yes\n      has_mass: true\n",
+            {"requirement": "has", "name": "mass"},
+            "has_weight: yes",
+            "has_mass",
+        ),
+        (
+            "      match:\n        ':c': {volume: 0123, mass: 5}\n",
+            {"requirement": "match", "name": ":c", "amounts": ["mass"]},
+            "volume: 0123",
+            "mass",
+        ),
+    ],
+)
+def test_a_hand_written_yaml_1_1_value_in_the_entry_a_removal_leaves_alone_does_not_stop_it(
+    tmp_path, requirements, params, left, gone
+):
+    """'0123' is 123 to 'ruamel' and 83 to PartCAD, but the removal did not write it: what it took out is checked."""
+    text = "parts:\n  b:\n    type: basic\n    cuboid: 1\n    requirements:\n" + requirements
+    (tmp_path / "partcad.yaml").write_text(text)
+    session = Session(EventEmitter(lambda event, payload: None))
+    session.partcad = pc
+    session.partcad_ctx = pc.Context(str(tmp_path))
+    operations.requirements_remove(session, {"object": "b", **params})
+    written = (tmp_path / "partcad.yaml").read_text()
+    assert left in written
+    assert gone not in written
+
+
 def test_a_hand_written_yaml_1_1_value_does_not_stop_an_edit_beside_it(tmp_path):
     """'has_material: yes' is the boolean PartCAD reads; an edit of another requirement leaves it so."""
     text = "parts:\n  b:\n    type: basic\n    cuboid: 1\n    requirements:\n      has_material: yes\n"

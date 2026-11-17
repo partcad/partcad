@@ -231,9 +231,10 @@ def test_a_feature_written_both_ways_is_removed_both_ways():
 
 
 def test_a_requirement_written_twice_loses_only_the_spelling_named():
-    declaration = _declaration({"has_weight": False, "has_mass": True})
-    edit.remove(declaration, "has", "has_mass")
-    assert declaration["requirements"] == {"has_weight": False}
+    for named in ("has_mass", "mass", "has-mass"):
+        declaration = _declaration({"has_weight": False, "has_mass": True})
+        edit.remove(declaration, "has", named)
+        assert declaration["requirements"] == {"has_weight": False}, named
     declaration = _declaration({"match": {":old": {"mass": 5, "weight": 6}}})
     problem = requirements.parse(declaration["requirements"]).problems[0]
     assert problem.address == {"requirement": "match", "name": ":old", "amount": "weight"}
@@ -279,16 +280,38 @@ def test_text_partcad_yaml_would_render_as_a_template_is_refused(text):
 
 
 def test_what_is_written_is_checked_as_partcad_would_read_it_before_it_replaces_anything():
-    """'read_back' compares the edited entry with what 'config_yaml.load' makes of the text about to be written."""
+    """'read_back' compares what the edit changed with what 'config_yaml.load' makes of the text about to be written."""
+    nothing = {"requirements": {}}
     written = {"requirements": {"features": {"off": "Holds"}}}
     check = edit.read_back("feature", "off")
-    check(written, {"requirements": {"features": {"off": "Holds"}}})
+    check(nothing, written, {"requirements": {"features": {"off": "Holds"}}})
     with pytest.raises(edit.EditError, match="read the feature 'off' back as nothing"):
-        check(written, {"requirements": {"features": {False: "Holds"}}})
+        check(nothing, written, {"requirements": {"features": {False: "Holds"}}})
     # Only the entry the edit was about: what else was written by hand is read as its author meant.
     edit.read_back("physics", "mass")(
+        {"requirements": {"has_material": "yes"}},
         {"requirements": {"physics": {"mass": ">0"}, "has_material": "yes"}},
         {"requirements": {"physics": {"mass": ">0"}, "has_material": True}},
     )
     # A removal reads back as nothing there.
-    edit.read_back("port", "top")({"requirements": {}}, {"requirements": {}})
+    edit.read_back("port", "top")({"requirements": {"ports": {"top": None}}}, nothing, nothing)
+
+
+def test_only_what_the_edit_changed_in_its_entry_has_to_read_back_as_written():
+    """An amount of the same 'match:', or the other spelling of a 'has_', that the edit left alone is the author's."""
+    edit.read_back("match", ":c")(
+        {"requirements": {"match": {":c": {"volume": 123, "mass": 5}}}},
+        {"requirements": {"match": {":c": {"volume": 123}}}},
+        {"requirements": {"match": {":c": {"volume": 83}}}},
+    )
+    edit.read_back("has", "mass")(
+        {"requirements": {"has_weight": "yes", "has_mass": True}},
+        {"requirements": {"has_weight": "yes"}},
+        {"requirements": {"has_weight": True}},
+    )
+    with pytest.raises(edit.EditError, match="back as"):
+        edit.read_back("match", ":c")(
+            {"requirements": {"match": {":c": {"volume": 123}}}},
+            {"requirements": {"match": {":c": {"volume": 123, "mass": "1_000"}}}},
+            {"requirements": {"match": {":c": {"volume": 83, "mass": 1000}}}},
+        )

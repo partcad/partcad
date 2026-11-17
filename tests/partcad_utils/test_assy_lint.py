@@ -204,6 +204,33 @@ def test_a_folded_block_a_template_fills_in_is_not_mistaken_for_a_misread_compar
     assert [d for d in validate_source(text, get_schema(PARTCAD_SCHEMA)) if d.code == CODE_YAML] == []
 
 
+@pytest.mark.parametrize(
+    "lines",
+    [
+        "    desc: >9\n      {{ x }}\n",
+        "    desc: |9\n\n      {{ x }}\n    color: red\n",
+    ],
+)
+def test_a_block_with_an_indentation_digit_a_template_fills_in_is_not_reported_when_its_values_are_unknown(lines):
+    """Checked masked, the template text the block holds is blank, which is not the same as the block being empty.
+
+    A short expression is the case: masked, '{{ x }}' is no more spaces than the
+    block is indented, so the block reads as empty. A longer one leaves spaces
+    over that, which the block reads as its text.
+    """
+    text = "parts:\n  b:\n    type: basic\n    cuboid: 1\n" + lines
+    assert [d for d in validate_source(text, get_schema(PARTCAD_SCHEMA)) if d.code == CODE_YAML] == []
+
+
+def test_a_misread_comparison_beside_a_template_is_still_found_when_its_values_are_unknown():
+    """Masked, 'mass: >5' over a line that is not part of its block is still the empty value it reads as."""
+    for after in ("    desc: {{ x }}\n", "\n    desc: {{ x }}\n"):
+        text = "parts:\n  b:\n    type: basic\n    cuboid: 1\n    mass: >5\n" + after
+        (diagnostic,) = [d for d in validate_source(text, get_schema(PARTCAD_SCHEMA)) if d.code == CODE_YAML]
+        assert (diagnostic.line, diagnostic.column) == (4, 10)
+        assert "quote it ('>5')" in diagnostic.message
+
+
 def test_a_quoted_comparison_and_a_folded_block_with_text_in_it_are_fine():
     assert validate_source(_configuration("'>5'"), get_schema(PARTCAD_SCHEMA)) == []
     text = "parts:\n  b:\n    type: basic\n    cuboid: 1\n    desc: >\n      Folded,\n      on purpose.\n"

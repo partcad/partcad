@@ -84,12 +84,21 @@ def has_names() -> list:
 
 def has_key(name: str) -> str:
     """The key a yes-or-no requirement is written with, from any of its spellings: 'material', 'has-material'."""
-    text = str(name or "").strip().lower().replace("-", "_")
-    if not text.startswith("has_"):
-        text = "has_" + text
+    text = _has_spelling(name)
     if text not in req.HAS_KEYS:
         raise EditError("'%s' is not a yes-or-no requirement: it is one of %s" % (name, ", ".join(has_names())))
     return req._HAS_NAMES.get(text, text)
+
+
+def _has_spelling(name: str) -> str:
+    """The key 'name' spells, before an alias is resolved: 'mass' is 'has_mass', which is written 'has_weight'."""
+    text = str(name or "").strip().lower().replace("-", "_")
+    return text if text.startswith("has_") else "has_" + text
+
+
+def _has_spellings(key: str) -> list:
+    """Every key a yes-or-no requirement may be written with, 'key' among them."""
+    return [spelling for spelling in req.HAS_KEYS if req._HAS_NAMES.get(spelling, spelling) == key]
 
 
 def physics_fields() -> dict:
@@ -485,7 +494,7 @@ def _add_has(section, _like, name, value, _instances, replace) -> str:
     key = has_key(name)
     if not isinstance(value, bool):
         raise EditError("'%s' is true or false, not %s" % (key, value))
-    spellings = [spelling for spelling in req.HAS_KEYS if req._HAS_NAMES.get(spelling, spelling) == key]
+    spellings = _has_spellings(key)
     if any(spelling in section for spelling in spellings) and not replace:
         raise _exists("'%s'" % key)
     for spelling in spellings:
@@ -704,11 +713,10 @@ def _remove_match(section, _declaration, name, _instances, amounts, _with) -> st
 
 def _remove_has(section, _declaration, name, *_rest) -> str:
     key = has_key(name)
-    spellings = [spelling for spelling in req.HAS_KEYS if req._HAS_NAMES.get(spelling, spelling) == key]
-    present = [spelling for spelling in spellings if spelling in section]
+    present = [spelling for spelling in _has_spellings(key) if spelling in section]
     if not present:
         raise _missing("'%s'" % key)
-    written = str(name).strip().lower().replace("-", "_")
+    written = _has_spelling(name)
     if len(present) > 1 and written in present:
         # Written twice ('has_weight:' and 'has_mass:'), which reads as a
         # problem: the spelling named is the one taken out, and the other stays.
@@ -725,7 +733,8 @@ def _entry(section, kind: str, name: str, instances=None):
     """What a section holds at one requirement's address, as plain data; '_MISSING' where it holds nothing."""
     section = section if isinstance(section, dict) else {}
     if kind == "has":
-        return section.get(has_key(name), _MISSING)
+        # Every spelling: an edit writes one and takes the others out.
+        return {spelling: section.get(spelling, _MISSING) for spelling in _has_spellings(has_key(name))}
     if kind == "physics":
         field, _, member = name.partition(".")
         value = (section.get(req.PHYSICS) or {}).get(field, _MISSING)
@@ -742,24 +751,27 @@ def _entry(section, kind: str, name: str, instances=None):
 def read_back(kind: str, name: str, instances=None):
     """A check that the requirement an edit wrote, or took out, reads back as PartCAD reads the file.
 
-    For 'Project.edit_object_declaration': the declaration as edited and as
-    'config_yaml.load' reads it out of the text about to be written are asked
-    for the one requirement the edit was about, and have to agree. Only that
-    one: anything else in the file was there before, and its reading is the
-    author's -- a hand-written 'has_material: yes' is the boolean PartCAD reads,
-    whatever 'ruamel' made of it. What this catches is the edit's own text read
-    as something else, which '_text' is there to prevent.
+    For 'Project.edit_object_declaration': the declaration before the edit, as
+    edited, and as 'config_yaml.load' reads it out of the text about to be
+    written are asked for the one requirement the edit was about, and what the
+    edit changed in it has to read back as it was edited. Only that: anything
+    else in the file -- an amount of the same 'match:' the edit left alone, the
+    'has_weight:' beside the 'has_mass:' it took out -- was there before, and
+    its reading is the author's: a hand-written 'has_material: yes' is the
+    boolean PartCAD reads, whatever 'ruamel' made of it. What this catches is
+    the edit's own text read as something else, which '_text' is there to
+    prevent.
     """
     name = str(name or "").strip()
     instances = [str(instance) for instance in instances] if instances else None
 
-    def check(written: dict, read) -> None:
+    def check(before: dict, written: dict, read) -> None:
         def at(declaration):
             raw = declaration.get(req.SECTION) if isinstance(declaration, dict) else None
             return _entry(_plain(structured(raw)), kind, name, instances)
 
         expected, found = at(written), at(read)
-        if expected != found:
+        if not _reads_back(at(before), expected, found):
             show = lambda value: "nothing" if value is _MISSING else repr(value)  # noqa: E731
             raise EditError(
                 "Nothing was written: PartCAD would read the %s '%s' back as %s, not as %s"
@@ -767,6 +779,19 @@ def read_back(kind: str, name: str, instances=None):
             )
 
     return check
+
+
+def _reads_back(before, written, read) -> bool:
+    """Whether 'read' is 'written' wherever 'written' is not what was there 'before'."""
+    if before == written:
+        return True
+    if isinstance(written, dict) and isinstance(read, dict):
+        before = before if isinstance(before, dict) else {}
+        return all(
+            _reads_back(before.get(key, _MISSING), written.get(key, _MISSING), read.get(key, _MISSING))
+            for key in [*before, *(key for key in written if key not in before)]
+        )
+    return written == read
 
 
 def section_as_data(section) -> typing.Any:

@@ -3652,11 +3652,11 @@ class Project(project_config.Configuration):
         keeps it one object, so the edit would change both, and write the
         anchor back with the change in it.
 
-        'read_back(declaration, read)' is handed the declaration as edited and
-        as PartCAD reads it out of the text about to be written
-        ('config_yaml.load', which is not the YAML 'ruamel' writes), and raises
-        to keep the file as it was: what is written is checked as it will be
-        read, before it replaces anything.
+        'read_back(before, declaration, read)' is handed the declaration as it
+        was, as edited, and as PartCAD reads it out of the text about to be
+        written ('config_yaml.load', which is not the YAML 'ruamel' writes), and
+        raises to keep the file as it was: what is written is checked as it will
+        be read, before it replaces anything.
         """
         section = OBJECT_KIND_SECTIONS.get(kind)
         if section is None:
@@ -3675,6 +3675,7 @@ class Project(project_config.Configuration):
                 "The %s '%s' shares %s with another declaration through a YAML anchor or a merge key, so %s would"
                 " change both: write it by hand" % (kind, object_name, shared, what)
             )
+        before = copy.deepcopy(declaration) if read_back is not None else None
         result = edit(declaration)
         text = None
         if read_back is not None:
@@ -3686,6 +3687,7 @@ class Project(project_config.Configuration):
             reread = config_yaml.load(text)
             reread_declarations = reread.get(section) if isinstance(reread, dict) else None
             read_back(
+                before,
                 declaration,
                 reread_declarations.get(object_name) if isinstance(reread_declarations, dict) else None,
             )

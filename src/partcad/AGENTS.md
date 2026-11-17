@@ -421,7 +421,10 @@ at all).
   or an enrich is refused: its requirements are read off its source, so what was written on it would never be read. So
   is a section shared with another declaration through a YAML anchor or a `<<:` merge (`_shared_by_alias`): ruamel
   keeps an alias the very object its anchor is. ruamel writes YAML 1.2 and PartCAD reads YAML 1.1, so every string an
-  edit writes is quoted where `config_yaml.load` would read it as something else (`_text`: a feature called `off`).
+  edit writes is quoted where `config_yaml.load` would read it as something else (`_text`: a feature called `off`),
+  and the text about to replace the file is read with `config_yaml.load` first (`read_back`): what the edit changed
+  in its requirement has to read back as it was edited. Only that -- the `has_weight: yes` beside the `has_mass:` a
+  removal takes out, or an amount of the same `match:` it leaves alone, is the author's, and reads as they meant.
   A value typed on the command line or into a form is read by `partcad_utils.config_yaml.scalar` -- as the same
   text in `partcad.yaml` is read, except that what YAML would refuse or misread there (`>0`, `!0`, `>5`) is the text
   itself.

@@ -137,6 +137,15 @@ def empty_block_scalars(text: str) -> list:
 
 def empty_block_scalars_of(root) -> list:
     """'empty_block_scalars' of a document already composed: [(line, column, header)], 0-based."""
+    return [(node.start_mark.line, node.start_mark.column, header) for node, header in empty_block_scalar_nodes(root)]
+
+
+def empty_block_scalar_nodes(root) -> list:
+    """'empty_block_scalars_of', with the node each one is: [(node, header)], in the order they are written.
+
+    A node's 'end_mark' is where the block it opens ends: the lines between the
+    header and there are the ones the block would have held.
+    """
     found = []
     stack = [root] if root is not None else []
     # Each node once: an alias is the node its anchor is, and an anchor can be
@@ -159,13 +168,13 @@ def empty_block_scalars_of(root) -> list:
                 words = line.split(" #", 1)[0].split()
                 header = words[-1] if words else node.style
                 if any(character.isdigit() for character in header):
-                    found.append((mark.line, mark.column, header))
+                    found.append((node, header))
         elif isinstance(node, yaml.SequenceNode):
             stack.extend(node.value)
         elif isinstance(node, yaml.MappingNode):
             for key, value in node.value:
                 stack.extend((key, value))
-    found.sort()
+    found.sort(key=lambda each: (each[0].start_mark.line, each[0].start_mark.column))
     return found
 
 
