@@ -27,6 +27,15 @@ surface alone - with a door and a window cut out of it by the sketch
 wall asked for an arc, bending towards the side it is seen from, in the grey
 a wall is unless it is painted: a solid 4.5 in (114.3 mm) thick, drawn as its surface.
 
+`apartment` stands on a whole plan, `apartment-plan`, which draws the three
+things a plan can. Its outline is a room, walled looking in (`wall-1` ...).
+A hole in it - the column - and a closed loop inside it - the lift shaft -
+are closed spaces, walled looking out (`enclosure-1-1`, `enclosure-2-1` ...)
+with `//builtin/building:enclosure-wall`, which is drawn as the solid it is,
+so that from wherever they are seen they look like walls around something.
+A line that closes nothing is a standalone wall (`partition-1-1`), drawn
+one-sided like the room's and seen from the right of the way it was drawn.
+
 A shaded picture, or a video of the room turning, is drawn the same way:
 
 ```shell
@@ -43,6 +52,13 @@ pc render -t png -S "//builtin/building:room;sketch=//pub/examples/partcad/produ
 
 
 ## Scenes
+
+### apartment
+<table><tr>
+<td valign=top><img src="././apartment.svg" alt="apartment" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
+<td valign=top>The walls standing on the apartment's plan: the room's looking in, the column's and the lift shaft's looking out and drawn as the walls they are, and the wall between the living room and the bedroom, seen from the east
+</td>
+</tr></table>
 
 ### living-room
 <table><tr>
@@ -84,6 +100,12 @@ pc render -t png -S "//builtin/building:room;sketch=//pub/examples/partcad/produ
 </tr></table>
 
 ## Sketches
+
+### apartment-plan
+<table><tr>
+<td valign=top><a href="apartment.py"><img src="././apartment-plan.svg" alt="apartment-plan" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>An apartment from above - its outline, a column and a lift shaft in it, and a wall standing in it</td>
+</tr></table>
 
 ### openings
 <table><tr>

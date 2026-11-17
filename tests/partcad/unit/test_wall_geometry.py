@@ -15,9 +15,11 @@ the same openings leave the same area on a curved wall as on a straight one),
 which way every face of it looks, and the exact words a wall that cannot be
 built is refused with.
 
-The outline is read the same way ('wrappers/wrapper_outline.py'): one wall per
-edge, clockwise whichever way the sketch was drawn, and a refusal with the
-reason for anything that is not one closed loop of lines and arcs. And the
+The plan is read the same way ('wrappers/wrapper_outline.py'): one wall per
+edge - around a room clockwise whichever way it was drawn, around a closed space
+in it anticlockwise, along a standalone wall the way it was drawn - and a
+refusal with the reason for anything that is not lines and arcs on XY, or whose
+walls would stand in each other. And the
 drawing ('wrappers/appearance.py'): a one-sided shape seen from behind is not
 drawn, and a curved one is cut where it turns away.
 
@@ -519,15 +521,124 @@ def test_loose_edges_that_close_are_joined_into_one_outline():
     assert len(_outline(_compound(*edges))) == 4
 
 
-def test_anything_but_one_closed_loop_of_lines_and_arcs_is_refused_with_the_reason():
+def _plan(shape):
+    """'[(kind, [(start, heading), ...])]': what 'wrapper_outline.plan' reads 'shape' as, rounded."""
+    return [
+        (
+            group["kind"],
+            [
+                (tuple(round(value, 6) for value in segment["start"]), round(segment["heading"], 6) % 360.0)
+                for segment in group["segments"]
+            ],
+        )
+        for group in wrapper_outline.plan(shape, "the plan")
+    ]
+
+
+def _loop(*points):
+    polygon = BRepBuilderAPI_MakePolygon()
+    for x, y in points:
+        polygon.Add(gp_Pnt(x, y, 0.0))
+    polygon.Close()
+    return polygon.Wire()
+
+
+def _polyline(*points):
+    polygon = BRepBuilderAPI_MakePolygon()
+    for x, y in points:
+        polygon.Add(gp_Pnt(x, y, 0.0))
+    return polygon.Wire()
+
+
+ROOM = [((0.0, 0.0), 90.0), ((0.0, 3000.0), 0.0), ((4000.0, 3000.0), 270.0), ((4000.0, 0.0), 180.0)]
+
+
+def test_a_hole_in_a_room_is_a_closed_space_walked_anticlockwise_its_walls_looking_out():
+    """A closet cut out of the room: walked the other way round, so that the room is on every wall's right."""
     room = _rectangle(0.0, 0.0, 4000.0, 3000.0)
-    with pytest.raises(wrapper_outline.OutlineError, match="the plan has a hole in it"):
+    closet = BRepAlgoAPI_Cut(room, _rectangle(1000.0, 1000.0, 2000.0, 2000.0)).Shape()
+
+    assert _plan(closet) == [
+        ("outline", ROOM),
+        (
+            "enclosure",
+            [((2000.0, 1000.0), 90.0), ((2000.0, 2000.0), 180.0), ((1000.0, 2000.0), 270.0), ((1000.0, 1000.0), 0.0)],
+        ),
+    ]
+    # Every one of its walls sees the room on its right: walking north up its
+    # east side, the room is to the east.
+    [_outline, enclosure] = wrapper_outline.plan(closet, "the plan")
+    assert wrapper_outline.signed_area([tuple(s["start"]) for s in enclosure["segments"]]) > 0.0
+
+
+def test_a_closed_loop_inside_a_room_is_a_closed_space_and_one_outside_it_another_room():
+    """A plan of wires, as a DXF draws one: the outer loop a room, a loop in it a shaft, a loop beside it a second room."""
+    plan = _compound(
+        _loop((0, 0), (0, 3000), (4000, 3000), (4000, 0)),
+        _loop((500, 500), (1500, 500), (1500, 1000), (500, 1000)),
+        _loop((5000, 0), (6000, 0), (6000, 1000), (5000, 1000)),
+    )
+    kinds = [kind for kind, _walls in _plan(plan)]
+    assert kinds == ["outline", "outline", "enclosure"]
+    assert _plan(plan)[0] == ("outline", ROOM)
+    assert _plan(plan)[2] == (
+        "enclosure",
+        [((500.0, 500.0), 0.0), ((1500.0, 500.0), 90.0), ((1500.0, 1000.0), 180.0), ((500.0, 1000.0), 270.0)],
+    )
+    # Two faces are two rooms, in the order they come.
+    rooms = _compound(_rectangle(0.0, 0.0, 4000.0, 3000.0), _rectangle(5000.0, 0.0, 6000.0, 1000.0))
+    assert [kind for kind, _walls in _plan(rooms)] == ["outline", "outline"]
+
+
+def test_a_line_that_closes_nothing_is_a_standalone_wall_walked_the_way_it_was_drawn():
+    plan = _compound(_rectangle(0.0, 0.0, 4000.0, 3000.0), _polyline((2000, 0), (2000, 2000), (3000, 2000)))
+    assert _plan(plan) == [("outline", ROOM), ("partition", [((2000.0, 0.0), 90.0), ((2000.0, 2000.0), 0.0)])]
+    # Drawn the other way, it is seen from the other side.
+    backwards = _compound(_rectangle(0.0, 0.0, 4000.0, 3000.0), _polyline((3000, 2000), (2000, 2000), (2000, 0)))
+    assert _plan(backwards)[1] == ("partition", [((3000.0, 2000.0), 180.0), ((2000.0, 2000.0), 270.0)])
+    # A wall on its own is a plan too, and so are loose edges that close nothing.
+    assert _plan(_line((0, 0), (1000, 0))) == [("partition", [((0.0, 0.0), 0.0)])]
+
+
+def test_walls_that_would_stand_in_each_other_are_refused_with_the_reason():
+    room = _loop((0, 0), (0, 3000), (4000, 3000), (4000, 0))
+    # Two rooms side by side share a wall, which is drawn once.
+    with pytest.raises(wrapper_outline.OutlineError, match="the plan draws two loops that touch"):
+        wrapper_outline.plan(_compound(room, _loop((4000, 0), (6000, 0), (6000, 1000), (4000, 1000))), "the plan")
+    # A closet against the room's own wall is a notch in its outline.
+    with pytest.raises(wrapper_outline.OutlineError, match="a closed space touching its room is a notch"):
+        wrapper_outline.plan(_compound(room, _loop((0, 500), (1500, 500), (1500, 1000), (0, 1000))), "the plan")
+    with pytest.raises(wrapper_outline.OutlineError, match="the plan draws a closed loop inside a closed space"):
+        wrapper_outline.plan(
+            _compound(
+                room,
+                _loop((500, 500), (1500, 500), (1500, 1500), (500, 1500)),
+                _loop((700, 700), (900, 700), (900, 900), (700, 900)),
+            ),
+            "the plan",
+        )
+    with pytest.raises(wrapper_outline.OutlineError, match="the plan draws nothing"):
+        wrapper_outline.plan(_compound(), "the plan")
+
+
+def test_outline_reads_a_plan_of_one_room_and_nothing_else():
+    """What the corner tests read: 'plan' is what a 'walls' scene reads."""
+    room = _rectangle(0.0, 0.0, 4000.0, 3000.0)
+    with pytest.raises(wrapper_outline.OutlineError, match="the plan is not one outline and nothing else"):
         wrapper_outline.outline(BRepAlgoAPI_Cut(room, _rectangle(1000, 1000, 2000, 2000)).Shape(), "the plan")
-    with pytest.raises(wrapper_outline.OutlineError, match="the plan has 2 faces"):
-        wrapper_outline.outline(_compound(room, _rectangle(5000, 0, 6000, 1000)), "the plan")
-    with pytest.raises(wrapper_outline.OutlineError, match="the plan is an open outline"):
+    with pytest.raises(wrapper_outline.OutlineError, match="the plan is not one outline and nothing else"):
         wrapper_outline.outline(_line((0, 0), (1000, 0)), "the plan")
 
+
+def test_an_open_walk_closes_its_corners_and_leaves_its_ends_as_they_were_drawn():
+    """A standalone wall turning right and then left: two corners closed, and no corner between its last and its first."""
+    from partcad.scene_factory_walls import corner_extensions
+
+    [group] = wrapper_outline.plan(_polyline((0, 0), (0, 2000), (2000, 2000), (2000, 4000)), "the plan")
+    assert corner_extensions(group["segments"], 100.0, closed=False) == [(0.0, 100.0), (0.0, -100.0), (0.0, 0.0)]
+
+
+def test_lines_and_arcs_on_the_xy_plane_only_are_read():
     points = TColgp_Array1OfPnt(1, 3)
     for index, (x, y) in enumerate(((0, 0), (500, 500), (1000, 0)), 1):
         points.SetValue(index, gp_Pnt(x, y, 0))

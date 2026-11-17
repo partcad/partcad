@@ -1039,6 +1039,9 @@ that is depends on its ``thickness``:
 its :ref:`visual <part-visual>` is the one-sided ``wall-surface`` beside it, which
 is :ref:`private <private-objects>` to that package. A room laid out with it is
 walled, and is still seen into from outside in the 3D view and in every picture.
+``//builtin/building:enclosure-wall`` is the same solid wall with no visual, drawn
+as the solid it is from every side: what the walls around a closet or a shaft in a
+plan are, which nobody looks into (see :ref:`scenes-walls`).
 
 .. code-block:: yaml
 

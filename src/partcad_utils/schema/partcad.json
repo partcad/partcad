@@ -2825,7 +2825,7 @@
                 "type": {
                   "type": "string",
                   "enum": ["assy", "alias", "enrich", "walls"],
-                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. 'walls' is the walls of a room standing on the outline of a sketch ('sketch', 'height', 'wall'), with no file at all. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
+                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. 'walls' is the walls standing on a plan, a sketch of rooms, closed spaces in them and standalone walls ('sketch', 'height', 'wall', 'enclosureWall'), with no file at all. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
@@ -2836,7 +2836,7 @@
                 "sketch": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "'walls' only: the sketch whose outline the walls stand on - one enclosed outline of straight lines and arcs of circles, a face with no holes or a closed wire, drawn on the XY plane. A '%...%' expression over the scene's parameters is resolved."
+                  "description": "'walls' only: the plan the walls stand on, drawn on the XY plane in straight lines and arcs of circles: each outline (a face, or a closed wire inside no other) a room, walled looking in; each hole in one, or closed wire inside one, a closed space (a closet, a shaft), walled looking out; each line that closes nothing a standalone wall. A '%...%' expression over the scene's parameters is resolved."
                 },
                 "height": {
                   "type": ["number", "string"],
@@ -2845,11 +2845,16 @@
                 "wall": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "'walls' only: the part each wall is, asked for with the parameters 'length', 'height' and 'radius', and 'thickness' when the scene states one. '//builtin/building:wall' unless this says otherwise."
+                  "description": "'walls' only: the part each wall of a room, and each standalone wall, is, asked for with the parameters 'length', 'height' and 'radius', and 'thickness' when the scene states one. '//builtin/building:wall' unless this says otherwise: a solid drawn as its one-sided surface."
+                },
+                "enclosureWall": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "'walls' only: the part each wall around a closed space is, asked for as 'wall' is. '//builtin/building:enclosure-wall' unless this says otherwise: a solid drawn as the solid it is, so that a closet or a shaft looks like walls around it from every side."
                 },
                 "thickness": {
                   "type": ["number", "string"],
-                  "description": "'walls' only: how thick each wall is, in millimetres, outside the outline - passed to every wall as its 'thickness'. Absent, the wall part's own default stands. A number, or a '%...%' expression over the scene's parameters."
+                  "description": "'walls' only: how thick each wall is, in millimetres, behind its face - outside a room's outline, inside a closed space - passed to every wall as its 'thickness'. Absent, the wall part's own default stands. A number, or a '%...%' expression over the scene's parameters."
                 },
                 "ignoreCollision": {
                   "oneOf": [
