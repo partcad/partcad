@@ -3689,6 +3689,26 @@ class Project(project_config.Configuration):
             pc_logging.error("A %s does not declare 'qual:'" % kind)
             return False
 
+        def strings(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    yield key
+                    yield from strings(item)
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    yield from strings(item)
+            else:
+                yield value
+
+        from .requirements_edit import EditError, refuse_template_text
+
+        try:
+            for text in strings({name: entry}):
+                refuse_template_text(text)
+        except EditError as e:
+            pc_logging.error(str(e))
+            return False
+
         def add(declaration):
             qual = declaration.get(qual_config.SECTION)
             if not isinstance(qual, dict):

@@ -147,6 +147,26 @@ def _holds_mapping(value) -> bool:
     return isinstance(value, (list, tuple)) and any(_holds_mapping(item) for item in value)
 
 
+# What opens a Jinja2 expression, statement or comment: 'partcad.yaml' is rendered
+# as a template before it is read as YAML.
+TEMPLATE_OPENINGS = ("{{", "{%", "{#")
+
+
+def refuse_template_text(value) -> None:
+    """Refuse a string that 'partcad.yaml' would render rather than read: one holding '{{', '{%' or '{#'.
+
+    The file is a Jinja2 template, so such text written into it is not what is
+    read back -- and an unclosed '{%' fails the whole package -- and a file that
+    holds one is a template no edit here writes into again. Written by hand, it
+    is written knowing that.
+    """
+    if isinstance(value, str) and any(opening in value for opening in TEMPLATE_OPENINGS):
+        raise EditError(
+            "'%s' holds '{{', '{%%' or '{#', which 'partcad.yaml' would render as a Jinja2 template rather than"
+            " read: write it by hand" % value
+        )
+
+
 def _text(value):
     """A string as it is written: in quotes where PartCAD would read the same text, unquoted, as something else.
 
@@ -160,6 +180,7 @@ def _text(value):
     """
     if type(value) is not str:  # noqa: E721 - a subclass of str carries a style of its own
         return value
+    refuse_template_text(value)
     try:
         read = config_yaml.load(value)
     except Exception:  # pylint: disable=broad-except

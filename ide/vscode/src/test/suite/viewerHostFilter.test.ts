@@ -549,6 +549,7 @@ suite('The Digital Thread host, and the view panel', () => {
     test("the Requirements tab's changes are the daemon's, and its answer or refusal goes back", async () => {
         const asked: Record<string, unknown>[] = [];
         let refuse = false;
+        let answer: unknown = { object: '//pkg:bracket', kind: 'part', changed: "the physical property 'mass'" };
         const registration = vscode.commands.registerCommand(
             'partcad.requirementsEdit',
             (args: Record<string, unknown>) => {
@@ -556,7 +557,7 @@ suite('The Digital Thread host, and the view panel', () => {
                 if (refuse) {
                     throw new Error("The physical property 'mass' is required already: say '--replace' to replace it");
                 }
-                return { object: '//pkg:bracket', kind: 'part', changed: "the physical property 'mass'" };
+                return answer;
             },
         );
         try {
@@ -583,9 +584,14 @@ suite('The Digital Thread host, and the view panel', () => {
             const refusal = posted[posted.length - 1];
             assert.strictEqual(refusal.type, 'requirementEdited');
             assert.match(String(refusal.error), /required already/);
+            // No answer at all is the daemon having changed nothing, which is not said as a change.
+            refuse = false;
+            answer = null;
+            await edit.editRequirement(15, change, target);
+            assert.match(String(posted[posted.length - 1].error), /changed nothing/);
             // Made on an object no longer on screen: refused here, and the daemon is not asked.
             await edit.editRequirement(14, change, { ...target, name: 'bracket' });
-            assert.strictEqual(asked.length, 2);
+            assert.strictEqual(asked.length, 3);
             assert.match(String(posted[posted.length - 1].error), /Another object was shown/);
             viewer.dispose();
         } finally {

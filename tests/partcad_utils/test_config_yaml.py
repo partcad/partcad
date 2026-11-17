@@ -178,3 +178,9 @@ def test_an_alias_inside_what_its_anchor_names_does_not_hold_the_scan_up():
 def test_an_empty_block_with_no_indentation_digit_is_no_misreading(text):
     """Written empty, or filled by a template whose values are not known: either way not '>5' misread."""
     assert config_yaml.empty_block_scalars(text) == []
+
+
+def test_an_anchor_or_a_tag_before_an_empty_block_is_not_its_header():
+    """'&text1 >' is an anchor named 'text1' on an empty block, not a misread '>1'."""
+    assert config_yaml.empty_block_scalars("desc: &text1 >\nnext: 1\n") == []
+    assert config_yaml.empty_block_scalars("mass: &a1 >5 # note\nnext: 1\n") == [(0, 6, ">5")]

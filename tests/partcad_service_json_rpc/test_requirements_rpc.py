@@ -264,3 +264,19 @@ def test_an_instance_has_the_requirements_of_the_object_it_is_of():
     assert operations._declared_name("bracket;length=10") == "bracket"
     assert operations._declared_name("room;medium=//pub/std:air") == "room"
     assert operations._declared_name("bracket") == "bracket"
+
+
+def test_qual_add_refuses_text_partcad_yaml_would_render(session, package):
+    before = (package / "partcad.yaml").read_text()
+    with pytest.raises(JsonRpcError):
+        operations.qual_add(
+            session,
+            {
+                "package": "//reqdemo",
+                "object": "bracket",
+                "subtype": "topology",
+                "name": "tolerance-surfaces",
+                "entry": {"desc": "{{ nope }}"},
+            },
+        )
+    assert (package / "partcad.yaml").read_text() == before

@@ -153,7 +153,11 @@ def empty_block_scalars_of(root) -> list:
                 buffer = getattr(mark, "buffer", None) or ""
                 pointer = getattr(mark, "pointer", 0) or 0
                 line = buffer[pointer:].split("\n", 1)[0].rstrip("\0")
-                header = line.split(" #", 1)[0].strip() or node.style
+                # The mark is where the node starts, which is its anchor or its
+                # tag when it has one ('&text1 >'): the block indicator is the
+                # last word before any comment.
+                words = line.split(" #", 1)[0].split()
+                header = words[-1] if words else node.style
                 if any(character.isdigit() for character in header):
                     found.append((mark.line, mark.column, header))
         elif isinstance(node, yaml.SequenceNode):

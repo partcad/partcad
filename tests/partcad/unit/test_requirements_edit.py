@@ -268,3 +268,11 @@ def test_what_is_written_reads_back_as_partcad_reads_the_file(name, desc):
     read = config_yaml.load(written.getvalue())["parts"]["b"]["requirements"]
     assert read == {"features": {name: desc}, "ports": {name: None}}
     assert requirements.parse(read).features == {name: desc}
+
+
+@pytest.mark.parametrize("text", ["Fits a {{ M3 }} screw", "{% if x %}", "a {# note"])
+def test_text_partcad_yaml_would_render_as_a_template_is_refused(text):
+    declaration = _declaration()
+    with pytest.raises(edit.EditError, match="Jinja2 template"):
+        edit.add(declaration, "feature", "mount", text)
+    assert "requirements" not in declaration

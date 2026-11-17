@@ -805,7 +805,13 @@ export class PartcadViewer implements vscode.Disposable {
                 kind: target.kind,
                 edit,
             })) as { changed?: string } | null | undefined;
-            post({ changed: data?.changed ?? null });
+            if (!data) {
+                // The daemon answers nothing, having said why in its log, when
+                // the object's package is not loaded: nothing was changed.
+                post({ error: 'PartCAD changed nothing: the package of this object is not loaded (see its log).' });
+                return;
+            }
+            post({ changed: data.changed ?? null });
         } catch (error: any) {
             traceError(`Digital Thread: failed to change a requirement: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
