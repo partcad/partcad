@@ -537,6 +537,19 @@
         "enablement": "!partcad.editingExternally"
       },
       {
+        "title": "Open a package in the Package Explorer",
+        "category": "PartCAD",
+        "command": "partcad.openInExplorer",
+        "enablement": "!partcad.editingExternally"
+      },
+      {
+        "title": "Back to the workspace's package",
+        "category": "PartCAD",
+        "command": "partcad.explorerHome",
+        "icon": "$(arrow-left)",
+        "enablement": "!partcad.editingExternally"
+      },
+      {
         "title": "Explain why an object could not be loaded",
         "category": "PartCAD",
         "command": "partcad.showBrokenItem",
@@ -868,6 +881,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "partcad.explorerHome",
+          "when": "view == partcadExplorer && partcad.explorerAway",
+          "group": "navigation"
+        },
         {
           "command": "partcad.promptLoadPackage",
           "when": "view == partcadContext",

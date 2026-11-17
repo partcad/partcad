@@ -65,9 +65,23 @@ def package_revision(project) -> typing.Optional[str]:
     repository - and never that the answer failed to be computed and could be
     retried later.
     """
+    # A package loaded at a revision ('//pkg@v1.2') is written out of the
+    # repository with no repository of its own around it; it knows its commit.
+    sha = getattr(project, "revision_sha", None)
+    if sha:
+        return sha
+
     config_dir = getattr(project, "config_dir", None)
     if not config_dir:
         return None
+
+    # And so does a package inside such a revision: a sub-package of it, or one
+    # of its local dependencies, read out of the same commit.
+    from .package_versions import exported_sha
+
+    sha = exported_sha(config_dir)
+    if sha:
+        return sha
 
     repository_path = _repository_path(config_dir)
     if repository_path is None:

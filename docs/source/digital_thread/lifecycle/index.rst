@@ -51,8 +51,8 @@ answers was stored to begin with.
      - Is it what it claims to be, and does it do what it is supposed to?
      - every claim above, checked by ``pc qual test``, ``pc qual test --simulation`` and ``qual: sim:``
    * - :doc:`Operations </digital_thread/lifecycle/operations>`
-     - How is the thing that was made actually doing?
-     - nothing yet; the phase is reserved
+     - What has become of it since: how did it get here, and what depends on it?
+     - its package's git history, and the references the loaded packages make
 
 The order is the order of *dependency*, which is why it reads the way it does:
 a design is judged against requirements, an analysis is run on a design, what is
@@ -75,9 +75,11 @@ always there -- **Design**, **Analysis**, **Manufacturing**, **Qualification** a
 that declares any. Most of the five open a **second strip** of their own
 underneath, and every tab of it has a chapter here, under the phase it belongs
 to: the object three ways under Design, the four analyses under Analysis, the
-five steps from a decision to an instruction book under Manufacturing, and the
-a tab per subtype of qualification test under Qualification. **Operations** is shown disabled, because
-there is nothing in it yet.
+five steps from a decision to an instruction book under Manufacturing, a tab per
+subtype of qualification test under Qualification, and the object's revisions and
+what uses it under Operations. Fewer of them apply to an interface, a sketch and
+a package, which the :doc:`Operations </digital_thread/lifecycle/operations>`
+chapter lists.
 
 Each of those chapters is written the same way -- what the tab shows (**In the
 UI**), what the same answer is called from a terminal (**On the command line**),

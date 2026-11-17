@@ -198,6 +198,25 @@ the show, before their lists are asked for, because a list can arrive while the 
 before the tab itself is requested -- and it is used once: the list opens on that entry instead of the first, or
 on the first when the object declares no such name, and every show says, so it does not linger.
 
+**A package opened from the explorer is shown by the host too** (`PartcadViewer.showPackage`), with `kind:
+'package'` and the package as both the package and the name, for the reason a declaration is: there is no shape.
+It has Requirements -- its own, asked with `kind: 'package'` and always offered, disabled while it states none --
+and Operations. The other kinds have fewer groups than a part as well (`tabsFor`, `designTabsFor`): an interface
+is Design with the 3D view alone (one tab, so no strip, and `transient` like a declaration's) and Operations; a
+sketch is Requirements when it declares any, Design with 2D and Draft, and Operations. A sketch's Draft asks for
+one view of its plane (`singleView`, `render.inline`'s `single_view`), which the daemon sends as the viewport
+and as `views` to the drawing implementation.
+
+**Operations is Revisions and Used By** (`revisions.ts`, `usedBy.ts`). Revisions is the Simulation tab's page
+over a list of commits: the list (`ScenarioList`), the selected revision compared with what is on screen, and the
+same folded views along the bottom -- "Uses (Dependencies)" and "Used By" -- each asked for the first time it is
+opened. Its four questions travel as `query` on one tab id; the host keys its in-flight requests by `tab:query`
+so a comparison does not cancel the list it was chosen from, and the renderer matches the answers to a
+comparison or a folded view by token (`revisionQueries`), as it does a simulation run. **Nothing is diffed
+here**: the daemon answers with the rows of a side-by-side view (`revisions.compare`). A dependency or its commit
+opens in the Package Explorer (`partcad.openInExplorer`), which lists that package in place of the workspace's
+with a row going back -- a revision is no child of anything in the tree, so it cannot be revealed where it is.
+
 **A colour, a material or a finish opened from the explorer is shown by the host, not by PartCAD**
 (`PartcadViewer.showDeclaration`): there is nothing to draw, so the show is made here with no object in it, and the
 renderer gives it the Design group alone and in it the CMF tab alone (`isDeclaration` in `src/webview/messages.ts`) --

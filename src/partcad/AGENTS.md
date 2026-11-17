@@ -1341,6 +1341,27 @@ at all).
   a visual with no key leaves the picture uncached. A visual that cannot be had is reported and the part drawn
   as itself.
 
+- **A package at a revision is a package of its own** (`package_versions.py`, `Context.get_versioned_project`).
+  `[<path>/]<name>@<revision>` -- a commit id, a tag, a branch -- is loaded once per commit, as
+  `<path>/<name>@<full commit id>`, from the commit's tree written out into `~/.partcad/git` (never from the
+  working tree), and every other name it was asked by is an alias in `Context.project_aliases`, kept apart from
+  `Context.projects` so that nothing walking the loaded packages meets one package twice. A package without `@`
+  is loaded exactly as before. A reference a revision makes to its own package or below is rebased into the
+  revision (`package_versions.rebase`, applied by `Project.relocate`); one out of it is not. A downloaded
+  dependency at the commit it is checked out at is answered with itself. `revision.package_revision` knows a
+  revision's commit from the guard `export` leaves (`exported_sha`), not from a repository, and
+  `repository_of` refuses an export, which a home directory kept in git would otherwise answer for.
+- **An object's declaration can be written back out of the context** (`serialize.py`). What `pc copy` writes and
+  what the IDE's Revisions tab compares: the normalized declaration, minus what PartCAD derives (`name`,
+  `orig_name`, `source_resolved`, the properties making it recorded) and minus every default (the package's
+  `manufacturable`, a scene's `false`, an ASSY file's own manufacturing method, a parameter's long form, a `path`
+  that is `<name>.<extension>`), in the declaration's order. A survey over `examples/` is how the defaults were
+  found; a new key a factory writes into a declaration as it reads one belongs on that list, or every copy
+  carries it. `ProjectLocal.rendered_config` is the Jinja2-rendered text of `partcad.yaml`, kept as it was read,
+  so that the package comparison never renders a second time.
+- **What uses what is read from what is loaded** (`usage.py`). References are resolved as the package that
+  wrote them resolves them (`Project.resolve`, `reference.source_of`), counted once per mention, and a built
+  assembly's children are counted per placement; nothing is loaded or built to answer.
 - **An object may keep itself to its package** (`privacy.py`, `Project.visible_to`). `private: true` on any
   object of the named kinds is checked on a *reference*: every getter of `Project` and `Context` takes a
   `referrer`, the package the name was written in, and refuses a private object of another package with a

@@ -98,6 +98,10 @@ catalog a plugin serves, say. Given one, ``pc`` takes it at its word, and on a `
 the walk to the objects of that kind. ``pc info`` takes three more, ``--color``, ``-m``/``--material`` and
 ``--finish``, which say the name is a CMF declaration's.
 
+A package may be named at a revision of its repository -- ``//pub/std/metric/m@v1.2:m3-screw``, or the package
+you are in as it was at one commit, ``//@3f2a9c1e:widget`` -- which loads that revision beside what is checked out
+and names the object in it (see :ref:`package-revisions`).
+
 .. _recursive-names:
 
 **********************************
@@ -1258,6 +1262,34 @@ Object commands
   every ``connect:`` left pointing at nothing is reported, naming the line, by this command and by ``pc lint``
   afterwards.
 
+``pc copy``
+  Declare a second object as a copy of the first::
+
+    pc copy OBJECT_FROM OBJECT_TO
+
+  The declaration written is ``OBJECT_FROM`` **as PartCAD read it**, not the text of the ``partcad.yaml`` it came
+  from: rendered (an object a Jinja2 loop declared is what the loop made of it), normalized, with the parameter
+  overrides of the user configuration applied, and with every value that is only what PartCAD would assume
+  anyway left out -- the package's own ``manufacturable``, a parameter in the long form it is expanded to, a
+  ``path`` that is the object's name and its type's extension. The keys are in the order they were declared in.
+  A copy refers to what the original referred to and reads the file the original reads: copied into another
+  package, a relative reference is written out in full and ``path`` names the original's file from where the copy
+  is.
+
+  ``OBJECT_FROM`` may be in any package, a revision of one included (see :ref:`package-revisions`), which is how an
+  object is brought back from an earlier revision under a name of its own. ``OBJECT_TO`` is declared in the
+  package ``-P`` selects, or the one it names. A name the package already uses is refused, and ``--dry-run``
+  prints the declaration without writing it.
+
+  .. code-block:: shell
+
+    pc copy bracket bracket_wide
+    pc copy //pub/std/metric/m:m3-screw m3          # into this package, referring to the original's file
+    pc copy //@v1.2:bracket bracket_v1              # the bracket as tagged v1.2
+
+  The Digital Thread's Revisions tab writes both sides of a comparison the same way, which is why it shows what
+  changed in what an object *means* rather than in how it was written.
+
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. The object is found by its name whatever its kind (see
   :ref:`object-names`). Choose the format with ``-t``:
@@ -1562,7 +1594,8 @@ instead.
   read: ``--design-3d``, ``--design-2d``, ``--design-draft``, ``--design-cmf``, ``--design-cam``; ``--analysis-fea``,
   ``--analysis-dynamic``, ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``,
   ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``;
-  ``--validation-test``, ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The analysis tabs and the
+  ``--validation-test``, ``--validation-simulation``; ``--operations-revisions``, ``--operations-used-by``. With
+  none, the viewer stays on whichever tab it is on. The analysis tabs and the
   Simulation tab list what the object declares -- its scenarios of that analysis, its simulations -- and select
   the first; ``--scenario <name>`` selects the one of that name instead, and is refused with any other tab. The tab travels with the
   shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA

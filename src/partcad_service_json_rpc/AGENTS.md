@@ -238,7 +238,22 @@ at all).
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
 `list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults|list`, `cam.route`, `filter.object`,
-`test`, `info`, `activate`, and `rpc.discover`. These mirror no subcommand:
+`copy.object`, `test`, `info`, `activate`, and `rpc.discover`. These mirror no subcommand:
+
+* `revisions.list`, `revisions.compare`, `revisions.uses`, `revisions.used_by` and `usage.used_by`, behind the
+  Digital Thread's Operations tabs (`partcad/revisions.py`, `partcad/usage.py`). A revision is loaded into the
+  session's context as `<package>@<commit>` (see `partcad/package_versions.py`) and **stays there**: the context
+  is warm, so a second comparison with the same revision costs nothing, and two revisions of one package sit
+  side by side in it the way two packages do. The comparison is made here, as rows of a side-by-side view,
+  because the webview has no differ and should not ship one; each side is what `copy.object` would write
+  (`partcad/serialize.py`), or for a package its `partcad.yaml` as Jinja2 rendered it when it was read
+  (`ProjectLocal.rendered_config`), never a second rendering. `usage.used_by` and `revisions.used_by` look only
+  at what the context has loaded -- nothing is loaded or built to answer them.
+* `copy.object` is `pc copy`, a daemon method for the reason `filter.object` is one: it writes a declaration.
+  It reloads the package it wrote into before answering, because a stat may not show the write.
+* `requirements.check` with `kind: package` is a package's own `requirements:`, the subset an object's has that a
+  package can mean (`requirements.check_package_async`): features, and the yes-or-no ones said of every part
+  the package declares.
 
 * `assembly.instantiate`, which a client calls on its own behalf as the second half of a two-phase assembly
   build (see below).

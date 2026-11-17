@@ -11,7 +11,7 @@
 // panel is a strip of tabs over one object rather than a canvas:
 //
 //     (Requirements)  |  Design                 |  Analysis                                 |  Manufacturing                                                    |  Qualification                                                 |  Operations
-//                           3D | 2D | Draft | CMF     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Basic | Topology | Simulation | Other | Process Emulation
+//                           3D | 2D | Draft | CMF     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Basic | Topology | Simulation | Other | Process Emulation    Revisions | Used By
 //
 // Four groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing, and what each of
@@ -29,8 +29,18 @@
 // run, with a picture of the scene before and after; Other is the tests plugins
 // supply that it declares, with what each tool reported; and Process Emulation
 // holds nothing yet and is always disabled. Qualification is always enabled,
-// since every object has tests. Operations holds nothing yet either, and is
-// always disabled.
+// since every object has tests. Operations is what has become of the object
+// since it was written: Revisions, the commits that changed its package, each
+// compared with what is on screen and with what the package used and was used
+// by at it (see 'revisions.ts'); and Used By, what among the loaded packages
+// uses the object (see 'usedBy.ts').
+//
+// Not every kind of object has every group. An interface is ports rather than
+// a shape: Design, with its 3D view alone - so no strip under it - and
+// Operations. A sketch is flat: Requirements when it declares any, Design with
+// 2D and Draft (a drawing of its one plane, not the three planes and the
+// perspective of a solid), and Operations. A package is not an object at all:
+// Requirements - its own, said of every part it declares - and Operations.
 //
 // Requirements comes before all of them, for every object that can declare a
 // 'requirements:' section - a part, an assembly, a scene, a sketch - and is
@@ -105,6 +115,7 @@ import {
     fetchFormats,
     cancelTab,
     fetchTab,
+    openPackage,
     openSource,
     ready,
     reportError,
@@ -149,6 +160,8 @@ import {
     RequirementEdit,
     RequirementEditedMessage,
     RequirementsData,
+    RevisionsData,
+    RevisionsQuery,
     SectionShownMessage,
     ShowMessage,
     SimulationListData,
@@ -159,6 +172,8 @@ import {
     TestArtifact,
     TestData,
     TestResult,
+    UsedByData,
+    UsedByRow,
     isQualTestTab,
     ViewportData,
     groupOf,
@@ -168,6 +183,8 @@ import {
 } from './messages';
 import { Choice, RenderView } from './render';
 import { RequirementsView } from './requirements';
+import { RevisionsView } from './revisions';
+import { UsedByView } from './usedBy';
 import {
     Bounds,
     Range,
@@ -221,6 +238,8 @@ const panes: Record<TabId, HTMLElement> = {
     simulation: byId('pane-simulation'),
     other: byId('pane-other'),
     emulation: byId('pane-emulation'),
+    revisions: byId('pane-revisions'),
+    usedby: byId('pane-usedby'),
 };
 
 /** The tabs whose panes are rebuilt from scratch on every show. */
@@ -317,6 +336,37 @@ const requirementsView = new RequirementsView(panes.requirements, {
     onEdit: (edit) => sendRequirementEdit(edit),
 });
 /**
+ * The Operations tabs. Revisions asks its own questions - a comparison, and
+ * what the package uses and is used by at a revision - each under a token of
+ * its own ('revisionQueries'), because a comparison asked for another revision
+ * does not take back the list it was chosen from.
+ */
+const revisionsView = new RevisionsView(panes.revisions, {
+    ask: (query, revision) => askRevision(query, revision),
+    openPackage: (name) => openPackage(name),
+    showObject: (row) => openUser(row),
+});
+const usedByView = new UsedByView(panes.usedby, (row) => openUser(row));
+
+/** An object a Used By list names, shown in the panel as the explorer would show it. */
+function openUser(row: UsedByRow): void {
+    showObject({ type: 'showObject', package: row.package, name: row.name, kind: row.kind });
+}
+
+/** The Revisions tab's questions in flight, by token: which, and of which revision. */
+const revisionQueries = new Map<number, { query: Exclude<RevisionsQuery, 'list'>; revision: string }>();
+
+function askRevision(query: Exclude<RevisionsQuery, 'list'>, revision: string): void {
+    lastToken += 1;
+    revisionQueries.set(lastToken, { query, revision });
+    fetchTab({ type: 'fetchTab', tab: 'revisions', token: lastToken, query, revision });
+}
+
+/** What the object on screen is called in a sentence: "this package" or "this sketch". */
+function thisObject(): string {
+    return `this ${shown?.kind ?? 'object'}`;
+}
+/**
  * The Qualification tabs drawn from 'qual.report', one per subtype of
  * qualification: what 'pc qual test --basic', '--topology' and '--other' say.
  */
@@ -371,6 +421,7 @@ const designTabs = new Tabs(byId('design-tabs'), (tab) => onInnerSelected('desig
 const analysisTabs = new Tabs(byId('analysis-tabs'), (tab) => onInnerSelected('analysis', tab));
 const manufacturingTabs = new Tabs(byId('manufacturing-tabs'), (tab) => onInnerSelected('manufacturing', tab));
 const qualificationTabs = new Tabs(byId('qualification-tabs'), (tab) => onInnerSelected('qualification', tab));
+const operationsTabs = new Tabs(byId('operations-tabs'), (tab) => onInnerSelected('operations', tab));
 
 /** Each group of the panel's strip, and the strip of its own it holds. */
 const groups: Partial<Record<TabId, Tabs>> = {
@@ -378,6 +429,7 @@ const groups: Partial<Record<TabId, Tabs>> = {
     analysis: analysisTabs,
     manufacturing: manufacturingTabs,
     qualification: qualificationTabs,
+    operations: operationsTabs,
 };
 
 /** The 3D view's module, once it has loaded; undefined before, and for good if it could not. */
@@ -1610,7 +1662,7 @@ const DETAILS_BATCH = 6;
 let buildPhase: 'plan' | 'document' = 'plan';
 
 /** The kinds of object that can declare requirements. */
-const REQUIRED_KINDS = ['part', 'assembly', 'scene', 'sketch'];
+const REQUIRED_KINDS = ['part', 'assembly', 'scene', 'sketch', 'package'];
 
 /**
  * The kinds of object that can declare simulations. A scene is one: a stack of
@@ -1721,9 +1773,27 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
     const required: TabSpec[] = requirementsOffered(message)
         ? [{ id: 'requirements', label: 'Requirements', pane: panes.requirements, secondary: true }]
         : [];
+    const design: TabSpec = { id: 'design', label: 'Design', pane: panes.design };
+    const operations = operationsGroup(message);
+    const kind = message?.kind;
+    if (kind === 'interface') {
+        // Ports rather than a shape: nothing to analyse, make or test, and no
+        // requirements of its own - the 3D view of it, and what became of it.
+        return [design, operations];
+    }
+    if (kind === 'sketch') {
+        // Flat: it is drawn rather than turned, and it is made and tested as
+        // part of whatever extrudes it.
+        return [...required, design, operations];
+    }
+    if (kind === 'package') {
+        // Not an object: no shape at all. Its own requirements, and its
+        // history - opened on the history, as an object opens on its design.
+        return [...required, operations];
+    }
     return [
         ...required,
-        { id: 'design', label: 'Design', pane: panes.design },
+        design,
         {
             id: 'analysis',
             label: 'Analysis',
@@ -1742,15 +1812,33 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
         // every one of them whether it applies - so the group is, whatever the
         // object simulates.
         { id: 'qualification', label: 'Qualification', pane: panes.qualification },
-        // A placeholder for the group to come: in the strip so that its shape
-        // is the one it will keep, disabled because it holds no tabs yet.
-        {
-            id: 'operations',
-            label: 'Operations',
-            pane: panes.operations,
-            disabled: true,
-            hint: 'No operations data is collected for this object',
-        },
+        operations,
+    ];
+}
+
+/** The Operations group, enabled while any of its tabs is. */
+function operationsGroup(message: ShowMessage | undefined): TabSpec {
+    return {
+        id: 'operations',
+        label: 'Operations',
+        pane: panes.operations,
+        disabled: !Tabs.anyEnabled(operationsTabsFor(message)),
+        hint: 'PartCAD did not say which package this belongs to',
+    };
+}
+
+/**
+ * Operations: Revisions, the commits that changed the package of what is on
+ * screen, each compared with it; and Used By, what among the loaded packages
+ * uses it. Both are questions about '<package>:<name>' - or, for a package,
+ * about the package - so an object whose package is not known gets neither.
+ */
+function operationsTabsFor(message: ShowMessage | undefined): TabSpec[] {
+    const known = Boolean(message?.package) && !isDeclaration(message?.kind);
+    const hint = 'PartCAD did not say which package this belongs to';
+    return [
+        { id: 'revisions', label: 'Revisions', pane: panes.revisions, disabled: !known, hint },
+        { id: 'usedby', label: 'Used By', pane: panes.usedby, disabled: !known, hint },
     ];
 }
 
@@ -1904,10 +1992,16 @@ function setAllTabs(message: ShowMessage | undefined): void {
     // A declaration's strip is one of passing ('transient'): the CMF tab it
     // opens on is the only one there is, not a tab anybody chose, and the next
     // object shown goes back to the Design tab that was open before it.
-    designTabs.setTabs(designTabsFor(message), { transient: isDeclaration(message?.kind) });
+    //
+    // So is an interface's: its one tab, the 3D view, is the only one there is,
+    // and a part shown after it goes back to the tab that was open before.
+    designTabs.setTabs(designTabsFor(message), {
+        transient: isDeclaration(message?.kind) || message?.kind === 'interface',
+    });
     analysisTabs.setTabs(analysisTabsFor(message));
     manufacturingTabs.setTabs(manufacturingTabsFor(message));
     qualificationTabs.setTabs(qualificationTabsFor(message));
+    operationsTabs.setTabs(operationsTabsFor(message));
     tabs.setTabs(tabsFor(message));
 }
 
@@ -1940,6 +2034,19 @@ function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
     if (isDeclaration(kind)) {
         return [cmf];
     }
+    const view3d: TabSpec = { id: '3d', label: '3D', pane: panes['3d'] };
+    if (kind === 'interface') {
+        // Its ports, turned in 3D, which is the one view of them there is: one
+        // tab, so no strip, and the pane is the group.
+        return [view3d];
+    }
+    if (kind === 'sketch') {
+        // Flat: rendered to a picture, and drawn - as one view of its plane.
+        return [
+            { id: '2d', label: '2D', pane: panes['2d'], disabled: !known },
+            { id: 'draft', label: 'Draft', pane: panes.draft, disabled: !known },
+        ];
+    }
     const cam = camData !== undefined && camData !== 'failed' && !camData.refused ? camData : undefined;
     const camTab: TabSpec = {
         id: 'cam',
@@ -1957,7 +2064,7 @@ function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
                   : (camData.refused ?? undefined),
     };
     return [
-        { id: '3d', label: '3D', pane: panes['3d'] },
+        view3d,
         {
             id: '2d',
             label: '2D',
@@ -2015,6 +2122,11 @@ async function show(message: ShowMessage): Promise<void> {
     );
     resetRenderTabs('Select this tab to render it.');
     cmfView.setBusy('Select this tab to see what this is in.');
+    // Asked when looked at, as the render tabs are: the history is a walk
+    // over the repository, and what uses the object a walk over the context.
+    revisionQueries.clear();
+    revisionsView.setBusy('Select this tab to see the history of this package.');
+    usedByView.setBusy(`Select this tab to see what uses ${thisObject()}.`);
     resetManufacturing('Asking PartCAD what this is made of…');
     resetSimulations('Asking PartCAD what this declares under qual: sim:…');
     if (!message.keepCamera) {
@@ -2298,6 +2410,9 @@ function clear(): void {
     eachTestView((view) => view.setBusy('Nothing to test: select an object.'));
     requirements = undefined;
     requirementsView.setBusy('Nothing to show.');
+    revisionQueries.clear();
+    revisionsView.setBusy('Nothing to show.');
+    usedByView.setBusy('Nothing to show.');
     resetSimulations('Nothing to simulate.');
     simulationView.setViewpoint(undefined);
     for (const panel of designPanels()) {
@@ -2571,6 +2686,9 @@ function renderTab(tab: TabId): void {
     request(tab, {
         format,
         plugin: tab === 'draft' ? view.plugin : undefined,
+        // A sketch is flat: its drawing is one view of its plane, face on,
+        // rather than the three planes and the perspective of a solid.
+        singleView: tab === 'draft' && shown.kind === 'sketch' ? SKETCH_DRAFT_VIEW : undefined,
         viewportOrigin: viewpoint?.origin,
         viewportUp: viewpoint?.up,
         section: sectionRequest(designSection) ?? undefined,
@@ -2586,6 +2704,9 @@ function renderTab(tab: TabId): void {
         ...(tab === '2d' ? renderOptions(labels.current) : {}),
     });
 }
+
+/** The one view a sketch's drawing is laid out with: the plane it is drawn in, face on. */
+const SKETCH_DRAFT_VIEW = 'top';
 
 /**
  * Start the Draft tab: learn what the chosen package draws, then draw.
@@ -2715,6 +2836,20 @@ function onLeafSelected(tab: TabId): void {
         verifyRequirements();
         return;
     }
+    if (tab === 'revisions') {
+        // The history first; a comparison is asked for once it says which
+        // revision is the newest (see 'RevisionsView.showHistory').
+        requested.add(tab);
+        revisionsView.setBusy('Asking PartCAD for the history of this package…');
+        request(tab, { query: 'list' });
+        return;
+    }
+    if (tab === 'usedby') {
+        requested.add(tab);
+        usedByView.setBusy(`Asking PartCAD what uses ${thisObject()}…`);
+        request(tab);
+        return;
+    }
     if (isQualTestTab(tab)) {
         listTests(tab);
         return;
@@ -2790,12 +2925,39 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
         }
         return;
     }
+    const revisionQuery = tab === 'revisions' ? revisionQueries.get(token) : undefined;
+    if (revisionQuery !== undefined) {
+        // A comparison, or what the package uses or is used by at a revision,
+        // each answered under a token of its own: see 'askRevision'.
+        revisionQueries.delete(token);
+        revisionsView.answer(revisionQuery.query, revisionQuery.revision, data, error);
+        return;
+    }
     if (awaiting.get(tab) !== token) {
         // For an object that is no longer on screen, or for a run this tab has
         // since been asked to replace.
         return;
     }
     awaiting.delete(tab);
+
+    if (tab === 'revisions') {
+        if (error !== undefined) {
+            revisionsView.showError(error);
+        } else if (data === null || data === undefined) {
+            revisionsView.showError('PartCAD had nothing to say about the history of this package.');
+        } else {
+            revisionsView.showHistory(data as RevisionsData);
+        }
+        return;
+    }
+    if (tab === 'usedby') {
+        if (error !== undefined) {
+            usedByView.showError(error);
+        } else {
+            usedByView.show((data as UsedByData | undefined) ?? { objects: [] }, thisObject());
+        }
+        return;
+    }
 
     if (isRenderTab(tab)) {
         const view = renderViews[tab];

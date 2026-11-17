@@ -57,6 +57,7 @@ from . import (
     material,
     material_config,
     output,
+    package_versions,
     part_config,
 )
 from . import part_factory_alias as pfa
@@ -405,6 +406,12 @@ class Project(project_config.Configuration):
     providers: dict[str, plugin_provider.Provider]
     repositories: dict[str, plugin_repository.Repository]
     software: dict[str, pc_software.Software]
+
+    # The commit this package was read at, and the package it is a revision of,
+    # for a package loaded as '<name>@<revision>' (see 'partcad.package_versions');
+    # None for every other package, which is read from wherever it is loaded.
+    revision_sha: typing.Optional[str] = None
+    revision_of: typing.Optional[str] = None
 
     class MaterialLock(object):
         """The lock of one CMF declaration ('partcad.cmf'): materials, colours and finishes alike.
@@ -1482,6 +1489,17 @@ class Project(project_config.Configuration):
         return False
 
     def relocate(self, pattern: str) -> str:
+        """Rewrites a reference this package authored to where what it names is loaded.
+
+        Against the name the package declares for itself (see
+        '_relocate_declared'), and then -- for a package loaded at a revision,
+        or inside one -- into that revision: '//pkg@<sha>' and every package
+        under it read '//pkg:widget' as '//pkg@<sha>:widget', because the
+        revision was written against itself (see 'package_versions.rebase').
+        """
+        return package_versions.rebase(self.name, self._relocate_declared(pattern))
+
+    def _relocate_declared(self, pattern: str) -> str:
         """Rewrites a reference this package authored against its own name.
 
         A package declares its identity ('name' in its configuration) but may
