@@ -160,7 +160,9 @@ def pin_tracked_dependencies(ctx) -> dict:
             stats["current"] += 1
             continue
 
-        reason = set_dependency_revision(project.config_path, name, commit)
+        # Under the lock every writer of 'partcad.yaml' takes: see 'edit_lock'.
+        with project._editing():
+            reason = set_dependency_revision(project.config_path, name, commit)
         if reason is not None:
             pc_logging.error(
                 "Failed to pin %s to the tip of '%s' in the 'partcad.yaml' of %s: %s. Set 'revision: %s' in it by hand."

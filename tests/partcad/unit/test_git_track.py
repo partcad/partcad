@@ -964,6 +964,40 @@ def initialized(tmp_path, user_config, upstream=None):
     return config, yaml.safe_load(config.read_text())["dependencies"]["pub"]
 
 
+def _held_while_pinning(monkeypatch, module):
+    """Whether the edit lock on the file was held each time 'module' wrote a pin into it."""
+    from partcad import dependency_pin, edit_lock
+
+    held, write = [], dependency_pin.set_dependency_revision
+
+    def watched(config_path, name, revision):
+        held.append(os.path.realpath(config_path) in getattr(edit_lock._HELD, "files", set()))
+        return write(config_path, name, revision)
+
+    monkeypatch.setattr(module, "set_dependency_revision", watched)
+    return held
+
+
+def test_update_writes_its_pin_under_the_edit_lock(tmp_path, upstream, user_config, monkeypatch):
+    """'pc update' rewrites 'partcad.yaml': an edit of it meanwhile waits rather than one of the two being lost."""
+    import importlib
+
+    held = _held_while_pinning(monkeypatch, importlib.import_module("partcad.actions.package.update"))
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, track="main"))
+    monkeypatch.setattr(rfg, "tracked_commit", lambda user_config, url, track=None: (track, DIGITS))
+    assert pin(workspace, user_config)["pinned"] == 1
+    assert held == [True]
+
+
+def test_init_writes_its_pin_under_the_edit_lock(tmp_path, upstream, user_config, monkeypatch):
+    from partcad import dependency_pin
+
+    held = _held_while_pinning(monkeypatch, dependency_pin)
+    initialized(tmp_path, user_config, upstream)
+    assert held == [True]
+
+
 def test_init_pins_the_index_to_the_tip_of_main(tmp_path, upstream, user_config):
     # As the real index is: its default branch is 'devel', which is ahead of or
     # behind the released 'main' -- and 'main' is what a new package gets.
