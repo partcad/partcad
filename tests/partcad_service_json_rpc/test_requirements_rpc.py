@@ -216,3 +216,51 @@ def test_qual_add_replaces_an_entry_only_when_asked(session, package):
     assert _written(package)["bracket"]["qual"]["topology"] == {"tolerance-surfaces": {"minArea": 1.0}}
     operations.qual_add(session, {**params, "entry": {"minArea": 2.0}, "replace": True})
     assert _written(package)["bracket"]["qual"]["topology"] == {"tolerance-surfaces": {"minArea": 2.0}}
+
+
+def test_a_requirement_shared_with_another_declaration_through_an_anchor_is_refused(tmp_path):
+    """'ruamel' keeps an alias the object its anchor is: an edit of one would be an edit of both."""
+    text = (
+        "parts:\n"
+        "  a:\n    type: basic\n    cuboid: 1\n    requirements: &shared\n      has_color: true\n"
+        "  b:\n    type: basic\n    cuboid: 2\n    requirements: *shared\n"
+        "  base: &base\n    type: basic\n    cuboid: 3\n    requirements:\n      has_finish: true\n"
+        "  c:\n    <<: *base\n    cuboid: 4\n"
+    )
+    (tmp_path / "partcad.yaml").write_text(text)
+    session = Session(EventEmitter(lambda event, payload: None))
+    session.partcad = pc
+    session.partcad_ctx = pc.Context(str(tmp_path))
+    for name in ("b", "c"):
+        with pytest.raises(JsonRpcError, match="YAML anchor or a merge key"):
+            operations.requirements_add(
+                session, {"object": name, "requirement": "has", "name": "weight", "value": True}
+            )
+    assert (tmp_path / "partcad.yaml").read_text() == text
+
+
+def test_consecutive_edits_are_read_by_the_same_warm_context(session, package):
+    """What the IDE does: one context, kept across a change and the check after it."""
+    params = {"package": "//reqdemo", "object": "bracket"}
+    operations.requirements_add(session, {**params, "requirement": "has", "name": "material", "value": True})
+    assert operations.requirements_check(session, params)["section"]["has_material"] is True
+    operations.requirements_remove(session, {**params, "requirement": "has", "name": "material"})
+    assert "has_material" not in operations.requirements_check(session, params)["section"]
+
+
+def test_the_package_of_the_object_is_reloaded_whatever_the_requirement_names():
+    """'name' is a requirement here ('//lib:mount'), not the editor's object: both packages are checked."""
+    import types
+
+    ctx = types.SimpleNamespace(resolve_package_path=lambda package: package)
+    targets, _ = operations._config_check_targets(ctx, {"package": "//here", "object": "bracket", "name": "//lib:m"})
+    assert targets == ["//here", "//lib"]
+    # The editor's own 'name', with no 'object', is still the object, and its package the one.
+    targets, _ = operations._config_check_targets(ctx, {"package": "//here", "name": "//there:bracket"})
+    assert targets == ["//there"]
+
+
+def test_an_instance_has_the_requirements_of_the_object_it_is_of():
+    assert operations._declared_name("bracket;length=10") == "bracket"
+    assert operations._declared_name("room;medium=//pub/std:air") == "room"
+    assert operations._declared_name("bracket") == "bracket"

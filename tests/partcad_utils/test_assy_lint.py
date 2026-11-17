@@ -198,6 +198,12 @@ def test_a_comparison_yaml_misreads_as_an_empty_block_is_found_where_it_is_writt
     assert "quote it ('>5')" in diagnostic.message
 
 
+def test_a_folded_block_a_template_fills_in_is_not_mistaken_for_a_misread_comparison():
+    """Masked, '{{ description }}' leaves the block empty; its header has no indentation digit to misread."""
+    text = "parts:\n  b:\n    type: basic\n    cuboid: 1\n    desc: >\n      {{ description }}\n"
+    assert [d for d in validate_source(text, get_schema(PARTCAD_SCHEMA)) if d.code == CODE_YAML] == []
+
+
 def test_a_quoted_comparison_and_a_folded_block_with_text_in_it_are_fine():
     assert validate_source(_configuration("'>5'"), get_schema(PARTCAD_SCHEMA)) == []
     text = "parts:\n  b:\n    type: basic\n    cuboid: 1\n    desc: >\n      Folded,\n      on purpose.\n"

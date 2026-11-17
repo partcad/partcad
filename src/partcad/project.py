@@ -340,6 +340,41 @@ def declare_object_type_parameters(factory_name: str, config: dict, params: dict
 _ENRICHING = threading.local()
 
 
+def _shared_by_alias(document, declaration, keys) -> typing.Optional[str]:
+    """What of 'declaration' the document reaches from more than one place: 'itself', a key, or None.
+
+    Counted by identity: a YAML alias is the very object its anchor is, and so
+    is what a '<<:' merge brings in. Only the declaration itself and what is
+    under 'keys' are asked about; every container is counted, but the walk does
+    not go into one it has been in, so a cycle of aliases ends.
+    """
+    seen: dict = {}
+    stack = [document]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, (dict, list)):
+            continue
+        seen[id(node)] = seen.get(id(node), 0) + 1
+        if seen[id(node)] > 1:
+            continue
+        stack.extend(node.values() if isinstance(node, dict) else node)
+
+    def shared_under(node, visited) -> bool:
+        if not isinstance(node, (dict, list)) or id(node) in visited:
+            return False
+        visited.add(id(node))
+        if seen.get(id(node), 0) > 1:
+            return True
+        return any(shared_under(item, visited) for item in (node.values() if isinstance(node, dict) else node))
+
+    if seen.get(id(declaration), 0) > 1:
+        return "itself"
+    for key in keys:
+        if key in declaration and shared_under(declaration[key], set()):
+            return "its '%s:'" % key
+    return None
+
+
 def _enriches_being_made() -> list:
     making = getattr(_ENRICHING, "stack", None)
     if making is None:
@@ -3592,7 +3627,7 @@ class Project(project_config.Configuration):
                 os.remove(temporary)
             raise
 
-    def edit_object_declaration(self, kind: str, object_name: str, edit, what: str = "the change"):
+    def edit_object_declaration(self, kind: str, object_name: str, edit, what: str = "the change", keys=None):
         """Change one object's declaration in this package's 'partcad.yaml': 'edit(declaration)', then write it.
 
         'edit' is handed the object's own mapping, as 'ruamel' read it, and
@@ -3601,6 +3636,14 @@ class Project(project_config.Configuration):
         file does not declare -- one a plugin supplies, or one another file
         holds -- since there is nowhere here to write it, and for a template
         (see '_load_to_edit').
+
+        And refused for a declaration that shares what the edit changes with
+        another one: 'keys' are the keys of the declaration it changes, and a
+        mapping or a list under one of them -- or the declaration itself -- that
+        the document reaches from more than one place (a YAML anchor and its
+        alias, a '<<:' merge) is the other declaration's as well. 'ruamel'
+        keeps it one object, so the edit would change both, and write the
+        anchor back with the change in it.
         """
         section = OBJECT_KIND_SECTIONS.get(kind)
         if section is None:
@@ -3612,6 +3655,12 @@ class Project(project_config.Configuration):
             raise ValueError(
                 "The %s '%s' is not declared in '%s', so there is nowhere to write %s"
                 % (kind, object_name, self.config_path, what)
+            )
+        shared = _shared_by_alias(config, declaration, keys or ())
+        if shared is not None:
+            raise ValueError(
+                "The %s '%s' shares %s with another declaration through a YAML anchor or a merge key, so %s would"
+                " change both: write it by hand" % (kind, object_name, shared, what)
             )
         result = edit(declaration)
         self._write_edited(config, yaml)
@@ -3657,7 +3706,7 @@ class Project(project_config.Configuration):
             entries[name] = entry
 
         try:
-            self.edit_object_declaration(kind, object_name, add, "its qualification")
+            self.edit_object_declaration(kind, object_name, add, "its qualification", keys=(qual_config.SECTION,))
         except ValueError as e:
             pc_logging.error(str(e))
             return False

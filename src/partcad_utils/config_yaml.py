@@ -122,9 +122,11 @@ def empty_block_scalars(text: str) -> list:
     '|' followed by a digit is a block scalar header with an indentation
     indicator, and the block it opens is empty when the next line is not
     indented further -- so 'mass: >5' reads as 'mass: ""', with nothing said.
-    A block scalar that is empty because nothing was written under it is
-    reported too: an empty value written as a block is not something anybody
-    means. Nothing is reported for a document that does not parse.
+    Only a header with that digit is reported. A plain '>' or '|' over nothing
+    is an empty value written as one, which is no misreading -- and in a
+    template it is often a block whose text a '{{ }}' fills in, which a check
+    of the template with its values unknown sees as nothing at all. Nothing is
+    reported for a document that does not parse.
     """
     try:
         root = yaml.compose(text, Loader=Loader)
@@ -137,15 +139,23 @@ def empty_block_scalars_of(root) -> list:
     """'empty_block_scalars' of a document already composed: [(line, column, header)], 0-based."""
     found = []
     stack = [root] if root is not None else []
+    # Each node once: an alias is the node its anchor is, and an anchor can be
+    # inside what it names ('custom: &loop [*loop]'), which is a cycle.
+    visited = set()
     while stack:
         node = stack.pop()
+        if id(node) in visited:
+            continue
+        visited.add(id(node))
         if isinstance(node, yaml.ScalarNode):
             if node.style in (">", "|") and node.value == "":
                 mark = node.start_mark
                 buffer = getattr(mark, "buffer", None) or ""
                 pointer = getattr(mark, "pointer", 0) or 0
                 line = buffer[pointer:].split("\n", 1)[0].rstrip("\0")
-                found.append((mark.line, mark.column, line.split(" #", 1)[0].strip() or node.style))
+                header = line.split(" #", 1)[0].strip() or node.style
+                if any(character.isdigit() for character in header):
+                    found.append((mark.line, mark.column, header))
         elif isinstance(node, yaml.SequenceNode):
             stack.extend(node.value)
         elif isinstance(node, yaml.MappingNode):

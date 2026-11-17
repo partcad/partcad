@@ -543,8 +543,10 @@ Object commands
   ``pc req list <object>`` prints the section as PartCAD reads it, as YAML -- or JSON with ``--json``;
   ``--yaml`` asks for the default by name. ``--kind`` keeps only the requirements of a kind (``feature``,
   ``port``, ``interface``, ``physics``, ``match``, ``has``; repeat it for several), and ``--verify`` adds
-  ``checks:``, each requirement with whether the model meets it. An alias's requirements are its source's,
-  which ``from:`` names. What it prints reads back: any part of it is what ``pc req add --stdin`` takes.
+  ``checks:``, each requirement with whether the model meets it -- of the instance ``-p <name>=<value>`` says, for
+  an object with parameters; what is required is the declaration's, which every instance shares. An alias's
+  requirements are its source's, which ``from:`` names. What it prints reads back: any part of it is what
+  ``pc req add --stdin`` takes.
 
   ``pc req add <kind> <object> <name>`` writes one requirement into the object's package, a command per kind
   since each is written differently::
@@ -584,8 +586,11 @@ Object commands
   every option of ``pc qual test`` that does not choose the tests.
 
   An alias or an enrich is refused: its requirements are read off what it points at, so they are changed
-  there. So is an object its package's ``partcad.yaml`` does not declare, and a ``partcad.yaml`` that is a
-  Jinja2 template. The rest of the file is kept as it was written.
+  there. So is an object its package's ``partcad.yaml`` does not declare, a ``partcad.yaml`` that is a
+  Jinja2 template, and requirements shared with another object through a YAML anchor or a ``<<:`` merge
+  key, which an edit of one would change in both. The rest of the file is kept as it was written, and
+  what is written is quoted wherever PartCAD would otherwise read it as something else (a feature called
+  ``off``).
 
 ``pc qual test``
   Run the qualification tests of a part, an assembly, a scene or a sketch -- or of every object of a package

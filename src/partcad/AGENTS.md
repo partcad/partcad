@@ -418,7 +418,10 @@ at all).
   its own to disagree with the reader. An edit is tried on a copy first, so a refused one leaves nothing behind.
   Adding refuses what is there unless `replace` (so does `pc qual add` now), and removing a feature that a
   simulation or an analysis scenario names is refused unless `with_references` takes those names out too. An alias
-  or an enrich is refused: its requirements are read off its source, so what was written on it would never be read.
+  or an enrich is refused: its requirements are read off its source, so what was written on it would never be read. So
+  is a section shared with another declaration through a YAML anchor or a `<<:` merge (`_shared_by_alias`): ruamel
+  keeps an alias the very object its anchor is. ruamel writes YAML 1.2 and PartCAD reads YAML 1.1, so every string an
+  edit writes is quoted where `config_yaml.load` would read it as something else (`_text`: a feature called `off`).
   A value typed on the command line or into a form is read by `partcad_utils.config_yaml.scalar` -- as the same
   text in `partcad.yaml` is read, except that what YAML would refuse or misread there (`>0`, `!0`, `>5`) is the text
   itself.

@@ -1655,7 +1655,12 @@ function sendRequirementEdit(edit: RequirementEdit): void {
     }
     lastToken += 1;
     requirementEditing = lastToken;
-    editRequirement({ type: 'editRequirement', token: lastToken, edit });
+    editRequirement({
+        type: 'editRequirement',
+        token: lastToken,
+        target: { package: shown.package ?? '', name: shown.name ?? '', kind: shown.kind ?? '' },
+        edit,
+    });
 }
 
 /**
@@ -1674,6 +1679,10 @@ function onRequirementEdited(message: RequirementEditedMessage): void {
         return;
     }
     requirementsView.edited(message.changed);
+    // What was drawn is the declaration as it was before the change: a form
+    // filled from it now would write the old values back over the new ones. It
+    // is let go of, so that the tab waits for the declaration as it now is.
+    requirements = undefined;
     requested.delete('requirements');
     verifyRequirements();
 }

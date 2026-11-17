@@ -22,6 +22,7 @@ import rich_click as click
 import yaml
 
 from ... import object_kind
+from ...parameters import param_option, param_params
 from ...requirement_args import object_options, object_params
 from ...service import run
 
@@ -100,10 +101,13 @@ def listing(result: dict, kinds=(), verify: bool = False) -> dict:
     is_flag=True,
     help="Also check the model against each requirement, as 'pc req test' does, and print the verdicts",
 )
+@param_option
 @click.argument("object", type=str)
 @click.pass_obj
-def cli(cli_ctx, package, assembly, scene, sketch, kinds, output, verify, object):
-    request = {**object_params(package, assembly, scene, sketch, object), "verify": verify}
+def cli(cli_ctx, package, assembly, scene, sketch, kinds, output, verify, params, object):
+    # '-p' says which instance is checked with '--verify'; what is required is
+    # the declaration's, which every instance of the object shares.
+    request = {**object_params(package, assembly, scene, sketch, object), "verify": verify, **param_params(params)}
     result = run(cli_ctx, "requirements.check", request, needs_context=True)
     if result is None:
         # The package did not load; the daemon has already said so.

@@ -119,15 +119,25 @@ def _config_check_targets(ctx, params):
     """
     package, object_name, recursive = _request(params)
     target = ctx.resolve_package_path(package)
-    for name in (object_name, params.get("name")):
-        # A ':' in a parameter value ('room;medium=//pub/std:air') names no
-        # package; only one before the parameters does.
-        object_package = split_resource_path(name)[0] if isinstance(name, str) else None
-        if object_package is not None:
-            if object_package:
-                target = ctx.resolve_package_path(object_package)
-            break
+    # A ':' in a parameter value ('room;medium=//pub/std:air') names no
+    # package; only one before the parameters does.
+    object_package = split_resource_path(object_name)[0] if isinstance(object_name, str) else None
+    if object_package:
+        target = ctx.resolve_package_path(object_package)
     targets = [target]
+    name = params.get("name")
+    name_package = split_resource_path(name)[0] if isinstance(name, str) else None
+    if name_package:
+        name_target = ctx.resolve_package_path(name_package)
+        if object_name is None:
+            # The editor's object, named by 'name' alone: its package is the one.
+            targets = [name_target]
+        elif object_package is None and name_target not in targets:
+            # A method about the object given as 'object' uses 'name' for
+            # something else -- a requirement of it ('requirements.add', where
+            # '//lib:mount' is an interface), a test of it ('qual.add') -- so its
+            # package is checked beside the object's, not in place of it.
+            targets.append(name_target)
     other = params.get("current")
     other_package = split_resource_path(other)[0] if isinstance(other, str) else None
     if other_package:
@@ -4228,7 +4238,7 @@ def _requirements_sections(ctx, package, kind, name, obj) -> dict:
         "section": structured(own),
         "declared": structured(declared),
         "source": config.get("source_resolved"),
-        "editable": _requirements_not_editable(ctx, package, kind, name, obj),
+        "editable": _requirements_not_editable(ctx, package, kind, _declared_name(name), obj),
         "physics_fields": fields,
         "has_names": requirements_edit.has_names(),
     }
@@ -4285,12 +4295,23 @@ def _requirement_object(session, params):
     obj = getters[kind](_qualified(package, name))
     if obj is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), _qualified(package, name)))
-    why = _requirements_not_editable(ctx, package, kind, name, obj)
+    # What is written is the declaration, which every instance of the object
+    # shares: an instance with other parameter values (the IDE shows one as
+    # 'bracket;length=10') has the requirements of the object it is of.
+    declared = _declared_name(name)
+    why = _requirements_not_editable(ctx, package, kind, declared, obj)
     if why is not None:
         raise JsonRpcError(
             USAGE_ERROR, "The requirements of %s cannot be changed: %s" % (_qualified(package, name), why)
         )
-    return ctx, package, kind, name, obj
+    return ctx, package, kind, declared, obj
+
+
+def _declared_name(name: str) -> str:
+    """The name an object is declared under: 'bracket' of the instance 'bracket;length=10'."""
+    from partcad_utils.utils import parse_parameterized_name
+
+    return parse_parameterized_name(name)[0]
 
 
 def _typed(value):
@@ -4363,6 +4384,7 @@ def requirements_add(session, params):
                 replace=bool(params.get("replace")),
             ),
             "its requirements",
+            keys=requirements_edit.TOUCHED,
         )
     except (requirements_edit.EditError, ValueError) as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
@@ -4399,6 +4421,7 @@ def requirements_remove(session, params):
                 with_references=bool(params.get("with_references")),
             ),
             "its requirements",
+            keys=requirements_edit.TOUCHED,
         )
     except (requirements_edit.EditError, ValueError) as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e

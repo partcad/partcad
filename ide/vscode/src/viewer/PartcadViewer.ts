@@ -772,12 +772,27 @@ export class PartcadViewer implements vscode.Disposable {
      * it: a refusal is an answer about the requirement, not a failure of the
      * extension, so it is not raised as an error notification too.
      */
-    private async editRequirement(token: number, edit: unknown): Promise<void> {
+    private async editRequirement(
+        token: number,
+        edit: unknown,
+        made: { package?: string; name?: string; kind?: string } | undefined,
+    ): Promise<void> {
         const post = (payload: { changed?: string | null; error?: string }) =>
             void this.panel?.webview.postMessage({ type: 'requirementEdited', token, ...payload });
         const target = this.lastShow;
         if (!target?.package || !target.name) {
             post({ error: 'PartCAD did not say which package this object belongs to.' });
+            return;
+        }
+        // Made on the object the tab was drawn for, which may no longer be the
+        // one shown: another show can come between the click and this message.
+        if (
+            made === undefined ||
+            made.package !== target.package ||
+            made.name !== target.name ||
+            (made.kind ?? '') !== (target.kind ?? '')
+        ) {
+            post({ error: 'Another object was shown before this change reached PartCAD: nothing was changed.' });
             return;
         }
         try {
@@ -1091,6 +1106,7 @@ export class PartcadViewer implements vscode.Disposable {
                     machine?: string;
                     settings?: unknown;
                     edit?: unknown;
+                    target?: { package?: string; name?: string; kind?: string };
                 } & Partial<ViewerStateReply>,
             ) => {
                 if (message.type === 'state') {
@@ -1154,7 +1170,7 @@ export class PartcadViewer implements vscode.Disposable {
                 } else if (message.type === 'saveCam') {
                     void this.saveCam(message.token ?? 0, message.machine, message.settings);
                 } else if (message.type === 'editRequirement') {
-                    void this.editRequirement(message.token ?? 0, message.edit);
+                    void this.editRequirement(message.token ?? 0, message.edit, message.target);
                 } else if (message.type === 'videoFullscreen') {
                     void this.videoFullscreen(message.on === true);
                 } else {

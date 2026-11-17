@@ -134,6 +134,15 @@ def test_stdin_that_yaml_cannot_read_says_how_to_quote(monkeypatch):
     assert calls == []
 
 
+def test_stdin_that_yaml_misreads_as_an_empty_block_is_refused_before_anything_is_sent(monkeypatch):
+    """'>5' unquoted is read as the empty string -- for an interface, the unnamed instance."""
+    calls = _calls(monkeypatch)
+    result = _invoke("add", "interface", "bracket", "mount", "--stdin", stdin=">5\n")
+    assert result.exit_code == 2
+    assert "quote it ('>5')" in _words(result.output)
+    assert calls == []
+
+
 def test_stdin_and_options_that_say_the_same_are_refused(monkeypatch):
     calls = _calls(monkeypatch)
     result = _invoke("add", "physics", "bracket", "mass", "--value", "1", "--stdin", stdin="1")

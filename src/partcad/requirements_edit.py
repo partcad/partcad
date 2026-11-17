@@ -40,6 +40,9 @@ import copy
 import typing
 
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from ruamel.yaml.scalarstring import SingleQuotedScalarString
+
+from partcad_utils import config_yaml
 
 from . import cae
 from . import requirements as req
@@ -57,6 +60,10 @@ KINDS = {
     "match": req.MATCH,
     "has": req.HAS,
 }
+
+# The keys of an object's declaration an edit here may change: the section, and
+# what names a feature ('feature:' of a simulation or an analysis scenario).
+TOUCHED = (req.SECTION, qual_config.SECTION) + tuple(cae.ANALYSES)
 
 # The keys of a location requirement, and of a port's beside it.
 LOCATION_KEYS = ("position", "direction", "angle")
@@ -112,7 +119,7 @@ def structured(section, like=None):
     features = _mapping(like)
     declaration = req.parse(section)
     for name, desc in (declaration.features if declaration is not None else {}).items():
-        features[name] = desc
+        features[_text(name)] = _text(desc)
     if features:
         result[req.FEATURES] = features
     return result
@@ -140,12 +147,34 @@ def _holds_mapping(value) -> bool:
     return isinstance(value, (list, tuple)) and any(_holds_mapping(item) for item in value)
 
 
+def _text(value):
+    """A string as it is written: in quotes where PartCAD would read the same text, unquoted, as something else.
+
+    The file is written by 'ruamel', which writes YAML 1.2 and quotes a string
+    only where YAML 1.2 would read it as something else; PartCAD reads it as
+    YAML 1.1 ('config_yaml.load'), which reads more words as other things. So a
+    feature called 'off' would be written 'off:' and read back as the key
+    False, and a sentence 'yes' as True. What decides is the reader that reads
+    the file next, so it is asked. Anything but a plain string -- a number, a
+    boolean, a string 'ruamel' read with quotes of its own -- is left as it is.
+    """
+    if type(value) is not str:  # noqa: E721 - a subclass of str carries a style of its own
+        return value
+    try:
+        read = config_yaml.load(value)
+    except Exception:  # pylint: disable=broad-except
+        read = None
+    if isinstance(read, str) and read == value:
+        return value
+    return SingleQuotedScalarString(value)
+
+
 def _written(value):
     """'value' as it is put into the file: a list of scalars on one line, as a location is written by hand."""
     if isinstance(value, dict):
         mapping = CommentedMap()
         for key, item in value.items():
-            mapping[key] = _written(item)
+            mapping[_text(key)] = _written(item)
         return mapping
     if isinstance(value, (list, tuple)):
         sequence = CommentedSeq([_written(item) for item in value])
@@ -153,7 +182,7 @@ def _written(value):
             # On one line, as a location is written by hand: '[[0, 0, 0], [0, 0, 1], 90]'.
             sequence.fa.set_flow_style()
         return sequence
-    return value
+    return _text(value)
 
 
 def _schema_errors(section) -> list:
@@ -285,7 +314,7 @@ def _add_feature(section, like, name, value, _instances, replace) -> str:
         raise _exists("The feature '%s'" % name)
     if heading:
         del section[name]
-    features[name] = value.strip()
+    features[_text(name)] = _text(value.strip())
     return "the feature '%s'" % name
 
 
@@ -311,7 +340,7 @@ def _add_port(section, like, name, value, _instances, replace) -> str:
     ports = _sub(section, req.PORTS, like)
     if name in ports and not replace:
         raise _exists("The port '%s'" % name)
-    ports[name] = _location(value, PORT_KEYS, "a port requirement")
+    ports[_text(name)] = _location(value, PORT_KEYS, "a port requirement")
     return "the port '%s'" % name
 
 
@@ -321,12 +350,12 @@ def _instance_map(current, like):
         return _mapping(like)
     if isinstance(current, str):
         mapping = _mapping(like)
-        mapping[current] = None
+        mapping[_text(current)] = None
         return mapping
     if isinstance(current, list) and all(isinstance(item, str) for item in current):
         mapping = _mapping(like)
         for item in current:
-            mapping[item] = None
+            mapping[_text(item)] = None
         return mapping
     if isinstance(current, dict):
         return current
@@ -344,12 +373,12 @@ def _add_interface(section, like, name, value, instances, replace) -> str:
         if isinstance(value, (list, tuple)) and len(value) == 3 and not all(isinstance(v, str) for v in value):
             # A location of any instance: written as the list, since a mapping
             # here is one of instance names.
-            interfaces[name] = _written(list(value))
+            interfaces[_text(name)] = _written(list(value))
         elif isinstance(value, dict) and set(value) <= set(LOCATION_KEYS):
             located = _location(value)
-            interfaces[name] = None if located is None else _written([located.get(key) for key in LOCATION_KEYS])
+            interfaces[_text(name)] = None if located is None else _written([located.get(key) for key in LOCATION_KEYS])
         else:
-            interfaces[name] = _written(value)
+            interfaces[_text(name)] = _written(value)
         return "the interface '%s'" % name
     try:
         mapping = _instance_map(interfaces.get(name), like)
@@ -359,8 +388,8 @@ def _add_interface(section, like, name, value, instances, replace) -> str:
     if taken and not replace:
         raise _exists("The instance%s %s of '%s'" % ("s" if len(taken) > 1 else "", ", ".join(taken), name))
     for instance in instances:
-        mapping[instance] = _location(value)
-    interfaces[name] = mapping
+        mapping[_text(instance)] = _location(value)
+    interfaces[_text(name)] = mapping
     return "the instance%s %s of the interface '%s'" % (
         "s" if len(instances) > 1 else "",
         ", ".join("'%s'" % instance for instance in instances),
@@ -390,7 +419,7 @@ def _add_physics(section, like, name, value, _instances, replace) -> str:
             raise EditError("'physics: %s' is not a mapping: rewrite it by hand first" % field)
         if member in members and not replace:
             raise _exists("The physical property '%s'" % name)
-        members[member] = value
+        members[member] = _written(value)
     else:
         if field in physics and not replace:
             raise _exists("The physical property '%s'" % name)
@@ -412,7 +441,7 @@ def _add_match(section, like, name, value, _instances, replace) -> str:
     limits = match.get(name)
     if limits is None:
         limits = _mapping(like)
-        match[name] = limits
+        match[_text(name)] = limits
     if not isinstance(limits, dict):
         raise EditError("'match: %s' is not a mapping: rewrite it by hand first" % name)
     asked = {}
@@ -427,7 +456,7 @@ def _add_match(section, like, name, value, _instances, replace) -> str:
     for amount, (_key, percent) in asked.items():
         for spelling in AMOUNTS[amount]:
             limits.pop(spelling, None)
-        limits[amount] = percent
+        limits[amount] = _written(percent)
     return "matching the %s of '%s'" % (" and ".join(asked), name)
 
 
@@ -483,7 +512,7 @@ def _unname(declaration: dict, feature: str) -> None:
             if not kept:
                 del entry[key]
             elif len(kept) == 1:
-                entry[key] = kept[0]
+                entry[key] = _text(kept[0])
             else:
                 entry[key] = _written(kept)
 

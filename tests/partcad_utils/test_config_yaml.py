@@ -167,3 +167,14 @@ def test_the_value_yaml_misreads_rather_than_refuses_is_found(value):
 )
 def test_a_value_typed_on_its_own_is_read_as_the_same_text_in_partcad_yaml(typed, read):
     assert config_yaml.scalar(typed) == read
+
+
+def test_an_alias_inside_what_its_anchor_names_does_not_hold_the_scan_up():
+    """'&loop [*loop]' composes into a cycle: each node is looked at once."""
+    assert config_yaml.empty_block_scalars("custom: &loop [*loop]\nmass: >5\n") == [(1, 6, ">5")]
+
+
+@pytest.mark.parametrize("text", ["desc: >\nnext: 1\n", "desc: |-\nnext: 1\n"])
+def test_an_empty_block_with_no_indentation_digit_is_no_misreading(text):
+    """Written empty, or filled by a template whose values are not known: either way not '>5' misread."""
+    assert config_yaml.empty_block_scalars(text) == []

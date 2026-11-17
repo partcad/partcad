@@ -780,6 +780,12 @@ export interface ShowSectionMessage {
 export interface EditRequirementMessage {
     type: 'editRequirement';
     token: number;
+    /**
+     * The object the change was made on, as the show that drew it said it. The
+     * host refuses the change when it is showing another by the time the message
+     * arrives, rather than make it on whatever is on screen then.
+     */
+    target: { package: string; name: string; kind: string };
     edit: RequirementEdit;
 }
 

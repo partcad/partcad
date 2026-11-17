@@ -561,9 +561,12 @@ suite('The Digital Thread host, and the view panel', () => {
         );
         try {
             const { viewer, host, posted } = bracket();
-            const edit = host as unknown as { editRequirement(token: number, edit: unknown): Promise<void> };
+            const edit = host as unknown as {
+                editRequirement(token: number, edit: unknown, target: unknown): Promise<void>;
+            };
             const change = { op: 'add', requirement: 'physics', name: 'mass', value: '>0', text: true };
-            await edit.editRequirement(12, change);
+            const target = { package: '//pkg', name: 'bracket;length=10', kind: 'assembly' };
+            await edit.editRequirement(12, change, target);
             assert.deepStrictEqual(asked[0], {
                 pkg: '//pkg',
                 name: 'bracket;length=10',
@@ -576,10 +579,14 @@ suite('The Digital Thread host, and the view panel', () => {
                 changed: "the physical property 'mass'",
             });
             refuse = true;
-            await edit.editRequirement(13, change);
+            await edit.editRequirement(13, change, target);
             const refusal = posted[posted.length - 1];
             assert.strictEqual(refusal.type, 'requirementEdited');
             assert.match(String(refusal.error), /required already/);
+            // Made on an object no longer on screen: refused here, and the daemon is not asked.
+            await edit.editRequirement(14, change, { ...target, name: 'bracket' });
+            assert.strictEqual(asked.length, 2);
+            assert.match(String(posted[posted.length - 1].error), /Another object was shown/);
             viewer.dispose();
         } finally {
             registration.dispose();

@@ -252,3 +252,19 @@ def test_a_value_json_has_no_type_for_is_handed_over_as_its_text():
 
     data = edit.section_as_data({"deadline": datetime.date(2026, 3, 1)})
     assert json.dumps(data) == '{"deadline": "2026-03-01"}'
+
+
+@pytest.mark.parametrize("name, desc", [("off", "yes"), ("1_000", "on"), ("no", "Holds a shelf")])
+def test_what_is_written_reads_back_as_partcad_reads_the_file(name, desc):
+    """'ruamel' writes YAML 1.2, PartCAD reads YAML 1.1: 'off:' unquoted would be the key False."""
+    from partcad_utils import config_yaml
+
+    yaml = ruamel.yaml.YAML()
+    document = yaml.load("parts:\n  b:\n    type: basic\n    cuboid: 1\n")
+    edit.add(document["parts"]["b"], "feature", name, desc)
+    edit.add(document["parts"]["b"], "port", name, None)
+    written = io.StringIO()
+    yaml.dump(document, written)
+    read = config_yaml.load(written.getvalue())["parts"]["b"]["requirements"]
+    assert read == {"features": {name: desc}, "ports": {name: None}}
+    assert requirements.parse(read).features == {name: desc}

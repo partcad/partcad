@@ -82,11 +82,21 @@ def read_stdin(as_json: bool):
     """The value standard input holds: YAML (as PartCAD reads 'partcad.yaml'), or JSON."""
     text = sys.stdin.read()
     try:
-        return json.loads(text) if as_json else config_yaml.load(text)
+        value = json.loads(text) if as_json else config_yaml.load(text)
     except (ValueError, yaml.YAMLError) as e:
         raise click.BadParameter(
             "standard input is not %s: %s" % ("JSON" if as_json else "YAML", e), param_hint="--stdin"
         )
+    if not as_json:
+        # '>5' unquoted is read, not refused: as an empty block of text, which
+        # would then be written as the empty string -- for an interface, the
+        # unnamed instance. Said as 'pc lint' says it, and nothing is sent.
+        for line, column, header in config_yaml.empty_block_scalars(text):
+            raise click.BadParameter(
+                "line %d, column %d: %s" % (line + 1, column + 1, config_yaml.misread_block(header)),
+                param_hint="--stdin",
+            )
+    return value
 
 
 def value(text):
