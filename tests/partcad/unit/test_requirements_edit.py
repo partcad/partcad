@@ -276,3 +276,19 @@ def test_text_partcad_yaml_would_render_as_a_template_is_refused(text):
     with pytest.raises(edit.EditError, match="Jinja2 template"):
         edit.add(declaration, "feature", "mount", text)
     assert "requirements" not in declaration
+
+
+def test_what_is_written_is_checked_as_partcad_would_read_it_before_it_replaces_anything():
+    """'read_back' compares the edited entry with what 'config_yaml.load' makes of the text about to be written."""
+    written = {"requirements": {"features": {"off": "Holds"}}}
+    check = edit.read_back("feature", "off")
+    check(written, {"requirements": {"features": {"off": "Holds"}}})
+    with pytest.raises(edit.EditError, match="read the feature 'off' back as nothing"):
+        check(written, {"requirements": {"features": {False: "Holds"}}})
+    # Only the entry the edit was about: what else was written by hand is read as its author meant.
+    edit.read_back("physics", "mass")(
+        {"requirements": {"physics": {"mass": ">0"}, "has_material": "yes"}},
+        {"requirements": {"physics": {"mass": ">0"}, "has_material": True}},
+    )
+    # A removal reads back as nothing there.
+    edit.read_back("port", "top")({"requirements": {}}, {"requirements": {}})

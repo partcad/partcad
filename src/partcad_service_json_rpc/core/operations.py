@@ -4385,6 +4385,7 @@ def requirements_add(session, params):
             ),
             "its requirements",
             keys=requirements_edit.TOUCHED,
+            read_back=requirements_edit.read_back(requirement, target, instances or None),
         )
     except (requirements_edit.EditError, ValueError) as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
@@ -4422,6 +4423,9 @@ def requirements_remove(session, params):
             ),
             "its requirements",
             keys=requirements_edit.TOUCHED,
+            read_back=requirements_edit.read_back(
+                params.get("requirement"), params.get("name"), params.get("instances") or None
+            ),
         )
     except (requirements_edit.EditError, ValueError) as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e

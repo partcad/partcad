@@ -718,6 +718,57 @@ def _remove_has(section, _declaration, name, *_rest) -> str:
     return "'%s'" % present[0] if len(present) == 1 else "'%s'" % key
 
 
+_MISSING = object()
+
+
+def _entry(section, kind: str, name: str, instances=None):
+    """What a section holds at one requirement's address, as plain data; '_MISSING' where it holds nothing."""
+    section = section if isinstance(section, dict) else {}
+    if kind == "has":
+        return section.get(has_key(name), _MISSING)
+    if kind == "physics":
+        field, _, member = name.partition(".")
+        value = (section.get(req.PHYSICS) or {}).get(field, _MISSING)
+        if member:
+            value = value.get(member, _MISSING) if isinstance(value, dict) else _MISSING
+        return value
+    sub = section.get(KINDS[kind])
+    value = sub.get(name, _MISSING) if isinstance(sub, dict) else _MISSING
+    if kind == "interface" and instances and isinstance(value, dict):
+        return {instance: value.get(instance, _MISSING) for instance in instances}
+    return value
+
+
+def read_back(kind: str, name: str, instances=None):
+    """A check that the requirement an edit wrote, or took out, reads back as PartCAD reads the file.
+
+    For 'Project.edit_object_declaration': the declaration as edited and as
+    'config_yaml.load' reads it out of the text about to be written are asked
+    for the one requirement the edit was about, and have to agree. Only that
+    one: anything else in the file was there before, and its reading is the
+    author's -- a hand-written 'has_material: yes' is the boolean PartCAD reads,
+    whatever 'ruamel' made of it. What this catches is the edit's own text read
+    as something else, which '_text' is there to prevent.
+    """
+    name = str(name or "").strip()
+    instances = [str(instance) for instance in instances] if instances else None
+
+    def check(written: dict, read) -> None:
+        def at(declaration):
+            raw = declaration.get(req.SECTION) if isinstance(declaration, dict) else None
+            return _entry(_plain(structured(raw)), kind, name, instances)
+
+        expected, found = at(written), at(read)
+        if expected != found:
+            show = lambda value: "nothing" if value is _MISSING else repr(value)  # noqa: E731
+            raise EditError(
+                "Nothing was written: PartCAD would read the %s '%s' back as %s, not as %s"
+                % (kind, name, show(found), show(expected))
+            )
+
+    return check
+
+
 def section_as_data(section) -> typing.Any:
     """A 'requirements:' section as plain data, for an answer: JSON can carry it, YAML can print it."""
     return _plain(section)

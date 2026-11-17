@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import copy
 import inspect
+import io
 import os
 import re
 import shutil
@@ -3608,17 +3609,21 @@ class Project(project_config.Configuration):
         config = yaml.load(text)
         return (config if config is not None else ruamel.yaml.comments.CommentedMap()), yaml
 
-    def _write_edited(self, config, yaml) -> None:
+    def _write_edited(self, config, yaml, text: typing.Optional[str] = None) -> None:
         """Replace this package's 'partcad.yaml' with 'config', once the new one is written in full beside it.
 
         Opening the file for writing would empty the package's declaration
-        before the dump, and a dump that fails then leaves nothing.
+        before the dump, and a dump that fails then leaves nothing. 'text' is
+        'config' dumped already, when the caller has read it back first.
         """
         target = os.path.realpath(self.config_path)
         temporary = "%s.%d.%d.tmp" % (target, os.getpid(), threading.get_ident())
         try:
             with open(temporary, "w") as fp:
-                yaml.dump(config, fp)
+                if text is None:
+                    yaml.dump(config, fp)
+                else:
+                    fp.write(text)
             with contextlib.suppress(OSError):
                 shutil.copymode(target, temporary)
             os.replace(temporary, target)
@@ -3627,7 +3632,9 @@ class Project(project_config.Configuration):
                 os.remove(temporary)
             raise
 
-    def edit_object_declaration(self, kind: str, object_name: str, edit, what: str = "the change", keys=None):
+    def edit_object_declaration(
+        self, kind: str, object_name: str, edit, what: str = "the change", keys=None, read_back=None
+    ):
         """Change one object's declaration in this package's 'partcad.yaml': 'edit(declaration)', then write it.
 
         'edit' is handed the object's own mapping, as 'ruamel' read it, and
@@ -3644,6 +3651,12 @@ class Project(project_config.Configuration):
         alias, a '<<:' merge) is the other declaration's as well. 'ruamel'
         keeps it one object, so the edit would change both, and write the
         anchor back with the change in it.
+
+        'read_back(declaration, read)' is handed the declaration as edited and
+        as PartCAD reads it out of the text about to be written
+        ('config_yaml.load', which is not the YAML 'ruamel' writes), and raises
+        to keep the file as it was: what is written is checked as it will be
+        read, before it replaces anything.
         """
         section = OBJECT_KIND_SECTIONS.get(kind)
         if section is None:
@@ -3663,7 +3676,20 @@ class Project(project_config.Configuration):
                 " change both: write it by hand" % (kind, object_name, shared, what)
             )
         result = edit(declaration)
-        self._write_edited(config, yaml)
+        text = None
+        if read_back is not None:
+            from partcad_utils import config_yaml
+
+            written = io.StringIO()
+            yaml.dump(config, written)
+            text = written.getvalue()
+            reread = config_yaml.load(text)
+            reread_declarations = reread.get(section) if isinstance(reread, dict) else None
+            read_back(
+                declaration,
+                reread_declarations.get(object_name) if isinstance(reread_declarations, dict) else None,
+            )
+        self._write_edited(config, yaml, text)
         return result
 
     def add_qual_config(

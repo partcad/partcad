@@ -280,3 +280,18 @@ def test_qual_add_refuses_text_partcad_yaml_would_render(session, package):
             },
         )
     assert (package / "partcad.yaml").read_text() == before
+
+
+def test_a_hand_written_yaml_1_1_value_does_not_stop_an_edit_beside_it(tmp_path):
+    """'has_material: yes' is the boolean PartCAD reads; an edit of another requirement leaves it so."""
+    text = "parts:\n  b:\n    type: basic\n    cuboid: 1\n    requirements:\n      has_material: yes\n"
+    (tmp_path / "partcad.yaml").write_text(text)
+    session = Session(EventEmitter(lambda event, payload: None))
+    session.partcad = pc
+    session.partcad_ctx = pc.Context(str(tmp_path))
+    operations.requirements_add(session, {"object": "b", "requirement": "physics", "name": "mass", "value": ">0"})
+    written = (tmp_path / "partcad.yaml").read_text()
+    assert "has_material: yes" in written
+    from partcad_utils import config_yaml
+
+    assert config_yaml.load(written)["parts"]["b"]["requirements"] == {"has_material": True, "physics": {"mass": ">0"}}
