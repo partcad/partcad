@@ -104,6 +104,7 @@ dynamic
 edges
 effort
 elif
+enclosure
 end
 endautoescape
 endblock
