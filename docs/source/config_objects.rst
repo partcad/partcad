@@ -423,7 +423,8 @@ the value, the misread ``>5`` included.
 
 On the command line no quoting for YAML is needed (see :ref:`pc-req`): ``pc req
 add`` reads each word as one value, so ``--value '>5'`` is quoted only for the
-shell, which would otherwise read ``>`` as a redirection. What ``pc req add
+shell, which would otherwise read ``>`` as a redirection (in Windows' ``cmd.exe``,
+where a single quote quotes nothing, that is ``--value ">5"``). What ``pc req add
 --stdin`` reads *is* YAML (or JSON with ``--json``), and is quoted as above.
 
 Where a port or an interface instance is

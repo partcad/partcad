@@ -565,7 +565,8 @@ Object commands
 
   Everything can be said with options, and each value given on the command line is one word, read as the same
   text is read in ``partcad.yaml`` -- ``5`` is the number, ``null`` no value -- except that it needs no YAML
-  quoting: ``'>5'`` is quoted only for the shell. ``--stdin`` reads the requirement from standard input
+  quoting: ``'>5'`` is quoted only for the shell (``">5"`` in Windows' ``cmd.exe``, where a single quote quotes
+  nothing). ``--stdin`` reads the requirement from standard input
   instead, as the YAML (or, with ``--json``, the JSON) of what its place in the section holds, with YAML's
   quoting (see :ref:`quoting a comparison <requirements-quoting>`)::
 
