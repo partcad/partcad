@@ -12,6 +12,8 @@ requirement asked for. What each kind of requirement means is pinned beside
 'partcad.requirements'; how each is written, beside 'partcad.requirements_edit'.
 """
 
+import threading
+
 import pytest
 import yaml
 
@@ -313,6 +315,46 @@ def test_a_hand_written_yaml_1_1_value_in_the_entry_a_removal_leaves_alone_does_
     written = (tmp_path / "partcad.yaml").read_text()
     assert left in written
     assert gone not in written
+
+
+def test_a_second_edit_of_the_file_waits_for_the_first_so_both_are_written(package, monkeypatch):
+    """Over HTTP the daemon serves requests on a pool of threads: two edits read the file one after the other."""
+    from partcad.project import Project
+
+    load = Project._load_to_edit
+    read, finish = threading.Event(), threading.Event()
+
+    def first_read_waits(self, what):
+        loaded = load(self, what)
+        if not read.is_set():
+            read.set()
+            finish.wait(30)
+        return loaded
+
+    monkeypatch.setattr(Project, "_load_to_edit", first_read_waits)
+    project = pc.Context(str(package)).get_project("//reqdemo")
+
+    def require(name, mass):
+        def edit(declaration):
+            declaration.setdefault("requirements", {})["physics"] = {"mass": mass}
+
+        return threading.Thread(target=project.edit_object_declaration, args=("part", name, edit))
+
+    first, second = require("bracket", 1), require("old-bracket", 2)
+    first.start()
+    assert read.wait(30)
+    second.start()
+    # Held up for as long as the first edit is, rather than reading the file it is about to replace.
+    second.join(1)
+    assert second.is_alive()
+    finish.set()
+    first.join(30)
+    second.join(30)
+    parts = _written(package)
+    assert (parts["bracket"]["requirements"]["physics"], parts["old-bracket"]["requirements"]) == (
+        {"mass": 1},
+        {"physics": {"mass": 2}},
+    )
 
 
 def test_a_hand_written_yaml_1_1_value_does_not_stop_an_edit_beside_it(tmp_path):

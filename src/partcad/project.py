@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import copy
+import functools
+import hashlib
 import inspect
 import io
 import os
@@ -278,6 +280,21 @@ SECTION_EXTENSIONS = {
 # read. Not a clause - nothing excluded it - but the object is dropped all the
 # same, and recorded as broken so that the reason reaches the user.
 INVALID_UNLESS = "<invalid 'unless'>"
+
+# How long an edit of a 'partcad.yaml' waits for another one of the same file to
+# finish. Each holds it for one read and one write of the file.
+EDIT_LOCK_TIMEOUT = 60
+
+
+def _one_edit_at_a_time(method):
+    """'method' reads this package's 'partcad.yaml', changes it and replaces it: done under 'Project._editing'."""
+
+    @functools.wraps(method)
+    def locked(self, *args, **kwargs):
+        with self._editing():
+            return method(self, *args, **kwargs)
+
+    return locked
 
 
 def _readme_cell(text) -> str:
@@ -3609,6 +3626,36 @@ class Project(project_config.Configuration):
         config = yaml.load(text)
         return (config if config is not None else ruamel.yaml.comments.CommentedMap()), yaml
 
+    @contextlib.contextmanager
+    def _editing(self):
+        """One read-edit-write of this package's 'partcad.yaml' at a time.
+
+        An edit reads the file, changes what it read and replaces the file with
+        that. Two at once -- the daemon serves HTTP requests on a pool of
+        threads -- would both read the file as it was, and the later replace
+        would drop what the earlier one wrote with nothing said. The lock is a
+        file in PartCAD's own state folder named after the file it guards, so
+        it holds across threads and processes and leaves nothing in the package.
+        """
+        from filelock import FileLock, Timeout
+
+        target = os.path.realpath(self.config_path)
+        folder = os.path.join(self.ctx.user_config.internal_state_dir, "locks", "edit")
+        os.makedirs(folder, exist_ok=True)
+        name = hashlib.sha256(target.encode("utf-8")).hexdigest()[:32] + ".lock"
+        lock = FileLock(os.path.join(folder, name), mode=0o600)
+        try:
+            lock.acquire(timeout=EDIT_LOCK_TIMEOUT)
+        except Timeout:
+            raise ValueError(
+                "'%s' is being changed by another edit, which has not finished in %d seconds: try again"
+                % (self.config_path, EDIT_LOCK_TIMEOUT)
+            ) from None
+        try:
+            yield
+        finally:
+            lock.release()
+
     def _write_edited(self, config, yaml, text: typing.Optional[str] = None) -> None:
         """Replace this package's 'partcad.yaml' with 'config', once the new one is written in full beside it.
 
@@ -3632,6 +3679,7 @@ class Project(project_config.Configuration):
                 os.remove(temporary)
             raise
 
+    @_one_edit_at_a_time
     def edit_object_declaration(
         self, kind: str, object_name: str, edit, what: str = "the change", keys=None, read_back=None
     ):
@@ -3760,6 +3808,7 @@ class Project(project_config.Configuration):
             return False
         return True
 
+    @_one_edit_at_a_time
     def set_machine_settings(self, part_name: str, machine: str, values: dict) -> None:
         """Write settings of one machine into a part's 'manufacturing:' section of this package's 'partcad.yaml'.
 
