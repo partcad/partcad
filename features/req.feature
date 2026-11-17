@@ -5,6 +5,10 @@ Feature: `pc req` command
   # back. Nothing here is built: the requirements are a declaration, and every
   # scenario works on a 'basic' part, which the daemon makes in-process -- so no
   # scenario provisions a CAD sandbox.
+  #
+  # Arguments are double-quoted and standard input comes from a file, never from
+  # 'echo': on Windows a command runs in cmd.exe, where single quotes quote
+  # nothing, '>' is a redirection, and 'echo' keeps the quotes it is given.
 
   Background: Create temporary $HOME and working directory
     Given I am in "/tmp/sandbox/behave" directory
@@ -23,7 +27,7 @@ Feature: `pc req` command
 
   @success @pc-req-add
   Scenario: `pc req add` takes a requirement from the command line alone, and `pc req list` prints it as YAML
-    When I run "pc --no-ansi req add physics bracket mass --value '>0,<=0.05'"
+    When I run "pc --no-ansi req add physics bracket mass --value ">0,<=0.05""
     Then the command should exit with a status code of "0"
     When I run "pc --no-ansi req add port bracket top --direction 0 0 -1"
     Then the command should exit with a status code of "0"
@@ -40,10 +44,18 @@ Feature: `pc req` command
 
   @success @pc-req-add
   Scenario: `pc req add --stdin` reads YAML with YAML's quoting, and a comparison left unquoted says to quote it
-    When I run "echo "[null, null, '<5']" | pc --no-ansi req add physics bracket centerOfMass --stdin"
+    Given a file named "center.txt" with content
+      """
+      [null, null, '<5']
+      """
+    When I run "pc --no-ansi req add physics bracket centerOfMass --stdin < center.txt"
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should contain "centerOfMass: [null, null, <5]"
-    When I run "echo '>0' | pc --no-ansi req add physics bracket mass --stdin 2>&1"
+    Given a file named "mass.txt" with content
+      """
+      >0
+      """
+    When I run "pc --no-ansi req add physics bracket mass --stdin < mass.txt 2>&1"
     Then the command should exit with a status code of "2"
     And STDOUT should contain "quote it"
     And a file named "partcad.yaml" should not contain "mass:"
@@ -61,7 +73,7 @@ Feature: `pc req` command
 
   @success @pc-req-remove
   Scenario: `pc req rm` takes a requirement out, and the section with it once nothing is left
-    When I run "pc --no-ansi req add feature bracket mount 'Takes an M3 screw from either side'"
+    When I run "pc --no-ansi req add feature bracket mount "Takes an M3 screw from either side""
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should contain "mount: Takes an M3 screw from either side"
     When I run "pc --no-ansi req rm feature bracket mount"
