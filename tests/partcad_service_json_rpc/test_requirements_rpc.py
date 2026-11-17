@@ -317,12 +317,33 @@ def test_a_hand_written_yaml_1_1_value_in_the_entry_a_removal_leaves_alone_does_
     assert gone not in written
 
 
-def test_a_second_edit_of_the_file_waits_for_the_first_so_both_are_written(package, monkeypatch):
+def _require(name, mass):
+    def edit(project):
+        def change(declaration):
+            declaration.setdefault("requirements", {})["physics"] = {"mass": mass}
+
+        project.edit_object_declaration("part", name, change)
+
+    return edit
+
+
+@pytest.mark.parametrize(
+    "second, written",
+    [
+        (_require("old-bracket", 2), lambda parts: parts["old-bracket"]["requirements"] == {"physics": {"mass": 2}}),
+        # Any other writer of the file waits for it too: 'pc add part' here.
+        (
+            lambda project: project.add_object_config("parts", "new", {"type": "basic", "cuboid": [1, 1, 1]}),
+            lambda parts: parts["new"] == {"type": "basic", "cuboid": [1, 1, 1]},
+        ),
+    ],
+)
+def test_a_second_edit_of_the_file_waits_for_the_first_so_both_are_written(package, monkeypatch, second, written):
     """Over HTTP the daemon serves requests on a pool of threads: two edits read the file one after the other."""
     from partcad.project import Project
 
-    load = Project._load_to_edit
-    read, finish = threading.Event(), threading.Event()
+    load, editing = Project._load_to_edit, Project._editing
+    read, finish, waiting = threading.Event(), threading.Event(), threading.Event()
 
     def first_read_waits(self, what):
         loaded = load(self, what)
@@ -331,30 +352,41 @@ def test_a_second_edit_of_the_file_waits_for_the_first_so_both_are_written(packa
             finish.wait(30)
         return loaded
 
+    def asked_for(self):
+        # The second edit has come for the lock the first one holds.
+        if read.is_set():
+            waiting.set()
+        return editing(self)
+
     monkeypatch.setattr(Project, "_load_to_edit", first_read_waits)
+    monkeypatch.setattr(Project, "_editing", asked_for)
     project = pc.Context(str(package)).get_project("//reqdemo")
 
-    def require(name, mass):
-        def edit(declaration):
-            declaration.setdefault("requirements", {})["physics"] = {"mass": mass}
-
-        return threading.Thread(target=project.edit_object_declaration, args=("part", name, edit))
-
-    first, second = require("bracket", 1), require("old-bracket", 2)
+    first = threading.Thread(target=_require("bracket", 1), args=(project,))
+    later = threading.Thread(target=second, args=(project,))
     first.start()
     assert read.wait(30)
-    second.start()
+    later.start()
+    assert waiting.wait(30)
     # Held up for as long as the first edit is, rather than reading the file it is about to replace.
-    second.join(1)
-    assert second.is_alive()
+    later.join(1)
+    assert later.is_alive()
     finish.set()
     first.join(30)
-    second.join(30)
+    later.join(30)
     parts = _written(package)
-    assert (parts["bracket"]["requirements"]["physics"], parts["old-bracket"]["requirements"]) == (
-        {"mass": 1},
-        {"physics": {"mass": 2}},
-    )
+    assert parts["bracket"]["requirements"]["physics"] == {"mass": 1}
+    assert written(parts)
+
+
+def test_a_writer_called_inside_an_edit_of_the_same_file_does_not_wait_for_it(package, monkeypatch):
+    from partcad import edit_lock
+
+    monkeypatch.setattr(edit_lock, "TIMEOUT", 1)
+    project = pc.Context(str(package)).get_project("//reqdemo")
+    with project._editing():
+        assert project.add_object_config("parts", "inner", {"type": "basic", "cuboid": [1, 1, 1]})
+    assert "inner" in _written(package)
 
 
 def test_a_hand_written_yaml_1_1_value_does_not_stop_an_edit_beside_it(tmp_path):

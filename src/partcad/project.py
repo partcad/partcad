@@ -12,7 +12,6 @@ import asyncio
 import contextlib
 import copy
 import functools
-import hashlib
 import inspect
 import io
 import os
@@ -45,6 +44,7 @@ from . import (
 from . import config as pc_config
 from . import document as pc_document
 from . import (
+    edit_lock,
     factory,
 )
 from . import fast_only as fast_only_mod
@@ -280,10 +280,6 @@ SECTION_EXTENSIONS = {
 # read. Not a clause - nothing excluded it - but the object is dropped all the
 # same, and recorded as broken so that the reason reaches the user.
 INVALID_UNLESS = "<invalid 'unless'>"
-
-# How long an edit of a 'partcad.yaml' waits for another one of the same file to
-# finish. Each holds it for one read and one write of the file.
-EDIT_LOCK_TIMEOUT = 60
 
 
 def _one_edit_at_a_time(method):
@@ -2027,6 +2023,7 @@ class Project(project_config.Configuration):
     def get_sketch_config(self, sketch_name):
         return self.object_config("sketch", sketch_name)
 
+    @_one_edit_at_a_time
     def set_sketch_config(self, sketch_name, sketch_config):
         """
         Save the updated sketch configuration to the project configuration file.
@@ -3346,6 +3343,7 @@ class Project(project_config.Configuration):
 
         self.suppliers = cfg
 
+    @_one_edit_at_a_time
     def add_import(self, alias, location, track=None) -> bool:
         """Declare a dependency in this package's 'partcad.yaml'.
 
@@ -3559,6 +3557,7 @@ class Project(project_config.Configuration):
             sorted(alias for alias, aliased in PART_EXTENSION_ALIASES.items() if aliased == kind and alias != own)
         )
 
+    @_one_edit_at_a_time
     def add_object_config(self, section: str, name: str, obj: dict) -> bool:
         """Write one object declaration into this package's 'partcad.yaml'.
 
@@ -3626,35 +3625,14 @@ class Project(project_config.Configuration):
         config = yaml.load(text)
         return (config if config is not None else ruamel.yaml.comments.CommentedMap()), yaml
 
-    @contextlib.contextmanager
     def _editing(self):
-        """One read-edit-write of this package's 'partcad.yaml' at a time.
+        """One read-edit-write of this package's 'partcad.yaml' at a time: see 'edit_lock'.
 
-        An edit reads the file, changes what it read and replaces the file with
-        that. Two at once -- the daemon serves HTTP requests on a pool of
-        threads -- would both read the file as it was, and the later replace
-        would drop what the earlier one wrote with nothing said. The lock is a
-        file in PartCAD's own state folder named after the file it guards, so
-        it holds across threads and processes and leaves nothing in the package.
+        Every method that reads the file to write it back takes it (see
+        '_one_edit_at_a_time'): a lock some writers skip is one whose edits
+        those writers still drop.
         """
-        from filelock import FileLock, Timeout
-
-        target = os.path.realpath(self.config_path)
-        folder = os.path.join(self.ctx.user_config.internal_state_dir, "locks", "edit")
-        os.makedirs(folder, exist_ok=True)
-        name = hashlib.sha256(target.encode("utf-8")).hexdigest()[:32] + ".lock"
-        lock = FileLock(os.path.join(folder, name), mode=0o600)
-        try:
-            lock.acquire(timeout=EDIT_LOCK_TIMEOUT)
-        except Timeout:
-            raise ValueError(
-                "'%s' is being changed by another edit, which has not finished in %d seconds: try again"
-                % (self.config_path, EDIT_LOCK_TIMEOUT)
-            ) from None
-        try:
-            yield
-        finally:
-            lock.release()
+        return edit_lock.editing(self.config_path, self.ctx.user_config.internal_state_dir)
 
     def _write_edited(self, config, yaml, text: typing.Optional[str] = None) -> None:
         """Replace this package's 'partcad.yaml' with 'config', once the new one is written in full beside it.
@@ -3930,6 +3908,7 @@ class Project(project_config.Configuration):
             config,
         )
 
+    @_one_edit_at_a_time
     def set_part_config(self, part_name, part_config):
         if "name" in part_config:
             del part_config["name"]
@@ -3956,6 +3935,7 @@ class Project(project_config.Configuration):
             yaml.dump(package_config, fp)
             fp.close()
 
+    @_one_edit_at_a_time
     def update_part_config(self, part_name, part_config_update: dict[str, typing.Any]):
         pc_logging.debug("Updating part config: %s: %s" % (part_name, part_config_update))
         yaml = ruamel.yaml.YAML()

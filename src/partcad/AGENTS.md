@@ -413,8 +413,10 @@ at all).
   Requirements tab's forms (`requirements.add`, `requirements.remove`): one requirement written or taken out by
   kind and name, on the object's own declaration through `Project.edit_object_declaration` (ruamel, so the rest of
   the file is kept as written; a template is refused; the file is replaced only once the new one is written in
-  full; and one edit of a file at a time, `Project._editing`, under a lock in PartCAD's state folder -- the daemon
-  serves HTTP on a pool of threads, and two edits reading the file at once would lose one with nothing said). It holds an edit to exactly one rule, the reader's: a section that `requirements.parse` reads with a
+  full; and one edit of a file at a time, `edit_lock`, under a lock in PartCAD's state folder -- the daemon serves
+  HTTP on a pool of threads, and two edits reading the file at once would lose one with nothing said. Every writer
+  of `partcad.yaml` takes it, `Project._editing` or `_one_edit_at_a_time` for a method; a lock one writer skips is a
+  lock that writer's edits still race). It holds an edit to exactly one rule, the reader's: a section that `requirements.parse` reads with a
   problem it did not have before, or that the schema now refuses, is not written -- so there is no validator of
   its own to disagree with the reader. An edit is tried on a copy first, so a refused one leaves nothing behind.
   Adding refuses what is there unless `replace` (so does `pc qual add` now), and removing a feature that a

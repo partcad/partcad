@@ -450,6 +450,11 @@ SECTION_KINDS = {
 
 def apply_config(project: Project, sections: dict) -> None:
     """Merge the generated sections into the package's 'partcad.yaml'."""
+    with project._editing():
+        _apply_config(project, sections)
+
+
+def _apply_config(project: Project, sections: dict) -> None:
     yaml = _yaml()
     with open(project.config_path, encoding="utf-8") as f:
         config = yaml.load(f)
