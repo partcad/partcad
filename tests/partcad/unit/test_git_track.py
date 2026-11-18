@@ -986,9 +986,9 @@ def _held_while_pinning(monkeypatch, module):
 
     held, write = [], dependency_pin.set_dependency_revision
 
-    def watched(config_path, name, revision):
+    def watched(config_path, name, revision, **kwargs):
         held.append(os.path.realpath(config_path) in getattr(edit_lock._HELD, "files", set()))
-        return write(config_path, name, revision)
+        return write(config_path, name, revision, **kwargs)
 
     monkeypatch.setattr(module, "set_dependency_revision", watched)
     return held
@@ -1037,6 +1037,24 @@ def test_a_pin_another_edit_holds_the_file_for_fails_alone_and_update_goes_on(
     assert pin(workspace, user_config) == {"pinned": 1, "current": 0, "failed": 1}
     pinned = yaml.safe_load(config.read_text())["dependencies"]
     assert ["revision" in pinned[name] for name in ("dep", "other")].count(True) == 1
+
+
+def test_update_leaves_a_revision_whose_track_was_taken_out_while_it_asked_the_remote(
+    tmp_path, upstream, user_config, monkeypatch
+):
+    """No later 'pc update' would move that 'revision:' again: it is the author's now, and is kept."""
+    kept = "abcdef0123" * 4
+    workspace = tmp_path / "ws"
+    config = write_package(workspace, dependency(upstream, track="main", revision=kept))
+
+    def untracked_meanwhile(user_config, url, track=None):
+        config.write_text(config.read_text().replace("    track: main\n", ""))
+        return track, DIGITS
+
+    monkeypatch.setattr(rfg, "tracked_commit", untracked_meanwhile)
+    assert pin(workspace, user_config) == {"pinned": 0, "current": 0, "failed": 1}
+    entry = yaml.safe_load(config.read_text())["dependencies"]["dep"]
+    assert "track" not in entry and entry["revision"] == kept
 
 
 def test_init_creates_the_package_when_its_pin_cannot_take_the_edit_lock(

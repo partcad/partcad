@@ -35,7 +35,7 @@ from partcad_utils import config_yaml, pcignore
 from ... import edit_lock
 from ... import logging as pc_logging
 from ... import project_factory_git as rfg
-from ...dependency_pin import set_dependency_revision, yaml_scalar
+from ...dependency_pin import TrackChanged, set_dependency_revision, yaml_scalar
 from ...utils import get_child_project_path
 
 
@@ -165,9 +165,14 @@ def pin_tracked_dependencies(ctx) -> dict:
         # Another edit holding it too long fails this pin, not the update.
         try:
             with project._editing():
-                reason = set_dependency_revision(project.config_path, name, commit)
+                reason = set_dependency_revision(project.config_path, name, commit, track=track)
         except edit_lock.Busy as e:
             reason = str(e)
+        if isinstance(reason, TrackChanged):
+            # The commit is the tip of a branch the declaration no longer names.
+            pc_logging.error("Not pinning %s: %s. Run 'pc update' again" % (dependency, reason))
+            stats["failed"] += 1
+            continue
         if reason is not None:
             pc_logging.error(
                 "Failed to pin %s to the tip of '%s' in the 'partcad.yaml' of %s: %s. Set 'revision: %s' in it by hand."
