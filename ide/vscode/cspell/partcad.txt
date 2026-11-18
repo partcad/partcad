@@ -104,7 +104,6 @@ dynamic
 edges
 effort
 elif
-enclosure
 end
 endautoescape
 endblock
@@ -201,6 +200,7 @@ interface
 interfaces
 interference
 interferes
+interior
 intro
 ipt
 item

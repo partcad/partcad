@@ -20,8 +20,8 @@ directly:
   * a wall has to say it is not manufacturable, and nothing manufacturable can be
     made with one in it;
   * a room is one wall per edge of its sketch, placed along it; a plan's closed
-    spaces are walled around, looking out and drawn as the solids they are, and
-    its standalone walls stand where they were drawn; and a sketch that is not
+    spaces are walled around, looking out, and its standalone walls stand where
+    they were drawn, both drawn as the solids they are; and a sketch that is not
     lines and arcs, or whose walls would stand in each other, is refused with
     the reason;
   * PartCAD's own wall is a solid whose 'visual:' is its surface, private to
@@ -184,6 +184,11 @@ scenes:
     type: walls
     sketch: apartment-plan
     height: 2500
+  apartment-one-sided:
+    type: walls
+    sketch: apartment-plan
+    height: 2500
+    interiorWall: //builtin/building:wall
 """
 
 # An L from above: five outside corners and one inside one.
@@ -440,12 +445,12 @@ def test_a_round_room_is_one_wall_once_around(context):
 
 
 def test_a_column_in_a_room_is_a_closed_space_walled_around_it_looking_out(context):
-    """A hole in the plan: one round wall around it, an enclosure wall bending away from the room it faces."""
+    """A hole in the plan: one round wall around it, an interior wall bending away from the room it faces."""
     walls = _walls(context, "courtyard")
 
     assert [label for label, _n, _l, _p in walls] == ["wall-1", "wall-2", "wall-3", "wall-4", "enclosure-1-1"]
     _label, name, location, _properties = walls[-1]
-    assert name.startswith("//builtin/building:enclosure-wall;")
+    assert name.startswith("//builtin/building:interior-wall;")
     # Walked anticlockwise, the column's centre is on its left: it bends away from its face, into the room.
     assert "radius=-200.0" in name
     assert float(name.split("length=")[1].split(",")[0]) == pytest.approx(2.0 * math.pi * 200.0, abs=1e-5)
@@ -454,18 +459,19 @@ def test_a_column_in_a_room_is_a_closed_space_walled_around_it_looking_out(conte
         assert name.startswith("//builtin/building:wall;")
 
 
-def test_a_closed_space_is_drawn_as_the_solid_its_walls_are_and_a_room_as_their_surfaces(context):
-    """A picture of a room looks through its near walls; a closed space in it looks like walls from every side."""
+def test_what_stands_in_a_room_is_drawn_as_the_solid_its_walls_are_and_a_room_as_their_surfaces(context):
+    """A picture of a room looks through its near walls; a closed space and a standalone wall look like walls from every side."""
     from partcad import visual
 
-    scene, envelope = _built(context, "courtyard", kind="scene")
+    scene, envelope = _built(context, "apartment", kind="scene")
     drawn = asyncio.run(visual.substitute_async(context, scene, envelope))
     nodes = {node["label"]: node for node in drawn.tree[ocp_serialize.KEY_ASSEMBLY]}
     for label in ("wall-1", "wall-2", "wall-3", "wall-4"):
         assert nodes[label]["visual"].startswith("//builtin/building:wall-surface;")
         assert nodes[label]["properties"]["oneSided"] is True
-    assert "visual" not in nodes["enclosure-1-1"]
-    assert "oneSided" not in nodes["enclosure-1-1"]["properties"]
+    for label in ("enclosure-1-1", "enclosure-2-1", "partition-1-1", "partition-1-2"):
+        assert "visual" not in nodes[label]
+        assert "oneSided" not in nodes[label]["properties"]
 
 
 def test_a_plan_is_the_walls_of_its_rooms_its_closed_spaces_and_its_standalone_walls(context):
@@ -479,8 +485,8 @@ def test_a_plan_is_the_walls_of_its_rooms_its_closed_spaces_and_its_standalone_w
         + ["partition-1-1", "partition-1-2"]
     )
     parts = {label: name.split(";")[0] for label, name, _l, _p in walls}
-    assert {parts[label] for label in labels if label.startswith("enclosure-")} == {"//builtin/building:enclosure-wall"}
-    assert {parts[label] for label in labels if not label.startswith("enclosure-")} == {"//builtin/building:wall"}
+    assert {parts[label] for label in labels if not label.startswith("wall-")} == {"//builtin/building:interior-wall"}
+    assert {parts[label] for label in labels if label.startswith("wall-")} == {"//builtin/building:wall"}
     # The standalone wall stands where it was drawn, from the south wall north, and then east.
     located = {label: (location[0][:2], location[2]) for label, _n, location, _p in walls}
     assert located["partition-1-1"] == ([5000.0, 0.0], 90.0)
@@ -488,7 +494,16 @@ def test_a_plan_is_the_walls_of_its_rooms_its_closed_spaces_and_its_standalone_w
 
     info = context.get_scene("apartment").info()["Walls"]
     assert (info["count"], info["enclosures"], info["partitions"]) == (14, 2, 1)
-    assert info["enclosureWall"] == "//builtin/building:enclosure-wall"
+    assert info["interiorWall"] == "//builtin/building:interior-wall"
+
+
+def test_a_scene_names_the_part_what_stands_in_its_rooms_is(context):
+    """'interiorWall' builds the closed spaces and the standalone walls of another part, and is in the scene's key."""
+    walls = _walls(context, "apartment-one-sided")
+    assert {name.split(";")[0] for _label, name, _l, _p in walls} == {"//builtin/building:wall"}
+    assert context.get_scene("apartment-one-sided").info()["Walls"]["interiorWall"] == "//builtin/building:wall"
+    keys = {name: context.get_scene(name).hash.get() for name in ("apartment", "apartment-one-sided")}
+    assert keys["apartment"] != keys["apartment-one-sided"]
 
 
 def test_no_wall_of_a_plan_stands_in_another_and_a_closed_space_is_walled_all_round(context):

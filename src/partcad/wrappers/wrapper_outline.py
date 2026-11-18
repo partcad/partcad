@@ -24,8 +24,8 @@
 #     It is walked anticlockwise, so that every wall of it looks out, into the
 #     room around it, and its thickness goes into the space.
 #   * a **standalone wall** - a line, or lines joined end to end, that close
-#     nothing - is a wall standing in a room, walked the way it was drawn: seen
-#     from its right, its thickness on its left.
+#     nothing - is a wall standing in a room, walked the way it was drawn, its
+#     thickness on its left.
 #
 # Only straight lines and arcs of circles, drawn on the XY plane, are read.
 # Anything else is refused, in words, rather than approximated - a spline is a

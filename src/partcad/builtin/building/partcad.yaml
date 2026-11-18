@@ -17,10 +17,10 @@
 # and nothing another package may build a room out of (see
 # `src/partcad/privacy.py`).
 #
-# `enclosure-wall` is the same solid wall with no `visual:`, so that it is drawn
-# as the solid it is, from every side: what the walls around a closed space are
-# - a closet, a lift shaft, a column - which nobody looks into, and which looks
-# like walls around it wherever it is seen from.
+# `interior-wall` is the same solid wall with no `visual:`, so that it is drawn
+# as the solid it is, from every side: what the walls standing in a room are -
+# around a closet, a lift shaft or a column, and the walls between its parts -
+# which look like walls wherever they are seen from.
 #
 # The geometry is the `wall` part type and the `walls` scene type (see
 # `part_factory_wall.py` and `scene_factory_walls.py`), and what is here is the
@@ -38,11 +38,11 @@ desc: |
   What a space is laid out with: `wall`, a solid wall, straight or along an arc
   and with doors and windows cut out of it by a sketch, drawn in a picture as
   the one-sided surface of it - seen from the side it faces and see-through
-  from behind; `enclosure-wall`, the same wall drawn as the solid it is, for the
-  walls around a closet or a shaft; and `room`, the walls standing on a plan:
-  its rooms' walls looking in, the walls around its closed spaces looking out,
-  and its standalone walls. For floor plans and space planning: none of it is
-  manufacturable.
+  from behind; `interior-wall`, the same wall drawn as the solid it is, for the
+  walls standing in a room - around a closet or a shaft, and between its parts;
+  and `room`, the walls standing on a plan: its rooms' walls looking in, the
+  walls around its closed spaces looking out, and its standalone walls. For
+  floor plans and space planning: none of it is manufacturable.
 
 # Said once for the whole package as well as on each object: a wall refuses to
 # be declared without it, and so would any object added here later.
@@ -141,18 +141,17 @@ parts:
         default: ":wall"
         desc: What the wall is painted - a colour declaration, named in full. Grey unless it says.
 
-  # `wall` drawn as the solid it is: what the walls around a closed space are, which
-  # nobody looks into. The same parameters as `wall`, and no `visual:`.
-  enclosure-wall:
+  # `wall` drawn as the solid it is: what the walls standing in a room are, seen
+  # from every side. The same parameters as `wall`, and no `visual:`.
+  interior-wall:
     type: wall
     manufacturable: false
     desc: |
-      A wall drawn as the solid it is, from every side: what the walls around a
-      closed space in a plan are - a closet, a lift shaft, a column - which
-      nobody looks into, so that it looks like walls around the space wherever
-      it is seen from. Otherwise `wall`: its face where it stands, facing -Y,
-      and its thickness behind it, towards +Y - into the space, around a closed
-      space walked anticlockwise.
+      A wall drawn as the solid it is, from every side: what the walls standing
+      in a room are - around a closed space in its plan (a closet, a lift
+      shaft, a column) and along a line in it that closes nothing - so that
+      they look like walls wherever they are seen from. Otherwise `wall`: its
+      face where it stands, facing -Y, and its thickness behind it, towards +Y.
     length: "%length%"
     height: "%height%"
     radius: "%radius%"
@@ -180,7 +179,7 @@ parts:
       thickness:
         type: float
         default: 114.3
-        desc: As `wall`'s - behind its face, which is into the space it walls in.
+        desc: As `wall`'s - behind its face, to the left of the way the plan walks it.
       extendStart:
         type: float
         default: 0.0
@@ -237,9 +236,10 @@ scenes:
       The walls standing on the plan `sketch`, one `wall` per edge of it: around
       each outline in it - a room - looking in, its face on the outline and its
       thickness outside it; around each closed space - a hole in a room, or a
-      loop inside one: a closet, a shaft - an `enclosure-wall` looking out, its
-      thickness inside; and along each line that closes nothing, a standalone
-      wall seen from the right of the way it was drawn. Straight lines and arcs,
+      loop inside one: a closet, a shaft - looking out, its thickness inside;
+      and along each line that closes nothing, a standalone wall, its thickness
+      to the left of the way it was drawn. The walls standing in a room are
+      `interior-wall`s, seen from every side. Straight lines and arcs,
       drawn on the XY plane as a plan is; anything else is refused with the
       reason. Name it with a `color` - a `material`, a `finish` - and every wall
       is painted in it.

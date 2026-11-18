@@ -9,10 +9,12 @@
 #   * its outline, a room, whose walls look into it;
 #   * the closed spaces in it - a round column, cut out of the floor as a hole,
 #     and a lift shaft, drawn as a closed loop inside the outline - whose walls
-#     look out, and are drawn as walls from every side;
+#     look out;
 #   * a standalone wall between the living room and the bedroom, a line that
-#     closes nothing, with a doorway left between it and the north wall. It is
-#     seen from the right of the way it is drawn: from the east, the bedroom.
+#     closes nothing, with a doorway left between it and the north wall. Its
+#     thickness is to the left of the way it is drawn: west, in the living room.
+#
+# Everything standing in the room is drawn as the walls it is, from every side.
 
 import build123d as bd
 

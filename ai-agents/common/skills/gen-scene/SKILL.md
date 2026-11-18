@@ -306,11 +306,13 @@ links:
     looking in, one-sided: `wall-<n>`;
   - a **closed space** (a hole in the face, or a closed loop inside the
     outline) is a closet, a lift shaft, a column: walled looking out, its
-    thickness inside it, and drawn as the solid walls they are from every side
-    (`//builtin/building:enclosure-wall`): `enclosure-<k>-<n>`;
-  - a **line that closes nothing** is a standalone wall, one-sided like the
-    room's and seen from the right of the way it is drawn (draw it the other
-    way to turn it): `partition-<k>-<n>`.
+    thickness inside it: `enclosure-<k>-<n>`;
+  - a **line that closes nothing** is a standalone wall - between two rooms of
+    one outline, or two parts of a room - its thickness to the left of the way
+    it is drawn: `partition-<k>-<n>`.
+  What stands in a room - a closed space's walls and the standalone walls - is
+  drawn as the solid walls it is, seen from every side
+  (`//builtin/building:interior-wall`).
   A build123d plan with lines in it says what it made with one `show_object` per
   piece - the face, each loop, each line - because a compound of a face and
   lines keeps only the face. A `walls` scene refuses two loops that touch (two
@@ -322,17 +324,10 @@ links:
   up from z = 0: `type: extrude`, `sketch: <scene>/plan`, `depth: 20`. The walls
   stand on its top, their thickness outside it: they are fixed, so they need
   nothing under that.
-- **A wall inside the space** is a line in the plan, a standalone wall: one
-  wall, seen from one side. Where both sides of a wall between two rooms have to
-  be seen as walls, or the rooms differ in height, make one floor plan per room,
-  `<scene>/<room>` on `<scene>/<room>-plan`, all drawn in the one frame of the
-  whole space and so all placed at `[[0, 0, 20], ...]`. Draw each plan as that
-  room's clear inside, **the partition's thickness apart** from its neighbour's,
-  and give both rooms that `thickness`: each room's wall then fills the gap
-  between them, and the two coincide there (an overlap inside the walls, §6).
-  Two plans sharing an edge would put each room's wall *inside* the other room.
-  A shared wall is drawn twice, once facing each room, which is right for walls
-  seen from one side.
+- **A wall between two rooms** is a line in the one plan of both, a standalone
+  wall, seen as a wall from each of them: draw the whole space as one outline
+  and the walls inside it as lines, not a plan per room. A `walls` scene has one
+  `height`, so only rooms of different heights are scenes of their own.
 - **Doors and windows.** A `walls` scene cannot cut them: it asks each wall for
   its `length`, `height`, `radius`, `thickness` and corner extensions, and
   nothing else. Where they

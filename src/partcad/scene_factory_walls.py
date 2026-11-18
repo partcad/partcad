@@ -11,8 +11,8 @@
         sketch: apartment-plan     # outlines, closed spaces in them, standalone walls
         height: 2700               # mm
         thickness: 150             # (optional) mm, behind each wall's face
-        wall: //builtin/building:wall                     # (optional) a room's walls
-        enclosureWall: //builtin/building:enclosure-wall  # (optional) a closed space's
+        wall: //builtin/building:wall                   # (optional) a room's walls
+        interiorWall: //builtin/building:interior-wall  # (optional) the walls standing in it
 
 The sketch is read as a plan is, from above, and is made of straight lines and
 arcs of circles. What it draws is three kinds of thing, told apart by their
@@ -28,23 +28,21 @@ geometry (see 'wrappers/wrapper_outline.py'):
     is 'partition-<k>-<n>', walked the way it was drawn.
 
 Each wall is a 'wall' part placed where its edge starts and turned the way the
-edge sets off. A wall looks to its right: the right of a clockwise walk is the
-inside, so every wall of a room looks into it; the right of an anticlockwise one
-is the outside, so every wall of a closed space looks out, into the room around
-it; and a standalone wall is seen from the right of the way it was drawn. Its
-thickness goes back from its face, to the left of the walk: outside a room's
-outline, which stays the room's inside face at the size it was drawn, and into a
-closed space, whose outline stays its outside face.
+edge sets off. Its face is on the edge, and its thickness goes back from there,
+to the left of the walk: outside a room's outline, walked clockwise, which stays
+the room's inside face at the size it was drawn; into a closed space, walked
+anticlockwise, whose outline stays its outside face; and to the left of a
+standalone wall, as it was drawn.
 
-A room's walls and the standalone walls are '//builtin/building:wall' unless the
-scene says otherwise ('wall'): a solid, a physical object a check measures and a
-simulation collides with, and drawn - in the 3D view and in PartCAD's pictures -
-as its 'visual:', the one-sided surface of its face (see 'partcad.visual'). So a
-room is seen into from outside through whichever of its walls are nearest, and
-is walled all the same. A closed space is nothing anybody looks into, and its
-walls are '//builtin/building:enclosure-wall' unless the scene says otherwise
-('enclosureWall'): the same solid wall, drawn as the solid it is, so that it
-looks like walls around the space from every side.
+A room's walls are '//builtin/building:wall' unless the scene says otherwise
+('wall'): a solid, a physical object a check measures and a simulation collides
+with, and drawn - in the 3D view and in PartCAD's pictures - as its 'visual:',
+the one-sided surface of its face, seen from the room (see 'partcad.visual').
+So a room is seen into from outside through whichever of its walls are nearest,
+and is walled all the same. What stands in the room - a closed space's walls and
+the standalone walls - is seen from every side, and is
+'//builtin/building:interior-wall' unless the scene says otherwise
+('interiorWall'): the same solid wall, drawn as the solid it is.
 
 Where two walls meet at a right angle, they meet as a builder makes them meet,
 with nothing missing and nothing in both (see 'corner_extensions'). The
@@ -68,7 +66,7 @@ wall of it: 'room;color=//my/package:sage' (see '_link').
 
 'sketch', 'height' and 'thickness' may be '%...%' expressions over the scene's
 parameters, which is how '//builtin/building:room' is one declaration of every
-room: 'room;sketch=//my/package:plan,height=2500'. 'wall' and 'enclosureWall'
+room: 'room;sketch=//my/package:plan,height=2500'. 'wall' and 'interiorWall'
 name the parts the walls are; whatever they name is asked for with the
 parameters 'length', 'height' and 'radius', and has to take them - and with
 'thickness' too, when the scene states one.
@@ -94,10 +92,11 @@ from .assembly_factory import AssemblyFactory
 from .process_crash import describe_exit_code
 from .scene_factory import SceneFactoryAssy
 
-# The part a wall of the scene is, unless the scene names another: a room's walls
-# and the standalone walls, drawn one-sided, and a closed space's, drawn solid.
+# The part a wall of the scene is, unless the scene names another: a room's walls,
+# drawn one-sided, and the walls standing in it - a closed space's and the
+# standalone ones - drawn solid.
 DEFAULT_WALL = "//builtin/building:wall"
-DEFAULT_ENCLOSURE_WALL = "//builtin/building:enclosure-wall"
+DEFAULT_INTERIOR_WALL = "//builtin/building:interior-wall"
 
 # What each thing a plan draws is, as the outline reader names it
 # ('wrapper_outline.OUTLINE' and the two beside it), and what its walls are called.
@@ -275,9 +274,7 @@ class SceneFactoryWalls(SceneFactoryAssy):
             # As a link of an ASSY file names it: resolved against this
             # package when it is not a path (see 'node_object_name').
             self.wall = str(expr.resolve(config.get("wall") or DEFAULT_WALL, values, where))
-            self.enclosure_wall = str(
-                expr.resolve(config.get("enclosureWall") or DEFAULT_ENCLOSURE_WALL, values, where)
-            )
+            self.interior_wall = str(expr.resolve(config.get("interiorWall") or DEFAULT_INTERIOR_WALL, values, where))
 
             # Worked out once per instance, from the sketch, by one caller at a
             # time - the thread of the one reading it, while it does: see
@@ -294,9 +291,9 @@ class SceneFactoryWalls(SceneFactoryAssy):
             if self.thickness is not None:
                 built["thickness"] = self.thickness
             # Only where the scene names one, so that a room keeps the key it
-            # had before plans had closed spaces in them.
-            if config.get("enclosureWall"):
-                built["enclosureWall"] = self.enclosure_wall
+            # had before plans had anything standing in them.
+            if config.get("interiorWall"):
+                built["interiorWall"] = self.interior_wall
             self.assembly.hash.add_dict({"walls": built})
             self.assembly.cache_dependencies_broken = True
 
@@ -383,7 +380,7 @@ class SceneFactoryWalls(SceneFactoryAssy):
         thicknesses = {}
         for group in result["walls"]:
             kind, segments = group["kind"], group["segments"]
-            part = self.enclosure_wall if kind == ENCLOSURE else self.wall
+            part = self.wall if kind == OUTLINE else self.interior_wall
             if part not in thicknesses:
                 thicknesses[part] = await self._wall_thickness_async(part)
             thickness, extended = thicknesses[part]
@@ -497,6 +494,6 @@ class SceneFactoryWalls(SceneFactoryAssy):
                 found = {link["name"].rsplit("-", 1)[0] for link in self._links if link["name"].startswith(kind + "-")}
                 if found:
                     info["Walls"][key] = len(found)
-            if any(link["part"] == self.enclosure_wall for link in self._links):
-                info["Walls"]["enclosureWall"] = self.enclosure_wall
+            if any(link["part"] == self.interior_wall for link in self._links):
+                info["Walls"]["interiorWall"] = self.interior_wall
         return info

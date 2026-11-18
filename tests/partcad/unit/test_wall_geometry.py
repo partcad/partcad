@@ -593,7 +593,7 @@ def test_a_closed_loop_inside_a_room_is_a_closed_space_and_one_outside_it_anothe
 def test_a_line_that_closes_nothing_is_a_standalone_wall_walked_the_way_it_was_drawn():
     plan = _compound(_rectangle(0.0, 0.0, 4000.0, 3000.0), _polyline((2000, 0), (2000, 2000), (3000, 2000)))
     assert _plan(plan) == [("outline", ROOM), ("partition", [((2000.0, 0.0), 90.0), ((2000.0, 2000.0), 0.0)])]
-    # Drawn the other way, it is seen from the other side.
+    # Drawn the other way, its thickness is on the other side of the line.
     backwards = _compound(_rectangle(0.0, 0.0, 4000.0, 3000.0), _polyline((3000, 2000), (2000, 2000), (2000, 0)))
     assert _plan(backwards)[1] == ("partition", [((3000.0, 2000.0), 180.0), ((2000.0, 2000.0), 270.0)])
     # A wall on its own is a plan too, and so are loose edges that close nothing.

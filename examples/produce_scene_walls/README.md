@@ -30,11 +30,11 @@ a wall is unless it is painted: a solid 4.5 in (114.3 mm) thick, drawn as its su
 `apartment` stands on a whole plan, `apartment-plan`, which draws the three
 things a plan can. Its outline is a room, walled looking in (`wall-1` ...).
 A hole in it - the column - and a closed loop inside it - the lift shaft -
-are closed spaces, walled looking out (`enclosure-1-1`, `enclosure-2-1` ...)
-with `//builtin/building:enclosure-wall`, which is drawn as the solid it is,
-so that from wherever they are seen they look like walls around something.
-A line that closes nothing is a standalone wall (`partition-1-1`), drawn
-one-sided like the room's and seen from the right of the way it was drawn.
+are closed spaces, walled looking out (`enclosure-1-1`, `enclosure-2-1` ...).
+A line that closes nothing - between the living room and the bedroom - is a
+standalone wall (`partition-1-1`). What stands in the room is
+`//builtin/building:interior-wall`, drawn as the solid it is, so that from
+wherever it is seen it looks like walls.
 
 A shaded picture, or a video of the room turning, is drawn the same way:
 
@@ -56,7 +56,7 @@ pc render -t png -S "//builtin/building:room;sketch=//pub/examples/partcad/produ
 ### apartment
 <table><tr>
 <td valign=top><img src="././apartment.svg" alt="apartment" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
-<td valign=top>The walls standing on the apartment's plan: the room's looking in, the column's and the lift shaft's looking out and drawn as the walls they are, and the wall between the living room and the bedroom, seen from the east
+<td valign=top>The walls standing on the apartment's plan: the room's looking in, and the column's, the lift shaft's and the one between the living room and the bedroom drawn as the walls they are, from every side
 </td>
 </tr></table>
 

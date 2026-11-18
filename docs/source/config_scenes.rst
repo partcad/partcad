@@ -157,8 +157,8 @@ standing on a sketch of its plan:
       sketch: apartment-plan
       height: 2700                    # mm
       thickness: 150                  # (optional) mm, behind each wall's face
-      wall: //builtin/building:wall   # (optional) a room's walls, and the standalone ones
-      enclosureWall: //builtin/building:enclosure-wall  # (optional) a closed space's
+      wall: //builtin/building:wall   # (optional) a room's walls
+      interiorWall: //builtin/building:interior-wall  # (optional) the walls standing in it
 
 The plan is made of **straight lines and arcs of circles**, on the XY plane, and
 draws three kinds of thing, told apart by their geometry alone:
@@ -170,36 +170,38 @@ draws three kinds of thing, told apart by their geometry alone:
   closet, a lift shaft, a column: a space walled in rather than looked into. Its
   walls look out, into the room around it, and are named ``enclosure-<k>-<n>``.
 - A **standalone wall** -- a line, or lines joined end to end, that close
-  nothing -- is a wall standing in a room, ``partition-<k>-<n>``, seen from the
-  right of the way it was drawn.
+  nothing -- is a wall standing in a room, ``partition-<k>-<n>``: between two
+  parts of it, or the two rooms of one outline.
 
 Loose edges, as a DXF of lines nobody joined into polylines draws them, are joined
 end to end first. The scene is one :ref:`wall <walls>` per edge, each standing
 where its edge starts and turned the way the edge goes. A line is a straight wall
 and an arc an arc wall of the arc's radius and length.
 
-A wall is seen from its right, and its thickness goes back from its face, to its
-left. Every wall of a room looks into it, whichever way round the outline was
-drawn -- the walk goes clockwise -- and its thickness is outside: the outline is the
-inside of the room, at the size it was drawn. Every wall of a closed space looks
-out -- the walk goes anticlockwise -- and its thickness is inside: the outline is
-the closed space's outside, and the room around it keeps its size too. A
-standalone wall is walked the way it was drawn, so drawing it the other way
-round turns it to face the other way.
+A wall's face is on the plan, and its thickness goes back from there, to the
+left of the walk. Every wall of a room looks into it, whichever way round the
+outline was drawn -- the walk goes clockwise -- and its thickness is outside: the
+outline is the inside of the room, at the size it was drawn. Every wall of a
+closed space looks out -- the walk goes anticlockwise -- and its thickness is
+inside: the outline is the closed space's outside, and the room around it keeps
+its size too. A standalone wall is walked the way it was drawn, and its
+thickness is to the left of that: draw it the other way round to put its
+thickness on the other side of the line.
 
-A room's walls and the standalone walls are ``//builtin/building:wall`` unless the
-scene says otherwise (``wall``), and that is a **solid** -- a physical wall, which
-``pc qual test`` checks, a simulation collides with and an export writes -- whose
-:ref:`visual <part-visual>` is the one-sided surface of its face. So a picture of
-the room taken from outside, in the 3D view or by ``pc render``, is taken *through*
-the walls nearest the camera, and shows the far walls from the inside, the way a
-dollhouse or a sales brochure shows a flat; from straight above, every wall is
-seen edge-on, and the drawing is the plan. A closed space is nothing anybody
-looks into, so its walls are ``//builtin/building:enclosure-wall`` unless the scene
-says otherwise (``enclosureWall``): the same solid wall with no visual, drawn as the
-solid it is, so that a closet or a shaft looks like walls around it from wherever
-it is seen. A STEP export of the same plan, its simulation and its dimensioned
-drawing have every wall with its thickness.
+A room's walls are ``//builtin/building:wall`` unless the scene says otherwise
+(``wall``), and that is a **solid** -- a physical wall, which ``pc qual test``
+checks, a simulation collides with and an export writes -- whose
+:ref:`visual <part-visual>` is the one-sided surface of its face, seen from the
+room. So a picture of the room taken from outside, in the 3D view or by
+``pc render``, is taken *through* the walls nearest the camera, and shows the far
+walls from the inside, the way a dollhouse or a sales brochure shows a flat; from
+straight above, every wall is seen edge-on, and the drawing is the plan. What
+stands in the room -- the walls around its closed spaces, and its standalone
+walls -- is seen from every side, and is ``//builtin/building:interior-wall``
+unless the scene says otherwise (``interiorWall``): the same solid wall with no
+visual, drawn as the solid it is, so that a closet, a shaft or a wall between two
+rooms looks like walls from wherever it is seen. A STEP export of the same plan,
+its simulation and its dimensioned drawing have every wall with its thickness.
 
 Where two walls meet at a **right angle**, they meet the way they are built:
 with nothing missing and nothing in both. Their thickness is outside the
