@@ -3343,7 +3343,6 @@ class Project(project_config.Configuration):
 
         self.suppliers = cfg
 
-    @_one_edit_at_a_time
     def add_import(self, alias, location, track=None) -> bool:
         """Declare a dependency in this package's 'partcad.yaml'.
 
@@ -3397,24 +3396,27 @@ class Project(project_config.Configuration):
             pc_logging.error("Not adding %s: only a git dependency tracks a branch" % alias)
             return False
 
-        yaml = ruamel.yaml.YAML()
-        yaml.preserve_quotes = True
-        with open(self.config_path, encoding="utf-8") as fp:
-            config = yaml.load(fp)
-            fp.close()
+        # Only now, with the remote asked: the lock is for the read, the change
+        # and the write, and a remote can take minutes to answer.
+        with self._editing():
+            yaml = ruamel.yaml.YAML()
+            yaml.preserve_quotes = True
+            with open(self.config_path, encoding="utf-8") as fp:
+                config = yaml.load(fp)
+                fp.close()
 
-        if config is None:
-            # An empty 'partcad.yaml': a package that declares nothing yet.
-            config = ruamel.yaml.comments.CommentedMap()
-        # Not 'import:', which used to be the name of this section and now
-        # declares the object types a package reads ('project_config' reports
-        # a legacy one instead of migrating it).
-        if config.get("dependencies") is None:
-            config["dependencies"] = {}
-        config["dependencies"][alias] = entry
-        with open(self.config_path, "w", encoding="utf-8") as fp:
-            yaml.dump(config, fp)
-            fp.close()
+            if config is None:
+                # An empty 'partcad.yaml': a package that declares nothing yet.
+                config = ruamel.yaml.comments.CommentedMap()
+            # Not 'import:', which used to be the name of this section and now
+            # declares the object types a package reads ('project_config' reports
+            # a legacy one instead of migrating it).
+            if config.get("dependencies") is None:
+                config["dependencies"] = {}
+            config["dependencies"][alias] = entry
+            with open(self.config_path, "w", encoding="utf-8") as fp:
+                yaml.dump(config, fp)
+                fp.close()
         return True
 
     def rel_path(self, path) -> str:

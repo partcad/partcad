@@ -12,10 +12,14 @@ file) while another request edits it -- would both read the file as it was, and
 the later replace would drop what the earlier one wrote with nothing said.
 
 So each takes this lock for the whole of it. It is a file in PartCAD's own state
-folder named after the file it guards, so it holds across threads and processes
-and leaves nothing in the package; and a writer that another writer calls, in
-the same thread, is part of that edit and does not take it again -- it would
-otherwise wait for itself.
+folder ('internalStateDir') named after the file it guards, so it leaves nothing
+in the package and holds across threads and across processes -- those that share
+that state folder: a process given another one ('PC_INTERNAL_STATE_DIR') takes
+another lock. A writer that another writer calls, in the same thread, is part of
+that edit and does not take it again -- it would otherwise wait for itself.
+
+A writer holds it for the read, the change and the write, and for nothing slow:
+what a remote says is asked before the lock is taken ('Project.add_import').
 """
 
 import contextlib
@@ -29,6 +33,16 @@ TIMEOUT = 60
 
 # The files each thread is in the middle of editing.
 _HELD = threading.local()
+
+
+class Busy(ValueError):
+    """Another edit of the file held the lock for longer than 'TIMEOUT': try again.
+
+    A ValueError, as every refusal of an edit is; its own class so that a caller
+    for whom the edit is optional (a pin written as a package is created) or one
+    of many (each dependency 'pc update' pins) can pass over it without passing
+    over anything else.
+    """
 
 
 @contextlib.contextmanager
@@ -50,7 +64,7 @@ def editing(config_path: str, state_dir: str):
     try:
         lock.acquire(timeout=TIMEOUT)
     except Timeout:
-        raise ValueError(
+        raise Busy(
             "'%s' is being changed by another edit, which has not finished in %d seconds: try again"
             % (config_path, TIMEOUT)
         ) from None

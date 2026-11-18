@@ -794,6 +794,43 @@ def test_convert_assy_to_urdf(tmp_path):
     assert converted.children
 
 
+def test_a_conversion_keeps_what_was_required_of_the_object(tmp_path):
+    """The declaration is written anew, but it is the same object: its 'requirements:' stay with it."""
+    from partcad.actions.assembly.convert import apply_config
+
+    (tmp_path / "partcad.yaml").write_text(
+        "assemblies:\n"
+        "  logo:\n"
+        "    type: assy\n"
+        "    path: logo.assy\n"
+        "    requirements:\n"
+        "      has_material: true\n"
+        "      physics:\n"
+        "        mass: '>0'\n"
+        "  other:\n"
+        "    type: assy\n"
+        "    path: other.assy\n"
+    )
+    project = pc.Context(str(tmp_path)).get_project("//")
+    apply_config(
+        project,
+        {
+            "assemblies": {
+                "logo": {"type": "urdf", "path": "logo.urdf"},
+                # One that states requirements of its own keeps those.
+                "other": {"type": "urdf", "path": "other.urdf", "requirements": {"has_color": True}},
+            }
+        },
+    )
+    assemblies = yaml.safe_load((tmp_path / "partcad.yaml").read_text())["assemblies"]
+    assert assemblies["logo"] == {
+        "type": "urdf",
+        "path": "logo.urdf",
+        "requirements": {"has_material": True, "physics": {"mass": ">0"}},
+    }
+    assert assemblies["other"]["requirements"] == {"has_color": True}
+
+
 def test_convert_rejects_formats_that_are_not_assemblies(tmp_path):
     root = sandbox(tmp_path, URDF_EXAMPLE_PACKAGES)
     project = pc.Context(str(root)).get_project("//produce_assembly_urdf")

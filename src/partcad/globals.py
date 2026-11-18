@@ -333,8 +333,13 @@ def _pin_tracked_dependencies(config_path, dependencies, user_config) -> None:
                 % (name, track, config["url"], e)
             )
             continue
-        with edit_lock.editing(config_path, user_config.internal_state_dir):
-            reason = dependency_pin.set_dependency_revision(config_path, name, commit)
+        try:
+            with edit_lock.editing(config_path, user_config.internal_state_dir):
+                reason = dependency_pin.set_dependency_revision(config_path, name, commit)
+        except edit_lock.Busy as e:
+            # The package is created all the same: the pin is what 'pc update' writes.
+            pc_logging.warning("Not pinning %s: %s. Run 'pc update' to pin it to the tip of '%s'" % (name, e, track))
+            continue
         if reason is not None:
             pc_logging.warning("Not pinning %s: %s. Set 'revision: %s' in it by hand" % (name, reason, commit))
             continue

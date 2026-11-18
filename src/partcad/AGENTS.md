@@ -416,7 +416,10 @@ at all).
   full; and one edit of a file at a time, `edit_lock`, under a lock in PartCAD's state folder -- the daemon serves
   HTTP on a pool of threads, and two edits reading the file at once would lose one with nothing said. Every writer
   of `partcad.yaml` takes it, `Project._editing` or `_one_edit_at_a_time` for a method; a lock one writer skips is a
-  lock that writer's edits still race). It holds an edit to exactly one rule, the reader's: a section that `requirements.parse` reads with a
+  lock that writer's edits still race. It excludes writers that share one state folder (`internalStateDir`): a
+  process given another one takes another lock. It is held for the read, the change and the write and nothing
+  slower -- `add_import` asks the remote first -- and a conversion that writes an object's declaration anew keeps
+  the `requirements:` of the one it replaces). It holds an edit to exactly one rule, the reader's: a section that `requirements.parse` reads with a
   problem it did not have before, or that the schema now refuses, is not written -- so there is no validator of
   its own to disagree with the reader. An edit is tried on a copy first, so a refused one leaves nothing behind.
   Adding refuses what is there unless `replace` (so does `pc qual add` now), and removing a feature that a

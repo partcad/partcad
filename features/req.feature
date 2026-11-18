@@ -70,6 +70,7 @@ Feature: `pc req` command
     When I run "pc --no-ansi req add match bracket :old-bracket --mass 4 --replace"
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should contain "mass: 4"
+    And a file named "partcad.yaml" should not contain "weight:"
 
   @success @pc-req-remove
   Scenario: `pc req rm` takes a requirement out, and the section with it once nothing is left

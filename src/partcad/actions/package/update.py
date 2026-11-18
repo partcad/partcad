@@ -32,6 +32,7 @@ import os
 
 from partcad_utils import config_yaml, pcignore
 
+from ... import edit_lock
 from ... import logging as pc_logging
 from ... import project_factory_git as rfg
 from ...dependency_pin import set_dependency_revision, yaml_scalar
@@ -161,8 +162,12 @@ def pin_tracked_dependencies(ctx) -> dict:
             continue
 
         # Under the lock every writer of 'partcad.yaml' takes: see 'edit_lock'.
-        with project._editing():
-            reason = set_dependency_revision(project.config_path, name, commit)
+        # Another edit holding it too long fails this pin, not the update.
+        try:
+            with project._editing():
+                reason = set_dependency_revision(project.config_path, name, commit)
+        except edit_lock.Busy as e:
+            reason = str(e)
         if reason is not None:
             pc_logging.error(
                 "Failed to pin %s to the tip of '%s' in the 'partcad.yaml' of %s: %s. Set 'revision: %s' in it by hand."
