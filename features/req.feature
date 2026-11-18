@@ -62,15 +62,32 @@ Feature: `pc req` command
 
   @success @pc-req-add
   Scenario: `pc req add` refuses a requirement that is there already, unless told to replace it
-    When I run "pc --no-ansi req add match bracket :old-bracket --weight 5"
-    Then the command should exit with a status code of "0"
+    # The mass written by hand under its other spelling, 'weight:', beside a volume.
+    Given a file named "partcad.yaml" with content
+      """
+      parts:
+        bracket:
+          type: basic
+          cuboid: [20, 10, 5]
+          requirements:
+            match:
+              ':old-bracket':
+                weight: 5
+                volume: 7
+        old-bracket:
+          type: basic
+          cuboid: [20, 10, 6]
+      """
     When I run "pc --no-ansi req add match bracket :old-bracket --mass 4 2>&1"
     Then the command should exit with a status code of "2"
     And STDOUT should contain "--replace"
-    When I run "pc --no-ansi req add match bracket :old-bracket --mass 4 --replace"
+    # '--weight' is '--mass' by another name, and either replaces the mass under
+    # both its spellings; the volume, which was not asked about, stays.
+    When I run "pc --no-ansi req add match bracket :old-bracket --weight 4 --replace"
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should contain "mass: 4"
     And a file named "partcad.yaml" should not contain "weight:"
+    And a file named "partcad.yaml" should contain "volume: 7"
 
   @success @pc-req-remove
   Scenario: `pc req rm` takes a requirement out, and the section with it once nothing is left
