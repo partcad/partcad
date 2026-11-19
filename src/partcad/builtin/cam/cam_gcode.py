@@ -1191,7 +1191,7 @@ def process(path, request):
         program, warnings, stats = MACHINES[machine](request, obj, units)
         removed = stats.pop(REMOVAL_KEY, None)
 
-        with open(path, "w", newline="\n") as f:
+        with open(path, "w", newline="\n", encoding="utf-8") as f:
             f.write(program.text())
 
         result = {"success": True, "exception": None, "warnings": warnings, "stats": stats}

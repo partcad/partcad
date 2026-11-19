@@ -240,7 +240,9 @@ def build(vertices, faces):
 
 def process(path):
     """The OBJ file at 'path' as a compound of OCCT faces, saying on standard error what was left out."""
-    with open(path, "r") as file:
+    # The geometry is numbers; a byte UTF-8 cannot decode, in a comment or a
+    # group name, is no reason to refuse the file.
+    with open(path, "r", encoding="utf-8", errors="replace") as file:
         vertices, faces = parse(file)
     compound, skipped = build(vertices, faces)
     if skipped:

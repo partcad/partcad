@@ -282,7 +282,7 @@ def create_package(dst_path=consts.DEFAULT_PACKAGE_CONFIG, config_options={"priv
         template_name = "init-public.yaml"
     src_path = os.path.join(os.path.dirname(__file__), "template", template_name)
 
-    with open(src_path) as f:
+    with open(src_path, encoding="utf-8") as f:
         config = yaml.load(f)
     for key, value in config_options.items():
         key = "".join(x.capitalize() if i != 0 else x for i, x in enumerate(key.split("_")))
@@ -292,7 +292,7 @@ def create_package(dst_path=consts.DEFAULT_PACKAGE_CONFIG, config_options={"priv
     if os.path.exists(dst_path):
         pc_logging.error("File already exists: %s" % dst_path)
         return False
-    with open(dst_path, "w") as f:
+    with open(dst_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f)
 
     _pin_tracked_dependencies(

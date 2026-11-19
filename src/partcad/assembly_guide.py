@@ -1556,7 +1556,7 @@ async def _route_images(ctx, part, images: ImageSource) -> list:
         try:
             async with budget:
                 result = await part.route_async(ctx, output_dir=output_dir, machine=machine)
-            with open(result["filepath"]) as f:
+            with open(result["filepath"], encoding="utf-8") as f:
                 text = f.read()
         except Exception as e:  # pylint: disable=broad-except
             pc_logging.debug("No route for %s: %s" % (label, e))
@@ -1565,7 +1565,7 @@ async def _route_images(ctx, part, images: ImageSource) -> list:
         if drawing is None:
             return None, None
         path = os.path.join(directory, _slug("route-" + label) + ".svg")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(drawing)
         caption = "The route%s, seen from above: %d cutting moves, %.0f mm in the cut; rapid moves dashed." % (
             "" if machine is None else " on the %s" % machine,

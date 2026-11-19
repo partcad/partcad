@@ -12,6 +12,8 @@ from pathlib import Path
 
 import ruamel.yaml
 
+from partcad_utils.user_config import read_config_text
+
 from ...user_config import user_config
 
 
@@ -27,9 +29,8 @@ def system_config_get() -> tuple[ruamel.yaml.YAML, dict]:
         Path(config_path).touch()
         config = {}
     else:
-        with open(config_path) as fp:
-            config = yaml.load(fp)
-            fp.close()
+        # Older versions wrote it in the locale's encoding: see 'read_config_text'.
+        config = yaml.load(read_config_text(config_path))
 
     if not config:
         config = {}
@@ -43,6 +44,6 @@ def system_config_set(yaml: ruamel.yaml.YAML, config: dict):
     """
     config_path = os.path.join(user_config.internal_state_dir, "config.yaml")
 
-    with open(config_path, "w") as fp:
+    with open(config_path, "w", encoding="utf-8") as fp:
         yaml.dump(config, fp)
         fp.close()

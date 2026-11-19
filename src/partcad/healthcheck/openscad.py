@@ -334,7 +334,7 @@ class WindowsOpenSCADCheck(OpenSCADCheck):
 
         # Read expected checksum
         try:
-            with open(self.openscad_zip_sha256_path, "r") as f:
+            with open(self.openscad_zip_sha256_path, "r", encoding="utf-8") as f:
                 expected = f.read().strip().split()[0]
         except FileNotFoundError:
             pc_logging.error(f"SHA256 checksum file '{self.openscad_zip_sha256_path}' not found")

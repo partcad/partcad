@@ -1992,7 +1992,7 @@ class Project(project_config.Configuration):
 
         with self.lock:
             try:
-                with open(self.config_path) as fp:
+                with open(self.config_path, encoding="utf-8") as fp:
                     package_config = yaml.load(fp)
 
                 if "sketches" in package_config:
@@ -2001,7 +2001,7 @@ class Project(project_config.Configuration):
                 else:
                     package_config["sketches"] = {sketch_name: sketch_config}
 
-                with open(self.config_path, "w") as fp:
+                with open(self.config_path, "w", encoding="utf-8") as fp:
                     yaml.dump(package_config, fp)
 
             except (IOError, OSError) as e:
@@ -3348,7 +3348,7 @@ class Project(project_config.Configuration):
 
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
-        with open(self.config_path) as fp:
+        with open(self.config_path, encoding="utf-8") as fp:
             config = yaml.load(fp)
             fp.close()
 
@@ -3361,7 +3361,7 @@ class Project(project_config.Configuration):
         if config.get("dependencies") is None:
             config["dependencies"] = {}
         config["dependencies"][alias] = entry
-        with open(self.config_path, "w") as fp:
+        with open(self.config_path, "w", encoding="utf-8") as fp:
             yaml.dump(config, fp)
             fp.close()
         return True
@@ -3523,7 +3523,7 @@ class Project(project_config.Configuration):
         # narrower than a sha256 'fileHash' - and a URL split across two lines is
         # both hard to read and easy to break while editing it by hand.
         yaml.width = 4096
-        with open(self.config_path) as fp:
+        with open(self.config_path, encoding="utf-8") as fp:
             config = yaml.load(fp)
             fp.close()
 
@@ -3543,7 +3543,7 @@ class Project(project_config.Configuration):
         config_section[name] = obj
         config[section] = config_section
 
-        with open(self.config_path, "w") as fp:
+        with open(self.config_path, "w", encoding="utf-8") as fp:
             yaml.dump(config, fp)
             fp.close()
 
@@ -3572,7 +3572,7 @@ class Project(project_config.Configuration):
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
         yaml.width = 4096
-        with open(self.config_path) as fp:
+        with open(self.config_path, encoding="utf-8") as fp:
             config = yaml.load(fp)
         if config is None:
             config = {}
@@ -3595,7 +3595,7 @@ class Project(project_config.Configuration):
             qual[subtype] = entries
         entries[name] = entry
 
-        with open(self.config_path, "w") as fp:
+        with open(self.config_path, "w", encoding="utf-8") as fp:
             yaml.dump(config, fp)
         return True
 
@@ -3623,7 +3623,7 @@ class Project(project_config.Configuration):
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
         yaml.width = 4096
-        with open(self.config_path) as fp:
+        with open(self.config_path, encoding="utf-8") as fp:
             text = fp.read()
         if any(opening in text for opening in ("{{", "{%", "{#")):
             # What PartCAD reads is the rendered document, and what would be
@@ -3669,7 +3669,7 @@ class Project(project_config.Configuration):
         target = os.path.realpath(self.config_path)
         temporary = "%s.%d.%d.tmp" % (target, os.getpid(), threading.get_ident())
         try:
-            with open(temporary, "w") as fp:
+            with open(temporary, "w", encoding="utf-8") as fp:
                 yaml.dump(config, fp)
             with contextlib.suppress(OSError):
                 shutil.copymode(target, temporary)
@@ -3756,7 +3756,7 @@ class Project(project_config.Configuration):
 
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
-        with open(self.config_path) as fp:
+        with open(self.config_path, encoding="utf-8") as fp:
             package_config = yaml.load(fp)
             fp.close()
 
@@ -3766,7 +3766,7 @@ class Project(project_config.Configuration):
         else:
             package_config["parts"] = {part_name: part_config}
 
-        with open(self.config_path, "w") as fp:
+        with open(self.config_path, "w", encoding="utf-8") as fp:
             yaml.dump(package_config, fp)
             fp.close()
 
@@ -3774,7 +3774,7 @@ class Project(project_config.Configuration):
         pc_logging.debug("Updating part config: %s: %s" % (part_name, part_config_update))
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
-        with open(self.config_path) as fp:
+        with open(self.config_path, encoding="utf-8") as fp:
             config = yaml.load(fp)
             fp.close()
 
@@ -3789,7 +3789,7 @@ class Project(project_config.Configuration):
                         if key in part_config:
                             del part_config[key]
 
-                with open(self.config_path, "w") as fp:
+                with open(self.config_path, "w", encoding="utf-8") as fp:
                     yaml.dump(config, fp)
                     fp.close()
 
@@ -4441,7 +4441,7 @@ class Project(project_config.Configuration):
 
         lines = pc_document.render_markdown(document)
         self.ctx.ensure_dirs_for_file(path)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.writelines(map(lambda s: s + "\n", lines))
         return path
 
@@ -4551,7 +4551,7 @@ class Project(project_config.Configuration):
         if format == "html":
             # Already the same bytes every time: nothing in the HTML is read
             # off a clock, so there is no 'reproducible' to honour.
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(pc_document.render_html(document))
         else:
             await render_pdf_async(self.ctx, document, path, reproducible=reproducible, cacheable=cacheable)
@@ -5044,7 +5044,7 @@ class Project(project_config.Configuration):
 
         lines = map(lambda s: s + "\n", lines)
 
-        f = open(path, "w")
+        f = open(path, "w", encoding="utf-8")
         f.writelines(lines)
         f.close()
 

@@ -122,12 +122,12 @@ def init_sentry(version: str) -> None:
     guid_file = user_config.get_generated_id_path()
     # Check if the ID is already cached
     if os.path.exists(guid_file):
-        with open(guid_file, "r") as f:
+        with open(guid_file, "r", encoding="utf-8") as f:
             unique_uid = f.read().strip()
     else:
         # Generate a new random ID and cache it
         unique_uid = str(uuid.uuid4())
-        with open(guid_file, "w") as f:
+        with open(guid_file, "w", encoding="utf-8") as f:
             f.write(unique_uid)
 
     sentry_sdk.set_user({"id": unique_uid})
