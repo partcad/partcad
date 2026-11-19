@@ -45,6 +45,7 @@ from __future__ import annotations
 import base64
 import copy
 import os
+import posixpath
 import re
 from typing import Optional
 
@@ -341,6 +342,28 @@ def values_in_file_name(values) -> str:
     if not values:
         return ""
     return _UNSAFE_IN_FILE_NAME.sub("_", format_parameterized_name("", values))
+
+
+def path_to_link(*pieces: str, sep: str = os.sep) -> str:
+    """The relative link a document carries, joined from paths on this machine.
+
+    A document links with '/' on every platform: the link is a URL that whoever
+    reads the document follows -- on GitHub, in a browser, in an editor's
+    preview -- not a path on the machine that generated it. Some of the pieces
+    it is built from are paths on that machine, though: 'os.path.relpath()'
+    answers '..\\..' on Windows. So in each piece the separator of this
+    filesystem, 'sep', becomes '/' before the pieces are joined, and a '/'
+    already in a piece -- the one in an object's name, the one in a path
+    written in 'partcad.yaml' -- stays as it is. Joining them with
+    'os.path.join()' instead put '.\\.\\rpi4b.svg' into every README generated
+    on Windows, a link with a backslash in it rather than a relative URL.
+
+    'sep' is a parameter so that a test on any platform can ask what Windows
+    produces; nothing else passes it.
+    """
+    if sep != "/":
+        pieces = tuple(piece.replace(sep, "/") for piece in pieces)
+    return posixpath.join(*pieces)
 
 
 def is_document_format(format_name: str, section_obj) -> bool:

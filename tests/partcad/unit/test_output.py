@@ -554,8 +554,83 @@ def test_a_document_links_an_instance_at_the_file_its_render_wrote(tmp_path):
 
     src, test_path = project.readme_image_path("robot/base;scale=2", {"svg": {"prefix": "images"}}, ".")
 
-    assert src.replace(os.sep, "/") == "./images/robot/base_scale_2.svg"
+    assert src == "./images/robot/base_scale_2.svg"
     assert test_path == os.path.join("images", "robot", "base_scale_2.svg")
+
+
+def test_a_document_in_a_sub_directory_links_its_images_with_slashes(tmp_path):
+    """The way back from a document to the images is a path of this machine, and the link is not.
+
+    'return_path' comes from 'os.path.relpath()', which on Windows answers
+    '..\\..'. Joined as it was, it made the README of every package rendered on
+    Windows link '.\\.\\rpi4b.svg'.
+    """
+    (tmp_path / "partcad.yaml").write_text("name: //p\n")
+    project = pc.Context(str(tmp_path)).get_project("//")
+
+    src, test_path = project.readme_image_path("robot/base", {"svg": {"prefix": "images"}}, os.path.join("..", ".."))
+
+    assert src == "../../images/robot/base.svg"
+    assert test_path == os.path.join("images", "robot", "base.svg")
+
+
+@pytest.mark.parametrize(
+    "pieces, sep, link",
+    [
+        # What 'os.path.relpath()' and 'os.path.join()' answer on Windows.
+        (("..\\..", "images", "robot/base.svg"), "\\", "../../images/robot/base.svg"),
+        ((".", ".", "rpi4b.svg"), "\\", "././rpi4b.svg"),
+        (("..", "packages\\sub", "README.md"), "\\", "../packages/sub/README.md"),
+        # A '/' already in a piece stays, whichever the platform's separator.
+        (("..", "packages/sub", "README.md"), "\\", "../packages/sub/README.md"),
+        # Elsewhere the pieces are joined as they are: there a backslash is a
+        # character a file name may hold, not a separator.
+        (("..", "images", "robot/base.svg"), "/", "../images/robot/base.svg"),
+        (("..", "odd\\name.svg"), "/", "../odd\\name.svg"),
+    ],
+)
+def test_a_link_is_joined_with_slashes_whatever_the_platform(pieces, sep, link):
+    assert output.path_to_link(*pieces, sep=sep) == link
+
+
+def test_a_link_uses_this_platforms_separator_by_default():
+    assert output.path_to_link(os.path.join("..", ".."), "a.svg") == "../../a.svg"
+
+
+def test_a_readme_in_a_sub_directory_links_with_slashes(tmp_path):
+    """The README's links -- to a part's picture, to a sub-package's README -- are '/'-separated.
+
+    Put in a sub-directory of the output directory, the README reaches both
+    through '..', which is the piece that came out as '..\\' on Windows.
+    """
+    (tmp_path / "partcad.yaml").write_text(
+        "dependencies:\n"
+        "  sub:\n"
+        "    type: local\n"
+        "    path: packages/sub\n"
+        "parts:\n"
+        "  box:\n"
+        "    type: step\n"
+        "    desc: A box\n",
+        encoding="utf-8",
+    )
+    # Never read: the README needs the part declared and its picture rendered.
+    (tmp_path / "box.step").write_text("", encoding="utf-8")
+    sub = tmp_path / "packages" / "sub"
+    sub.mkdir(parents=True)
+    (sub / "partcad.yaml").write_text("desc: Sub-package\n", encoding="utf-8")
+    project = pc.Context(str(tmp_path)).get_project("//")
+    out = tmp_path / "out"
+    (out / "docs").mkdir(parents=True)
+    (out / "box.svg").write_text("<svg/>", encoding="utf-8")
+
+    # Named '..._async' but synchronous; it is the one that writes the file.
+    project.render_readme_async({"svg": {}, "readme": {"path": "docs/README.md"}}, str(out))
+    readme = (out / "docs" / "README.md").read_text(encoding="utf-8")
+
+    assert '<img src=".././box.svg"' in readme, readme
+    assert "### [sub](../packages/sub/README.md)" in readme, readme
+    assert "\\" not in readme, readme
 
 
 def test_the_output_path_of_a_name_with_a_slash_is_in_a_sub_directory(ctx, tmp_path):

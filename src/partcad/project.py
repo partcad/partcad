@@ -4360,11 +4360,13 @@ class Project(project_config.Configuration):
 
         # The link the document carries keeps the name's '/' as a '/': it is a
         # URL a reader of the document follows rather than a path on the machine
-        # that generated it. The file it points at is that same link spelled for
-        # this filesystem, which for a name with a '/' in it is a file in a
-        # sub-directory -- see 'output.name_to_path()'. Both from the one list of
-        # segments, so that an instance's link names the file its render wrote.
-        image_path = os.path.join(return_path, prefix, "/".join(output.name_to_segments(name, extension)))
+        # that generated it, so it is '/'-separated on Windows too -- see
+        # 'output.path_to_link()'. The file it points at is that same link
+        # spelled for this filesystem, which for a name with a '/' in it is a
+        # file in a sub-directory -- see 'output.name_to_path()'. Both from the
+        # one list of segments, so that an instance's link names the file its
+        # render wrote.
+        image_path = output.path_to_link(return_path, prefix, "/".join(output.name_to_segments(name, extension)))
         test_image_path = os.path.join(prefix, output.name_to_path(name, extension))
         return image_path, test_image_path
 
@@ -4736,11 +4738,13 @@ class Project(project_config.Configuration):
                     columns = []
 
                     if "type" not in import_config or import_config["type"] == "local":
+                        # A link, '/'-separated on every platform, like the
+                        # images below: see 'output.path_to_link()'.
                         lines += [
                             "### [%s](%s)"
                             % (
                                 alias,
-                                os.path.join(
+                                output.path_to_link(
                                     return_path,
                                     import_config.get("path", alias),
                                     "README.md",
