@@ -239,11 +239,15 @@ def author(directory: typing.Optional[str] = None) -> typing.Optional[str]:
 
     cwd = directory if directory and os.path.isdir(directory) else None
     try:
+        # git prints a configured value as the bytes the file holds, which is
+        # UTF-8 whatever the locale: 'Zoë' is not mangled on Windows.
         found = subprocess.run(
             ["git", "config", "user.name"],
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
             check=False,
         )
