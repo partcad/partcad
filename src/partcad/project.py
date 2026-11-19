@@ -3617,7 +3617,7 @@ class Project(project_config.Configuration):
         yaml.preserve_quotes = True
         # Wide enough that nothing is folded onto a second line: see 'add_object_config'.
         yaml.width = 4096
-        with open(self.config_path) as fp:
+        with open(self.config_path, encoding="utf-8") as fp:
             text = fp.read()
         if any(opening in text for opening in ("{{", "{%", "{#")):
             raise ValueError(
@@ -3646,7 +3646,7 @@ class Project(project_config.Configuration):
         target = os.path.realpath(self.config_path)
         temporary = "%s.%d.%d.tmp" % (target, os.getpid(), threading.get_ident())
         try:
-            with open(temporary, "w") as fp:
+            with open(temporary, "w", encoding="utf-8") as fp:
                 if text is None:
                     yaml.dump(config, fp)
                 else:
