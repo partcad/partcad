@@ -141,7 +141,13 @@ def start_daemon(cwd: Optional[str] = None, extra_args=(), replace_different: bo
     argv = launcher_argv() + ["--socket", *(["--replace-different"] if replace_different else []), *extra_args]
     # check=False: the returncode is handled below, so that the error can
     # carry what the launcher printed rather than only its exit status.
-    result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=False)
+    #
+    # The launcher is Python, which prints in the locale's encoding - the one
+    # text mode reads it in - and its environment is the daemon's, so it is not
+    # told to print UTF-8. A byte that comes out wrong in a message (a path
+    # under a home directory with a name outside the code page) is no reason
+    # to fail to start it.
+    result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, errors="replace", check=False)
     if result.returncode != 0:
         raise RuntimeError(
             "%s exited with status %d:\n%s" % (" ".join(argv), result.returncode, _launcher_output(result))

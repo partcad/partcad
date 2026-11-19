@@ -144,7 +144,16 @@ def host():
 def version_of(path):
     """The release the cadmpeg at 'path' says it is ('0.6.7'), or None if it says nothing PartCAD reads."""
     try:
-        result = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=60, check=False)
+        # cadmpeg prints UTF-8; text mode alone would decode it in the locale's encoding.
+        result = subprocess.run(
+            [path, "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            check=False,
+        )
     except (OSError, subprocess.SubprocessError):
         return None
     words = (result.stdout or "").split()

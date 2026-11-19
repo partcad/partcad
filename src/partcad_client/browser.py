@@ -155,7 +155,8 @@ def _exec_of_desktop(desktop_id: str) -> Optional[List[str]]:
 
 def _run(command, timeout=5) -> str:
     try:
-        return subprocess.run(command, capture_output=True, text=True, timeout=timeout).stdout.strip()
+        # xdg-settings and xdg-mime print in the locale's encoding, which text mode reads it in.
+        return subprocess.run(command, capture_output=True, text=True, errors="replace", timeout=timeout).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return ""
 

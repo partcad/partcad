@@ -976,7 +976,10 @@ def _lsof_pipe_holders(descriptors, run=subprocess.run):
 
     def listed(*args):
         try:
-            answer = run(["lsof", "-n", "-P", "-w", *args], capture_output=True, text=True, timeout=10)
+            # A file's name is whatever its program called it.
+            answer = run(
+                ["lsof", "-n", "-P", "-w", *args], capture_output=True, text=True, errors="replace", timeout=10
+            )
         except (OSError, subprocess.SubprocessError):
             return []
         # One field a line, its kind first: 'p' starts a process and 'f' a

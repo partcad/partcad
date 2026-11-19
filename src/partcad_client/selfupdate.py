@@ -964,7 +964,13 @@ def _install_wheels(pin: Optional[str], log: Callable[[str], None]) -> str:
     requirements = ["%s==%s" % (dist, pin) if pin else dist for dist in distributions]
     argv = [sys.executable, "-m", "pip", "install", "--no-input", "--upgrade", *_pip_target_flags(), *requirements]
     log("Running: %s" % " ".join(argv))
-    result = subprocess.run(argv, capture_output=True, text=True, check=False)  # nosec B603 - argv is built above
+    # pip is Python, which prints in the locale's encoding - on Windows a code
+    # page, in which a path under a home directory named outside it is not
+    # printable at all. Told to print UTF-8, and read as UTF-8.
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    result = subprocess.run(  # nosec B603 - argv is built above
+        argv, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, check=False
+    )
     if result.stdout:
         log(result.stdout.strip())
     if result.returncode != 0:

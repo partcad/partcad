@@ -84,6 +84,9 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
                     [interpreter, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
                     capture_output=True,
                     text=True,
+                    # Python prints in the locale's encoding, which text mode reads it
+                    # in; a byte that comes out wrong is no reason to fail.
+                    errors="replace",
                     timeout=60,
                 ).stdout.strip()
                 or None

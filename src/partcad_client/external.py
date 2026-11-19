@@ -1482,6 +1482,10 @@ def _run(args: List[str], timeout: Optional[float] = DOCKER_TIMEOUT) -> subproce
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
+            # Docker and flatpak print UTF-8; text mode alone would decode it in
+            # the locale's encoding, and fail on a byte that has no character there.
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
         )
