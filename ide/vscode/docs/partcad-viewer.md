@@ -37,7 +37,7 @@ cannot drift apart.
 ## The 3D view
 
 The pane is a control pane on the left, the canvas beside it and the view panel on the right (below). The control
-pane is a **tree of what is on screen**, with a checkbox on every item, and under it the four callout boxes and the
+pane is a **tree of what is on screen**, with a checkbox on every item, and under it the six callout boxes and the
 Metadata box — all of them say what is drawn, so all of them are one pane. How the model is looked at and drawn — the camera, a section, Animate
 and Opacity — is the view panel's. There is no name in the corner of the canvas: the first item of the tree is the
 object, and it says the same thing where it can also be switched off.
@@ -125,6 +125,33 @@ cluster comes back with the point of it nearest the middle of it, in the frame o
 the nodes it is of; its callout hangs from the show's root and shows while the tree draws any of those nodes. An
 answer to a box ticked while the show is still loading is held until its geometry is on the stage (`held.ts`). The
 2D tab's picture finds its own clusters, of what its filter keeps.
+
+**Comments** is the sixth box, and the 3D view's alone (`RENDER_LABEL_BOXES` leaves it off the 2D tab, whose picture
+is a file nobody clicks into). A package and every object it declares may carry `comments:` — threads of comments,
+each `ref` (what inside the object it is about), `name` (git's), `date` (UTC, to the second), `text` (Markdown) and
+`attachments`; `partcad_utils/comments.py` is the normative description and `src/webview/comments.ts` its twin. While
+the box is ticked the 3D view asks, once per show, about every object the tree draws (`fetchComments` →
+`partcad.commentList` → `comment.list`, with `anchors`), and pins a callout per thread (`pinThreads`): a thread about
+`face:<n>` or `edge:<n>` of a part where the daemon found that face or edge in a sandbox (`element_refs.py` among the
+wrappers, numbered as OCCT numbers them); one about a link of an assembly — the link names down to it, joined with
+`:` as a port of something inside is named — at the top corner of that node; anything else at the top corner of the
+object, away from its middle, where its name is written and the threads about its faces tend to be. A thread is
+pinned once, on the first node that holds its object, however many times the tree places it, and threads pinned to
+one place share one callout, a section each. A callout holds whole threads, scrolled where they are long (its wheel scrolls it rather than zooming the model), with a bar in
+the amber of the editor's own comment threads, and is the one callout that is clicked: clicking it opens the dialog
+(`commentDialog.ts`) to answer it, with the thread above the box.
+
+While the box is ticked the model is clickable too (`setPicking` in `scene.ts`): a press and a release within a few
+pixels and under a second is a click rather than a turn of the camera, and a ray into what is drawn. A click on a
+part of an assembly starts a thread on the assembly about the link it is (`linkRef`); a click on a part or a sketch
+shown on its own asks the daemon which face or edge it landed on (`locateComment` → `comment.locate`), sending the
+point in the node's own frame in millimetres and how many millimetres a few pixels are there, which is how near an
+edge a click still counts as on it. The dialog opens at once and says it is finding out; Post waits for the answer.
+What is posted goes to the host, which signs it with `git config user.name` read *there* (`src/viewer/comments.ts`)
+— never the daemon's, which can be on another machine — and has it written (`addComment` → `comment.add`), and the
+comments are asked for again. Attachments are files of the package, which only the host can pick (`attachFiles`,
+with the package's directory from `comment.list`). An object declared where a comment cannot be written — supplied
+by a plugin, or in a Jinja2 template — has its threads shown and its dialog read-only.
 
 The boxes are one answer for the 3D and 2D tabs (`Labels`, as the tree has `Selection`), and are kept from one
 object to the next, as Metadata is. On the 2D tab they are sent with the render as the `pc render` options they are
@@ -416,6 +443,11 @@ the protocol has no authentication.
 | `src/webview/tree.ts` | The 3D view's control pane: the rows, the boxes, and what is to be drawn |
 | `src/webview/labels.ts` | The callout boxes under the tree of the 3D and 2D tabs, the answer they share, and the `pc render` options they are |
 | `src/webview/callouts.ts` | What a callout says: a shape's metadata about its elements, and a component's name and price |
+| `src/webview/comments.ts` | The comments: where each thread is pinned on the tree, what a click on an assembly is about, and the Markdown a comment is written in |
+| `src/webview/commentDialog.ts` | The dialog a comment is written in, over the 3D view |
+| `src/viewer/comments.ts` | The host's half of a comment: the git name it is signed with, and the files picked to attach |
+| `src/partcad_utils/comments.py` | What a comment is, for every reader: the date, the reference grammar, the threads as read |
+| `src/partcad/wrappers/element_refs.py` | Which face or edge a comment is about: where each is, and which a clicked point is on |
 | `src/partcad/component_prices.py` | What each component costs: its share of the object's quote, for the callouts |
 | `src/partcad/wrappers/material_clusters.py` | Where each material is: its faces gathered into clusters, for the Materials callouts |
 | `src/webview/held.ts` | An answer about the object on screen, held until its geometry is on the stage |

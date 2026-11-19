@@ -4,7 +4,7 @@
 // Licensed under Apache License, Version 2.0.
 //
 // The callout boxes at the bottom of the 3D and 2D tabs' control pane: which of
-// five things are written on the object as callouts.
+// six things are written on the object as callouts.
 //
 // * "Component names" and "Component prices" put one callout on every component -
 //   every part, wherever the object places it - with a row for each of the two
@@ -18,6 +18,12 @@
 //   interface instances that are drawn. On by default, because a port drawn with
 //   no name is a frame nobody can find in an ASSY file, and the 2D tab's picture
 //   always wrote them.
+// * "Comments" puts one on every thread of comments the objects drawn carry -
+//   on the face or the edge of a part it is about, on the link of an assembly -
+//   and makes a click on the model start a thread there, and a click on a
+//   thread answer it (see 'comments.ts'). The 3D view's alone: a comment is
+//   something to read and to answer, and the 2D tab's picture is a file PartCAD
+//   made, which nobody clicks into ('RENDER_LABEL_BOXES').
 //
 // None of the five puts anything on a thing the tree above does not draw: a
 // callout belongs to what it is pinned to, so the box that hides a part hides its
@@ -49,6 +55,7 @@ export interface LabelChoices {
     materials: boolean;
     portNames: boolean;
     interfaceNames: boolean;
+    comments: boolean;
 }
 
 export type LabelKey = keyof LabelChoices;
@@ -60,6 +67,7 @@ export const LABEL_DEFAULTS: Readonly<LabelChoices> = {
     materials: false,
     portNames: true,
     interfaceNames: true,
+    comments: false,
 };
 
 /** The boxes, in the order they are listed, with what each one is called and what it does. */
@@ -94,7 +102,20 @@ export const LABEL_BOXES: readonly { key: LabelKey; label: string; title: string
         label: 'Interface names',
         title: 'The name of every interface that is drawn (pc render --without-interface-names to leave them off)',
     },
+    {
+        key: 'comments',
+        label: 'Comments',
+        title:
+            'A callout on every thread of comments the objects drawn carry (pc comment list). While ticked, click ' +
+            'a face or an edge of a part, or a part of an assembly, to start a thread about it, and click a thread ' +
+            'to answer it - written into partcad.yaml, signed with git config user.name',
+    },
 ];
+
+/** The boxes the 2D tab's control pane has: every one but Comments, which is the 3D view's alone. */
+export const RENDER_LABEL_BOXES: readonly { key: LabelKey; label: string; title: string }[] = LABEL_BOXES.filter(
+    ({ key }) => key !== 'comments',
+);
 
 /**
  * What the boxes say, for both tabs.
@@ -136,7 +157,7 @@ export class Labels {
 }
 
 /**
- * The five boxes, drawn into one tab's control pane under its tree.
+ * The boxes, drawn into one tab's control pane under its tree: 'boxes' says which.
  *
  * Every tab's boxes read and write the one 'Labels', so ticking one on the 3D
  * view ticks it on the 2D tab as well; and a line under them says what the
@@ -148,11 +169,15 @@ export class LabelBoxes {
     private readonly note: HTMLElement;
     private readonly notes = new Map<LabelKey, string>();
 
-    constructor(host: HTMLElement, labels: Labels) {
+    constructor(
+        host: HTMLElement,
+        labels: Labels,
+        private readonly drawnBoxes: readonly { key: LabelKey; label: string; title: string }[] = LABEL_BOXES,
+    ) {
         host.classList.add('viewer-controls', 'label-controls');
         host.setAttribute('role', 'group');
         host.setAttribute('aria-label', 'Callouts');
-        for (const { key, label, title } of LABEL_BOXES) {
+        for (const { key, label, title } of drawnBoxes) {
             const row = el('label', 'control-label');
             row.title = title;
             const box = el('input');
@@ -187,7 +212,7 @@ export class LabelBoxes {
         } else {
             this.notes.set(key, text);
         }
-        const lines = LABEL_BOXES.map((box) => this.notes.get(box.key)).filter((line) => line !== undefined);
+        const lines = this.drawnBoxes.map((box) => this.notes.get(box.key)).filter((line) => line !== undefined);
         this.note.textContent = lines.join('\n');
         this.note.hidden = lines.length === 0;
     }

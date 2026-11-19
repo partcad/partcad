@@ -215,6 +215,10 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         # The old spelling of 'qual: basic: cmf:', still read (see
         # 'partcad.qual.config.LEGACY') and no more geometry than 'qual' below.
         "cmf",
+        # What people said about it, not what it is (see 'partcad_utils.comments'):
+        # writing a comment from the 3D view must not rebuild the part it is
+        # pinned to, and every assembly holding it.
+        "comments",
         # How the thing is packaged for sale, not what it is. The third of the
         # (vendor, SKU, pack size) record, and the only one of the three that
         # was missing here - so the same geometry sold in bags of 25 keyed

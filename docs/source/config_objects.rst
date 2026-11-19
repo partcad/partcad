@@ -51,6 +51,63 @@ application (``open:``), and a colour, a material or a finish (see :ref:`cmf`).
 ``pc info`` says it as ``Url``, and the package's own ``url:`` for an object that states none. It is for a
 reader: a plugin's script is never handed it as a parameter, as it is never handed ``desc``.
 
+.. _comments:
+
+========
+Comments
+========
+
+Every object -- a part, an assembly, a scene, a sketch, an interface, software, a provider, a repository, a part
+or sketch type, a colour, a material, a finish -- and the package itself may carry ``comments:``: the
+discussion of it, as a list of **threads**, each an ordered list of comments, oldest first.
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: step
+      comments:
+        - - ref: face:12
+            name: Ada Lovelace
+            date: 2026-11-19 14:31:01 UTC
+            text: |-
+              This face is **too thin** to print.
+
+              - thicken it to 2 mm
+              - or support it from below
+            attachments: [photos/bracket-crack.jpg]
+          - ref: face:12
+            name: Charles Babbage
+            date: 2026-11-19 15:02:44 UTC
+            text: Thickened to 2 mm.
+
+Each comment says who wrote it (``name``, what ``git config user.name`` says on the writer's machine), when
+(``date``, in UTC and to the second), what (``text``, in Markdown) and, where anything goes with it, which
+files (``attachments``, relative to the package). ``ref`` says what *inside* the object it is about, in the
+terms of the object's kind; a comment without one is about the object as a whole, and a thread is about what its
+first comment is about:
+
+- a part or a sketch: one of its faces or edges, ``face:<n>`` or ``edge:<n>``, numbered from one in the order
+  OCCT numbers them -- the numbering a topology finding's "face 3" uses. A number belongs to the shape it was
+  written against: a model edited so that its faces are numbered differently leaves a thread on a face it was
+  not about, and one numbered past its last face is shown on the part as a whole;
+- an assembly or a scene: a link, by the name the ASSY file addresses it by (its ``name:``, the object it
+  places, or ``link#2``), or something deeper by the link names down to it joined with ``:``, the way a port of
+  something inside is named;
+- a provider, a repository, a part type or a sketch type -- a plugin -- its entry point: the request it answers
+  (``quote``, ``search``) or a function of its script;
+- an interface: a port; the package itself: an object or a dependency of it.
+
+Comments say nothing about what an object is. Nothing PartCAD builds, caches or qualifies reads them, so
+writing one rebuilds nothing.
+
+``pc comment add`` writes one and ``pc comment list`` reads them (see :doc:`cli`). In the IDE, the Digital
+Thread's 3D view shows every thread of the objects it draws in a callout when **Comments** is ticked under its
+tree; while it is ticked, clicking a face or an edge of a part, or a part of an assembly, starts a thread about
+it, and clicking a thread answers it (see :doc:`tools_vscode`). Either way the comment is written into the
+``partcad.yaml`` that declares the object, the rest of the file kept as it was; an object a plugin supplies,
+or one declared in a Jinja2 template, can be read but not commented on.
+
 .. _one-name-one-object:
 
 ====================

@@ -5546,6 +5546,320 @@ def cam_save(session, params):
     return answer
 
 
+def _commented(ctx, pc, params, name=None):
+    """``(project, kind, declared name, full name)`` of what a comment request is about.
+
+    ``object`` (or ``name``, for one of a list) names a declaration, of the
+    ``kind`` the request says or of the kind its name is, looked up among the
+    kinds a bare name can be; no object at all is the package ``package`` names,
+    with kind and declared name None. A parametrized name ('bolt;length=10') is
+    its declaration's: the comments are on what is written.
+    """
+    from partcad.project import OBJECT_KIND_SECTIONS
+    from partcad_utils.utils import parse_parameterized_name
+
+    if name is None and not params.get("object"):
+        package = ctx.resolve_package_path(params.get("package") or ".")
+        project = ctx.get_project(package)
+        if project is None:
+            raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+        return project, None, None, project.name
+    if name is None:
+        resolved = _resolve_object(ctx, pc, params)
+        if resolved is None:
+            raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % (params.get("package") or "."))
+        package, object_name = resolved
+        said = _said_kind(params)
+    else:
+        package, object_name = pc.utils.resolve_resource_path(
+            ctx.resolve_package_path(params.get("package") or "."), name
+        )
+        said = None
+    project = ctx.get_project(package)
+    if project is None:
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+    declared, _ = parse_parameterized_name(object_name)
+    kind = _kind_of(ctx, package, declared, said)
+    if kind is None:
+        raise JsonRpcError(USAGE_ERROR, "%s is not found" % _qualified(package, object_name))
+    # Every kind a package declares carries comments, and nothing else does.
+    if kind not in OBJECT_KIND_SECTIONS:
+        raise JsonRpcError(USAGE_ERROR, "A %s carries no comments of its own" % kind)
+    return project, kind, declared, _qualified(package, declared)
+
+
+def _comment_file(project) -> dict:
+    """Where a package's comments are written, and whether they can be: ``{config, directory, template}``."""
+    path = getattr(project, "config_path", None)
+    template = False
+    if path and os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8") as stream:
+                text = stream.read()
+            template = any(opening in text for opening in ("{{", "{%", "{#"))
+        except OSError:
+            path = None
+    else:
+        path = None
+    return {"config": path, "directory": getattr(project, "config_dir", None), "template": template}
+
+
+def _comments_of(project, kind, declared, qualified, file) -> dict:
+    """What one declaration (or the package, with kind None) says in its ``comments:``, as ``comment.list`` answers it."""
+    from partcad.project import OBJECT_KIND_SECTIONS
+    from partcad_utils import comments as pc_comments
+
+    if kind is None:
+        declaration = project.config_obj
+        writable = True
+    else:
+        declaration = project.object_config(kind, declared)
+        # Written only where this package's own file declares it: an object a
+        # plugin supplies has nowhere to keep a comment.
+        section = (getattr(project, "config_obj", None) or {}).get(OBJECT_KIND_SECTIONS.get(kind, ""))
+        writable = isinstance(section, dict) and declared in section
+    threads = []
+    for index, thread in enumerate(pc_comments.threads(declaration)):
+        if not thread:
+            continue
+        ref = pc_comments.thread_ref(thread)
+        threads.append({"index": index, "ref": ref, "about": pc_comments.describe_ref(ref), "comments": thread})
+    return {
+        "object": qualified,
+        "kind": kind,
+        "package": project.name,
+        "config": file["config"],
+        "directory": file["directory"],
+        "writable": bool(writable and file["config"] and not file["template"]),
+        "threads": threads,
+    }
+
+
+def _attachment(project, item):
+    """One attachment as a comment keeps it: relative to the package, '/'-separated.
+
+    A client sends a file it was given on its command line as an absolute path,
+    as 'pc add' does, since it does not share the daemon's working directory;
+    one inside the package is written relative to it, and one outside refused --
+    a comment is read wherever the package is, and an absolute path is read on
+    one machine. A relative one is taken to be relative to the package already.
+    """
+    if not isinstance(item, str) or not item.strip():
+        raise JsonRpcError(USAGE_ERROR, "An attachment is named by its file name, not by %r" % (item,))
+    item = item.strip()
+    if not os.path.isabs(item):
+        relative = item.replace("\\", "/")
+    else:
+        directory = getattr(project, "config_dir", None) or ""
+        relative = os.path.relpath(os.path.realpath(item), os.path.realpath(directory)) if directory else ".."
+        relative = relative.replace(os.sep, "/")
+    if relative == ".." or relative.startswith("../") or os.path.isabs(relative):
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "'%s' is not inside the package '%s', and an attachment is a file of the package: copy it in first"
+            % (item, project.name),
+        )
+    return relative
+
+
+async def _anchor_threads_async(ctx, shape, threads) -> None:
+    """Pin each thread of a part's or a sketch's that names a face or an edge: its ``at``, in the shape's own frame."""
+    from partcad import measure
+    from partcad_utils import comments as pc_comments
+
+    refs = [thread["ref"] for thread in threads if pc_comments.parse_element_ref(thread["ref"]) is not None]
+    if not refs:
+        return
+    tree = await shape.get_wrapped(ctx)
+    if tree is None:
+        return
+    found = await measure.element_anchors(ctx, tree, refs, cacheable=shape.artifacts_cacheable())
+    for thread in threads:
+        at = found.get(thread["ref"]) if thread["ref"] else None
+        if at is not None:
+            thread["at"] = at
+
+
+def comment_list(session, params):
+    """The comments of objects, or of a package: ``pc comment list``.
+
+    ``object`` names one declaration (of ``kind`` where the request says, as
+    for every method that takes one); ``objects`` names several, each by its
+    full name -- what the IDE's 3D view sends, one per distinct object its tree
+    draws; neither is the package ``package`` names. Answers ``{"objects":
+    {<full name>: {object, kind, package, config, directory, writable,
+    threads}}}``: where each is declared, whether a comment can be written there
+    (it is declared in its package's own file, and that file is not a Jinja2
+    template), and its threads, each ``{index, ref, about, comments}`` -- its
+    position in the declaration's list, which a reply names, what it is about
+    and in words, and every comment of it oldest first. A name that is not
+    found is answered ``{"object", "error"}`` rather than failing the rest.
+
+    With ``anchors`` true, each thread of a part or a sketch that is about a
+    face or an edge carries ``at``, a point on it in the shape's own frame in
+    millimetres: what the 3D view pins its callout to. Worked out in a sandbox,
+    and only then, since the shape has to be built for it.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    names = params.get("objects")
+    if names is not None and (not isinstance(names, list) or not all(isinstance(n, str) and n for n in names)):
+        raise JsonRpcError(USAGE_ERROR, "'objects' is a list of object names")
+    anchors = bool(params.get("anchors"))
+    files = {}
+    answer = {}
+
+    def one(name):
+        project, kind, declared, qualified = _commented(ctx, pc, params, name)
+        if project.name not in files:
+            files[project.name] = _comment_file(project)
+        found = _comments_of(project, kind, declared, qualified, files[project.name])
+        if anchors and kind in ("part", "sketch") and found["threads"]:
+            shape = _getter(ctx, kind)(qualified)
+            if shape is not None:
+                try:
+                    asyncio.run(_anchor_threads_async(ctx, shape, found["threads"]))
+                except Exception as e:  # pylint: disable=broad-except
+                    # The threads are still worth showing, on the object as a
+                    # whole, when where their faces are cannot be worked out.
+                    pc.logging.warning("Where the comments on %s are could not be worked out: %s" % (qualified, e))
+        return found
+
+    if names is None:
+        found = one(None)
+        answer[found["object"]] = found
+    else:
+        for name in dict.fromkeys(names):
+            try:
+                answer[name] = one(name)
+            except JsonRpcError as e:
+                answer[name] = {"object": name, "error": str(e)}
+    for found in answer.values():
+        for thread in found.get("threads") or []:
+            pc.logging.debug("%s: %s: %d comment(s)" % (found["object"], thread["about"], len(thread["comments"])))
+    return {"objects": answer}
+
+
+def comment_add(session, params):
+    """Write a comment on an object, or on a package: ``pc comment add``.
+
+    ``object`` (and ``kind``) name the declaration, as for ``comment.list``, and
+    no object the package ``package`` names. ``thread`` is the index of the
+    thread the comment answers, as ``comment.list`` gave it, and absent starts a
+    thread of its own; ``ref`` is what inside the object it is about ('face:12',
+    a link name: see 'partcad_utils.comments'). ``name`` is who wrote it, which
+    the *client* reads from its own git configuration -- a daemon can be on
+    another machine, whose configuration names somebody else -- and is refused
+    when absent; ``date`` is when, and now when absent. ``text`` is Markdown, and
+    ``attachments`` the files that go with it, relative to the package.
+
+    A daemon method because it writes a declaration, like every other
+    package-mutating command; the package is then read again. Answers
+    ``{object, kind, config, thread, comment}``: the file written, the index of
+    the thread the comment is in, and the comment as it was written.
+    """
+    from partcad_utils import comments as pc_comments
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    project, kind, declared, qualified = _commented(ctx, pc, params)
+    attachments = params.get("attachments")
+    if attachments is not None and not isinstance(attachments, list):
+        raise JsonRpcError(USAGE_ERROR, "'attachments' is a list of file names")
+    attachments = [_attachment(project, item) for item in attachments or []]
+    thread = params.get("thread")
+    if thread is not None and (isinstance(thread, bool) or not isinstance(thread, int)):
+        raise JsonRpcError(USAGE_ERROR, "'thread' is the index of a thread, as 'pc comment list' gives it")
+    try:
+        written = pc_comments.entry(
+            params.get("name"),
+            params.get("text"),
+            ref=params.get("ref"),
+            attachments=attachments,
+            when=params.get("date"),
+        )
+        index = project.add_comment(kind, declared, written, thread=thread)
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    pc.logging.info(
+        "Commented on %s%s in %s"
+        % (
+            "the package %s" % qualified if kind is None else qualified,
+            "" if "ref" not in written else " (%s)" % pc_comments.describe_ref(written["ref"]),
+            project.config_path,
+        )
+    )
+    # The package as it now reads, for whatever is asked next -- above all the
+    # 3D view listing the comments again to show the one just written.
+    ctx.reload_packages([project.name])
+    _invalidate_context(session, params)
+    return {"object": qualified, "kind": kind, "config": project.config_path, "thread": index, "comment": written}
+
+
+def comment_locate(session, params):
+    """Which face or edge of a part or a sketch a point is on, as a comment names it.
+
+    Not a CLI command: what the IDE's 3D view asks when somebody clicks a part
+    with "Comments" ticked, to say what the comment they are about to write is
+    about. ``point`` is where the click landed, in the shape's own frame in
+    millimetres, and ``tolerance`` how far from it, in millimetres, an edge
+    still counts as clicked -- a few pixels' worth where it landed, which only
+    the view knows. Answers ``{object, kind, ref, element, index, at, distance,
+    about}``: 'face:12', its two halves, the point of it nearest the click, how
+    far that is, and the reference in words. Worked out in a sandbox.
+    """
+    import asyncio
+
+    from partcad import measure
+    from partcad_utils import comments as pc_comments
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    point = params.get("point")
+    if (
+        not isinstance(point, list)
+        or len(point) != 3
+        or not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in point)
+    ):
+        raise JsonRpcError(USAGE_ERROR, "'point' is [x, y, z] in millimetres")
+    tolerance = params.get("tolerance") or 0.0
+    if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or not math.isfinite(tolerance):
+        raise JsonRpcError(USAGE_ERROR, "'tolerance' is a length in millimetres")
+    refusal = "Only a part's or a sketch's faces and edges are located; '%s' is neither"
+    _refuse_said_kind(params, ("part", "sketch"), refusal)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    kind = _resolve_kind(ctx, params, package, object_name, ("part", "sketch"), refusal)
+    path = _qualified(package, object_name)
+    shape = _getter(ctx, kind)(path)
+    if shape is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+
+    async def locate():
+        tree = await shape.get_wrapped(ctx)
+        if tree is None:
+            return None
+        return await measure.locate_element(ctx, tree, point, float(tolerance))
+
+    found = asyncio.run(locate())
+    if found is None:
+        raise JsonRpcError(USAGE_ERROR, "%s has no face and no edge to comment on" % path)
+    found["object"] = path
+    found["kind"] = kind
+    found["about"] = pc_comments.describe_ref(found["ref"])
+    return found
+
+
 def supply_quote(session, params):
     """Where to buy what an object is made of, and for how much.
 

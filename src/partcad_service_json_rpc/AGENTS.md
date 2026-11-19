@@ -306,6 +306,17 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   in place of what the part states, nothing written -- which answers `{stats}`; the same method takes
   `extra_details`, the 3D tab's "Extra details" box, and `detail`, a level of tessellation
   (`partcad.cam_view.representation` decides both), and the show says which way the box was (`extraDetails`).
+* `comment.list`, `comment.add` and `comment.locate`, behind `pc comment list`/`pc comment add` and the 3D view's
+  Comments box (see `partcad_utils/comments.py`). The first lists the threads of one object, of several by their
+  full names (what the 3D view asks, one per object its tree draws; a name that is not found is answered with an
+  `error` rather than failing the rest), or of the package; with `anchors`, each thread of a part or a sketch about
+  a face or an edge carries `at`, a point on it in the shape's own frame, found in a sandbox (`element_refs.py`
+  among the wrappers, through `wrapper_measure`). The second writes one comment into the declaration's
+  `partcad.yaml` (`Project.add_comment`, ruamel, so the file keeps its comments and a short form is written out as
+  the mapping it stands for), and refuses an unsigned one: `name` is the *client's* git identity and is never
+  looked up here. Attachments sent as absolute paths are written relative to the package, and one outside it is
+  refused. The third says which face or edge a point clicked in the 3D view is on, an edge winning within the
+  `tolerance` the view worked out from a few pixels; it is never cached, since every click is somewhere else.
 * `cmf.info`, behind the Digital Thread's CMF tab (see `partcad/cmf.py`, "What the IDE shows"): for a part, an
   assembly or a scene, a row per item the `cmf` check judges -- the part itself, or every part an assembly holds and
   every sub-assembly in it bought whole -- each with its CMF as `pc info` says it and the check's findings, the

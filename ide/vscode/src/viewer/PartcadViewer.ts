@@ -14,6 +14,7 @@ import { readChoices, writeChoices } from '../common/garage';
 import { traceError, traceInfo, traceVerbose } from '../common/log/logging';
 import { getViewerPerformanceDebugFromSetting } from '../common/settings';
 import * as utils from '../utils';
+import { NO_AUTHOR, attachmentNames, gitAuthor } from './comments';
 import { WebviewLedger } from './geometryStore';
 import { detailsBytes, filesAsBytes } from './payloads';
 import { GltfPayload, MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, glbOf } from './protocol';
@@ -870,6 +871,133 @@ export class PartcadViewer implements vscode.Disposable {
         }
     }
 
+    /**
+     * Answer one of the 3D view's questions about comments ('comments.ts' in the
+     * webview): the comments of the objects it draws ('comment.list', with where
+     * each thread about a face or an edge is), which face or edge a click landed
+     * on ('comment.locate'), writing one ('comment.add'), or which files of the
+     * package to attach to one. Each answer quotes the question's token.
+     *
+     * A comment is signed here, with this machine's git identity: see
+     * 'comments.ts' beside this file.
+     */
+    private async commentQuestion(message: {
+        type: string;
+        token?: number;
+        objects?: unknown;
+        object?: string;
+        kind?: string | null;
+        point?: unknown;
+        tolerance?: unknown;
+        thread?: number;
+        ref?: string;
+        text?: string;
+        attachments?: unknown;
+        directory?: string | null;
+    }): Promise<void> {
+        const answers: Record<string, string> = {
+            fetchComments: 'comments',
+            locateComment: 'commentLocated',
+            addComment: 'commentAdded',
+            attachFiles: 'filesAttached',
+        };
+        const token = message.token ?? 0;
+        const post = (payload: { data?: unknown; error?: string }) =>
+            void this.panel?.webview.postMessage({ type: answers[message.type], token, ...payload });
+        const target = this.lastShow;
+        try {
+            if (message.type === 'attachFiles') {
+                post({ data: { files: await this.pickAttachments(message.directory ?? undefined) } });
+                return;
+            }
+            if (!target?.package) {
+                throw new Error('PartCAD did not say which package this object belongs to.');
+            }
+            const command = {
+                fetchComments: 'partcad.commentList',
+                locateComment: 'partcad.commentLocate',
+                addComment: 'partcad.commentAdd',
+            }[message.type as 'fetchComments' | 'locateComment' | 'addComment'];
+            if (!(await vscode.commands.getCommands(true)).includes(command)) {
+                throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
+            }
+            if (message.type === 'fetchComments') {
+                post({
+                    data: await vscode.commands.executeCommand(command, {
+                        pkg: target.package,
+                        objects: message.objects,
+                        anchors: true,
+                    }),
+                });
+                return;
+            }
+            if (message.type === 'locateComment') {
+                post({
+                    data: await vscode.commands.executeCommand(command, {
+                        pkg: target.package,
+                        object: message.object,
+                        kind: message.kind,
+                        point: message.point,
+                        tolerance: message.tolerance,
+                    }),
+                });
+                return;
+            }
+            const name = await gitAuthor(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+            if (name === undefined) {
+                throw new Error(NO_AUTHOR);
+            }
+            post({
+                data: await vscode.commands.executeCommand(command, {
+                    pkg: target.package,
+                    object: message.object,
+                    kind: message.kind,
+                    thread: message.thread,
+                    ref: message.ref,
+                    text: message.text,
+                    attachments: message.attachments,
+                    name,
+                }),
+            });
+        } catch (error: any) {
+            traceError(`Digital Thread: ${message.type} failed: ${error?.message ?? error}`);
+            post({ error: `${error?.message ?? error}` });
+        }
+    }
+
+    /**
+     * Let the user pick files of the package to attach to a comment: their names
+     * relative to it, or none if they picked none. A file outside the package is
+     * refused, saying which: a comment is read wherever the package is.
+     */
+    private async pickAttachments(directory: string | undefined): Promise<string[]> {
+        const root = directory && fs.existsSync(directory) ? directory : undefined;
+        if (root === undefined) {
+            throw new Error(
+                "The package's folder is not on this machine, so its files cannot be picked here: name them with " +
+                    "'pc comment add --attach' where it is.",
+            );
+        }
+        const picked = await vscode.window.showOpenDialog({
+            canSelectMany: true,
+            canSelectFiles: true,
+            canSelectFolders: false,
+            defaultUri: vscode.Uri.file(root),
+            openLabel: 'Attach',
+            title: 'Attach files of the package to the comment',
+        });
+        const { files, outside } = attachmentNames(
+            root,
+            (picked ?? []).map((uri) => uri.fsPath),
+        );
+        if (outside.length > 0) {
+            throw new Error(
+                `Not in the package, so not attached: ${outside.join(', ')}. Copy a file into the package first.`,
+            );
+        }
+        return files;
+    }
+
     /** Answer the Draft tab: which file types a drawing package renders to. */
     private async fetchFormats(token: number, plugin: string): Promise<void> {
         const post = (payload: { formats?: unknown; error?: string }) =>
@@ -1235,6 +1363,13 @@ export class PartcadViewer implements vscode.Disposable {
                     void this.saveCam(message.token ?? 0, message.machine, message.settings);
                 } else if (message.type === 'editRequirement') {
                     void this.editRequirement(message.token ?? 0, message.edit, message.target);
+                } else if (
+                    message.type === 'fetchComments' ||
+                    message.type === 'locateComment' ||
+                    message.type === 'addComment' ||
+                    message.type === 'attachFiles'
+                ) {
+                    void this.commentQuestion(message as Parameters<PartcadViewer['commentQuestion']>[0]);
                 } else if (message.type === 'videoFullscreen') {
                     void this.videoFullscreen(message.on === true);
                 } else {

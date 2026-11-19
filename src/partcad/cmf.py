@@ -885,7 +885,23 @@ def _declarations_digest(ctx, name: str) -> typing.Optional[str]:
         import hashlib
         import json
 
-        declared = {key: project.config_obj.get(key) for key in SCOPE_SECTIONS if project.config_obj.get(key)}
+        from partcad_utils import comments as pc_comments
+
+        def said(section):
+            # What a declaration is, without what anybody said about it: a
+            # comment written on a colour is no reason to judge its users again.
+            if not isinstance(section, dict):
+                return section
+            return {
+                name: (
+                    {k: v for k, v in declaration.items() if k != pc_comments.KEY}
+                    if isinstance(declaration, dict)
+                    else declaration
+                )
+                for name, declaration in section.items()
+            }
+
+        declared = {key: said(project.config_obj.get(key)) for key in SCOPE_SECTIONS if project.config_obj.get(key)}
         project._cmf_declarations_digest = (
             hashlib.sha256(json.dumps(declared, sort_keys=True, default=str).encode()).hexdigest() if declared else None
         )

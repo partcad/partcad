@@ -104,6 +104,19 @@ import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
 import { CaeResult } from './cae';
 import { CamView, sameSettings } from './cam';
+import { CommentDialog } from './commentDialog';
+import {
+    CommentAdded,
+    CommentLocated,
+    CommentsData,
+    ELEMENT_KINDS,
+    ThreadPin,
+    countThreads,
+    linkRef,
+    objectNames,
+    pinThreads,
+    threadHeading,
+} from './comments';
 import type { CmfChoice } from './choice';
 import { CmfView } from './cmf';
 import { el, empty, placeholder } from './dom';
@@ -111,6 +124,7 @@ import { geometryCache } from './geometryCache';
 import { HeldForShow } from './held';
 import { LabelBoxes, Labels, renderOptions } from './labels';
 import {
+    askComments as askHostComments,
     fetchDetails,
     fetchFormats,
     cancelTab,
@@ -142,6 +156,7 @@ import {
     CamSettings,
     CamSettingsData,
     Choices,
+    CommentsAnswerMessage,
     CmfData,
     DESIGN_TABS,
     DRAFT_PLUGINS,
@@ -665,6 +680,12 @@ const labelBoxes3d = new LabelBoxes(byId('labels-3d'), labels);
 
 labels.onChange((key) => {
     scene?.setLabels(labels.current);
+    if (key === 'comments') {
+        // The 3D view's alone: the 2D tab's picture says nothing about comments,
+        // so it is not the picture of anything else now and is left alone.
+        askComments();
+        return;
+    }
     if (key === 'componentPrices') {
         // Asked for, or stopped, here only while the 3D view is on screen: the
         // 2D tab's picture asks for its own prices with the render it is.
@@ -842,6 +863,334 @@ function onMaterials(data: MaterialClustersData | undefined, error: string | und
         clusters.length === 0 ? 'Nothing here states what it is made of. Give a part a material to see it.' : undefined,
         'materials',
     );
+}
+
+/*
+ * Comments: the threads the objects drawn carry, and writing one.
+ *
+ * Asked for ('comment.list') when the Comments box is ticked and the 3D view is
+ * on screen, once per show - every object the tree draws, each once, and where
+ * each thread about a face or an edge is - and pinned once the show is on the
+ * stage ('heldComments'). While the box is ticked the model is clickable: a
+ * click on a part shown on its own asks which face or edge it landed on
+ * ('comment.locate') and starts a thread about that; a click on a part of an
+ * assembly starts one about the link it is, on the assembly; a click on a
+ * thread's callout answers it. Each opens the dialog ('commentDialog.ts'), and
+ * what is posted goes to the host, which signs it with this machine's git
+ * identity and has it written ('comment.add'); the comments are then asked for
+ * again, and the one just written is on the model.
+ */
+
+/** The comments of the objects on screen, once the daemon has said; pinned once the show's geometry is on the stage. */
+const heldComments = new HeldForShow<CommentsData>((data) => pinComments(data));
+
+/** What the daemon said about the comments of the show on screen, or undefined until it has. */
+let commentsShown: CommentsData | undefined;
+
+/** Whether this show's comments were asked for, and the token of each question about comments in flight. */
+let commentsAsked = false;
+const commentQuestions = new Map<number, 'comments' | 'locate' | 'add' | 'attach'>();
+
+/** The dialog comments are written in; made the first time it is needed. */
+let commentDialog: CommentDialog | undefined;
+
+/** What the comment being written is about: on which object, of which kind, in which thread, about what. */
+let commentDraft:
+    | {
+          object: string;
+          kind: string | null;
+          thread?: number;
+          ref?: string;
+          /** The node clicked, while which face or edge it is is being found ('locating', its token). */
+          path?: number[];
+          locating?: number;
+          posting?: number;
+      }
+    | undefined;
+
+/** Another show, or none: what was known about comments was of the last one, and nothing is being written. */
+function resetComments(): void {
+    heldComments.reset();
+    commentsShown = undefined;
+    commentsAsked = false;
+    commentQuestions.clear();
+    commentDialog?.close();
+}
+
+/** The name of the object on screen as a comment is written on it: its root's, or its package's and name. */
+function shownObjectName(): string | undefined {
+    if (shown === undefined) {
+        return undefined;
+    }
+    const name = shown.object?.name;
+    if (name) {
+        return name;
+    }
+    return shown.package && shown.name ? `${shown.package}:${shown.name}` : undefined;
+}
+
+/** A new question about comments, by its token. */
+function commentQuestion(kind: 'comments' | 'locate' | 'add' | 'attach'): number {
+    lastToken += 1;
+    commentQuestions.set(lastToken, kind);
+    return lastToken;
+}
+
+/**
+ * Ask for the comments of the object on screen, if the Comments box is ticked
+ * and the 3D view is the tab on screen - and make the model clickable while it
+ * is ticked, or stop it being. 'again' asks even though this show has asked:
+ * what a comment just written changed.
+ */
+function askComments(again = false): void {
+    const ticked = labels.get('comments');
+    const onScreen = tabs.current === 'design' && designTabs.current === '3d';
+    scene?.setPicking(ticked && onScreen && shown?.object ? onPicked : undefined);
+    if (!ticked || shown === undefined) {
+        labelBoxes3d.setNote(undefined, 'comments');
+        commentDialog?.close();
+        return;
+    }
+    if (!onScreen || (commentsAsked && !again)) {
+        return;
+    }
+    const root = shown.object;
+    const name = shownObjectName();
+    if (!root || !name || !shown.package) {
+        labelBoxes3d.setNote(
+            'PartCAD did not say which package this is in, so its comments cannot be read.',
+            'comments',
+        );
+        return;
+    }
+    commentsAsked = true;
+    if (commentsShown === undefined) {
+        labelBoxes3d.setNote('Reading the comments…', 'comments');
+    }
+    askHostComments({ type: 'fetchComments', token: commentQuestion('comments'), objects: objectNames(root, name) });
+}
+
+/** The comments have arrived, or why they have not. */
+function onComments(data: CommentsData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        // Not an answer to keep: the box ticked again asks afresh.
+        commentsAsked = false;
+        labelBoxes3d.setNote(`No comments: ${error ?? 'PartCAD said nothing about them.'}`, 'comments');
+        return;
+    }
+    commentsShown = data;
+    heldComments.arrive(data);
+    const { threads, comments } = countThreads(data);
+    const how = shown?.object?.assembly?.length
+        ? 'click a part to start a thread about it'
+        : 'click the model to start a thread about a face or an edge';
+    labelBoxes3d.setNote(
+        threads === 0
+            ? `No comments yet: ${how}.`
+            : `${comments} comment${comments === 1 ? '' : 's'} in ${threads} thread${threads === 1 ? '' : 's'}: ` +
+                  `click one to answer it, or ${how}.`,
+        'comments',
+    );
+}
+
+/** Pin every thread on the stage, as the tree on screen places them. */
+function pinComments(data: CommentsData): void {
+    const root = shown?.object;
+    if (scene === undefined || !root) {
+        return;
+    }
+    scene.setCommentPins(pinThreads(root, data, shownObjectName()), openThread);
+}
+
+/** Why nothing can be written on an object, where nothing can; undefined where it can, or is not known yet. */
+function readOnlyReason(object: string): string | undefined {
+    const found = commentsShown?.objects?.[object];
+    if (found === undefined || found.writable !== false) {
+        return undefined;
+    }
+    return (
+        `${object} is not declared in a partcad.yaml a comment can be written into - one a plugin supplies, or a ` +
+        'Jinja2 template - so it can be read here but not answered.'
+    );
+}
+
+/** The dialog, made the first time it is needed. */
+function dialog(): CommentDialog {
+    commentDialog ??= new CommentDialog(document.body);
+    return commentDialog;
+}
+
+/** Open the dialog for a comment on 'object': its heading, what it is about, and the thread it answers. */
+function openDialog(
+    draft: NonNullable<typeof commentDraft>,
+    title: string,
+    subject: string,
+    ready: boolean,
+    pin?: ThreadPin,
+): void {
+    commentDraft = draft;
+    const directory = commentsShown?.objects?.[draft.object]?.directory;
+    dialog().open({
+        title,
+        subject,
+        ready,
+        thread: pin?.thread,
+        readOnly: readOnlyReason(draft.object),
+        canAttach: Boolean(directory) || commentsShown === undefined,
+        onAttach: () =>
+            askHostComments({ type: 'attachFiles', token: commentQuestion('attach'), directory: directory ?? null }),
+        onPost: (text, attachments) => postComment(text, attachments),
+        onClose: () => {
+            commentDraft = undefined;
+            scene?.setPendingMarker();
+        },
+    });
+}
+
+/** A thread's callout was clicked: answer it. */
+function openThread(pin: ThreadPin): void {
+    if (commentDialog?.isOpen) {
+        return;
+    }
+    scene?.setPendingMarker();
+    openDialog(
+        { object: pin.object, kind: pin.kind, thread: pin.thread.index, ref: pin.thread.ref ?? undefined },
+        'Reply',
+        threadHeading(pin),
+        true,
+        pin,
+    );
+}
+
+/** The model was clicked while the Comments box is ticked: start a thread about what was clicked. */
+function onPicked(picked: { path: number[]; point: [number, number, number]; tolerance: number }): void {
+    const root = shown?.object;
+    const object = shownObjectName();
+    if (!root || !object || shown === undefined || commentDialog?.isOpen) {
+        return;
+    }
+    const short = object.split(':').pop() || object;
+    const kind = shown.kind ?? null;
+    if ((root.assembly ?? []).length > 0) {
+        // A part of an assembly: what the assembly calls the link it is, down to it.
+        const ref = linkRef(root, picked.path) || undefined;
+        scene?.setPendingMarker(picked.path, picked.point);
+        openDialog({ object, kind, ref }, 'New comment', `On ${ref ?? 'the whole object'} of ${short}`, true);
+        return;
+    }
+    if (!ELEMENT_KINDS.includes(kind ?? '')) {
+        openDialog({ object, kind }, 'New comment', `On ${short}`, true);
+        return;
+    }
+    // A part or a sketch on its own: which face or edge is the daemon's to say.
+    scene?.setPendingMarker(picked.path, picked.point);
+    const token = commentQuestion('locate');
+    openDialog(
+        { object, kind, locating: token, path: picked.path },
+        'New comment',
+        `Finding what was clicked on ${short}…`,
+        false,
+    );
+    askHostComments({
+        type: 'locateComment',
+        token,
+        object,
+        kind: kind ?? 'part',
+        point: picked.point,
+        tolerance: picked.tolerance,
+    });
+}
+
+/** Which face or edge was clicked has arrived, or why it has not. */
+function onLocated(token: number, data: CommentLocated | undefined, error: string | undefined): void {
+    if (commentDraft?.locating !== token) {
+        return;
+    }
+    commentDraft.locating = undefined;
+    const short = commentDraft.object.split(':').pop() || commentDraft.object;
+    if (error !== undefined || data === undefined || data === null) {
+        // Still worth writing, on the part as a whole.
+        commentDraft.ref = undefined;
+        dialog().setSubject(`On ${short}`, true);
+        dialog().setStatus(`Which face or edge that is could not be found: ${error ?? 'nothing was said'}`, true);
+        return;
+    }
+    commentDraft.ref = data.ref;
+    dialog().setSubject(`On ${data.about} of ${short}`, true);
+    // On the face or the edge itself, where its callout will be.
+    scene?.setPendingMarker(commentDraft.path, data.at);
+}
+
+/** Post was pressed: have the host write it. */
+function postComment(text: string, attachments: string[]): void {
+    if (commentDraft === undefined) {
+        return;
+    }
+    const token = commentQuestion('add');
+    commentDraft.posting = token;
+    dialog().setBusy(true);
+    dialog().setStatus('Writing it into partcad.yaml…');
+    askHostComments({
+        type: 'addComment',
+        token,
+        object: commentDraft.object,
+        kind: commentDraft.kind,
+        thread: commentDraft.thread,
+        ref: commentDraft.ref,
+        text,
+        attachments: attachments.length > 0 ? attachments : undefined,
+    });
+}
+
+/** The comment was written, or why it was not. */
+function onAdded(token: number, data: CommentAdded | undefined, error: string | undefined): void {
+    if (commentDraft?.posting !== token) {
+        return;
+    }
+    commentDraft.posting = undefined;
+    dialog().setBusy(false);
+    if (error !== undefined || data === undefined || data === null) {
+        dialog().setStatus(`Not written: ${error ?? 'PartCAD said nothing about why.'}`, true);
+        return;
+    }
+    dialog().close();
+    // What it changed: the comments are asked for again, and the one just
+    // written goes on the model with the rest.
+    askComments(true);
+}
+
+/** Files to attach have been picked, or why they could not be. */
+function onAttached(data: { files?: string[] } | undefined, error: string | undefined): void {
+    if (commentDraft === undefined || !commentDialog?.isOpen) {
+        return;
+    }
+    if (error !== undefined) {
+        dialog().setStatus(error, true);
+        return;
+    }
+    dialog().setStatus('');
+    dialog().addAttachments(data?.files ?? []);
+}
+
+/** One of the answers about comments has arrived: whichever question it answers is told. */
+function onCommentsAnswer(message: CommentsAnswerMessage): void {
+    const question = commentQuestions.get(message.token);
+    if (question === undefined) {
+        return;
+    }
+    commentQuestions.delete(message.token);
+    if (question === 'comments') {
+        // Dropped if another show has begun since: its own question is out.
+        if (message.type === 'comments' && commentsAsked) {
+            onComments(message.data as CommentsData | undefined, message.error);
+        }
+    } else if (question === 'locate') {
+        onLocated(message.token, message.data as CommentLocated | undefined, message.error);
+    } else if (question === 'add') {
+        onAdded(message.token, message.data as CommentAdded | undefined, message.error);
+    } else {
+        onAttached(message.data as { files?: string[] } | undefined, message.error);
+    }
 }
 
 /*
@@ -2111,6 +2460,7 @@ async function show(message: ShowMessage): Promise<void> {
     awaiting.clear();
     requested.clear();
     heldClusters.reset();
+    resetComments();
     for (const tab of DATA_TABS) {
         reset(tab);
     }
@@ -2271,6 +2621,10 @@ async function show(message: ShowMessage): Promise<void> {
         }
         // On the stage now: what was found about it meanwhile can be pinned to it.
         heldClusters.onStage();
+        heldComments.onStage();
+        // And it can be clicked, if the Comments box says so; its comments are
+        // asked for if they are not already.
+        askComments();
         // What the Opacity slider says, for the geometry that just arrived.
         view.setOpacity(view3d.opacityFraction);
         if (designBounds === undefined) {
@@ -2375,6 +2729,8 @@ function clear(): void {
     shown = undefined;
     showFinding(undefined);
     heldClusters.reset();
+    resetComments();
+    scene?.setPicking(undefined);
     sectionSupported = false;
     shownSection = null;
     designSection = null;
@@ -2809,6 +3165,8 @@ function onLeafSelected(tab: TabId): void {
             askPrices();
             askMaterials();
         }
+        // Clickable on the 3D tab alone, and asked for there.
+        askComments();
         return;
     }
     if (isAnalysisTab(tab)) {
@@ -3440,6 +3798,13 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
         onCamSaved(message);
     } else if (message.type === 'requirementEdited') {
         onRequirementEdited(message);
+    } else if (
+        message.type === 'comments' ||
+        message.type === 'commentLocated' ||
+        message.type === 'commentAdded' ||
+        message.type === 'filesAttached'
+    ) {
+        onCommentsAnswer(message);
     } else if (message.type === 'clear') {
         clear();
     } else if (message.type === 'show') {

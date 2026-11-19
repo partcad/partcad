@@ -24,11 +24,15 @@
 //
 
 import {
+    AddCommentMessage,
+    AttachFilesMessage,
     CancelTabMessage,
+    FetchCommentsMessage,
     FetchDetailsMessage,
     FetchFormatsMessage,
     FetchTabMessage,
     GeometryMissingMessage,
+    LocateCommentMessage,
     OpenPackageMessage,
     SaveCamMessage,
     EditRequirementMessage,
@@ -102,6 +106,17 @@ export function saveCam(message: SaveCamMessage): void {
 
 /** Ask the host to change one requirement of the object on screen; it answers with 'requirementEdited'. */
 export function editRequirement(message: EditRequirementMessage): void {
+    vscode.postMessage(message);
+}
+
+/**
+ * Ask the host one of the 3D view's questions about comments: what the objects
+ * drawn carry, what a click is on, to write one, or which files to attach.
+ * Each is answered by a message of its own with the same token ('CommentsAnswerMessage').
+ */
+export function askComments(
+    message: FetchCommentsMessage | LocateCommentMessage | AddCommentMessage | AttachFilesMessage,
+): void {
     vscode.postMessage(message);
 }
 

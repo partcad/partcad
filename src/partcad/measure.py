@@ -166,3 +166,49 @@ async def material_clusters(ctx, tree, distance: float, cacheable: bool = True):
     """
     request = {"operation": "clusters", "shape": tree, "distance": float(distance)}
     return await _run(ctx, request, cacheable, "materials.py")
+
+
+def _own_frame(shape):
+    """The shape envelope with no placement of its own: what a comment's face or edge is located in.
+
+    The 3D view draws a node's geometry in the node's own frame and places the
+    node separately, so a point it is handed, and a point it pins a callout to,
+    is in the frame the geometry was made in.
+    """
+    if not isinstance(shape, dict) or shape.get(shape_envelope.KEY_LOCATION) is None:
+        return shape
+    unplaced = dict(shape)
+    unplaced.pop(shape_envelope.KEY_LOCATION, None)
+    return unplaced
+
+
+async def element_anchors(ctx, shape, refs, cacheable: bool = True) -> dict:
+    """Where each face or edge 'refs' names is, as '{ref: [x, y, z]}': what a comment's callout is pinned to.
+
+    'refs' are references as a comment writes them ('face:12', 'edge:3', see
+    'partcad_utils.comments'); one to an element the shape does not have is
+    left out of the answer. Each point is on its element, in the shape's own
+    frame, in millimetres (see 'element_refs' among the wrappers). Remembered
+    like any measurement, by the shape and the references.
+    """
+    asked = sorted({ref for ref in refs or [] if isinstance(ref, str)})
+    if not asked:
+        return {}
+    return await _run(ctx, {"operation": "anchors", "shape": _own_frame(shape), "refs": asked}, cacheable)
+
+
+async def locate_element(ctx, shape, point, tolerance: float = 0.0):
+    """Which face or edge of 'shape' the point 'point' is on: '{"ref", "element", "index", "at", "distance"}', or None.
+
+    'point' is in the shape's own frame, in millimetres - where a click in the
+    3D view landed on its tessellation - and an edge nearer it than 'tolerance'
+    is preferred to the face it bounds. Never remembered: every click is
+    somewhere else.
+    """
+    request = {
+        "operation": "locate",
+        "shape": _own_frame(shape),
+        "point": [float(value) for value in point],
+        "tolerance": float(tolerance or 0.0),
+    }
+    return await _run(ctx, request, cacheable=False)
