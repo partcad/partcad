@@ -12,7 +12,7 @@ import threading
 
 import ruamel.yaml as ruamel
 
-from . import cache_io, consts, dependency_pin, factory
+from . import cache_io, consts, dependency_pin, edit_lock, factory
 from . import logging as pc_logging
 from . import project_factory_git as rfg
 from .assembly import Assembly
@@ -333,7 +333,16 @@ def _pin_tracked_dependencies(config_path, dependencies, user_config) -> None:
                 % (name, track, config["url"], e)
             )
             continue
-        reason = dependency_pin.set_dependency_revision(config_path, name, commit)
+        try:
+            with edit_lock.editing(config_path, user_config.internal_state_dir):
+                reason = dependency_pin.set_dependency_revision(config_path, name, commit, track=track)
+        except edit_lock.Busy as e:
+            # The package is created all the same: the pin is what 'pc update' writes.
+            pc_logging.warning("Not pinning %s: %s. Run 'pc update' to pin it to the tip of '%s'" % (name, e, track))
+            continue
+        if isinstance(reason, dependency_pin.TrackChanged):
+            pc_logging.warning("Not pinning %s: %s. Run 'pc update' to pin it" % (name, reason))
+            continue
         if reason is not None:
             pc_logging.warning("Not pinning %s: %s. Set 'revision: %s' in it by hand" % (name, reason, commit))
             continue

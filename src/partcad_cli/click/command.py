@@ -145,6 +145,9 @@ command_groups = [
             "search",
             "add",
             "import",
+            # `req` says what an object is required to be, which is written
+            # before what it is, and `pc req test` holds the model to it.
+            "req",
             # `qual` asks whether an object is what it claims to be, a subtype
             # at a time: its tests (`pc qual test`), its simulations among them.
             "qual",

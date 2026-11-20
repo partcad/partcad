@@ -947,6 +947,8 @@
             "has_finish": { "type": "boolean", "description": "true: every face is in a finish that is a CMF declaration claiming it can be had; no finish, which is as produced, does not count. false: it must not be. Of an assembly, of every part in it." },
             "has_weight": { "type": "boolean", "description": "true: PartCAD knows what the object weighs - stated under 'properties: physics: mass:', or its solid at its material's density. false: it must not. Of an assembly, what all of it weighs." },
             "has_mass": { "type": "boolean", "description": "The same requirement as 'has_weight'." },
+            "has_dependencies": { "type": "boolean", "description": "true: the object draws on another package than its own -- an object it is an alias or an enrich of, a part or an assembly in it, a colour, a material or a finish it is in, an interface it implements -- all the way down. false: it must not, which is an object everything of which is in its own package. PartCAD's own '//builtin' packages do not count." },
+            "has_private_dependencies": { "type": "boolean", "description": "As 'has_dependencies', of the packages outside '//pub', the public index. false: everything the object draws on is published, so whoever can get it can get all of it -- what an object that is about to be published requires." },
             "match": { "$ref": "#/definitions/requirement-match" }
           },
           "additionalProperties": { "type": "string", "minLength": 1 }

@@ -56,6 +56,13 @@ which are checked two ways:
   is how the maintainer of a package of a vendor's parts can make sure each says
   what it is made of.
 
+``has_dependencies`` and ``has_private_dependencies``
+  Whether the object is built from anything outside its own package -- and, for
+  the second, from anything outside ``//pub``, the public index -- followed
+  through everything it is made of. ``has_private_dependencies: false`` is how an
+  object that is going to be published says that everything it needs is
+  published too.
+
 A ``qual: sim:`` entry names the feature it demonstrates with ``feature:``, which
 is how a simulation becomes evidence for a requirement rather than a test that
 happens to exist.
@@ -76,8 +83,10 @@ stock size, a tool -- belongs to manufacturing, not here.
 In the UI
 =========
 
-An object that declares requirements gets a **Requirements** tab in front of all
-the others. It is the one tab with no strip of its own -- there is nothing to
+Every part, assembly, scene and sketch has a **Requirements** tab in front of all
+the others, always enabled -- an object that requires nothing yet is where its
+first requirement is added -- though what is opened when an object is shown is
+still Design. It is the one tab with no strip of its own -- there is nothing to
 divide it into, because a requirement is one thing either met or not.
 
 It lists every port, interface and physical property required, each with a green
@@ -93,14 +102,34 @@ judge and for no program to measure.
   :align: center
   :alt: The Requirements tab: the measured requirements with their marks, and the features with what validates each
 
-``pc ide view`` has a flag per tab of the five groups and none for this one:
-the tab is there for an object that declares ``requirements:`` and absent for
-every other object, so there is nothing to ask for.
+Every requirement can be changed there. The strip over the lists -- **Feature**,
+**Port**, **Interface**, **Physics**, **Match**, **Specified** -- opens a form to
+add one of that kind, and each row has **Edit** and **Remove**. They are ``pc req
+add`` and ``pc req remove``, by the same daemon methods, so the tab writes
+exactly what the command line would and refuses what it would refuse, in the
+same words. A field is typed as a value on the command line is: ``5`` is the
+number, ``>5`` the comparison, with no YAML quoting. Removing a feature that a
+simulation or an analysis scenario names asks first, and then takes it out of
+those as well. An object whose requirements are not its own to change -- an
+alias, whose requirements are its source's, or one in a templated
+``partcad.yaml`` -- says why, and offers no buttons.
+
+``pc ide view`` has a flag per tab of the five groups and none for this one.
 
 On the command line
 ===================
 
-- ``pc qual test`` runs the ``requirements`` check (see :ref:`test-requirements`):
+- ``pc req list`` prints the section as YAML, and ``pc req add`` and ``pc req
+  remove`` change it one requirement at a time, from options alone or from YAML
+  on standard input (see :ref:`pc-req`)::
+
+    pc req add physics bracket mass --value '<0.05'
+    pc req add has bracket private_dependencies --not
+    pc req list bracket
+
+- ``pc req test`` -- ``pc qual test --basic --filter requirements`` -- runs the
+  ``requirements`` check alone, and ``pc qual test`` runs it with all the others
+  (see :ref:`test-requirements`):
   every measured requirement, with what was found instead of each one not met. A
   value PartCAD cannot find out -- a mass with no density to work it out from --
   fails as "not known" rather than passing.

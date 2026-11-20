@@ -92,6 +92,35 @@ Feature: `pc qual` command
     And a file named "partcad.yaml" should contain "minArea: 1.5"
 
   @success @pc-qual-add
+  Scenario: `pc qual add` refuses a test the object declares already, unless told to replace it
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        block:
+          type: step
+          path: block.step
+          qual:
+            topology:
+              tolerance-surfaces:
+                minArea: 1.0
+      """
+    And a file named "block.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    When I run "pc qual add --topology --set minArea=1.5 block tolerance-surfaces"
+    Then the command should exit with a status code of "2"
+    And a file named "partcad.yaml" should contain "minArea: 1.0"
+    When I run "pc qual add --topology --replace --set minArea=1.5 block tolerance-surfaces"
+    Then the command should exit with a status code of "0"
+    And a file named "partcad.yaml" should contain "minArea: 1.5"
+
+  @success @pc-qual-add
   Scenario: `pc qual add` refuses a test that is neither built in nor a plugin's
     Given a file named "partcad.yaml" with content:
       """

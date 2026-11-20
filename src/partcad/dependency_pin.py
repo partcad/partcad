@@ -52,6 +52,27 @@ _REVISION_RE = re.compile(
 )
 
 
+class TrackChanged(str):
+    """Why a pin was not written: the entry no longer tracks the branch the commit is the tip of.
+
+    The reason 'set_dependency_revision' gives when the 'track:' it was told
+    the commit came from is gone or names another branch by the time the file
+    is written -- somebody changed the declaration while the remote was being
+    asked. A 'str', as every other reason is, so that a caller who only reports
+    it need not know; its own class so that a caller who would otherwise say
+    "set it by hand" says to run 'pc update' again instead, since the commit in
+    hand is the tip of a branch the declaration no longer names.
+    """
+
+
+def _value_text(rest: str) -> str:
+    """What follows 'key:' on a line, as text: the comment dropped, the quotes taken off."""
+    value = rest.split(" #", 1)[0].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1]
+    return value
+
+
 def plain_reads_back(value: str) -> bool:
     """Whether 'value', written unquoted, is read back from 'partcad.yaml' as this very text.
 
@@ -131,11 +152,19 @@ def _opens_block(match: re.Match) -> bool:
     return bool(_OPENS_BLOCK_RE.match(match.group("rest")))
 
 
-def set_dependency_revision(config_path: str, dependency: str, revision: str) -> typing.Optional[str]:
+def set_dependency_revision(
+    config_path: str, dependency: str, revision: str, track: typing.Optional[str] = None
+) -> typing.Optional[str]:
     """Make 'dependency' in 'config_path' say 'revision: <revision>'.
 
     Returns None once the file says so (including when it already did), or why
     it was left alone.
+
+    'track' is the branch 'revision' is the tip of, as the caller read it before
+    asking the remote. Given, the entry still has to track that branch, or
+    nothing is written and the reason is a 'TrackChanged': a 'track:' taken out
+    meanwhile leaves a 'revision:' that is the author's and that no later
+    'pc update' would move again.
     """
     with open(config_path, "r", encoding="utf-8", newline="") as f:
         lines = f.read().splitlines(keepends=True)
@@ -173,6 +202,15 @@ def set_dependency_revision(config_path: str, dependency: str, revision: str) ->
         fields.setdefault(match.group("key"), []).append(index)
     if len(fields.get("revision", [])) > 1 or len(fields.get("track", [])) > 1:
         return "its 'revision:' or 'track:' is written more than once"
+    if track is not None:
+        tracked = None
+        if "track" in fields:
+            tracked = _value_text(_key(lines[fields["track"][0]]).group("rest"))
+        if tracked != config_yaml.spelling(track):
+            return TrackChanged(
+                "it %s while the tip of '%s' was being looked up"
+                % ("stopped tracking a branch" if tracked is None else "started tracking '%s'" % tracked, track)
+            )
 
     if "revision" in fields:
         index = fields["revision"][0]

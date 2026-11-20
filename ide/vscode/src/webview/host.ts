@@ -30,6 +30,7 @@ import {
     FetchTabMessage,
     GeometryMissingMessage,
     SaveCamMessage,
+    EditRequirementMessage,
     SaveChoicesMessage,
     ShowObjectMessage,
     ShowSectionMessage,
@@ -89,6 +90,11 @@ export function showSection(message: ShowSectionMessage): void {
 
 /** Ask the host to write the CAM tab's settings into the part's declaration ('cam.save'). */
 export function saveCam(message: SaveCamMessage): void {
+    vscode.postMessage(message);
+}
+
+/** Ask the host to change one requirement of the object on screen; it answers with 'requirementEdited'. */
+export function editRequirement(message: EditRequirementMessage): void {
     vscode.postMessage(message);
 }
 

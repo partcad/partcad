@@ -671,6 +671,18 @@ class JsonRpcBackend implements PartcadBackend {
                 a.cancellation,
             ),
         );
+        // The Requirements tab's forms: one requirement written into the
+        // object's 'partcad.yaml' or taken out of it -- 'pc req add' and 'pc req
+        // remove', by the same daemon methods, so that the tab cannot write what
+        // the command line would refuse.
+        reg('partcad.requirementsEdit', (a) => {
+            const { op, ...edit } = a.edit ?? {};
+            return this.send(
+                op === 'remove' ? 'requirements.remove' : 'requirements.add',
+                { package: a.pkg, object: a.name, kind: a.kind, ...edit },
+                a.cancellation,
+            );
+        });
         // The Qualification tabs: every test of the subtypes asked for 'pc qual
         // test' runs on one object, and with 'verify' how each came out.
         reg('partcad.qualReport', (a) =>

@@ -306,6 +306,15 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   `pc qual test`'s `requirements` check reaches, by the same code (`partcad/requirements.py`). An assembly is staged
   only when a physical property is to be checked, because that is what builds it -- what it weighs is worked out
   from the tree it is built as (`partcad/physics.py`), while its ports are read off a tree that needs no build.
+  Each line carries the `address` of the requirement it is of, and the answer carries the section itself --
+  `section` as the object's own declaration holds it, `declared` as it is read -- with `editable` (null, or why the
+  requirements cannot be changed here) and what the forms offer (`physics_fields`, `has_names`). It is also
+  `pc req list`.
+* `requirements.add` and `requirements.remove`, which are `pc req add` and `pc req remove` and the Requirements tab's
+  forms: one requirement of an object's `requirements:`, addressed by `requirement` (its kind) and `name`, written
+  into its package's `partcad.yaml` or taken out, by `partcad/requirements_edit.py`. `text: true` reads each string
+  of `value` as the same text in `partcad.yaml` is read (what a form sends); an interface named, or an object to
+  match, is looked up before anything is written.
 * `qual.report` (and its older name `test.report`), behind the Digital Thread's Qualification tabs: every test
   `pc qual test <object>` runs of the `subtypes` asked for (`basic`, `topology`, `sim`, `other`; all of them when
   absent), as a list -- each with its subtype, its verdict (`passed`, `failed`, `warned`, `skipped`,
@@ -315,7 +324,8 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   with it the tests run through the same cache `pc qual test` reads, so the two give the same answer
   (`partcad/qual/report.py`). An assembly or a scene is staged first when it is run. `qual.run` (and `test.run`) is
   `pc qual test` itself, with the same `subtypes`; `qual.add` writes an entry of an object's `qual:` section, as
-  `pc qual add` asks, resolving a plugin's test before anything is written.
+  `pc qual add` asks, resolving a plugin's test before anything is written, and refusing one of that name that is
+  there already unless `replace`.
 
 Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,

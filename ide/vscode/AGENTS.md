@@ -211,9 +211,14 @@ to buy it and the assembly instructions; then Qualification, a tab per subtype o
 and Topology, every test of theirs `pc qual test` runs, test by test, a topology finding with the place on the
 object it is about; Simulation, the simulations the object declares under `qual: sim:`, each run and shown as the
 scene before and after; and Other, the tests plugins supply, with what each tool reported. In
-front of all of them, for an object that declares `requirements:`, a Requirements tab: asked about on every show
-(`requirements.check`, a declaration read) and verified when opened, by the same code as `pc qual test -f
-requirements`. The Basic, Topology and Other tabs are `qual.report`, each asking for its own `subtypes` (the
+front of all of them, for every part, assembly, scene and sketch, a Requirements tab, always enabled -- an object that
+declares nothing yet is where its first requirement is added -- and `secondary`, so a show still opens on Design:
+asked about on every show (`requirements.check`, a declaration read) and verified when opened, by the same code as
+`pc req test`. Its forms and row buttons are `pc req add` and `pc req remove`: the webview posts `editRequirement`,
+the host runs `partcad.requirementsEdit` (`requirements.add` / `requirements.remove`) and answers
+`requirementEdited`, and the tab then checks the model again. A form's fields are sent as typed (`text: true`) and
+read by the daemon as `partcad.yaml` is read, so no value is parsed in TypeScript; a row is addressed by the
+`address` its check carries, never by parsing its label. The Basic, Topology and Other tabs are `qual.report`, each asking for its own `subtypes` (the
 host's `QUAL_TEST_TABS`), listed and then run by the same tests and cache as `pc qual test`, beside the text of
 `partcad/qual/catalog.py`, which is also what the documentation lists the tests with -- edit a test's text there,
 never in TypeScript. A topology finding's **Show** shows the object the test left behind and, once its show

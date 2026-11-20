@@ -11,7 +11,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import copy
+import functools
 import inspect
+import io
 import os
 import re
 import shutil
@@ -42,6 +44,7 @@ from . import (
 from . import config as pc_config
 from . import document as pc_document
 from . import (
+    edit_lock,
     factory,
 )
 from . import fast_only as fast_only_mod
@@ -279,6 +282,17 @@ SECTION_EXTENSIONS = {
 INVALID_UNLESS = "<invalid 'unless'>"
 
 
+def _one_edit_at_a_time(method):
+    """'method' reads this package's 'partcad.yaml', changes it and replaces it: done under 'Project._editing'."""
+
+    @functools.wraps(method)
+    def locked(self, *args, **kwargs):
+        with self._editing():
+            return method(self, *args, **kwargs)
+
+    return locked
+
+
 def _readme_cell(text) -> str:
     """A value made safe to put in one cell of a generated markdown table."""
     text = "" if text is None else str(text)
@@ -338,6 +352,41 @@ def declare_object_type_parameters(factory_name: str, config: dict, params: dict
 # The enriches each thread is in the middle of making, outermost first, as
 # (package, kind, instance) - see 'Project._get_enrich'.
 _ENRICHING = threading.local()
+
+
+def _shared_by_alias(document, declaration, keys) -> typing.Optional[str]:
+    """What of 'declaration' the document reaches from more than one place: 'itself', a key, or None.
+
+    Counted by identity: a YAML alias is the very object its anchor is, and so
+    is what a '<<:' merge brings in. Only the declaration itself and what is
+    under 'keys' are asked about; every container is counted, but the walk does
+    not go into one it has been in, so a cycle of aliases ends.
+    """
+    seen: dict = {}
+    stack = [document]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, (dict, list)):
+            continue
+        seen[id(node)] = seen.get(id(node), 0) + 1
+        if seen[id(node)] > 1:
+            continue
+        stack.extend(node.values() if isinstance(node, dict) else node)
+
+    def shared_under(node, visited) -> bool:
+        if not isinstance(node, (dict, list)) or id(node) in visited:
+            return False
+        visited.add(id(node))
+        if seen.get(id(node), 0) > 1:
+            return True
+        return any(shared_under(item, visited) for item in (node.values() if isinstance(node, dict) else node))
+
+    if seen.get(id(declaration), 0) > 1:
+        return "itself"
+    for key in keys:
+        if key in declaration and shared_under(declaration[key], set()):
+            return "its '%s:'" % key
+    return None
 
 
 def _enriches_being_made() -> list:
@@ -1974,6 +2023,7 @@ class Project(project_config.Configuration):
     def get_sketch_config(self, sketch_name):
         return self.object_config("sketch", sketch_name)
 
+    @_one_edit_at_a_time
     def set_sketch_config(self, sketch_name, sketch_config):
         """
         Save the updated sketch configuration to the project configuration file.
@@ -3346,24 +3396,27 @@ class Project(project_config.Configuration):
             pc_logging.error("Not adding %s: only a git dependency tracks a branch" % alias)
             return False
 
-        yaml = ruamel.yaml.YAML()
-        yaml.preserve_quotes = True
-        with open(self.config_path, encoding="utf-8") as fp:
-            config = yaml.load(fp)
-            fp.close()
+        # Only now, with the remote asked: the lock is for the read, the change
+        # and the write, and a remote can take minutes to answer.
+        with self._editing():
+            yaml = ruamel.yaml.YAML()
+            yaml.preserve_quotes = True
+            with open(self.config_path, encoding="utf-8") as fp:
+                config = yaml.load(fp)
+                fp.close()
 
-        if config is None:
-            # An empty 'partcad.yaml': a package that declares nothing yet.
-            config = ruamel.yaml.comments.CommentedMap()
-        # Not 'import:', which used to be the name of this section and now
-        # declares the object types a package reads ('project_config' reports
-        # a legacy one instead of migrating it).
-        if config.get("dependencies") is None:
-            config["dependencies"] = {}
-        config["dependencies"][alias] = entry
-        with open(self.config_path, "w", encoding="utf-8") as fp:
-            yaml.dump(config, fp)
-            fp.close()
+            if config is None:
+                # An empty 'partcad.yaml': a package that declares nothing yet.
+                config = ruamel.yaml.comments.CommentedMap()
+            # Not 'import:', which used to be the name of this section and now
+            # declares the object types a package reads ('project_config' reports
+            # a legacy one instead of migrating it).
+            if config.get("dependencies") is None:
+                config["dependencies"] = {}
+            config["dependencies"][alias] = entry
+            with open(self.config_path, "w", encoding="utf-8") as fp:
+                yaml.dump(config, fp)
+                fp.close()
         return True
 
     def rel_path(self, path) -> str:
@@ -3506,6 +3559,7 @@ class Project(project_config.Configuration):
             sorted(alias for alias, aliased in PART_EXTENSION_ALIASES.items() if aliased == kind and alias != own)
         )
 
+    @_one_edit_at_a_time
     def add_object_config(self, section: str, name: str, obj: dict) -> bool:
         """Write one object declaration into this package's 'partcad.yaml'.
 
@@ -3549,56 +3603,192 @@ class Project(project_config.Configuration):
 
         return True
 
-    def add_qual_config(self, kind: str, object_name: str, subtype: str, name: str, entry: dict) -> bool:
+    def _load_to_edit(self, what: str):
+        """This package's 'partcad.yaml', read to be written back as its author wrote it, and how to write it.
+
+        'ruamel' round-trips the document: the order, the comments and the
+        quoting of everything not edited are kept. Refused, with ValueError, for
+        a Jinja2 template: what PartCAD reads is the rendered document, and what
+        would be edited is the source -- read as YAML, 'width: {{ w }}' is a
+        mapping in a mapping, and would be written back as one. 'what' is what
+        was going to be written, for that message.
+        """
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        # Wide enough that nothing is folded onto a second line: see 'add_object_config'.
+        yaml.width = 4096
+        with open(self.config_path, encoding="utf-8") as fp:
+            text = fp.read()
+        if any(opening in text for opening in ("{{", "{%", "{#")):
+            raise ValueError(
+                "'%s' is a Jinja2 template, so %s cannot be written into it without changing what it renders to:"
+                " write it by hand" % (self.config_path, what)
+            )
+        config = yaml.load(text)
+        return (config if config is not None else ruamel.yaml.comments.CommentedMap()), yaml
+
+    def _editing(self):
+        """One read-edit-write of this package's 'partcad.yaml' at a time: see 'edit_lock'.
+
+        Every method that reads the file to write it back takes it (see
+        '_one_edit_at_a_time'): a lock some writers skip is one whose edits
+        those writers still drop.
+        """
+        return edit_lock.editing(self.config_path, self.ctx.user_config.internal_state_dir)
+
+    def _write_edited(self, config, yaml, text: typing.Optional[str] = None) -> None:
+        """Replace this package's 'partcad.yaml' with 'config', once the new one is written in full beside it.
+
+        Opening the file for writing would empty the package's declaration
+        before the dump, and a dump that fails then leaves nothing. 'text' is
+        'config' dumped already, when the caller has read it back first.
+        """
+        target = os.path.realpath(self.config_path)
+        temporary = "%s.%d.%d.tmp" % (target, os.getpid(), threading.get_ident())
+        try:
+            with open(temporary, "w", encoding="utf-8") as fp:
+                if text is None:
+                    yaml.dump(config, fp)
+                else:
+                    fp.write(text)
+            with contextlib.suppress(OSError):
+                shutil.copymode(target, temporary)
+            os.replace(temporary, target)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.remove(temporary)
+            raise
+
+    @_one_edit_at_a_time
+    def edit_object_declaration(
+        self, kind: str, object_name: str, edit, what: str = "the change", keys=None, read_back=None
+    ):
+        """Change one object's declaration in this package's 'partcad.yaml': 'edit(declaration)', then write it.
+
+        'edit' is handed the object's own mapping, as 'ruamel' read it, and
+        changes it in place; whatever it returns is returned. Nothing is
+        written when it raises. Refused, with ValueError, for an object this
+        file does not declare -- one a plugin supplies, or one another file
+        holds -- since there is nowhere here to write it, and for a template
+        (see '_load_to_edit').
+
+        And refused for a declaration that shares what the edit changes with
+        another one: 'keys' are the keys of the declaration it changes, and a
+        mapping or a list under one of them -- or the declaration itself -- that
+        the document reaches from more than one place (a YAML anchor and its
+        alias, a '<<:' merge) is the other declaration's as well. 'ruamel'
+        keeps it one object, so the edit would change both, and write the
+        anchor back with the change in it.
+
+        'read_back(before, declaration, read)' is handed the declaration as it
+        was, as edited, and as PartCAD reads it out of the text about to be
+        written ('config_yaml.load', which is not the YAML 'ruamel' writes), and
+        raises to keep the file as it was: what is written is checked as it will
+        be read, before it replaces anything.
+        """
+        section = OBJECT_KIND_SECTIONS.get(kind)
+        if section is None:
+            raise ValueError("A %s has no declaration of its own to change" % kind)
+        config, yaml = self._load_to_edit(what)
+        declarations = config.get(section) if isinstance(config, dict) else None
+        declaration = declarations.get(object_name) if isinstance(declarations, dict) else None
+        if not isinstance(declaration, dict):
+            raise ValueError(
+                "The %s '%s' is not declared in '%s', so there is nowhere to write %s"
+                % (kind, object_name, self.config_path, what)
+            )
+        shared = _shared_by_alias(config, declaration, keys or ())
+        if shared is not None:
+            raise ValueError(
+                "The %s '%s' shares %s with another declaration through a YAML anchor or a merge key, so %s would"
+                " change both: write it by hand" % (kind, object_name, shared, what)
+            )
+        before = copy.deepcopy(declaration) if read_back is not None else None
+        result = edit(declaration)
+        text = None
+        if read_back is not None:
+            from partcad_utils import config_yaml
+
+            written = io.StringIO()
+            yaml.dump(config, written)
+            text = written.getvalue()
+            reread = config_yaml.load(text)
+            reread_declarations = reread.get(section) if isinstance(reread, dict) else None
+            read_back(
+                before,
+                declaration,
+                reread_declarations.get(object_name) if isinstance(reread_declarations, dict) else None,
+            )
+        self._write_edited(config, yaml, text)
+        return result
+
+    def add_qual_config(
+        self, kind: str, object_name: str, subtype: str, name: str, entry: dict, replace: bool = False
+    ) -> bool:
         """Write one entry of an object's 'qual:' section into this package's 'partcad.yaml'.
 
         '<object>.qual.<subtype>.<name>' becomes 'entry': a plugin's check (with
         'path:'), a simulation, or the parameters of a built-in check, which is
         what 'pc qual add' writes (see 'partcad.qual.config'). An entry of that
-        name is replaced. Refused, with the reason logged and False returned, for
-        an object the file does not declare -- one a plugin supplies, or one
-        another file holds -- since there is nowhere here to write it.
+        name is replaced only when 'replace' says so: a test quietly redefined is
+        a different qualification. Refused, with the reason logged and False
+        returned, for an entry that is there already, for an object the file
+        does not declare -- one a plugin supplies, or one another file holds --
+        since there is nowhere here to write it, and for a Jinja2 template.
         """
         from .qual import config as qual_config
 
         if subtype not in qual_config.SUBTYPES:
             pc_logging.error("'%s' is not a subtype of qualification (%s)" % (subtype, ", ".join(qual_config.SUBTYPES)))
             return False
-        section = OBJECT_KIND_SECTIONS.get(kind)
-        if section is None:
+        if OBJECT_KIND_SECTIONS.get(kind) is None:
             pc_logging.error("A %s does not declare 'qual:'" % kind)
             return False
 
-        yaml = ruamel.yaml.YAML()
-        yaml.preserve_quotes = True
-        yaml.width = 4096
-        with open(self.config_path, encoding="utf-8") as fp:
-            config = yaml.load(fp)
-        if config is None:
-            config = {}
-        declarations = config.get(section)
-        declaration = declarations.get(object_name) if isinstance(declarations, dict) else None
-        if not isinstance(declaration, dict):
-            pc_logging.error(
-                "The %s '%s' is not declared in '%s', so there is nowhere to add its qualification"
-                % (kind, object_name, self.config_path)
-            )
+        def strings(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    yield key
+                    yield from strings(item)
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    yield from strings(item)
+            else:
+                yield value
+
+        from .requirements_edit import EditError, refuse_template_text
+
+        try:
+            for text in strings({name: entry}):
+                refuse_template_text(text)
+        except EditError as e:
+            pc_logging.error(str(e))
             return False
 
-        qual = declaration.get(qual_config.SECTION)
-        if not isinstance(qual, dict):
-            qual = {}
-            declaration[qual_config.SECTION] = qual
-        entries = qual.get(subtype)
-        if not isinstance(entries, dict):
-            entries = {}
-            qual[subtype] = entries
-        entries[name] = entry
+        def add(declaration):
+            qual = declaration.get(qual_config.SECTION)
+            if not isinstance(qual, dict):
+                qual = ruamel.yaml.comments.CommentedMap()
+                declaration[qual_config.SECTION] = qual
+            entries = qual.get(subtype)
+            if not isinstance(entries, dict):
+                entries = ruamel.yaml.comments.CommentedMap()
+                qual[subtype] = entries
+            if name in entries and not replace:
+                raise ValueError(
+                    "'%s: %s: %s' is declared already: say '--replace' to replace it"
+                    % (qual_config.SECTION, subtype, name)
+                )
+            entries[name] = entry
 
-        with open(self.config_path, "w", encoding="utf-8") as fp:
-            yaml.dump(config, fp)
+        try:
+            self.edit_object_declaration(kind, object_name, add, "its qualification", keys=(qual_config.SECTION,))
+        except ValueError as e:
+            pc_logging.error(str(e))
+            return False
         return True
 
+    @_one_edit_at_a_time
     def set_machine_settings(self, part_name: str, machine: str, values: dict) -> None:
         """Write settings of one machine into a part's 'manufacturing:' section of this package's 'partcad.yaml'.
 
@@ -3620,22 +3810,9 @@ class Project(project_config.Configuration):
                 write it; or the file is a Jinja2 template, which is not the
                 document PartCAD reads until it is rendered.
         """
-        yaml = ruamel.yaml.YAML()
-        yaml.preserve_quotes = True
-        yaml.width = 4096
-        with open(self.config_path, encoding="utf-8") as fp:
-            text = fp.read()
-        if any(opening in text for opening in ("{{", "{%", "{#")):
-            # What PartCAD reads is the rendered document, and what would be
-            # edited is the source: read as YAML, 'width: {{ w }}' is a mapping
-            # in a mapping, and would be written back as one. So nothing is
-            # written into a template.
-            raise ValueError(
-                "'%s' is a Jinja2 template, so the settings of '%s' cannot be written into it without changing what"
-                " it renders to: write them under the part's 'manufacturing: %s:' by hand"
-                % (self.config_path, part_name, machine)
-            )
-        config = yaml.load(text)
+        config, yaml = self._load_to_edit(
+            "the settings of '%s' (under the part's 'manufacturing: %s:')" % (part_name, machine)
+        )
         parts = config.get("parts") if isinstance(config, dict) else None
         declaration = parts.get(part_name) if isinstance(parts, dict) else None
         if not isinstance(declaration, dict):
@@ -3666,18 +3843,7 @@ class Project(project_config.Configuration):
             del section[machine]
             if not section:
                 del declaration["manufacturing"]
-        target = os.path.realpath(self.config_path)
-        temporary = "%s.%d.%d.tmp" % (target, os.getpid(), threading.get_ident())
-        try:
-            with open(temporary, "w", encoding="utf-8") as fp:
-                yaml.dump(config, fp)
-            with contextlib.suppress(OSError):
-                shutil.copymode(target, temporary)
-            os.replace(temporary, target)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.remove(temporary)
-            raise
+        self._write_edited(config, yaml)
 
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))
@@ -3744,6 +3910,7 @@ class Project(project_config.Configuration):
             config,
         )
 
+    @_one_edit_at_a_time
     def set_part_config(self, part_name, part_config):
         if "name" in part_config:
             del part_config["name"]
@@ -3770,6 +3937,7 @@ class Project(project_config.Configuration):
             yaml.dump(package_config, fp)
             fp.close()
 
+    @_one_edit_at_a_time
     def update_part_config(self, part_name, part_config_update: dict[str, typing.Any]):
         pc_logging.debug("Updating part config: %s: %s" % (part_name, part_config_update))
         yaml = ruamel.yaml.YAML()

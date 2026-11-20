@@ -247,3 +247,44 @@ def test_digits_quoted_already_are_left_alone(tmp_path, quoted):
     reason, after = pin(tmp_path, text, revision=DIGITS)
     assert reason is None
     assert after == text
+
+
+TRACKING = (
+    "dependencies:\n"
+    "  pub:\n"
+    "    type: git\n"
+    "    url: https://github.com/partcad/partcad-index.git\n"
+    "%s"
+    "    revision: 0000000000000000000000000000000000000000  # kept by hand\n"
+)
+
+
+@pytest.mark.parametrize("line", ["    track: main\n", "    track: 'main'  # the released state\n"])
+def test_a_pin_is_written_while_the_entry_tracks_the_branch_it_is_the_tip_of(tmp_path, line):
+    path = tmp_path / "partcad.yaml"
+    path.write_text(TRACKING % line)
+    assert set_dependency_revision(str(path), "pub", SHA, track="main") is None
+    assert read_back(path.read_text()) == SHA
+
+
+@pytest.mark.parametrize("line", ["", "    track: devel\n"])
+def test_a_pin_is_not_written_once_the_entry_stopped_tracking_that_branch(tmp_path, line):
+    """A 'track:' taken out while the remote was asked leaves a 'revision:' that is the author's to keep."""
+    from partcad.dependency_pin import TrackChanged
+
+    path = tmp_path / "partcad.yaml"
+    path.write_text(TRACKING % line)
+    before = path.read_text()
+    reason = set_dependency_revision(str(path), "pub", SHA, track="main")
+    assert isinstance(reason, TrackChanged)
+    assert "'main'" in reason
+    assert path.read_text() == before
+
+
+def test_a_branch_of_digits_is_compared_as_it_is_spelled(tmp_path):
+    from partcad_utils.config_yaml import SpelledInt
+
+    path = tmp_path / "partcad.yaml"
+    path.write_text(TRACKING % "    track: 0123\n")
+    assert set_dependency_revision(str(path), "pub", SHA, track=SpelledInt(83, "0123")) is None
+    assert read_back(path.read_text()) == SHA

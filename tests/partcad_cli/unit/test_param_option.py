@@ -46,6 +46,9 @@ COMMANDS = [
     ("commands.export", "render.objects", ["export"]),
     ("commands.qual.test", "qual.run", ["qual", "test"]),
     ("commands.qual.test", "qual.simulate", ["qual", "test", "--simulation"]),
+    # 'pc req test' is 'pc qual test', and sends from there.
+    ("commands.qual.test", "qual.run", ["req", "test"]),
+    ("commands.req.list", "requirements.check", ["req", "list"]),
     ("commands.cam", "cam.route", ["cam"]),
     ("commands.instructions", "assembly.guide", ["instructions"]),
     ("commands.info", "info.object", ["info"]),

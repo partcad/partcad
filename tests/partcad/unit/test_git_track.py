@@ -902,6 +902,22 @@ def test_add_dep_writes_what_is_read_back_as_text(tmp_path, upstream, user_confi
     assert dependencies["dep"]["revision"] == DIGITS
 
 
+def test_add_dep_asks_the_remote_before_it_takes_the_edit_lock(tmp_path, upstream, user_config, monkeypatch):
+    """A remote can take minutes to answer; the lock on 'partcad.yaml' is for reading and writing it."""
+    from partcad import edit_lock
+
+    held = []
+
+    def tracked(user_config, url, track=None):
+        held.append(bool(getattr(edit_lock._HELD, "files", None)))
+        return "main", DIGITS
+
+    monkeypatch.setattr(rfg, "tracked_commit", tracked)
+    ok, dependencies = added(tmp_path, user_config, upstream.path.as_uri())
+    assert ok and dependencies["dep"]["revision"] == DIGITS
+    assert held == [False]
+
+
 def test_add_dep_adds_nothing_it_could_not_pin(tmp_path, upstream, user_config):
     ok, dependencies = added(tmp_path, user_config, upstream.path.as_uri(), track="no-such-branch")
 
@@ -962,6 +978,98 @@ def initialized(tmp_path, user_config, upstream=None):
     config.parent.mkdir()
     assert pc.create_package(str(config), {"private": False}, user_config=user_config)
     return config, yaml.safe_load(config.read_text())["dependencies"]["pub"]
+
+
+def _held_while_pinning(monkeypatch, module):
+    """Whether the edit lock on the file was held each time 'module' wrote a pin into it."""
+    from partcad import dependency_pin, edit_lock
+
+    held, write = [], dependency_pin.set_dependency_revision
+
+    def watched(config_path, name, revision, **kwargs):
+        held.append(os.path.realpath(config_path) in getattr(edit_lock._HELD, "files", set()))
+        return write(config_path, name, revision, **kwargs)
+
+    monkeypatch.setattr(module, "set_dependency_revision", watched)
+    return held
+
+
+def test_update_writes_its_pin_under_the_edit_lock(tmp_path, upstream, user_config, monkeypatch):
+    """'pc update' rewrites 'partcad.yaml': an edit of it meanwhile waits rather than one of the two being lost."""
+    import importlib
+
+    held = _held_while_pinning(monkeypatch, importlib.import_module("partcad.actions.package.update"))
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, track="main"))
+    monkeypatch.setattr(rfg, "tracked_commit", lambda user_config, url, track=None: (track, DIGITS))
+    assert pin(workspace, user_config)["pinned"] == 1
+    assert held == [True]
+
+
+def test_init_writes_its_pin_under_the_edit_lock(tmp_path, upstream, user_config, monkeypatch):
+    from partcad import dependency_pin
+
+    held = _held_while_pinning(monkeypatch, dependency_pin)
+    initialized(tmp_path, user_config, upstream)
+    assert held == [True]
+
+
+def test_a_pin_another_edit_holds_the_file_for_fails_alone_and_update_goes_on(
+    tmp_path, upstream, user_config, monkeypatch
+):
+    """'pc update' pins each dependency under the edit lock; one it cannot have is that dependency's failure."""
+    from partcad import edit_lock
+    from partcad.project import Project
+
+    workspace = tmp_path / "ws"
+    second = dependency(upstream, track="main").replace("  dep:", "  other:")
+    config = write_package(workspace, dependency(upstream, track="main") + second)
+    monkeypatch.setattr(rfg, "tracked_commit", lambda user_config, url, track=None: (track, DIGITS))
+    editing, calls = Project._editing, []
+
+    def first_one_busy(self):
+        calls.append(self)
+        if len(calls) == 1:
+            raise edit_lock.Busy("'partcad.yaml' is being changed by another edit")
+        return editing(self)
+
+    monkeypatch.setattr(Project, "_editing", first_one_busy)
+    assert pin(workspace, user_config) == {"pinned": 1, "current": 0, "failed": 1}
+    pinned = yaml.safe_load(config.read_text())["dependencies"]
+    assert ["revision" in pinned[name] for name in ("dep", "other")].count(True) == 1
+
+
+def test_update_leaves_a_revision_whose_track_was_taken_out_while_it_asked_the_remote(
+    tmp_path, upstream, user_config, monkeypatch
+):
+    """No later 'pc update' would move that 'revision:' again: it is the author's now, and is kept."""
+    kept = "abcdef0123" * 4
+    workspace = tmp_path / "ws"
+    config = write_package(workspace, dependency(upstream, track="main", revision=kept))
+
+    def untracked_meanwhile(user_config, url, track=None):
+        config.write_text(config.read_text().replace("    track: main\n", ""))
+        return track, DIGITS
+
+    monkeypatch.setattr(rfg, "tracked_commit", untracked_meanwhile)
+    assert pin(workspace, user_config) == {"pinned": 0, "current": 0, "failed": 1}
+    entry = yaml.safe_load(config.read_text())["dependencies"]["dep"]
+    assert "track" not in entry and entry["revision"] == kept
+
+
+def test_init_creates_the_package_when_its_pin_cannot_take_the_edit_lock(
+    tmp_path, upstream, user_config, monkeypatch, caplog
+):
+    """The pin is optional when a package is created: one the lock keeps out is left to 'pc update'."""
+    from partcad import edit_lock
+
+    def busy(config_path, state_dir):
+        raise edit_lock.Busy("'partcad.yaml' is being changed by another edit")
+
+    monkeypatch.setattr(edit_lock, "editing", busy)
+    _, pub = initialized(tmp_path, user_config, upstream)
+    assert "revision" not in pub
+    assert "Run 'pc update' to pin it" in caplog.text
 
 
 def test_init_pins_the_index_to_the_tip_of_main(tmp_path, upstream, user_config):

@@ -92,7 +92,7 @@ import jsonschema
 import jsonschema.exceptions
 import yaml
 
-from . import assy_filter, object_names, parameters, template_render
+from . import assy_filter, config_yaml, object_names, parameters, template_render
 
 SEVERITY_ERROR = "error"
 SEVERITY_WARNING = "warning"
@@ -1574,9 +1574,52 @@ def _is_configuration_schema(schema) -> bool:
     return schema is not None and schema.get("$id") == get_schema(PARTCAD_SCHEMA).get("$id")
 
 
+def _yaml_problem(exc) -> str:
+    """What a YAML parse failure says, with the fix named when it is an unquoted '>', '|' or '!'."""
+    problem = (exc.problem or str(exc)).strip()
+    hint = config_yaml.explain(exc)
+    if hint is not None and hint not in problem:
+        problem = "%s (%s)" % (problem, hint)
+    return problem
+
+
+def check_block_scalars(root_node, masked=None) -> list:
+    """A value written '>5' (or '|2'), which YAML reads as an empty block of text and not as the text.
+
+    The one way an unquoted comparison -- 'mass: >5' in a 'requirements:' -- is
+    misread rather than refused, so it is the one this has to say: the document
+    parses, the schema accepts an empty string, and the value is not what was
+    written. See 'config_yaml.empty_block_scalars'.
+
+    ``masked`` is the record of what a template stands for in a document checked
+    masked: a block whose lines are template text the mask blanked ('desc: >9'
+    over '{{ x }}') is empty only because those values are not known, so nothing
+    is said about it.
+    """
+    diagnostics = []
+    for node, header in config_yaml.empty_block_scalar_nodes(root_node):
+        line, column = node.start_mark.line, node.start_mark.column
+        body = ((line + 1, 0), (node.end_mark.line, node.end_mark.column))
+        if masked is not None and masked.overlaps(*body):
+            continue
+        diagnostics.append(
+            Diagnostic(
+                SEVERITY_ERROR,
+                config_yaml.misread_block(header),
+                line,
+                column,
+                end_line=line,
+                end_column=column + len(header),
+                code=CODE_YAML,
+            )
+        )
+    return diagnostics
+
+
 def _document_checks(data, schema, root_node, masked, manufacturable, inherited_manufacturable) -> list:
     """Everything said about a parsed document: its schema, and what no schema can say."""
     diagnostics = _validate_schema(data, schema, root_node, masked)
+    diagnostics.extend(check_block_scalars(root_node, masked))
     if _is_assy_schema(schema) or _is_configuration_schema(schema):
         diagnostics.extend(check_motion(data, root_node))
     # Only for an ASSY document, and only ever as well as the schema: a link
@@ -1625,7 +1668,7 @@ def _check_rendered(text, schema, render, manufacturable, inherited_manufacturab
     except yaml.MarkedYAMLError as exc:
         mark = exc.problem_mark or exc.context_mark
         line, column = rendering.position(mark.line, mark.column) if mark is not None else (0, 0)
-        return [Diagnostic(SEVERITY_ERROR, (exc.problem or str(exc)).strip(), line, column, code=CODE_YAML)]
+        return [Diagnostic(SEVERITY_ERROR, _yaml_problem(exc), line, column, code=CODE_YAML)]
     except Exception as exc:  # pylint: disable=broad-except
         # Not only 'yaml.YAMLError': a date that is not one ('2001-13-45') is
         # a 'ValueError' out of the parser, and nesting deep enough a
@@ -1666,7 +1709,7 @@ def _check_masked(text, schema, manufacturable, inherited_manufacturable) -> lis
         mark = exc.problem_mark or exc.context_mark
         line = mark.line if mark is not None else 0
         column = mark.column if mark is not None else 0
-        problem = (exc.problem or str(exc)).strip()
+        problem = _yaml_problem(exc)
         # Masking replaces a conditional with the union of its branches, so a
         # construct such as `x: {% if c %}a{% else %}b{% endif %}` can only be
         # checked approximately. Say so instead of asserting a broken file.

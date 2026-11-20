@@ -38,6 +38,7 @@ import ruamel.yaml
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from ... import logging as pc_logging
+from ... import requirements as pc_requirements
 from ...assembly import Assembly, AssemblyChild
 from ...geom import Location
 from ...project import Project
@@ -450,6 +451,26 @@ SECTION_KINDS = {
 
 def apply_config(project: Project, sections: dict) -> None:
     """Merge the generated sections into the package's 'partcad.yaml'."""
+    with project._editing():
+        _apply_config(project, sections)
+
+
+def _keep_requirements(replaced, entry) -> None:
+    """Carry what was required of an object into the declaration that replaces it.
+
+    A conversion writes the object's declaration anew -- 'type:', 'path:', what
+    the format says -- but it is the same object, held to the same requirements,
+    which belong to it and not to the format it is read from. 'replaced' is the
+    declaration as the file held it when the lock was taken, so a requirement
+    written while the conversion ran is kept as well. One the new declaration
+    states itself is its own.
+    """
+    section = pc_requirements.SECTION
+    if isinstance(replaced, dict) and isinstance(entry, dict) and section in replaced and section not in entry:
+        entry[section] = replaced[section]
+
+
+def _apply_config(project: Project, sections: dict) -> None:
     yaml = _yaml()
     with open(project.config_path, encoding="utf-8") as f:
         config = yaml.load(f)
@@ -464,6 +485,7 @@ def apply_config(project: Project, sections: dict) -> None:
             config[section] = CommentedMap()
             existing = config[section]
         for name, entry in entries.items():
+            _keep_requirements(existing.get(name), entry)
             existing[name] = entry
 
     # Through a temporary file in the same directory: opening the real one for

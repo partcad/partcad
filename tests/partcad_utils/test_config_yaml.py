@@ -114,3 +114,73 @@ def test_lint_context_reads_the_file_as_partcad_does(tmp_path):
     (tmp_path / "partcad.yaml").write_text("dependencies:\n  dep:\n    type: git\n    track: 1_000\n")
     read = lint_context._load(str(tmp_path / "partcad.yaml"), [str(tmp_path)])
     assert spelling(read["dependencies"]["dep"]["track"]) == "1_000"
+
+
+# --- a leading '>', '|' or '!' ------------------------------------------------
+#
+# A requirement's comparison ('>0', '>=1,<10', '!0') is the common case of a value
+# that starts with a character YAML reads as syntax. YAML is right to read it so;
+# what is pinned here is that PartCAD says what to do about it, and that the one
+# case YAML reads without complaint -- '>5', an empty folded block -- is found.
+
+
+@pytest.mark.parametrize("value", [">0", ">=1,<10", "!0", "!=0", "|0"])
+def test_a_document_that_yaml_refuses_for_it_says_to_quote_it(value):
+    with pytest.raises(yaml.MarkedYAMLError) as raised:
+        config_yaml.load("physics:\n  mass: %s\n" % value)
+    assert config_yaml.QUOTING_HINT in str(raised.value)
+
+
+def test_any_other_yaml_error_is_left_as_it_was():
+    with pytest.raises(yaml.MarkedYAMLError) as raised:
+        config_yaml.load("a: [1, 2\n")
+    assert config_yaml.QUOTING_HINT not in str(raised.value)
+
+
+@pytest.mark.parametrize("value", [">5", "|2"])
+def test_the_value_yaml_misreads_rather_than_refuses_is_found(value):
+    """'mass: >5' is a folded block with an indentation of 5 and nothing in it: the value is ''."""
+    text = "physics:\n  mass: %s\n  density: 1\nfeatures:\n  long: >\n    text that is there\n" % value
+    assert config_yaml.load(text)["physics"]["mass"] == ""
+    assert config_yaml.empty_block_scalars(text) == [(1, 8, value)]
+
+
+@pytest.mark.parametrize(
+    "typed, read",
+    [
+        ("5", 5),
+        ("0.25", 0.25),
+        ("true", True),
+        ("null", None),
+        ("", None),
+        ("<5", "<5"),
+        ("5%", "5%"),
+        ("[1, 2]", [1, 2]),
+        ("'5'", "5"),
+        # What YAML refuses or misreads is the text itself: there is no document to be mistaken about.
+        (">0", ">0"),
+        (">5", ">5"),
+        (">=1,<10", ">=1,<10"),
+        ("!0", "!0"),
+        ("!=0", "!=0"),
+    ],
+)
+def test_a_value_typed_on_its_own_is_read_as_the_same_text_in_partcad_yaml(typed, read):
+    assert config_yaml.scalar(typed) == read
+
+
+def test_an_alias_inside_what_its_anchor_names_does_not_hold_the_scan_up():
+    """'&loop [*loop]' composes into a cycle: each node is looked at once."""
+    assert config_yaml.empty_block_scalars("custom: &loop [*loop]\nmass: >5\n") == [(1, 6, ">5")]
+
+
+@pytest.mark.parametrize("text", ["desc: >\nnext: 1\n", "desc: |-\nnext: 1\n"])
+def test_an_empty_block_with_no_indentation_digit_is_no_misreading(text):
+    """Written empty, or filled by a template whose values are not known: either way not '>5' misread."""
+    assert config_yaml.empty_block_scalars(text) == []
+
+
+def test_an_anchor_or_a_tag_before_an_empty_block_is_not_its_header():
+    """'&text1 >' is an anchor named 'text1' on an empty block, not a misread '>1'."""
+    assert config_yaml.empty_block_scalars("desc: &text1 >\nnext: 1\n") == []
+    assert config_yaml.empty_block_scalars("mass: &a1 >5 # note\nnext: 1\n") == [(0, 6, ">5")]
