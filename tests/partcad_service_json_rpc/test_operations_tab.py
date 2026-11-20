@@ -323,3 +323,107 @@ def test_a_comparison_looks_up_a_kind_that_is_not_the_default(session):
     assert [(row["left"], row["right"]) for row in answer["rows"] if row["tag"] == "replace"] == [
         ("  circle: 1", "  circle: 2")
     ]
+
+
+# ---- what each method answers when it cannot ------------------------------------
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        operations.revisions_list,
+        operations.revisions_compare,
+        operations.revisions_uses,
+        operations.revisions_used_by,
+        operations.usage_used_by,
+        operations.copy_object,
+    ],
+)
+def test_with_no_context_there_is_no_answer(session, operation):
+    session.partcad_ctx = None
+
+    assert operation(session, {"package": "//", "object": "cube", "revision": "x", "target": "y"}) is None
+
+
+@pytest.mark.parametrize(
+    "operation, params",
+    [
+        (operations.revisions_list, {"package": "//nowhere", "kind": "package"}),
+        (operations.revisions_compare, {"package": "//", "object": "cube", "revision": "nowhere"}),
+        (operations.revisions_uses, {"package": "//", "revision": "nowhere"}),
+        (operations.copy_object, {"package": "//", "object": "//nowhere:x", "target": "y"}),
+        (operations.copy_object, {"package": "//", "object": "cube", "target": "//nowhere:y"}),
+    ],
+)
+def test_what_is_not_there_is_refused(session, operation, params):
+    with pytest.raises(JsonRpcError):
+        operation(session, params)
+
+
+def test_used_by_an_object_of_no_package_is_no_answer(session):
+    # Said in the log, as every lookup of an object that is not there is.
+    assert operations.usage_used_by(session, {"package": "//nowhere", "object": "x", "kind": "part"}) is None
+
+
+def test_used_by_a_package_is_what_uses_anything_in_it(session):
+    answer = operations.usage_used_by(session, {"package": "//", "kind": "package"})
+
+    assert answer["object"] == "//"
+    assert answer["objects"] == []
+
+
+def test_a_package_s_declaration_that_cannot_be_written_says_why(session, tmp_path):
+    import types
+
+    root = session.partcad_ctx.root
+    assert operations._package_not_editable(root) is None
+    assert "no 'partcad.yaml'" in operations._package_not_editable(
+        types.SimpleNamespace(not_written_to=lambda: None, config_path=None)
+    )
+    assert "cannot be read" in operations._package_not_editable(
+        types.SimpleNamespace(not_written_to=lambda: None, config_path=str(tmp_path / "missing.yaml"))
+    )
+    template = tmp_path / "template.yaml"
+    template.write_text("name: {{ name }}\n")
+    assert "Jinja2" in operations._package_not_editable(
+        types.SimpleNamespace(not_written_to=lambda: None, config_path=str(template))
+    )
+    at_first = session.partcad_ctx.get_project("//@" + session.first)
+    assert "revision" in operations._package_not_editable(at_first)
+    with pytest.raises(JsonRpcError):
+        operations.requirements_add(
+            session,
+            {
+                "package": "//@" + session.first,
+                "kind": "package",
+                "requirement": "feature",
+                "name": "x",
+                "value": "y",
+            },
+        )
+
+
+def test_a_package_requirement_given_as_text_is_read_as_a_value_and_a_bad_edit_is_refused(session):
+    operations.requirements_add(
+        session,
+        {
+            "package": "//",
+            "kind": "package",
+            "requirement": "has",
+            "name": "dependencies",
+            "value": "false",
+            "text": True,
+        },
+    )
+    answer = operations.requirements_check(session, {"package": "//", "kind": "package", "verify": False})
+    assert answer["declared"]["has_dependencies"] is False
+
+    with pytest.raises(JsonRpcError):
+        operations.requirements_remove(
+            session, {"package": "//", "kind": "package", "requirement": "feature", "name": "nothing-of-that-name"}
+        )
+
+
+def test_only_what_has_a_declaration_is_copied(session):
+    with pytest.raises(JsonRpcError, match="cannot be copied"):
+        operations.copy_object(session, {"package": "//", "object": "cube", "kind": "provider", "target": "y"})

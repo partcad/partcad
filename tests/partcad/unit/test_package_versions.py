@@ -705,3 +705,327 @@ def test_an_empty_lfs_object_is_written_out_as_an_empty_file(tmp_path):
 def test_a_sub_folder_of_a_revision_has_no_revisions_of_its_own_and_says_where_they_are(ctx, caplog):
     assert ctx.get_project("//@v1/sub@main") is None
     assert "name it as //sub@main" in caplog.text
+
+
+# ---- the edges of reading a repository ----------------------------------------
+
+
+def test_a_repository_with_nothing_committed_has_no_head_and_no_history(tmp_path):
+    repo = pygit2.init_repository(str(tmp_path / "empty"))
+    repository = package_versions.Repository(repo, "")
+
+    assert repository.head() is None
+    assert package_versions.revisions(repository) == []
+
+
+def test_what_is_in_no_repository_has_none(tmp_path):
+    assert package_versions.repository_of(str(tmp_path / "missing")) is None
+    assert package_versions.repository_of("") is None
+    assert package_versions.exported_sha("") is None
+
+
+def test_a_bare_repository_has_no_working_tree_to_be_in(tmp_path):
+    pygit2.init_repository(str(tmp_path / "bare.git"), bare=True)
+
+    assert package_versions.repository_of(str(tmp_path / "bare.git")) is None
+
+
+def test_an_unreadable_guard_says_no_commit(tmp_path, monkeypatch):
+    (tmp_path / package_versions.GUARD).write_text("abc")
+    real_open = open
+
+    def refusing(path, *args, **kwargs):
+        if str(path).endswith(package_versions.GUARD):
+            raise OSError("denied")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", refusing)
+
+    assert package_versions.exported_sha(str(tmp_path)) is None
+
+
+def test_a_revision_a_downloaded_copy_lacks_is_fetched_once(repo, monkeypatch):
+    root, first, _ = repo
+    from partcad import project_factory_git
+
+    asked = []
+
+    def fetch(repository, revision, depth=None, user_config=None):
+        asked.append(revision)
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(project_factory_git, "_fetch", fetch)
+    repository = package_versions.Repository(pygit2.Repository(str(root)), "")
+
+    with pytest.raises(ValueError):
+        package_versions.resolve(repository, "nowhere", fetch=True)
+    assert asked == ["nowhere"]
+    assert package_versions.resolve(repository, "v1", fetch=True) == first
+
+
+def test_a_tree_is_written_out_as_a_checkout_would_be(tmp_path):
+    root = tmp_path / "kinds"
+    repo = pygit2.init_repository(str(root))
+    _write(root / "partcad.yaml", {"name": "//"})
+    (root / "run.sh").write_text("#!/bin/sh\n")
+    os.chmod(str(root / "run.sh"), 0o755)
+    os.symlink("partcad.yaml", str(root / "link.yaml"))
+    sha = _commit(root, "first")
+    repository = package_versions.Repository(repo, "")
+    cache = tmp_path / "state" / "git"
+
+    dest = package_versions.export(repository, sha, str(cache))
+
+    assert os.access(os.path.join(dest, "run.sh"), os.X_OK)
+    link = os.path.join(dest, "link.yaml")
+    # A link where the system makes one, and its target as text where it will not (as git does).
+    assert os.readlink(link) == "partcad.yaml" if os.path.islink(link) else open(link).read() == "partcad.yaml"
+    # Written once: asked again, it is the same directory, not written again.
+    assert package_versions.export(repository, sha, str(cache)) == dest
+
+
+def test_a_half_written_export_is_replaced_and_a_missing_commit_is_refused(tmp_path):
+    root = tmp_path / "half"
+    repo = pygit2.init_repository(str(root))
+    _write(root / "partcad.yaml", {"name": "//"})
+    sha = _commit(root, "first")
+    repository = package_versions.Repository(repo, "")
+    cache = tmp_path / "state" / "git"
+    from partcad.project_factory_git import cache_dir_name
+
+    half = cache / (package_versions.EXPORT_PREFIX + cache_dir_name(repository.identity, sha))
+    half.mkdir(parents=True)
+    (half / "leftover").write_text("x")
+
+    dest = package_versions.export(repository, sha, str(cache))
+
+    assert not os.path.exists(os.path.join(dest, "leftover"))
+    with pytest.raises(ValueError, match="missing"):
+        package_versions.export(repository, "0" * 40, str(cache))
+
+
+def test_a_history_stops_where_its_shallow_copy_does(repo, monkeypatch):
+    root, first, second = repo
+    repository = package_versions.Repository(pygit2.Repository(str(root)), "")
+
+    assert [entry["sha"] for entry in package_versions.revisions(repository, limit=1)] == [second]
+    monkeypatch.setattr(package_versions, "REVISIONS_SCAN_LIMIT", 1)
+    assert [entry["sha"] for entry in package_versions.revisions(repository)] == [second]
+
+
+# ---- what refers to what, at the edges ----------------------------------------
+
+
+def test_a_revision_nothing_names_is_left_as_written_and_a_path_below_one_is_read(ctx, repo):
+    _, first, _ = repo
+
+    assert usage._canonical(ctx, "//sub@nowhere") == "//sub@nowhere"
+    assert usage._canonical(ctx, "//@v1/sub") == "//@%s/sub" % first
+
+
+@pytest.mark.parametrize(
+    "config, found",
+    [
+        ({"sketch": "outline"}, [("//", "outline")]),
+        ({"implements": ["//other:pad;size=3", "a b:c", "https://x.org/a:b"]}, [("//other", "pad")]),
+        ("//other:cube", [("//other", "cube")]),
+        (7, []),
+    ],
+)
+def test_what_a_declaration_refers_to(ctx, config, found):
+    assert usage.references(ctx.root, "part", config) == found
+
+
+def test_a_reference_that_cannot_be_read_is_not_counted(ctx, monkeypatch):
+    from partcad import reference as pc_reference
+
+    def broken(*args, **kwargs):
+        raise ValueError("no")
+
+    monkeypatch.setattr(ctx.root, "resolve", broken)
+    monkeypatch.setattr(pc_reference, "source_of", broken)
+
+    assert usage.references(ctx.root, "part", {"type": "alias", "source": ":cube", "x": "//other:y"}) == []
+
+
+def test_a_declaration_nested_too_deep_is_not_followed(ctx):
+    config = current = {}
+    for _ in range(40):
+        current["nested"] = {}
+        current = current["nested"]
+    current["source"] = "//other:deep"
+
+    assert usage.references(ctx.root, "part", config) == []
+
+
+def test_what_uses_anything_in_a_package_and_what_could_not_be_read(ctx, monkeypatch):
+    rows = usage.package_used_by(ctx, "//")
+    assert rows == []
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("no")
+
+    monkeypatch.setattr(usage, "_uses", broken)
+    assert usage.object_used_by(ctx, "//", "cube") == []
+
+
+def test_load_workspace_goes_on_past_a_package_that_will_not_load(tmp_path, monkeypatch):
+    root = tmp_path / "ws"
+    _write(root / "partcad.yaml", {"name": "//"})
+    _write(root / "near" / "partcad.yaml", {"parts": {"a": _cube(1)}})
+    context = pc.Context(str(root), search_root=False)
+    real = context.get_project
+
+    def refusing(name):
+        if name == "//near":
+            raise RuntimeError("broken")
+        return real(name)
+
+    monkeypatch.setattr(context, "get_project", refusing)
+
+    assert usage.load_workspace(context) == 1
+
+
+def test_a_dependency_is_listed_at_the_commit_it_is_at(tmp_path, monkeypatch):
+    root = tmp_path / "deps"
+    pygit2.init_repository(str(root))
+    pinned = "a" * 40
+    _write(
+        root / "partcad.yaml",
+        {
+            "name": "//",
+            "dependencies": {
+                "near": {"type": "local", "path": "near"},
+                "far": {"type": "git", "url": "https://example.invalid/far.git", "revision": pinned},
+            },
+        },
+    )
+    _write(root / "near" / "partcad.yaml", {"parts": {"a": _cube(1)}})
+    sha = _commit(root, "first")
+    context = pc.Context(str(root), search_root=False)
+    real = context.get_project
+    # Nothing downloaded: the pinned one is read from its declaration.
+    monkeypatch.setattr(context, "get_project", lambda name: None if name == "//far" else real(name))
+
+    rows = {row["name"]: row for row in usage.dependencies(context, context.root)}
+
+    assert rows["near"]["sha"] == sha and rows["near"]["current"] == "//near"
+    assert rows["far"]["sha"] == pinned and rows["far"]["current"] is None
+
+
+# ---- a package's yes-or-no requirements, each way they can come out -------------
+
+
+def _package(tmp_path, requirements_section, parts=None):
+    _write(
+        tmp_path / "req" / "partcad.yaml",
+        {"name": "//", "requirements": requirements_section, "parts": parts if parts is not None else {}},
+    )
+    context = pc.Context(str(tmp_path / "req"), search_root=False)
+    return context
+
+
+def _checks(context):
+    report = asyncio.run(requirements.check_package_async(context, context.root, verify=True)).to_dict()
+    return {check["name"]: (check["passed"], check["detail"]) for check in report["requirements"]}
+
+
+def test_a_part_that_cannot_be_made_leaves_every_requirement_not_known(tmp_path, monkeypatch):
+    context = _package(tmp_path, {"has_material": True, "has_dependencies": False}, {"a": _cube(1), "b": _cube(2)})
+
+    async def broken(name, quiet=False):
+        if name == "a":
+            raise RuntimeError("no kernel")
+        return None
+
+    monkeypatch.setattr(context.root, "get_part_async", broken)
+
+    checks = _checks(context)
+    assert checks["has_material"][0] is False and "not known" in checks["has_material"][1]
+    assert checks["has_dependencies"][0] is False and "could not be made" in checks["has_dependencies"][1]
+
+
+def test_every_part_s_mass_is_known_or_not(tmp_path, monkeypatch):
+    context = _package(tmp_path, {"has_mass": True}, {"a": _cube(1), "b": _cube(2)})
+
+    async def physics(ctx, part, paths):
+        return {"mass": (2.0, "declared") if part.name == "a" else (None, "no density")}
+
+    monkeypatch.setattr(requirements, "resolve_physics_async", physics)
+
+    checks = _checks(context)
+    passed, detail = checks.get("has_weight") or checks["has_mass"]
+    assert passed is False
+    assert "//:b: not known: no density" in detail
+
+
+def test_a_part_not_built_yet_leaves_the_requirement_not_known(tmp_path, monkeypatch):
+    context = _package(tmp_path, {"has_color": True}, {"a": _cube(1)})
+
+    async def lacking(ctx, parts, component, where, shape=None):
+        return [], ["//:a is not built"]
+
+    monkeypatch.setattr(requirements, "_parts_lacking", lacking)
+
+    passed, detail = _checks(context)["has_color"]
+    assert passed is False and "not built" in detail
+
+
+def test_a_required_component_a_part_lacks_is_named(tmp_path, monkeypatch):
+    context = _package(tmp_path, {"has_finish": True}, {"a": _cube(1)})
+
+    async def lacking(ctx, parts, component, where, shape=None):
+        return ["//:a: no finish"], []
+
+    monkeypatch.setattr(requirements, "_parts_lacking", lacking)
+
+    assert _checks(context)["has_finish"] == (False, "//:a: no finish")
+
+
+def test_what_a_package_s_parts_draw_on(tmp_path, monkeypatch):
+    import types
+
+    from partcad import object_dependencies
+
+    context = _package(
+        tmp_path,
+        {"has_dependencies": False, "has_private_dependencies": True},
+        {"a": _cube(1), "b": _cube(2)},
+    )
+
+    async def collect(ctx, part):
+        if part.name == "b":
+            raise RuntimeError("unreadable")
+        return types.SimpleNamespace(packages={"//": [":x"], "//far": ["//far:bolt"]}, unknown=[])
+
+    monkeypatch.setattr(object_dependencies, "collect_async", collect)
+
+    checks = _checks(context)
+    assert checks["has_dependencies"][0] is False
+    assert "required not to draw on another package" in checks["has_dependencies"][1]
+    assert checks["has_private_dependencies"][0] is True
+
+
+def test_a_package_with_no_parts_draws_on_nothing(tmp_path):
+    context = _package(tmp_path, {"has_dependencies": False})
+
+    assert _checks(context)["has_dependencies"] == (True, "the package declares no parts")
+
+
+def test_a_requirement_only_an_object_can_have_is_unreadable_and_a_failure_is_reported(tmp_path, monkeypatch):
+    context = _package(tmp_path, {"has_material": True, "ports": {"top": None}}, {"a": _cube(1)})
+
+    async def broken(ctx, project, entries):
+        raise RuntimeError("checker broke")
+
+    monkeypatch.setattr(requirements, "_verify_package_has", broken)
+    report = asyncio.run(requirements.check_package_async(context, context.root, verify=True)).to_dict()
+
+    unreadable = [check for check in report["requirements"] if check["requirement"] == "unreadable"]
+    assert unreadable and unreadable[0]["passed"] is False
+    (has,) = [check for check in report["requirements"] if check["name"] == "has_material"]
+    assert has["passed"] is False and "checker broke" in has["detail"]
+
+
+def test_a_package_is_its_own(ctx):
+    assert requirements._is_own(ctx, ctx.root, "//")

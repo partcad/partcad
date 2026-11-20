@@ -411,3 +411,203 @@ def test_an_assy_link_s_material_named_in_full_is_copied(ctx):
     assert serialize.declaration(ctx.root, "assembly", "pair", ctx.get_project("//other"), "pair")["path"] == (
         "../pair.assy"
     )
+
+
+# ---- the pieces, one at a time ----------------------------------------------
+
+
+def test_compact_parameter_leaves_what_is_not_a_declaration_alone():
+    assert serialize.compact_parameter(5) == 5
+    assert serialize.compact_parameter({"type": "float", "min": 0}) == {"min": 0}
+
+
+def test_a_reference_is_spelled_out_from_any_package(ctx):
+    assert serialize._spell_out(ctx.root, "cube10") == "//:cube10"
+    assert serialize._spell_out(ctx.root, 7) == 7
+    assert serialize._spell_out(ctx.root, "//other:part") == "//other:part"
+    assert serialize._spell_out(ctx.root, ":cube10") == "//:cube10"
+
+
+def test_a_reference_that_cannot_be_read_is_left_as_written(ctx, monkeypatch):
+    def refuse(pattern):
+        raise ValueError(pattern)
+
+    monkeypatch.setattr(ctx.root, "normalize", refuse)
+
+    assert serialize._spell_out(ctx.root, "../x:y") == "../x:y"
+
+
+@pytest.mark.parametrize(
+    "declared, spelled",
+    [
+        ({"package": "sub", "source": "x"}, {"package": "//sub", "source": "x"}),
+        ({"project": "this", "source": "x"}, {"project": "//", "source": "x"}),
+        ({"package": "", "source": "x"}, {"package": "//", "source": "x"}),
+        ({"package": "//far", "source": "x"}, {"package": "//far", "source": "x"}),
+    ],
+)
+def test_a_package_a_declaration_names_is_spelled_out_and_its_source_kept(ctx, declared, spelled):
+    serialize._spell_out_references(ctx.root, declared)
+
+    assert declared == spelled
+
+
+def test_references_in_lists_and_nested_mappings_are_spelled_out(ctx):
+    config = {"desc": "a cube", "sketch": ["disc", "//other:s"], "nested": {"source": "cube10"}}
+
+    serialize._spell_out_references(ctx.root, config)
+
+    assert config == {"desc": "a cube", "sketch": ["//:disc", "//other:s"], "nested": {"source": "//:cube10"}}
+
+
+def test_an_object_of_no_kind_with_a_file_is_none(ctx, monkeypatch):
+    assert serialize._object(ctx.root, "interface", "x") is None
+
+    def broken(name, quiet=False):
+        raise RuntimeError(name)
+
+    monkeypatch.setattr(ctx.root, "get_part", broken)
+    assert serialize._object(ctx.root, "part", "cube10") is None
+
+
+def test_a_downloaded_file_keeps_where_it_is_kept(ctx):
+    config = {"type": "step", "fileFrom": "url", "path": "kept.step"}
+
+    assert serialize._file_path(ctx.root, "part", "x", config, ctx.root, "x") == "kept.step"
+
+
+def test_an_object_that_says_no_file_keeps_its_declared_path(ctx, monkeypatch):
+    monkeypatch.setattr(serialize, "_object", lambda project, kind, name: None)
+
+    assert serialize._file_path(ctx.root, "part", "x", {"path": "a.step"}, ctx.root, "y") == "a.step"
+
+
+def test_the_default_extension_is_not_known_without_a_type(ctx, monkeypatch):
+    assert serialize._default_extension(ctx.root, "material", {}) is None
+    assert serialize._default_extension(ctx.root, "part", {}) is None
+
+    def broken(section, kind):
+        raise RuntimeError(kind)
+
+    monkeypatch.setattr(ctx.root, "extension_for", broken)
+    assert serialize._default_extension(ctx.root, "part", {"type": "step"}) is None
+
+
+def test_a_cmf_reference_that_cannot_be_read_is_not_the_same_anywhere(ctx, monkeypatch):
+    from partcad import cmf
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("no")
+
+    monkeypatch.setattr(cmf, "canonical", broken)
+
+    assert serialize._same_cmf(ctx.root, ctx.root, "material", ":steel") is False
+
+
+def test_an_assy_file_not_found_by_its_object_is_where_it_is_declared(ctx, monkeypatch):
+    monkeypatch.setattr(serialize, "_object", lambda project, kind, name: None)
+
+    assert serialize._assy_file(ctx.root, "assembly", "pair", {"type": "assy"}) == os.path.join(
+        ctx.root.config_dir, "pair.assy"
+    )
+    assert serialize._assy_file(ctx.root, "assembly", "pair", {"type": "alias"}) is None
+
+
+def test_an_assy_template_is_not_copied_into_another_package(ctx):
+    path = os.path.join(ctx.root.config_dir, "pair.assy")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("links:\n{% for i in [1] %}\n  - part: cube10\n{% endfor %}\n")
+
+    with pytest.raises(ValueError, match="cannot be read as YAML"):
+        serialize.declaration(ctx.root, "assembly", "pair", ctx.get_project("//other"), "pair")
+
+
+@pytest.mark.parametrize(
+    "link, portable",
+    [
+        ({"part": "//:cube10"}, True),
+        ({"part": "//:cube10", "connect": {"with": "//:iface", "to": "//:iface"}}, True),
+        ({"part": "//:cube10", "connect": {"with": "iface"}}, False),
+    ],
+)
+def test_what_an_assy_link_connects_with_is_checked_too(ctx, link, portable):
+    path = os.path.join(ctx.root.config_dir, "pair.assy")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(yaml.safe_dump({"links": [link]}))
+    other = ctx.get_project("//other")
+
+    if portable:
+        assert serialize.declaration(ctx.root, "assembly", "pair", other, "pair")
+    else:
+        with pytest.raises(ValueError, match="relative to its own package"):
+            serialize.declaration(ctx.root, "assembly", "pair", other, "pair")
+
+
+def test_an_instance_that_cannot_be_made_is_not_declared(ctx, monkeypatch):
+    def broken(*args, **kwargs):
+        raise RuntimeError("no")
+
+    monkeypatch.setattr(ctx.root, "get_interface", broken)
+    monkeypatch.setattr(ctx.root, "get_cmf", broken)
+
+    assert serialize.config_of(ctx.root, "interface", "x;a=1") is None
+    assert serialize.config_of(ctx.root, "material", "x;a=1") is None
+    assert serialize.config_of(ctx.root, "provider", "x;a=1") is None
+
+
+def test_every_kind_of_declaration_is_written_out(tmp_path):
+    root = tmp_path / "kinds"
+    root.mkdir()
+    (root / "partcad.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": "//",
+                "colors": {"red": "#FF0000"},
+                "materials": {"steel": {"density": 7850}},
+                "interfaces": {"pad": {"ports": {"p": {"location": [[0, 0, 0], [0, 0, 1], 0]}}}},
+                "parts": {"tagged": {"type": "basic", "cuboid": 1, "properties": {"supplier": "acme"}}},
+            },
+            sort_keys=False,
+        )
+    )
+    context = pc.Context(str(root), search_root=False)
+
+    assert serialize.declaration(context.root, "color", "red") == "#FF0000"
+    assert serialize.declaration(context.root, "material", "steel")["density"] == 7850
+    assert "ports" in serialize.declaration(context.root, "interface", "pad")
+    assert serialize.declaration(context.root, "part", "tagged")["properties"] == {"supplier": "acme"}
+
+
+def test_what_has_no_value_is_left_out(ctx, monkeypatch):
+    real = serialize.config_of
+
+    def with_nothing(project, kind, name):
+        config = dict(real(project, kind, name))
+        config["desc"] = None
+        return config
+
+    monkeypatch.setattr(serialize, "config_of", with_nothing)
+
+    assert "desc" not in serialize.declaration(ctx.root, "sketch", "disc")
+
+
+@pytest.mark.parametrize(
+    "value, flows",
+    [
+        ([[0, 0, 0], [0, 0, 1], 0], True),
+        ([[1, 2, 3, 4, 5, 6, 7, 8, 9]], False),
+        ([{"a": 1}], False),
+        (["two\nlines"], False),
+        (list(range(9)), False),
+    ],
+)
+def test_a_short_flat_list_is_written_on_one_line(value, flows):
+    assert serialize._flows(value) is flows
+
+
+def test_what_is_neither_text_nor_a_number_is_written_as_text():
+    class Thing:
+        def __str__(self):
+            return "thing"
+
+    assert serialize.styled(Thing()) == "thing"
