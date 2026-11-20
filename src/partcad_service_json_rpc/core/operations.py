@@ -5655,11 +5655,15 @@ def _attachment(project, item):
         raise JsonRpcError(USAGE_ERROR, "An attachment is named by its file name, not by %r" % (item,))
     item = item.strip()
     directory = getattr(project, "config_dir", None) or ""
-    given = item if os.path.isabs(item) else item.replace("\\", "/")
+    # Rooted however this machine roots a path: '/x' is no file of the package
+    # on Windows either, where Python 3.13 stopped calling it absolute (it is
+    # on the current drive), and nor is 'C:x'.
+    rooted = os.path.isabs(item) or item.startswith(("/", "\\")) or bool(os.path.splitdrive(item)[0])
+    given = item if rooted else item.replace("\\", "/")
     inside = None
     if directory:
         root = os.path.realpath(directory)
-        path = given if os.path.isabs(given) else os.path.join(directory, *given.split("/"))
+        path = given if rooted else os.path.join(directory, *given.split("/"))
         try:
             inside = os.path.relpath(os.path.realpath(path), root).replace(os.sep, "/")
         except ValueError:
@@ -5671,7 +5675,7 @@ def _attachment(project, item):
             "'%s' is not inside the package '%s', and an attachment is a file of the package: copy it in first"
             % (item, project.name),
         )
-    return inside if os.path.isabs(given) else posixpath.normpath(given)
+    return inside if rooted else posixpath.normpath(given)
 
 
 async def _anchor_threads_async(ctx, shape, threads) -> None:

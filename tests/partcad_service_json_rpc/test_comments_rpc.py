@@ -227,6 +227,8 @@ def test_a_short_form_and_a_colour_are_commented_on_too(package):
         ({"object": "bracket", "name": "Ada", "text": "x", "attachments": ["/elsewhere/x.png"]}, "not inside"),
         ({"object": "bracket", "name": "Ada", "text": "x", "attachments": ["../x.png"]}, "not inside"),
         ({"object": "bracket", "name": "Ada", "text": "x", "attachments": ["photos/../../x.png"]}, "not inside"),
+        # Rooted, if not absolute, on Windows: on the current drive, not in the package.
+        ({"object": "bracket", "name": "Ada", "text": "x", "attachments": ["\\elsewhere\\x.png"]}, "not inside"),
         ({"object": "bracket", "name": "Ada", "text": "x", "attachments": ["."]}, "not inside"),
         ({"object": "bracket", "name": "Ada", "text": "x", "answering": {"name": "Ada"}}, "'answering'"),
         (
