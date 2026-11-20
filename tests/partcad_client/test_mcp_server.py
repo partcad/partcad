@@ -229,6 +229,10 @@ def test_a_list_value_is_written_the_way_a_name_spells_it(tmp_path):
         ("export", "render.inline", {"format": "step", "path": "out/box.step"}),
         ("qual_test", "qual.run", {}),
         ("instructions", "assembly.guide", {}),
+        ("revisions", "revisions.list", {}),
+        ("diff", "revisions.compare", {"revision": "v1"}),
+        ("revision_uses", "revisions.uses", {"revision": "v1"}),
+        ("used_by", "usage.used_by", {}),
     ],
 )
 def test_every_tool_naming_an_object_takes_its_parameter_values(tmp_path, tool, method, arguments):
@@ -886,8 +890,8 @@ def test_revisions_sends_what_pc_revisions_list_sends(tmp_path):
     assert not call(server, "revisions").is_error
     call(server, "revisions", {"object": "frame", "kind": "assembly", "package": "//pkg"})
     assert requests(daemon, "revisions.list") == [
-        {"package": ".", "kind": "package", "context": "ctx-1"},
-        {"package": "//pkg", "object": "frame", "kind": "assembly", "context": "ctx-1"},
+        {"package": ".", "kind": "package", "params": [], "context": "ctx-1"},
+        {"package": "//pkg", "object": "frame", "kind": "assembly", "params": [], "context": "ctx-1"},
     ]
 
 
@@ -900,7 +904,14 @@ def test_diff_is_the_unified_diff_and_not_the_side_by_side_rows(tmp_path):
 
     assert not result.is_error
     (request,) = requests(daemon, "revisions.compare")
-    assert request == {"package": None, "object": "cube", "revision": "v1", "lines": 1, "context": "ctx-1"}
+    assert request == {
+        "package": None,
+        "object": "cube",
+        "params": [],
+        "revision": "v1",
+        "lines": 1,
+        "context": "ctx-1",
+    }
     reply = body(result)
     assert reply["result"] == {"revision": "a" * 40, "short": "a" * 8, "same": False}
     assert result.content[1].text == UNIFIED
@@ -921,7 +932,7 @@ def test_revision_uses_sends_what_pc_revisions_uses_sends(tmp_path):
 
     assert not call(server, "revision_uses", {"revision": "v1"}).is_error
     assert requests(daemon, "revisions.uses") == [
-        {"package": ".", "object": None, "revision": "v1", "context": "ctx-1"}
+        {"package": ".", "object": None, "revision": "v1", "params": [], "context": "ctx-1"}
     ]
 
 
@@ -937,7 +948,9 @@ def test_used_by_is_pc_used_by_and_with_a_revision_pc_revisions_used_by(tmp_path
     call(server, "used_by", {"object": "cube", "load": True})
     call(server, "used_by", {"revision": "v1"})
 
-    assert requests(daemon, "usage.used_by") == [{"package": None, "object": "cube", "load": True, "context": "ctx-1"}]
+    assert requests(daemon, "usage.used_by") == [
+        {"package": None, "object": "cube", "params": [], "load": True, "context": "ctx-1"}
+    ]
     assert requests(daemon, "revisions.used_by") == [
-        {"package": ".", "object": None, "revision": "v1", "context": "ctx-1"}
+        {"package": ".", "object": None, "revision": "v1", "params": [], "context": "ctx-1"}
     ]

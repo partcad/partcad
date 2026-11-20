@@ -17,6 +17,7 @@ which is what makes the answer about the whole workspace.
 import rich_click as click
 
 from ..operations_args import echo_json, print_used_by, target_options, target_params
+from ..parameters import param_option, param_params
 from ..service import run
 
 
@@ -30,12 +31,13 @@ from ..service import run
 @target_options
 @click.option("--load", is_flag=True, help="Load every package below the root first, so that all of them are asked")
 @click.option("--json", "as_json", is_flag=True, help="Print JSON")
+@param_option
 @click.argument("object", type=str, required=False)
 @click.pass_obj
-def cli(cli_ctx, package, interface, assembly, scene, sketch, load, as_json, object):
-    params = target_params(package, interface, assembly, scene, sketch, object)
-    params["load"] = load
-    result = run(cli_ctx, "usage.used_by", params, needs_context=True)
+def cli(cli_ctx, package, interface, assembly, scene, sketch, load, as_json, params, object):
+    request = {**target_params(package, interface, assembly, scene, sketch, object), **param_params(params)}
+    request["load"] = load
+    result = run(cli_ctx, "usage.used_by", request, needs_context=True)
     if result is None:
         raise click.ClickException("Nothing was listed")
     if as_json:

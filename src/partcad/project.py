@@ -3588,6 +3588,10 @@ class Project(project_config.Configuration):
         Refused, with the reason logged and False returned, for a name another
         kind of object of the package already has (see 'name_taken').
         """
+        why = self.not_written_to()
+        if why is not None:
+            pc_logging.error("Not adding '%s' to '%s': %s" % (name, self.name, why))
+            return False
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
         # Wide enough that nothing here is ever folded onto a second line. The
@@ -3621,6 +3625,18 @@ class Project(project_config.Configuration):
 
         return True
 
+    def not_written_to(self) -> typing.Optional[str]:
+        """Why nothing may be written into this package's 'partcad.yaml', or None when it may.
+
+        A package loaded at a revision ('//pkg@<sha>', or a package inside one)
+        is a commit written out into '~/.partcad/git': a change made there would
+        change what that commit is taken to hold for everyone who reads it next.
+        Every writer asks this first, so that no path into the file forgets to.
+        """
+        if self.revision_sha or package_versions.is_versioned(self.name):
+            return "it is a revision of its package, which is never written to"
+        return None
+
     def _load_to_edit(self, what: str):
         """This package's 'partcad.yaml', read to be written back as its author wrote it, and how to write it.
 
@@ -3631,6 +3647,9 @@ class Project(project_config.Configuration):
         mapping in a mapping, and would be written back as one. 'what' is what
         was going to be written, for that message.
         """
+        why = self.not_written_to()
+        if why is not None:
+            raise ValueError("%s: %s cannot be written: %s" % (self.name, what, why))
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
         # Wide enough that nothing is folded onto a second line: see 'add_object_config'.

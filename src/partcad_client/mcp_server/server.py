@@ -795,6 +795,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         object: SomeObjectName = None,
         kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
         package: PackageName = None,
+        params: Parameters = None,
     ) -> CallToolResult:
         """List the commits that changed the package of an object, or the package itself, newest first.
 
@@ -803,7 +804,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         own directory; one in no git repository is not published ('published': false). Any of them is a revision
         diff, revision_uses and used_by take.
         """
-        return await run(ctx, "revisions.list", _subject(package, object, kind))
+        return await run(ctx, "revisions.list", {**_subject(package, object, kind), "params": _assignments(params)})
 
     @server.tool(title="What changed since a revision", annotations=_READS)
     async def diff(
@@ -815,6 +816,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         lines: Annotated[
             int, Field(ge=0, description="Lines of what did not change to show around each change ('-U').")
         ] = 3,
+        params: Parameters = None,
     ) -> CallToolResult:
         """Show what changed in an object -- or, with no object, the package's partcad.yaml -- since a revision.
 
@@ -824,7 +826,12 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         text of its own ("No change since ..." when nothing changed, 'same': true). 'missing' on a side says the
         object is not declared there.
         """
-        request = {**_subject(package, object, kind), "revision": revision, "lines": lines}
+        request = {
+            **_subject(package, object, kind),
+            "params": _assignments(params),
+            "revision": revision,
+            "lines": lines,
+        }
         try:
             outcome = await call(ctx, "revisions.compare", request)
         except CallFailed as e:
@@ -843,6 +850,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         revision: Revision,
         package: PackageName = None,
         object: SomeObjectName = None,
+        params: Parameters = None,
     ) -> CallToolResult:
         """List the dependencies a package declared at a revision, each with the commit it is at.
 
@@ -850,7 +858,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         name that loads it at that commit ('versioned', '<package>@<sha>'), which any tool takes. Loading a
         dependency may download it.
         """
-        return await run(ctx, "revisions.uses", {"package": package or ".", "object": object, "revision": revision})
+        request = {"package": package or ".", "object": object, "revision": revision, "params": _assignments(params)}
+        return await run(ctx, "revisions.uses", request)
 
     @server.tool(title="What uses an object", annotations=_READS)
     async def used_by(
@@ -872,6 +881,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
                 "downloads -- so that all of them are asked ('--load'). Without a revision only."
             ),
         ] = False,
+        params: Parameters = None,
     ) -> CallToolResult:
         """List the loaded objects that use an object -- or anything in a package -- each with how many times.
 
@@ -879,10 +889,11 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         times uses it four times. Only what is loaded is looked at, so an empty list is not "nothing uses it":
         load asks for the workspace's packages to be loaded first.
         """
+        assigned = _assignments(params)
         if revision is not None:
-            request = {"package": package or ".", "object": object, "revision": revision}
+            request = {"package": package or ".", "object": object, "revision": revision, "params": assigned}
             return await run(ctx, "revisions.used_by", request)
-        return await run(ctx, "usage.used_by", {**_subject(package, object, kind), "load": load})
+        return await run(ctx, "usage.used_by", {**_subject(package, object, kind), "params": assigned, "load": load})
 
     @server.tool(title="PartCAD version", annotations=_LOCAL)
     async def version(ctx: Context) -> CallToolResult:

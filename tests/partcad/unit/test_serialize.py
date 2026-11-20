@@ -206,3 +206,63 @@ def test_yaml_text_writes_a_location_on_one_line_and_text_as_a_block():
     # Too long to read on one line: an item a line.
     assert "    - '9'" in text.splitlines()
     assert yaml.safe_load(text)["port"]["desc"] == "two\nlines\n"
+
+
+# ---- what review found ------------------------------------------------------
+
+
+def test_a_copy_keeps_manufacturable_where_the_destination_would_read_it_otherwise(tmp_path):
+    root = tmp_path / "m"
+    _dir = root / "made"
+    _dir.mkdir(parents=True)
+    (root / "partcad.yaml").write_text(
+        yaml.safe_dump({"name": "//", "manufacturable": False, "parts": {"cube": {"type": "basic", "cuboid": 1}}})
+    )
+    (_dir / "partcad.yaml").write_text(yaml.safe_dump({"manufacturable": True, "parts": {}}))
+    context = pc.Context(str(root), search_root=False)
+    made = context.get_project("//made")
+
+    # Not manufacturable in its own package, which says so for it; the copy
+    # would be read as manufacturable in '//made' without the key.
+    copied = serialize.declaration(context.root, "part", "cube", made, "cube")
+
+    assert copied["manufacturable"] is False
+    assert "manufacturable" not in serialize.declaration(context.root, "part", "cube")
+
+
+def test_a_copy_of_software_into_another_package_names_the_original_file(tmp_path):
+    root = tmp_path / "s"
+    (root / "other").mkdir(parents=True)
+    (root / "partcad.yaml").write_text(yaml.safe_dump({"name": "//", "software": {"fw": {"path": "fw.bin"}}}))
+    (root / "fw.bin").write_bytes(b"\0")
+    (root / "other" / "partcad.yaml").write_text("parts: {}\n")
+    context = pc.Context(str(root), search_root=False)
+
+    copied = serialize.declaration(context.root, "software", "fw", context.get_project("//other"), "fw")
+
+    assert copied["path"] == "../fw.bin"
+
+
+def test_an_assy_file_naming_its_parts_without_a_package_is_not_copied_into_another(ctx, tmp_path):
+    other = ctx.get_project("//other")
+
+    with pytest.raises(ValueError, match="relative to its own package"):
+        serialize.declaration(ctx.root, "assembly", "pair", other, "pair")
+    # Within its own package it is copied as ever.
+    assert serialize.declaration(ctx.root, "assembly", "pair", ctx.root, "pair2")["path"] == "pair.assy"
+
+
+def test_an_assy_file_naming_everything_in_full_is_copied_into_another(ctx):
+    path = os.path.join(ctx.root.config_dir, "pair.assy")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(yaml.safe_dump({"links": [{"part": "cube10", "package": "//"}]}))
+
+    copied = serialize.declaration(ctx.root, "assembly", "pair", ctx.get_project("//other"), "pair")
+
+    assert copied["path"] == "../pair.assy"
+
+
+def test_an_instance_is_its_declaration_with_the_values_as_defaults(ctx):
+    copied = serialize.declaration(ctx.root, "part", "sized;width=7")
+
+    assert copied["parameters"]["width"] == 7

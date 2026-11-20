@@ -46,8 +46,11 @@ def copy_object_action(
     section = OBJECT_KIND_SECTIONS.get(kind)
     if section is None:
         raise ValueError("'%s' is not a kind of object that can be copied" % kind)
-    if "@" in target_project.name:
-        raise ValueError("%s is a revision, which is never written to" % target_project.name)
+    written = target_project.not_written_to() if hasattr(target_project, "not_written_to") else None
+    if written is None and "@" in target_project.name:
+        written = "it is a revision of its package, which is never written to"
+    if written is not None:
+        raise ValueError("Nothing is copied into %s: %s" % (target_project.name, written))
     declaration = serialize.declaration(source_project, kind, source_name, target_project, target_name)
 
     taken = target_project.name_taken(kind, target_name)

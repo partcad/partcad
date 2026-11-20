@@ -70,7 +70,7 @@ def test_list_with_no_object_is_of_the_package(monkeypatch):
     ((method, params, needs_context),) = recorder.calls
     assert method == "revisions.list"
     assert needs_context
-    assert params == {"package": ".", "kind": "package"}
+    assert params == {"package": ".", "kind": "package", "params": []}
     lines = result.output.splitlines()
     assert lines[0].startswith("* bbbbbbbb") and lines[0].endswith("second")
     assert lines[1].startswith("  aaaaaaaa") and lines[1].endswith("first")
@@ -81,7 +81,7 @@ def test_list_of_an_object_says_its_kind_when_a_flag_does(monkeypatch):
 
     _invoke("revisions", "list", "-a", "-P", "//pkg", "frame")
 
-    assert recorder.calls[0][1] == {"package": "//pkg", "object": "frame", "kind": "assembly"}
+    assert recorder.calls[0][1] == {"package": "//pkg", "object": "frame", "kind": "assembly", "params": []}
 
 
 def test_a_package_not_published_says_so(monkeypatch):
@@ -100,7 +100,7 @@ def test_diff_prints_the_unified_diff_the_daemon_wrote(monkeypatch):
     assert result.exit_code == 0, result.output
     ((method, params, _),) = recorder.calls
     assert method == "revisions.compare"
-    assert params == {"package": "", "object": "cube", "revision": "v1", "lines": 1}
+    assert params == {"package": "", "object": "cube", "params": [], "revision": "v1", "lines": 1}
     assert result.output == UNIFIED
 
 
@@ -149,7 +149,7 @@ def test_uses_lists_each_dependency_at_its_commit(monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert recorder.calls[0][0] == "revisions.uses"
-    assert recorder.calls[0][1] == {"package": ".", "object": None, "revision": "v1"}
+    assert recorder.calls[0][1] == {"package": ".", "object": None, "revision": "v1", "params": []}
     assert result.output.split() == ["std", "f00dfeed", "//std@" + "f" * 40]
 
 
@@ -174,7 +174,7 @@ def test_used_by_an_object_and_loading_the_workspace_first(monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert recorder.calls[0][0] == "usage.used_by"
-    assert recorder.calls[0][1] == {"package": "", "object": "cube", "load": True}
+    assert recorder.calls[0][1] == {"package": "", "object": "cube", "params": [], "load": True}
     assert "Nothing PartCAD has loaded uses //:cube" in result.output
 
 
@@ -182,3 +182,28 @@ def test_a_kind_flag_needs_an_object():
     result = _invoke("used-by", "-a")
 
     assert result.exit_code != 0
+
+
+@pytest.mark.parametrize(
+    "module, method, command",
+    [
+        ("revisions.list", "revisions.list", ["revisions", "list"]),
+        ("revisions.diff", "revisions.compare", ["revisions", "diff", "v1"]),
+        ("revisions.uses", "revisions.uses", ["revisions", "uses", "v1"]),
+        ("revisions.used_by", "revisions.used_by", ["revisions", "used-by", "v1"]),
+        ("used_by", "usage.used_by", ["used-by"]),
+        ("copy", "copy.object", ["copy"]),
+    ],
+)
+def test_every_command_naming_an_object_takes_its_parameter_values(monkeypatch, module, method, command):
+    """'-p' as every command that names an object takes it (see 'test_param_option.py')."""
+    recorder = _record(monkeypatch, module, {"same": True, "unified": "", "objects": [], "dependencies": []})
+    extra = ["big"] if command == ["copy"] else []
+
+    result = _invoke(*command, "bolt", *extra, "-p", "length=10", "--param", "include=UP,DOWN")
+
+    assert result.exit_code != 2, result.output
+    ((called, params, _),) = recorder.calls
+    assert called == method
+    assert params["object"] == "bolt"
+    assert params["params"] == ["length=10", "include=UP,DOWN"]

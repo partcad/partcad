@@ -263,7 +263,9 @@ package's files are in.
       source: ../brackets@3f2a9c1e:corner   # and as it was at one commit
 
 The same works wherever an object is named, on the command line too
-(``pc info //brackets@v1.2:corner``, ``pc copy //brackets@v1.2:corner corner_v1``).
+(``pc info //brackets@v1.2:corner``, ``pc copy //brackets@v1.2:corner corner_v1``). A package inside a revision
+may be named at a revision of its own in turn: ``//brackets@v1.2/std@v3:m3`` is the ``std`` that ``v1.2``
+depends on, as it was at ``v3``.
 
 **Every revision is a package of its own in the same context, named after its
 commit.** ``//brackets@v1.2`` and ``//brackets@main`` are each loaded once, as
@@ -288,7 +290,8 @@ where it came from; one the repository of the package you are in does not have i
 not -- what it lacks is yours to fetch.
 
 A package in no git repository has no revisions, and naming one at a revision is
-"not found". The Digital Thread's :doc:`Revisions tab
+"not found". **Nothing is ever written into a revision**: an edit, a requirement added or a copy aimed at one is
+refused, since it would change what that commit is taken to hold. The Digital Thread's :doc:`Revisions tab
 </digital_thread/lifecycle/operations>` lists the revisions of a package and
 compares any of them with what is on screen.
 

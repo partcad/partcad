@@ -1277,9 +1277,13 @@ Object commands
   is.
 
   ``OBJECT_FROM`` may be in any package, a revision of one included (see :ref:`package-revisions`), which is how an
-  object is brought back from an earlier revision under a name of its own. ``OBJECT_TO`` is declared in the
-  package ``-P`` selects, or the one it names. A name the package already uses is refused, and ``--dry-run``
-  prints the declaration without writing it.
+  object is brought back from an earlier revision under a name of its own; ``-p <name>=<value>`` copies that
+  instance, its parameters defaulting to those values. ``OBJECT_TO`` is declared in the package ``-P`` selects, or
+  the one it names. A name the package already uses is refused, and so is a package loaded at a revision, which
+  is never written to; ``--dry-run`` prints the declaration without writing it. An assembly or a scene read from
+  an ASSY file is copied into another package only when that file names every object in full
+  (``//package:name``): the copy reads the original's file, and a link written ``part: bolt`` would there name the
+  other package's bolt.
 
   .. code-block:: shell
 
@@ -1297,9 +1301,10 @@ Object commands
     pc revisions list [OBJECT]
 
   Of the package ``OBJECT`` is in, or with no ``OBJECT`` of the package ``-P`` selects (this one by default). A
-  package that shares its repository with others lists the commits that changed its own directory. A package in
-  no git repository, or with nothing of it committed, is *not published yet*. ``--json`` prints the daemon's
-  answer.
+  package that shares its repository with others lists the commits that changed its own directory, the one that
+  deleted it included. A package in no git repository, or with nothing of it committed, is *not published yet*.
+  ``--json`` prints the daemon's answer. Like every command that names an object, these take ``-p <name>=<value>``:
+  ``pc revisions diff`` compares that instance at each side.
 
 ``pc revisions diff``
   Show what changed in an object since a revision, as a unified diff -- what the Revisions tab draws side by

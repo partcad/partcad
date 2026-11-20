@@ -989,26 +989,49 @@ class Context:
         Loaded once per commit, as '<path>/<name>@<commit id>', and answered
         under every other name it was asked by. A package inside a revision -
         one of its sub-packages or of its dependencies - is reached from the
-        revision the way it is reached from any package.
+        revision the way it is reached from any package, and may be asked for at
+        a revision of its own in turn ('//pkg@<sha>/dep@v1').
         """
         with self.lock:
             found = self._registered_project(project_path)
             if found is not None:
                 return found
-            errors = []
-            for base, revision, rest in package_versions.candidates(project_path):
-                try:
-                    project = self._load_revision(base, revision)
-                except ValueError as e:
-                    errors.append(str(e))
-                    continue
-                if project is None:
-                    return None
-                if not rest:
-                    return project
-                return self._get_project_recursive(project, rest.split("/"))
-            pc_logging.error("%s: %s" % (project_path, errors[0] if errors else "not a package at a revision"))
-            return None
+            base, revisions = package_versions.split(project_path)
+            current = self.get_project(base)
+            if current is None:
+                pc_logging.error("%s: there is no package %s" % (project_path, base))
+                return None
+            return self._at_revision(project_path, current, revisions)
+
+    def _at_revision(self, asked: str, project: Project, selector: str) -> Optional[Project]:
+        """'project' at the revision 'selector' starts with, and the packages the rest of 'selector' names below it.
+
+        'selector' is what follows an '@': a revision, which a branch may hold a
+        '/' in, and then the path below it, which may hold an '@' of its own.
+        The longest revision is tried first (see 'package_versions.candidates').
+        """
+        errors = []
+        for revision, rest in package_versions.selector_candidates(selector):
+            try:
+                loaded = self._load_revision(project.name, revision)
+            except ValueError as e:
+                errors.append(str(e))
+                continue
+            if loaded is None:
+                return None
+            return self._below(asked, loaded, rest)
+        pc_logging.error("%s: %s" % (asked, errors[0] if errors else "not a package at a revision"))
+        return None
+
+    def _below(self, asked: str, project: Project, rest: str) -> Optional[Project]:
+        """The package 'rest' names below 'project', which may be at a revision of its own."""
+        if not rest:
+            return project
+        path, separator, selector = rest.partition(package_versions.SEPARATOR)
+        child = self._get_project_recursive(project, path.split("/")) if path else project
+        if child is None or not separator:
+            return child
+        return self._at_revision(asked, child, selector)
 
     def _load_revision(self, base: str, revision: str) -> Optional[Project]:
         """The package 'base' at 'revision', loading it if it is not loaded yet.

@@ -153,7 +153,10 @@ export class RevisionsView {
         this.selected = entry.sha;
         this.drawList();
         this.drawHeader(entry);
-        if (!this.compared.has(entry.sha)) {
+        // Asked again while still pending: the host cancels a comparison a newer
+        // one replaces, and a cancelled one is never answered.
+        const compared = this.compared.get(entry.sha);
+        if (compared === undefined || compared === 'pending') {
             this.compared.set(entry.sha, 'pending');
             this.callbacks.ask('compare', entry.sha);
         }
@@ -231,7 +234,8 @@ export class RevisionsView {
     /** Ask for a folded view's contents for 'sha', the first time it is opened for it. */
     private ensure(detail: RevisionsDetail, sha: string): void {
         const answers = detail === 'uses' ? this.uses : this.usedBy;
-        if (!answers.has(sha)) {
+        const answered = answers.get(sha);
+        if (answered === undefined || answered === 'pending') {
             answers.set(sha, 'pending');
             this.callbacks.ask(detail, sha);
         }
@@ -243,6 +247,11 @@ export class RevisionsView {
      * view, which asks for what it shows the first time, and closes it again.
      */
     private drawDetails(): void {
+        // The title with the focus, by the view it is of, to be given it again
+        // once the strip is drawn anew: drawing replaces the buttons, and a
+        // keyboard user who opened a view must not be dropped onto the page.
+        const active = typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null);
+        const focused = active !== null && this.details.contains?.(active) ? active.dataset?.detail : undefined;
         empty(this.details);
         const sha = this.selected;
         if (sha === undefined) {
@@ -274,6 +283,11 @@ export class RevisionsView {
             strip.appendChild(title);
         }
         this.details.appendChild(strip);
+        if (focused !== undefined) {
+            Array.from(strip.children as HTMLCollectionOf<HTMLElement>)
+                .find((title) => title.dataset.detail === focused)
+                ?.focus?.();
+        }
         if (this.detail === undefined) {
             return;
         }

@@ -15,6 +15,7 @@ it at each. The daemon writes the diff (`revisions.compare`'s `unified`).
 import rich_click as click
 
 from ...operations_args import echo_json, print_unified, target_options, target_params
+from ...parameters import param_option, param_params
 from ...service import run
 
 
@@ -37,13 +38,15 @@ from ...service import run
 )
 @click.option("--exit-code", is_flag=True, help="Exit with 1 when something changed, as 'git diff --exit-code' does")
 @click.option("--json", "as_json", is_flag=True, help="Print JSON: the side-by-side rows and the unified diff")
+@param_option
 @click.argument("revision", type=str)
 @click.argument("object", type=str, required=False)
 @click.pass_obj
-def cli(cli_ctx, package, interface, assembly, scene, sketch, context, exit_code, as_json, revision, object):
-    params = target_params(package, interface, assembly, scene, sketch, object)
-    params.update({"revision": revision, "lines": context})
-    result = run(cli_ctx, "revisions.compare", params, needs_context=True)
+def cli(cli_ctx, package, interface, assembly, scene, sketch, context, exit_code, as_json, params, revision, object):
+    # '-p': the instance with these values, compared at each side.
+    request = {**target_params(package, interface, assembly, scene, sketch, object), **param_params(params)}
+    request.update({"revision": revision, "lines": context})
+    result = run(cli_ctx, "revisions.compare", request, needs_context=True)
     if result is None:
         raise click.ClickException("Nothing was compared")
     if as_json:

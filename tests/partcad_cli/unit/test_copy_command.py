@@ -43,7 +43,13 @@ def test_both_names_reach_the_daemon_as_typed(recorder):
     ((method, params, needs_context),) = recorder.calls
     assert method == "copy.object"
     assert needs_context
-    assert params == {"package": "//pkg", "object": "//pkg@v1.2:cube", "target": "big", "dry_run": False}
+    assert params == {
+        "package": "//pkg",
+        "object": "//pkg@v1.2:cube",
+        "target": "big",
+        "dry_run": False,
+        "params": [],
+    }
 
 
 def test_a_dry_run_prints_the_declaration_it_would_write(recorder):

@@ -153,7 +153,8 @@ def _uses(ctx, project, kind: str, name: str, config, wanted) -> int:
             for child in children:
                 item = getattr(child, "item", None)
                 package = getattr(item, "project_name", None)
-                if package is not None and wanted(_canonical(ctx, package), getattr(item, "name", "")):
+                placed = _strip_parameters(getattr(item, "name", "") or "")
+                if package is not None and wanted(_canonical(ctx, package), placed):
                     count += 1
     for package, object_name in references(project, kind, config):
         if wanted(_canonical(ctx, package), object_name):
@@ -270,12 +271,16 @@ def load_workspace(ctx, project=None) -> int:
             continue
         seen.add(current.name)
         declared = current.dependencies() or {}
-        for child in current.get_child_project_names() or []:
-            config = declared.get(child[len(current.name.rstrip("/")) + 1 :])
+        from partcad_utils.utils import get_child_project_path
+
+        # By the names the package itself gives them, which is what its
+        # 'dependencies:' are keyed by, whatever the package is called.
+        for child in current.get_child_project_names(absolute=False) or []:
+            config = declared.get(child)
             if isinstance(config, dict) and (config.get("type") in _FETCHED or config.get("url")):
                 continue
             try:
-                stack.append(ctx.get_project(child))
+                stack.append(ctx.get_project(get_child_project_path(current.name, child)))
             except Exception as e:  # pylint: disable=broad-except
                 pc_logging.debug("Not loading %s: %s" % (child, e))
     return len(seen)

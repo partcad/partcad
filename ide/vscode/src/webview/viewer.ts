@@ -2040,11 +2040,13 @@ function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
         // tab, so no strip, and the pane is the group.
         return [view3d];
     }
-    if (kind === 'sketch') {
+    if (kind === 'sketch' && known) {
         // Flat: rendered to a picture, and drawn - as one view of its plane.
+        // Both are the daemon's, so a sketch whose package is not known keeps
+        // the 3D view below, the one view of it that needs none.
         return [
-            { id: '2d', label: '2D', pane: panes['2d'], disabled: !known },
-            { id: 'draft', label: 'Draft', pane: panes.draft, disabled: !known },
+            { id: '2d', label: '2D', pane: panes['2d'] },
+            { id: 'draft', label: 'Draft', pane: panes.draft },
         ];
     }
     const cam = camData !== undefined && camData !== 'failed' && !camData.refused ? camData : undefined;

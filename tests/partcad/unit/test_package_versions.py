@@ -456,3 +456,148 @@ def test_load_workspace_loads_what_is_in_the_checkout_and_no_download(ctx):
     usage.load_workspace(ctx)
 
     assert "//sub" in ctx.projects
+
+
+# ---- what review found ------------------------------------------------------
+
+
+def test_an_lfs_pointer_whose_id_is_not_a_sha256_is_never_read(tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("private")
+    repo = pygit2.init_repository(str(tmp_path / "r"))
+    pointer = ("version https://git-lfs.github.com/spec/v1\noid sha256:%s\nsize 7\n" % secret).encode()
+
+    assert package_versions._lfs_object(repo, pointer) is None
+
+
+def test_a_commit_holding_the_export_guard_is_not_written_out(tmp_path, monkeypatch):
+    root = tmp_path / "evil"
+    pygit2.init_repository(str(root))
+    _write(root / "partcad.yaml", {"name": "//", "parts": {"cube": _cube(1)}})
+    target = tmp_path / "victim.txt"
+    target.write_text("keep me")
+    os.symlink(str(target), str(root / package_versions.GUARD))
+    _commit(root, "first", tag="v1")
+    context = pc.Context(str(root), search_root=False)
+    monkeypatch.setattr(context.user_config, "internal_state_dir", str(tmp_path / "state"))
+
+    assert context.get_project("//@v1") is None
+    assert target.read_text() == "keep me"
+
+
+def test_a_revision_inside_a_revision_is_read_as_one(ctx, repo):
+    # 'sub' at v1 is in the export, which is no repository of its own: it has
+    # no revisions, and is not taken for a sub-package named 'sub@main'.
+    assert ctx.get_project("//@v1/sub@main") is None
+    assert package_versions.selector_candidates("v1/sub@main") == [("v1", "sub@main")]
+    assert package_versions.selector_candidates("feature/x") == [("feature/x", ""), ("feature", "x")]
+
+
+def test_a_package_deleted_and_made_again_keeps_its_history(tmp_path, monkeypatch):
+    root = tmp_path / "again"
+    pygit2.init_repository(str(root))
+    _write(root / "partcad.yaml", {"name": "//"})
+    _write(root / "sub" / "partcad.yaml", {"parts": {"a": _cube(1)}})
+    made = _commit(root, "made")
+    import shutil
+
+    shutil.rmtree(str(root / "sub"))
+    deleted = _commit(root, "deleted")
+    _write(root / "sub" / "partcad.yaml", {"parts": {"a": _cube(2)}})
+    again = _commit(root, "made again")
+    context = pc.Context(str(root), search_root=False)
+
+    history = revisions.history(context, context.get_project("//sub"))
+
+    assert [entry["sha"] for entry in history["revisions"]] == [again, deleted, made]
+
+
+def test_load_workspace_leaves_what_the_root_downloads(tmp_path):
+    root = tmp_path / "ws"
+    _write(
+        root / "partcad.yaml",
+        {"name": "//", "dependencies": {"far": {"type": "git", "url": "https://example.invalid/far.git"}}},
+    )
+    _write(root / "near" / "partcad.yaml", {"parts": {"a": _cube(1)}})
+    context = pc.Context(str(root), search_root=False)
+
+    usage.load_workspace(context)
+
+    assert "//near" in context.projects
+    assert "//far" not in context.projects
+
+
+def test_a_package_no_part_of_which_may_have_a_material_fails_when_one_has(tmp_path, monkeypatch):
+    _write(
+        tmp_path / "mixed" / "partcad.yaml",
+        {"name": "//", "requirements": {"has_material": False}, "parts": {"a": _cube(1), "b": _cube(2)}},
+    )
+    context = pc.Context(str(tmp_path / "mixed"), search_root=False)
+
+    async def lacking(ctx, parts, component, where, shape=None):
+        # 'a' is in a material, 'b' is not.
+        return ([] if parts[0].name == "a" else ["//:b: no material"]), []
+
+    monkeypatch.setattr(requirements, "_parts_lacking", lacking)
+
+    report = asyncio.run(requirements.check_package_async(context, context.root, verify=True)).to_dict()
+
+    (check,) = report["requirements"]
+    assert check["passed"] is False
+    assert "//:a" in check["detail"]
+
+
+def test_a_dependency_of_the_root_is_not_its_own(tmp_path, monkeypatch):
+    _write(tmp_path / "own" / "partcad.yaml", {"name": "//"})
+    _write(tmp_path / "own" / "sub" / "partcad.yaml", {"parts": {"a": _cube(1)}})
+    context = pc.Context(str(tmp_path / "own"), search_root=False)
+    context.get_project("//sub")
+    downloaded = tmp_path / "state" / "git" / "abc"
+    _write(downloaded / "partcad.yaml", {"parts": {"b": _cube(1)}})
+    monkeypatch.setattr(context.user_config, "internal_state_dir", str(tmp_path / "state"))
+    context.projects["//pub"] = pc.Context(str(downloaded), search_root=False).root
+
+    assert requirements._is_own(context, context.root, "//sub")
+    assert not requirements._is_own(context, context.root, "//pub")
+    assert not requirements._is_own(context, context.root, "//nowhere")
+
+
+def test_nothing_is_written_into_a_revision(ctx):
+    at_v1 = ctx.get_project("//@v1")
+
+    assert at_v1.not_written_to() is not None
+    assert at_v1.add_object_config("parts", "x", {"type": "basic", "cuboid": 1}) is False
+    with pytest.raises(ValueError):
+        at_v1.edit_object_declaration("part", "cube", lambda declaration: None)
+    with pytest.raises(ValueError):
+        at_v1.edit_package_declaration(lambda declaration: None)
+    assert ctx.root.not_written_to() is None
+
+
+def test_a_placement_with_parameter_values_uses_the_object_it_is_of():
+    class Item:
+        project_name = "//"
+        name = "cube;length=10"
+
+    class Child:
+        item = Item()
+
+    class Built:
+        children = [Child(), Child()]
+
+    class Project:
+        name = "//users"
+
+        def objects(self, kind):
+            return {"pair": Built()}
+
+        def resolve(self, value):
+            return ("//", value)
+
+    class Ctx:
+        project_aliases = {}
+        projects = {}
+
+    count = usage._uses(Ctx(), Project(), "assembly", "pair", {"type": "assy"}, lambda p, n: (p, n) == ("//", "cube"))
+
+    assert count == 2

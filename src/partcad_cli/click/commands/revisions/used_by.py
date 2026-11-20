@@ -14,6 +14,7 @@ looked at; `pc used-by` is the same question about what is checked out.
 import rich_click as click
 
 from ...operations_args import echo_json, print_used_by
+from ...parameters import param_option, param_params
 from ...service import run
 
 
@@ -25,14 +26,15 @@ from ...service import run
 )
 @click.option("--package", "-P", type=str, default="", show_envvar=True, help="The package, when not this one")
 @click.option("--json", "as_json", is_flag=True, help="Print JSON")
+@param_option
 @click.argument("revision", type=str)
 @click.argument("object", type=str, required=False)
 @click.pass_obj
-def cli(cli_ctx, package, as_json, revision, object):
+def cli(cli_ctx, package, as_json, params, revision, object):
     result = run(
         cli_ctx,
         "revisions.used_by",
-        {"package": package or ".", "object": object or None, "revision": revision},
+        {"package": package or ".", "object": object or None, "revision": revision, **param_params(params)},
         needs_context=True,
     )
     if result is None:

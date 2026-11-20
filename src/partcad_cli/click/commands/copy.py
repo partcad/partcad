@@ -16,6 +16,7 @@ in (see ``partcad.serialize``) -- not the text of the file it came from.
 
 import rich_click as click
 
+from ..parameters import param_option, param_params
 from ..service import run
 
 
@@ -41,10 +42,11 @@ from ..service import run
     is_flag=True,
     show_envvar=True,
 )
+@param_option
 @click.argument("object_from", metavar="OBJECT_FROM", type=str, required=True)
 @click.argument("object_to", metavar="OBJECT_TO", type=str, required=True)
 @click.pass_obj
-def cli(cli_ctx, package, dry_run, object_from, object_to):
+def cli(cli_ctx, package, dry_run, params, object_from, object_to):
     result = run(
         cli_ctx,
         "copy.object",
@@ -53,6 +55,9 @@ def cli(cli_ctx, package, dry_run, object_from, object_to):
             "object": object_from,
             "target": object_to,
             "dry_run": dry_run,
+            # Of OBJECT_FROM: the copy is that instance's declaration, its
+            # parameters defaulting to these values.
+            **param_params(params),
         },
         needs_context=True,
     )

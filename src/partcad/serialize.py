@@ -138,12 +138,17 @@ def _spell_out_references(project, config: dict) -> None:
             _spell_out_references(project, value)
 
 
+# The kinds whose declaration names a file of the package's: 'path', or its default.
+_FILE_KINDS = ("part", "sketch", "assembly", "scene", "software")
+
+
 def _object(project, kind: str, name: str):
     getter = {
         "part": project.get_part,
         "sketch": project.get_sketch,
         "assembly": project.get_assembly,
         "scene": project.get_scene,
+        "software": project.get_software,
     }.get(kind)
     if getter is None:
         return None
@@ -163,7 +168,7 @@ def _file_path(project, kind: str, name: str, config: dict, target_project, targ
         # Nothing there, and nothing named, is an object with no file -- a basic
         # shape, an alias -- which there is no need to make to find that out.
         stem = os.path.join(project.config_dir, str(config.get("orig_name", name)))
-        if not glob.glob(glob.escape(stem) + ".*"):
+        if not os.path.isfile(stem) and not glob.glob(glob.escape(stem) + ".*"):
             return None
     obj = _object(project, kind, name)
     source_file = getattr(obj, "path", None) if obj is not None else None
@@ -177,8 +182,82 @@ def _file_path(project, kind: str, name: str, config: dict, target_project, targ
     return os.path.relpath(source_file, os.path.abspath(target_project.config_dir)).replace(os.sep, "/")
 
 
+def _assy_file(project, kind: str, name: str, config: dict) -> typing.Optional[str]:
+    """The ASSY file an assembly or a scene is read from, or None for one that is not."""
+    if kind not in ("assembly", "scene") or config.get("type") != "assy":
+        return None
+    obj = _object(project, kind, name)
+    path = getattr(obj, "path", None) if obj is not None else None
+    if isinstance(path, str) and path:
+        return path
+    declared = config.get("path") or "%s.assy" % name
+    return os.path.join(project.config_dir, declared)
+
+
+def _links_not_portable(project, kind: str, name: str, config: dict) -> typing.Optional[str]:
+    """Why the ASSY file a copy in another package would read names other objects there, or None.
+
+    The copy reads the original's file, and what a link of that file names
+    without a package ('part: bolt'), or with one relative to the file's
+    ('package: ../std'), or the interface a 'connect:' names without one, is
+    read against the package that declares the assembly -- which for the copy
+    is another package, and another bolt. Refused rather than rewritten: the
+    file is the original's, shared with it.
+    """
+    path = _assy_file(project, kind, name, config)
+    if path is None:
+        return None
+    import yaml
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            document = yaml.safe_load(f.read())
+    except (OSError, yaml.YAMLError):
+        return "its ASSY file %s cannot be read as YAML (a Jinja2 template is not), so its links cannot be checked" % (
+            project.rel_path(path)
+        )
+    found = []
+
+    def absolute(value) -> bool:
+        return isinstance(value, str) and value.startswith("//")
+
+    def walk(node):
+        if isinstance(node, dict):
+            if any(key in node for key in ("part", "assembly", "scene")) and not absolute(node.get("package")):
+                named = next(node[key] for key in ("part", "assembly", "scene") if key in node)
+                if not (absolute(named) and ":" in str(named)):
+                    found.append(str(named))
+            connect = node.get("connect")
+            if isinstance(connect, dict):
+                for key in ("with", "to"):
+                    if isinstance(connect.get(key), str) and not absolute(connect[key]):
+                        found.append(connect[key])
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(document)
+    if not found:
+        return None
+    shown = ", ".join("'%s'" % each for each in found[:3]) + (
+        " and %d more" % (len(found) - 3) if len(found) > 3 else ""
+    )
+    return "its ASSY file %s names %s relative to its own package" % (project.rel_path(path), shown)
+
+
 def config_of(project, kind: str, name: str):
-    """The declaration of 'name' as the context holds it, normalized; None if there is none."""
+    """The declaration of 'name' as the context holds it, normalized; None if there is none.
+
+    An instance named with parameter values ('bracket;length=10') is the
+    declaration as that instance has it: the values as its parameters'
+    defaults.
+    """
+    if ";" in name and kind in ("sketch", "part", "assembly", "scene"):
+        instance = _object(project, kind, name)
+        config = getattr(instance, "config", None) if instance is not None else None
+        return config if isinstance(config, dict) else None
     if kind in _DECLARED:
         return project.object_config(kind, name)
     if kind == "interface":
@@ -194,7 +273,8 @@ def declaration(project, kind: str, name: str, target_project=None, target_name:
     Raises ValueError for an object the package does not declare.
     """
     target_project = project if target_project is None else target_project
-    target_name = name if target_name is None else target_name
+    declared_name = name.partition(";")[0]
+    target_name = declared_name if target_name is None else target_name
     config = config_of(project, kind, name)
     if config is None:
         raise ValueError("%s declares no %s '%s'" % (project.name, kind, name))
@@ -206,9 +286,10 @@ def declaration(project, kind: str, name: str, target_project=None, target_name:
     for key in DERIVED_KEYS:
         result.pop(key, None)
     # A scene is an arrangement rather than a product, and is not manufacturable
-    # unless it says so (see 'SceneConfiguration'); anything else is what its
-    # package is.
-    default_manufacturable = False if kind == "scene" else getattr(project, "is_manufacturable", None)
+    # unless it says so (see 'SceneConfiguration'); anything else is what the
+    # package it is declared in is -- the copy's, for a copy into another one,
+    # since that is what it would be read as without the key.
+    default_manufacturable = False if kind == "scene" else getattr(target_project, "is_manufacturable", None)
     if "manufacturable" in result and result["manufacturable"] == default_manufacturable:
         result.pop("manufacturable")
     manufacturing = result.get("manufacturing")
@@ -219,7 +300,7 @@ def declaration(project, kind: str, name: str, target_project=None, target_name:
             manufacturing.pop("method")
         if not manufacturing:
             result.pop("manufacturing")
-    declared = _declared_properties(project, kind, name)
+    declared = _declared_properties(project, kind, declared_name)
     if declared is not False:
         if declared is None:
             result.pop("properties", None)
@@ -228,8 +309,8 @@ def declaration(project, kind: str, name: str, target_project=None, target_name:
     if isinstance(result.get("parameters"), dict) and kind != "interface":
         result["parameters"] = {key: compact_parameter(value) for key, value in result["parameters"].items()}
 
-    if kind in ("part", "sketch", "assembly", "scene"):
-        path = _file_path(project, kind, name, config, target_project, target_name)
+    if kind in _FILE_KINDS:
+        path = _file_path(project, kind, declared_name, config, target_project, target_name)
         if path is None:
             result.pop("path", None)
         else:
@@ -239,6 +320,12 @@ def declaration(project, kind: str, name: str, target_project=None, target_name:
 
     if target_project is not project:
         _spell_out_references(project, result)
+        why = _links_not_portable(project, kind, declared_name, config)
+        if why is not None:
+            raise ValueError(
+                "%s:%s cannot be copied into %s: %s. Copy it within its own package, or write the names in full"
+                % (project.name, declared_name, target_project.name, why)
+            )
 
     for key in [key for key, value in result.items() if value is None]:
         del result[key]

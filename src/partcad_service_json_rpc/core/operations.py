@@ -4280,8 +4280,9 @@ def _package_requirements_sections(project) -> dict:
 
 def _package_not_editable(project):
     """Why a package's own requirements cannot be written into its 'partcad.yaml', or None when they can."""
-    if getattr(project, "revision_sha", None) or "@" in project.name:
-        return "it is a revision, which is never written to"
+    written = project.not_written_to()
+    if written is not None:
+        return written
     config_path = getattr(project, "config_path", None)
     if not config_path:
         return "it has no 'partcad.yaml' of its own"
@@ -4345,6 +4346,9 @@ def _requirements_not_editable(ctx, package, kind, name, obj):
     project = ctx.get_project(package)
     if project is None:
         return "the package %s is not loaded" % package
+    written = project.not_written_to()
+    if written is not None:
+        return written
     from partcad.project import OBJECT_KIND_SECTIONS
 
     section = OBJECT_KIND_SECTIONS.get(kind)
@@ -4632,7 +4636,15 @@ def revisions_compare(session, params):
         if _said_kind(params) is None:
             # Looked up, as every command that takes a name looks it up: an
             # assembly compared as a part would be "not declared" on both sides.
-            kind = project.object_kind(name) or kind
+            # In the revision, when the package declares it no longer.
+            found = project.object_kind(name.partition(";")[0])
+            if found is None:
+                from partcad import package_versions
+
+                current = revisions.current_project(ctx, project)
+                at_revision = ctx.get_project(package_versions.versioned_name(current.name, revision))
+                found = at_revision.object_kind(name.partition(";")[0]) if at_revision is not None else None
+            kind = found or kind
     # 'lines', not 'context', which is the context a request is about.
     lines = params.get("lines")
     try:
@@ -4732,6 +4744,9 @@ def usage_used_by(session, params):
     project = ctx.get_project(package)
     if project is None:
         raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+    # What uses an object uses it whatever its parameter values: the users of
+    # 'bracket;length=10' are the users of 'bracket'.
+    name = name.partition(";")[0]
     return {"object": _qualified(project.name, name), "objects": usage.object_used_by(ctx, project.name, name)}
 
 
@@ -6843,10 +6858,13 @@ def copy_object(session, params):
     if source_project is None:
         raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % source_package)
     kind = _said_kind(params) or _object_kind(params)
+    # By the name it is declared under: '-p' makes 'source_name' an instance
+    # ('bracket;length=10'), which is what is copied, of the object it is of.
+    declared_source = source_name.partition(";")[0]
     if kind is None:
-        kind = source_project.object_kind(source_name)
+        kind = source_project.object_kind(declared_source)
     if kind is None:
-        found = _cmf_kinds(source_project, source_name)
+        found = _cmf_kinds(source_project, declared_source)
         kind = found[0] if found else None
     if kind is None:
         raise JsonRpcError(USAGE_ERROR, "%s:%s is not found" % (source_project.name, source_name))

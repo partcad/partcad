@@ -195,8 +195,9 @@ suite('Digital Thread Operations tabs', () => {
         );
         assert.ok(rows[0].className.includes('selected'));
         assert.strictEqual(view.current, NEWEST);
-        // The newest is compared with what is on screen, once.
+        // The newest is compared with what is on screen, once it has answered.
         assert.deepStrictEqual(asked, [['compare', NEWEST]]);
+        view.answer('compare', NEWEST, { ...COMPARED, revision: NEWEST });
         view.select(NEWEST);
         assert.deepStrictEqual(asked, [['compare', NEWEST]]);
     });
@@ -217,6 +218,27 @@ suite('Digital Thread Operations tabs', () => {
         assert.ok(root.find('diff-added').some((cell) => cell.textContent === '  length: 30'));
         // A line only the current side has leaves the revision's side empty.
         assert.ok(root.find('diff-empty').length >= 2);
+    });
+
+    test('a revision whose comparison never came back is asked about again when selected again', () => {
+        // The host cancels a comparison a newer one replaces, and a cancelled
+        // one is never answered: going back to it must not wait forever.
+        const { root, view, asked } = pane();
+        view.showHistory(HISTORY);
+        root.find('revisions-item')[1].fire('click');
+
+        root.find('revisions-item')[0].fire('click');
+
+        assert.deepStrictEqual(asked, [
+            ['compare', NEWEST],
+            ['compare', OLDEST],
+            ['compare', NEWEST],
+        ]);
+        // Once answered, it is not asked again.
+        view.answer('compare', NEWEST, { ...COMPARED, revision: NEWEST });
+        root.find('revisions-item')[1].fire('click');
+        root.find('revisions-item')[0].fire('click');
+        assert.strictEqual(asked.filter(([query, sha]) => query === 'compare' && sha === NEWEST).length, 2);
     });
 
     test('an answer for a revision no longer selected is kept, not drawn', () => {

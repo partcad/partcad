@@ -247,3 +247,58 @@ def test_used_by_can_load_the_workspace_first(session, tmp_path):
 
     assert "//users:peg" not in [row["object"] for row in before["objects"]]
     assert "//users:peg" in [row["object"] for row in after["objects"]]
+
+
+def test_an_object_of_a_revision_has_requirements_that_are_not_edited(session):
+    answer = operations.requirements_check(
+        session, {"package": "//@%s" % session.first, "object": "cube", "kind": "part"}
+    )
+
+    assert answer["editable"] is not None
+    with pytest.raises(JsonRpcError):
+        operations.requirements_add(
+            session,
+            {
+                "package": "//@%s" % session.first,
+                "object": "cube",
+                "kind": "part",
+                "requirement": "feature",
+                "name": "x",
+                "value": "y",
+            },
+        )
+
+
+def test_an_object_gone_since_the_revision_is_compared_as_what_it_was(session):
+    config = yaml.safe_load(open(session.partcad_ctx.root.config_path).read())
+    del config["parts"]["cube"]
+    del config["parts"]["user"]
+    with open(session.partcad_ctx.root.config_path, "w") as f:
+        f.write(yaml.safe_dump(config, sort_keys=False))
+    session.partcad_ctx.reload_packages(["//"])
+
+    answer = operations.revisions_compare(session, {"package": "//", "object": "cube", "revision": session.first})
+
+    assert answer["left"]["missing"] is False
+    assert answer["right"]["missing"] is True
+    assert answer["same"] is False
+
+
+def test_copy_of_an_instance_is_that_instance(session):
+    config = yaml.safe_load(open(session.partcad_ctx.root.config_path).read())
+    config["parts"]["sized"] = {"type": "basic", "parameters": {"edge": 1}, "cuboid": 1}
+    with open(session.partcad_ctx.root.config_path, "w") as f:
+        f.write(yaml.safe_dump(config, sort_keys=False))
+    session.partcad_ctx.reload_packages(["//"])
+
+    answer = operations.copy_object(
+        session, {"package": "//", "object": "sized", "params": ["edge=3"], "target": "big", "dry_run": True}
+    )
+
+    assert "    edge: 3" in answer["declaration"].splitlines()
+
+
+def test_used_by_an_instance_is_used_by_its_object(session):
+    answer = operations.usage_used_by(session, {"package": "//", "object": "cube", "params": ["x=1"], "kind": "part"})
+
+    assert answer["object"] == "//:cube"

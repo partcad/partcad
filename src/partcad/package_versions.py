@@ -46,6 +46,7 @@ revision is of this package's repository, and a sibling may be in another one.
 """
 
 import os
+import re
 import threading
 import typing
 import uuid
@@ -71,6 +72,16 @@ REVISIONS_LIMIT = 500
 
 # The first line of a Git LFS pointer, which is what such a file's blob holds.
 _LFS_POINTER = b"version https://git-lfs.github.com/spec/v1"
+
+# What an LFS object id is: a SHA-256, in hex. Anything else in a pointer is not
+# one, and is never made into a path -- 'oid sha256:/home/me/secret' would
+# otherwise be read and written out into the revision.
+_LFS_OID = re.compile(r"^[0-9a-f]{64}$")
+
+# How many commits a listing of a package's revisions looks at, at most, to find
+# 'REVISIONS_LIMIT' that changed it: a package added late to a long history is
+# not worth walking all of it for.
+REVISIONS_SCAN_LIMIT = 20000
 
 _export_locks: dict[str, threading.Lock] = {}
 _export_locks_lock = threading.Lock()
@@ -115,6 +126,22 @@ def candidates(package_path: str) -> list:
     result = []
     for count in range(len(parts), 0, -1):
         result.append((base, "/".join(parts[:count]), "/".join(parts[count:])))
+    return result
+
+
+def selector_candidates(selector: str) -> list:
+    """Every (revision, the rest of the path) what follows an '@' can be read as, longest revision first.
+
+    A revision holds no '@' ('check_revision'), so a candidate that would is
+    left out: in 'v1/dep@v2' the revision is 'v1', and 'dep@v2' is below it.
+    """
+    parts = selector.split("/")
+    result = []
+    for count in range(len(parts), 0, -1):
+        revision = "/".join(parts[:count])
+        if SEPARATOR in revision:
+            continue
+        result.append((revision, "/".join(parts[count:])))
     return result
 
 
@@ -335,7 +362,7 @@ def _lfs_object(repo: pygit2.Repository, data: bytes) -> typing.Optional[bytes]:
     for line in data.decode("utf-8", "replace").splitlines():
         if line.startswith("oid sha256:"):
             oid = line.split(":", 1)[1].strip()
-    if not oid or len(oid) < 5:
+    if not oid or not _LFS_OID.match(oid):
         return None
     path = os.path.join(repo.path, "lfs", "objects", oid[0:2], oid[2:4], oid)
     if not os.path.isfile(path):
@@ -344,10 +371,17 @@ def _lfs_object(repo: pygit2.Repository, data: bytes) -> typing.Optional[bytes]:
         return f.read()
 
 
-def _write_tree(repo: pygit2.Repository, tree: pygit2.Tree, dest: str) -> None:
-    """Write 'tree' out under 'dest', the way a checkout would."""
+def _write_tree(repo: pygit2.Repository, tree: pygit2.Tree, dest: str, top: bool = False) -> None:
+    """Write 'tree' out under 'dest', the way a checkout would.
+
+    At the top, an entry named as the guard 'export' writes is refused: it is
+    PartCAD's, and a commit holding one -- a symbolic link, say -- would decide
+    where the guard is written, or claim to be an export of another commit.
+    """
     os.makedirs(dest, exist_ok=True)
     for entry in tree:
+        if top and entry.name == GUARD:
+            raise ValueError("The commit holds '%s', which is PartCAD's own name for an exported revision" % GUARD)
         path = os.path.join(dest, entry.name)
         mode = entry.filemode
         if mode == FileMode.TREE:
@@ -406,8 +440,11 @@ def export(repository: Repository, sha: str, git_cache_dir: str) -> str:
         commit = commit.peel(pygit2.Commit)
         staging = "%s.tmp-%s" % (dest, uuid.uuid4().hex[:8])
         try:
-            _write_tree(repository.repo, commit.tree, staging)
-            with open(os.path.join(staging, GUARD), "w", encoding="utf-8") as f:
+            _write_tree(repository.repo, commit.tree, staging, top=True)
+            # Created, never opened: nothing at that name may be followed or
+            # written through, whatever put it there.
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            with os.fdopen(os.open(os.path.join(staging, GUARD), flags, 0o644), "w", encoding="utf-8") as f:
                 f.write(sha)
             if os.path.exists(dest):
                 # An export that never finished: replaced, not read.
@@ -440,7 +477,9 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT) -> list:
     A commit is listed when what it has at the package's directory differs from
     what its first parent had there -- 'git log --first-parent -- <dir>' -- so a
     package that shares its repository with others lists its own history and
-    nobody else's. A package at the repository's root lists every commit.
+    nobody else's, the commit that deleted its directory included. A package at
+    the repository's root lists every commit. At most 'REVISIONS_SCAN_LIMIT'
+    commits are looked at.
 
     Each is {'sha', 'short', 'summary', 'author', 'time'}: the time as seconds
     since the epoch, which is what a reader formats in its own time zone.
@@ -455,12 +494,12 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT) -> list:
     except (pygit2.GitError, ValueError, KeyError):
         return []
     relpath = repository.relpath
-    for commit in walker:
-        here = _subtree_id(commit, relpath)
-        if here is None:
-            # Not there yet in this commit, nor (on a first-parent walk) before it.
+    for scanned, commit in enumerate(walker):
+        if scanned >= REVISIONS_SCAN_LIMIT:
             break
+        here = _subtree_id(commit, relpath)
         parents = commit.parent_ids
+        before = None
         if parents:
             try:
                 parent = repository.repo[parents[0]]
@@ -468,8 +507,11 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT) -> list:
                 parent = None
             # A shallow copy stops here: the parent was never downloaded.
             before = _subtree_id(parent, relpath) if parent is not None else None
-            if before == here:
-                continue
+        if before == here:
+            # Nothing of the package changed - or it is not there on either
+            # side, which a directory deleted and made again later is, between
+            # the two: the walk goes on past it, to the commits before.
+            continue
         found.append(
             {
                 "sha": str(commit.id),

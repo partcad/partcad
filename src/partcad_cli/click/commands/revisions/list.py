@@ -13,6 +13,7 @@ its repository with others lists the commits that changed its own directory.
 import rich_click as click
 
 from ...operations_args import echo_json, print_revisions, target_options, target_params
+from ...parameters import param_option, param_params
 from ...service import run
 
 
@@ -25,13 +26,14 @@ from ...service import run
 )
 @target_options
 @click.option("--json", "as_json", is_flag=True, help="Print JSON")
+@param_option
 @click.argument("object", type=str, required=False)
 @click.pass_obj
-def cli(cli_ctx, package, interface, assembly, scene, sketch, as_json, object):
+def cli(cli_ctx, package, interface, assembly, scene, sketch, as_json, params, object):
     result = run(
         cli_ctx,
         "revisions.list",
-        target_params(package, interface, assembly, scene, sketch, object),
+        {**target_params(package, interface, assembly, scene, sketch, object), **param_params(params)},
         needs_context=True,
     )
     if result is None:

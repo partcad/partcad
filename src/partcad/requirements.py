@@ -1873,41 +1873,74 @@ async def _verify_package_has(ctx, project, entries) -> None:
             check.detail = "not known: %s" % _first_few(unknown)
             continue
         if not parts:
-            has = True
-            detail = "the package declares no parts"
-        elif HAS_KEYS[requirement.name] is None:
-            lacking = []
+            # Of no part, either way: there is nothing to have it or lack it.
+            check.passed = True
+            check.detail = "the package declares no parts"
+            continue
+        # Each part held to it on its own: 'has_material: false' is that no
+        # part has one, which "not every part has one" is not.
+        verdicts, not_built = [], []
+        if HAS_KEYS[requirement.name] is None:
+            what = "every part's mass is known"
             for part in parts:
                 value, source = (await resolve_physics_async(ctx, part, ["mass"]))["mass"]
+                named = "%s:%s" % (part.project_name, part.name)
                 if value is None:
-                    lacking.append("%s:%s: not known: %s" % (part.project_name, part.name, source))
-            has = not lacking
-            detail = "every part's mass is known" if has else _first_few(lacking)
+                    verdicts.append((False, "%s: not known: %s" % (named, source)))
+                else:
+                    verdicts.append((True, "%s: %s (%s)" % (named, _quantity("mass", value), source)))
         else:
             component, where = HAS_KEYS[requirement.name]
-            lacking, not_built = await _parts_lacking(ctx, parts, component, where)
-            if not_built:
-                check.passed = False
-                check.detail = "not known: %s" % _first_few(not_built + lacking)
-                continue
-            has = not lacking
-            detail = (
-                "every %s of every part is in a %s that is a claim" % (where, _WORDS[component])
-                if has
-                else _first_few(lacking)
+            what = "every %s of every part is in a %s that is a claim" % (where, _WORDS[component])
+            for part in parts:
+                lacking, unbuilt = await _parts_lacking(ctx, [part], component, where)
+                if unbuilt:
+                    not_built.extend(unbuilt)
+                elif lacking:
+                    verdicts.append((False, lacking[0]))
+                else:
+                    verdicts.append((True, "%s:%s" % (part.project_name, part.name)))
+        if not_built:
+            check.passed = False
+            check.detail = "not known: %s" % _first_few(not_built)
+            continue
+        failing = [why for has, why in verdicts if has != requirement.required]
+        check.passed = not failing
+        if requirement.required:
+            check.detail = what if not failing else _first_few(failing)
+        else:
+            check.detail = (
+                "no part has one"
+                if not failing
+                else "it is required that no part has one, and these do: %s" % _first_few(failing)
             )
-        check.passed = has == requirement.required
-        if has and not requirement.required:
-            detail = "it has one, and is required not to: %s" % detail
-        check.detail = detail
+
+
+def _is_own(ctx, project, package: str) -> bool:
+    """Whether 'package' is 'project' or one of its own: its files in the package's checkout, not fetched.
+
+    By where its files are rather than by its name: every package is named
+    under the root's, '//', and a dependency of a package is named under it --
+    neither makes it the package's own. A sub-folder, or a dependency declared
+    with a local path inside the package, is.
+    """
+    if package == project.name:
+        return True
+    other = ctx.projects.get(ctx.project_aliases.get(package, package))
+    if other is None or getattr(other, "revision_sha", None) or ctx.is_downloaded(other):
+        return False
+    import os
+
+    root = os.path.realpath(project.config_dir)
+    return os.path.realpath(other.config_dir).startswith(root.rstrip(os.sep) + os.sep)
 
 
 async def _verify_package_dependencies(ctx, project, parts, entries) -> None:
     """Hold a package to 'has_dependencies' and 'has_private_dependencies': what any part it declares draws on.
 
     Of a package, what its parts draw on, together - not what its 'dependencies:'
-    import, which may be more than anything uses. A package its own parts are in
-    (the package itself, one under it) is no dependency of it.
+    import, which may be more than anything uses. A package of its own (see
+    '_is_own') is no dependency of it.
     """
     from . import object_dependencies
 
@@ -1920,7 +1953,7 @@ async def _verify_package_dependencies(ctx, project, parts, entries) -> None:
             continue
         unknown.extend(found.unknown)
         for package, uses in found.packages.items():
-            if package == project.name or package.startswith(project.name.rstrip("/") + "/"):
+            if _is_own(ctx, project, package):
                 continue
             packages.setdefault(package, []).extend(use for use in uses if use not in packages.get(package, []))
     for requirement, check in entries:
