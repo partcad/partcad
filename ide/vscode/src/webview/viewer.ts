@@ -1074,6 +1074,7 @@ function openDialog(
             commentDraft = undefined;
             scene?.setPendingMarker();
         },
+        onOpenerGone: (thread) => scene?.focusReplyWhenDrawn(thread),
     });
 }
 

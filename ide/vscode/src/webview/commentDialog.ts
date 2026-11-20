@@ -76,6 +76,11 @@ export interface CommentDialogOptions {
     onAttach: () => void;
     onPost: (text: string, attachments: string[]) => void;
     onClose: () => void;
+    /**
+     * The thread whose Reply opened the dialog, by its key, when that Reply is
+     * gone and its replacement not drawn yet: whoever draws it gives it the focus.
+     */
+    onOpenerGone?: (thread: string) => void;
 }
 
 /** The one dialog of the panel; 'open' replaces whatever it showed. */
@@ -254,13 +259,25 @@ export class CommentDialog {
         if (this.backdrop.hidden) {
             return;
         }
+        // Let go of the focus now rather than when the page next lays out: until
+        // then a control hidden with the dialog still has it, and nothing waiting
+        // to give it to a Reply (see 'onOpenerGone') would take the page as idle.
+        const focused = document.activeElement;
+        if (focused instanceof HTMLElement && this.dialog.contains(focused)) {
+            focused.blur();
+        }
         this.backdrop.hidden = true;
         const options = this.options;
         this.options = undefined;
         this.busy = false;
         const opener = this.opener;
         this.opener = undefined;
-        (opener?.isConnected ? opener : replacementOf(opener))?.focus();
+        const target = opener?.isConnected ? opener : replacementOf(opener);
+        if (target !== undefined) {
+            target.focus();
+        } else if (opener?.dataset.thread !== undefined) {
+            options?.onOpenerGone?.(opener.dataset.thread);
+        }
         options?.onClose();
     }
 

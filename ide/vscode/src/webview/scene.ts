@@ -600,6 +600,16 @@ let replyButtons = new Map<string, HTMLElement>();
  */
 let focusReply: string | undefined;
 
+/**
+ * Give the focus to a thread's Reply once it is drawn: the dialog it opened
+ * closed after the callouts were replaced and before the new ones were drawn.
+ * Not if something else has the focus by then.
+ */
+export function focusReplyWhenDrawn(thread: string): void {
+    focusReply = thread;
+    invalidate();
+}
+
 /** A thread, as the Reply that answers it is known across a refresh. */
 function threadKey(pin: ThreadPin): string {
     return `${pin.object}#${pin.thread.index}`;
