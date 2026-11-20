@@ -19,11 +19,31 @@
 // dialog then closes - or why not, which it shows and stays open with
 // everything still typed.
 //
-// Escape cancels, as does the backdrop; Ctrl+Enter (Cmd+Enter) posts.
+// Escape cancels, as does the backdrop; Ctrl+Enter (Cmd+Enter) posts. None of
+// the three cancels while a comment is being written: what the host answers is
+// what says whether it was, and a dialog closed under it would leave somebody
+// posting it twice. It is a modal dialog for the keyboard too: Tab goes round
+// what is in it, and closing it gives the focus back to what had it.
 //
 
 import { CommentThread, renderComment } from './comments';
 import { el, empty } from './dom';
+
+/** How many dialogs have been made: each heading's id, which names its dialog to a screen reader. */
+let made = 0;
+
+/** What the focus can be on inside 'root', in the order Tab takes it there. */
+function focusable(root: HTMLElement): HTMLElement[] {
+    return Array.from(
+        root.querySelectorAll<HTMLElement>('button, textarea, input, select, a[href], [tabindex]:not([tabindex="-1"])'),
+    ).filter(
+        (element) =>
+            !(element as HTMLButtonElement).disabled &&
+            !element.hidden &&
+            element.closest('[hidden]') === null &&
+            element.getClientRects().length > 0,
+    );
+}
 
 export interface CommentDialogOptions {
     /** What the dialog is for, in its heading: "New comment", "Reply". */
@@ -60,11 +80,17 @@ export class CommentDialog {
     private attachments: string[] = [];
     private ready = false;
     private busy = false;
+    /** What had the focus before the dialog opened, to have it back once it closes. */
+    private opener: HTMLElement | undefined;
 
     constructor(host: HTMLElement) {
         this.backdrop.hidden = true;
         this.dialog.setAttribute('role', 'dialog');
         this.dialog.setAttribute('aria-modal', 'true');
+        made += 1;
+        this.heading.id = `comment-dialog-title-${made}`;
+        this.dialog.setAttribute('aria-labelledby', this.heading.id);
+        this.status.setAttribute('role', 'status');
         this.text.rows = 6;
         this.text.placeholder = 'Write a comment - Markdown: **bold**, *italic*, `code`, - lists, [links](https://…)';
         this.text.setAttribute('aria-label', 'Comment');
@@ -79,11 +105,11 @@ export class CommentDialog {
 
         this.text.addEventListener('input', () => this.update());
         this.attach.addEventListener('click', () => this.options?.onAttach());
-        this.cancel.addEventListener('click', () => this.close());
+        this.cancel.addEventListener('click', () => this.dismiss());
         this.post.addEventListener('click', () => this.submit());
         this.backdrop.addEventListener('mousedown', (event) => {
             if (event.target === this.backdrop) {
-                this.close();
+                this.dismiss();
             }
         });
         // Escape and Ctrl+Enter wherever the focus is while the dialog is up -
@@ -98,7 +124,25 @@ export class CommentDialog {
                 if (event.key === 'Escape') {
                     event.preventDefault();
                     event.stopPropagation();
-                    this.close();
+                    this.dismiss();
+                } else if (event.key === 'Tab') {
+                    // Round what is in the dialog, as a modal dialog keeps it.
+                    const inside = focusable(this.dialog);
+                    if (inside.length === 0) {
+                        event.preventDefault();
+                        return;
+                    }
+                    const at = inside.indexOf(document.activeElement as HTMLElement);
+                    const next = event.shiftKey
+                        ? at <= 0
+                            ? inside.length - 1
+                            : at - 1
+                        : at === -1 || at === inside.length - 1
+                          ? 0
+                          : at + 1;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    inside[next].focus();
                 } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                     event.preventDefault();
                     event.stopPropagation();
@@ -119,6 +163,10 @@ export class CommentDialog {
     }
 
     public open(options: CommentDialogOptions): void {
+        if (this.backdrop.hidden) {
+            const active = document.activeElement;
+            this.opener = active instanceof HTMLElement && active !== document.body ? active : undefined;
+        }
         this.options = options;
         this.attachments = [];
         this.busy = false;
@@ -171,6 +219,11 @@ export class CommentDialog {
         }
     }
 
+    /** Whether files can be attached: once the host has said where the package is. */
+    public setCanAttach(canAttach: boolean): void {
+        this.attach.hidden = !canAttach || this.options?.readOnly !== undefined;
+    }
+
     /** Files the host picked, relative to the package; each once. */
     public addAttachments(files: readonly string[]): void {
         for (const file of files) {
@@ -181,6 +234,7 @@ export class CommentDialog {
         this.drawFiles();
     }
 
+    /** Close it, whatever it was doing: what the host does once it has answered, or once there is another object. */
     public close(): void {
         if (this.backdrop.hidden) {
             return;
@@ -188,7 +242,22 @@ export class CommentDialog {
         this.backdrop.hidden = true;
         const options = this.options;
         this.options = undefined;
+        this.busy = false;
+        const opener = this.opener;
+        this.opener = undefined;
+        if (opener?.isConnected) {
+            opener.focus();
+        }
         options?.onClose();
+    }
+
+    /** Escape, Cancel or the backdrop: close it, unless what is posted is still being written. */
+    private dismiss(): void {
+        if (this.busy) {
+            this.setStatus('Still writing it into partcad.yaml - it closes once that is done, or says why not.');
+            return;
+        }
+        this.close();
     }
 
     private submit(): void {
@@ -201,6 +270,7 @@ export class CommentDialog {
     private update(): void {
         this.post.disabled = this.busy || !this.ready || this.text.value.trim() === '';
         this.attach.disabled = this.busy;
+        this.cancel.disabled = this.busy;
     }
 
     private drawFiles(): void {

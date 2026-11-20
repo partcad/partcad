@@ -724,7 +724,10 @@ Object commands
   Markdown, and ``-m -`` reads it from standard input. The comment is signed with ``git config user.name`` on
   the machine the command runs on -- never the daemon's, which can be somebody else's -- and dated now, in UTC;
   ``--author`` signs it with another name. The object is found by its name whatever its kind, and ``--kind``
-  names any kind, a provider's or a colour's included.
+  names any kind, a provider's or a colour's included. ``-p <name>=<value>`` is taken as every command that
+  names an object takes it, and changes nothing: a comment is on the object's declaration, whatever the values.
+  Text that ``partcad.yaml`` would render as a Jinja2 template (``{{``, ``{%``, ``{#``) is refused, as is a
+  declaration a YAML anchor shares with another: write those by hand.
 
 ``pc comment list``
   The threads of comments on an object -- or, with no object named, on the package -- each with the index

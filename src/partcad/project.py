@@ -3953,7 +3953,9 @@ class Project(project_config.Configuration):
         self._write_edited(config, yaml)
 
     @_one_edit_at_a_time
-    def add_comment(self, kind: Optional[str], object_name: Optional[str], entry: dict, thread=None) -> int:
+    def add_comment(
+        self, kind: Optional[str], object_name: Optional[str], entry: dict, thread=None, answering=None
+    ) -> int:
         """Write one comment into this package's 'partcad.yaml': a new thread, or a reply to thread 'thread'.
 
         'kind' and 'object_name' name the declaration the comment is about, and
@@ -3964,6 +3966,11 @@ class Project(project_config.Configuration):
         thread the comment is now in. A reply that says nothing of what it is
         about is about what its thread is, and is written so: 'entry' gains the
         thread's 'ref'.
+
+        'answering' is the first comment of the thread the reply was written
+        to, as it was read ('name', 'date' and 'text'): a thread is named by its
+        position, and a thread removed before it since moves every one after it
+        up, so a reply is written only where its thread still starts with that.
 
         A declaration written in its short form ('bolt: //pub/std:bolt', 'red:
         "#C91A09"') is written out as the mapping it stands for first, since a
@@ -3978,14 +3985,25 @@ class Project(project_config.Configuration):
                 supplies, or one another file holds -- so there is nowhere here
                 to write it; the file is a Jinja2 template, which is not the
                 document PartCAD reads until it is rendered; or there is no
-                thread 'thread' to answer.
+                thread 'thread' to answer, or it is no longer the thread
+                'answering' says; the comment holds text the file would render
+                as a template ('{{'); or the declaration, or its 'comments:', is
+                shared with another through a YAML anchor or a merge key.
         """
         from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
         from partcad_utils import comments as pc_comments
         from partcad_utils import config_yaml
 
+        from .requirements_edit import refuse_template_text
+
         what = "the package '%s'" % self.name if kind is None else "%s '%s'" % (kind, object_name)
+        # A comment is written into a file that is read as a Jinja2 template:
+        # '{{' in one would be rendered rather than read, and the file it is in
+        # one no edit writes into again.
+        for value in entry.values():
+            for text in value if isinstance(value, list) else [value]:
+                refuse_template_text(text)
         # Refused for a Jinja2 template, as every edit is: what would be edited
         # is the template, and what PartCAD reads is what it renders to.
         config, yaml = self._load_to_edit("a comment on %s" % what)
@@ -4008,6 +4026,15 @@ class Project(project_config.Configuration):
             if not isinstance(declaration, dict):
                 declaration = self._expanded_short_form(kind, declaration)
                 declarations[object_name] = declaration
+        # 'ruamel' keeps what an anchor and its alias name as one object, so a
+        # comment written into it would be written on every declaration that
+        # names it, and into the anchor as well.
+        shared = _shared_by_alias(config, declaration, (pc_comments.KEY,))
+        if shared is not None:
+            raise ValueError(
+                "%s shares %s with another declaration through a YAML anchor or a merge key, so a comment written"
+                " on it would be written on both: write it by hand" % (what[0].upper() + what[1:], shared)
+            )
 
         threads = declaration.get(pc_comments.KEY)
         if threads is None:
@@ -4039,6 +4066,14 @@ class Project(project_config.Configuration):
             replies = threads[thread]
             if not isinstance(replies, list):
                 raise ValueError("Thread %d of the comments on %s is not a list of comments" % (thread, what))
+            if answering is not None:
+                first = (pc_comments.normalized_entry(replies[0]) if replies else None) or {}
+                if any(first.get(key) != answering.get(key) for key in ("name", "date", "text")):
+                    raise ValueError(
+                        "Thread %d of the comments on %s is no longer the thread that was answered -- the comments"
+                        " were changed since they were read: read them again, and answer the thread there"
+                        % (thread, what)
+                    )
             about = pc_comments.thread_ref(replies)
             if about is not None and "ref" not in written:
                 # A reply is about what its thread is about, and says so, as the

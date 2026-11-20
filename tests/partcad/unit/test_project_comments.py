@@ -241,3 +241,79 @@ def test_a_comment_reads_back_as_the_text_it_was_whatever_yaml_11_makes_of_it(tm
     assert pc_comments.threads(pc.Context(str(tmp_path)).get_project("//").object_config("part", "bracket")) == [
         [{"ref": "link#2", "name": "No", "date": comment["date"], "text": said}]
     ]
+
+
+@pytest.mark.parametrize(
+    "said", [{"text": "Compare {{ with the previous revision"}, {"name": "{% raw"}, {"attachments": ["a{#b.png"]}]
+)
+def test_what_the_file_would_render_as_a_template_is_refused_with_nothing_written(tmp_path, said):
+    """'partcad.yaml' is read as a Jinja2 template, and one holding '{{' is a file no edit writes into again."""
+    project = _package(tmp_path, "parts:\n  bracket:\n    type: basic\n    cylinder: {radius: 4, height: 10}\n")
+    before = (tmp_path / "partcad.yaml").read_text()
+    with pytest.raises(ValueError, match="Jinja2 template"):
+        project.add_comment("part", "bracket", {**ADA, **said})
+    assert (tmp_path / "partcad.yaml").read_text() == before
+
+
+@pytest.mark.parametrize(
+    "declarations",
+    [
+        # One declaration, two names: the comment would be on both.
+        "  bracket: &shared\n    type: basic\n    cylinder: {radius: 4, height: 10}\n  copy: *shared\n",
+        # Two declarations, one list of threads.
+        "  bracket:\n    type: basic\n    cylinder: {radius: 4, height: 10}\n    comments: &said []\n"
+        "  copy:\n    type: basic\n    cylinder: {radius: 4, height: 10}\n    comments: *said\n",
+    ],
+)
+def test_what_an_anchor_shares_is_not_written_into(tmp_path, declarations):
+    project = _package(tmp_path, "parts:\n" + declarations)
+    before = (tmp_path / "partcad.yaml").read_text()
+    with pytest.raises(ValueError, match="YAML anchor"):
+        project.add_comment("part", "bracket", ADA)
+    assert (tmp_path / "partcad.yaml").read_text() == before
+
+
+def test_an_unshared_declaration_beside_an_anchor_is_written_into(tmp_path):
+    project = _package(
+        tmp_path,
+        "parts:\n  bracket: &shared\n    type: basic\n    cylinder: {radius: 4, height: 10}\n  copy: *shared\n"
+        "  bolt:\n    type: basic\n    cylinder: {radius: 1, height: 10}\n",
+    )
+    assert project.add_comment("part", "bolt", ADA) == 0
+
+
+def test_a_reply_is_written_only_where_its_thread_still_starts_as_it_did(tmp_path):
+    """A thread is named by its position, and one removed before it moves it up."""
+    project = _package(tmp_path, "parts:\n  bracket:\n    type: basic\n    cylinder: {radius: 4, height: 10}\n")
+    first = pc_comments.entry("Ada Lovelace", "First.", when="2026-11-19 14:31:01 UTC")
+    second = pc_comments.entry("Charles Babbage", "Second.", when="2026-11-19 15:02:44 UTC")
+    project.add_comment("part", "bracket", first)
+    project.add_comment("part", "bracket", second)
+    reply = pc_comments.entry("Grace", "Agreed.")
+    assert project.add_comment("part", "bracket", dict(reply), thread=1, answering=dict(second)) == 1
+    before = (tmp_path / "partcad.yaml").read_text()
+    with pytest.raises(ValueError, match="no longer the thread"):
+        project.add_comment("part", "bracket", dict(reply), thread=0, answering=dict(second))
+    assert (tmp_path / "partcad.yaml").read_text() == before
+
+
+@pytest.mark.parametrize(
+    "section, kind, short", [("colors", "color", "'#C91A09'"), ("materials", "material", "Aluminium 6061")]
+)
+def test_a_comment_on_a_short_form_judges_nothing_that_uses_it_again(tmp_path, section, kind, short):
+    """Writing the first comment on 'red: "#C91A09"' writes the mapping it stands for: the same declaration."""
+    from partcad import cmf
+
+    def digest():
+        return cmf._declarations_digest(pc.Context(str(tmp_path)), "//")
+
+    _package(tmp_path, "%s:\n  thing: %s\n" % (section, short))
+    before = digest()
+    pc.Context(str(tmp_path)).get_project("//").add_comment(kind, "thing", ADA)
+    assert "comments" in _read(tmp_path)[section]["thing"]
+    assert digest() == before
+    # What it is, changed, still changes it.
+    (tmp_path / "partcad.yaml").write_text(
+        (tmp_path / "partcad.yaml").read_text().replace(short.strip("'"), short.strip("'") + "0")
+    )
+    assert digest() != before

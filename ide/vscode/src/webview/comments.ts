@@ -276,25 +276,37 @@ export interface MarkdownBlock {
     kind: 'paragraph' | 'heading' | 'item' | 'ordered' | 'code' | 'quote';
     /** The lines of a paragraph, an item or a quote, each a list of runs; one line of one run for code. */
     lines: MarkdownRun[][];
+    /** The number an ordered item is written with: a list goes on from where its first item says. */
+    number?: number;
 }
 
 /**
  * The inline forms, tried in order at each position of a line: each a pattern
- * anchored there and what the run it matches is. An underscore only opens
- * emphasis where no letter or digit comes before it, so that a snake_case name
- * stays the text it is.
+ * matched there ('y', from 'lastIndex') and what the run it matches is. An
+ * underscore only opens emphasis where no letter or digit comes before it, so
+ * that a snake_case name stays the text it is.
+ *
+ * None of them reads past the next character that would open or close the same
+ * form - a link's text and its destination stop at the next bracket - so a line
+ * is read once over however many delimiters in it are never closed: a line of
+ * a thousand '[' does not read the rest of the line a thousand times. A link's
+ * destination may hold a pair of parentheses, as a URL does
+ * ('https://example.org/bracket(left)'), but not a bracket.
  */
 const INLINE: { pattern: RegExp; run: (found: RegExpExecArray) => MarkdownRun; wordStart?: boolean }[] = [
-    { pattern: /^`([^`]+)`/, run: (found) => ({ text: found[1], code: true }) },
-    { pattern: /^\*\*([^*]+)\*\*/, run: (found) => ({ text: found[1], strong: true }) },
-    { pattern: /^__([^_]+)__/, run: (found) => ({ text: found[1], strong: true }), wordStart: true },
-    { pattern: /^\*([^*\s][^*]*)\*/, run: (found) => ({ text: found[1], emphasis: true }) },
+    { pattern: /`([^`]+)`/y, run: (found) => ({ text: found[1], code: true }) },
+    { pattern: /\*\*([^*]+)\*\*/y, run: (found) => ({ text: found[1], strong: true }) },
+    { pattern: /__([^_]+)__/y, run: (found) => ({ text: found[1], strong: true }), wordStart: true },
+    { pattern: /\*([^*\s][^*]*)\*/y, run: (found) => ({ text: found[1], emphasis: true }) },
     {
-        pattern: /^_([^_\s][^_]*)_(?![A-Za-z0-9])/,
+        pattern: /_([^_\s][^_]*)_(?![A-Za-z0-9])/y,
         run: (found) => ({ text: found[1], emphasis: true }),
         wordStart: true,
     },
-    { pattern: /^\[([^\]]+)\]\(([^)\s]+)\)/, run: (found) => ({ text: found[1], href: found[2] }) },
+    {
+        pattern: /\[([^[\]]+)\]\(((?:[^()[\]\s]|\([^()[\]\s]*\))+)\)/y,
+        run: (found) => ({ text: found[1], href: found[2] }),
+    },
 ];
 
 /** The runs of one line of text. */
@@ -303,14 +315,14 @@ export function parseInline(line: string): MarkdownRun[] {
     let plain = '';
     let i = 0;
     while (i < line.length) {
-        const rest = line.slice(i);
         const afterWord = /[A-Za-z0-9]/.test(line[i - 1] ?? '');
         let taken = 0;
         for (const form of INLINE) {
             if (form.wordStart && afterWord) {
                 continue;
             }
-            const found = form.pattern.exec(rest);
+            form.pattern.lastIndex = i;
+            const found = form.pattern.exec(line);
             if (found !== null) {
                 if (plain) {
                     runs.push({ text: plain });
@@ -366,9 +378,9 @@ export function parseMarkdown(text: string): MarkdownBlock[] {
             end();
             paragraph = { kind: 'item', lines: [parseInline(match[1])] };
             blocks.push(paragraph);
-        } else if ((match = /^\s*[0-9]+[.)]\s+(.*)$/.exec(line))) {
+        } else if ((match = /^\s*([0-9]{1,9})[.)]\s+(.*)$/.exec(line))) {
             end();
-            paragraph = { kind: 'ordered', lines: [parseInline(match[1])] };
+            paragraph = { kind: 'ordered', lines: [parseInline(match[2])], number: Number(match[1]) };
             blocks.push(paragraph);
         } else if ((match = /^\s*>\s?(.*)$/.exec(line))) {
             if (paragraph?.kind !== 'quote') {
@@ -425,6 +437,10 @@ export function renderMarkdown(text: string): HTMLElement {
             const tag = block.kind === 'item' ? 'ul' : 'ol';
             if (list === undefined || list.tagName.toLowerCase() !== tag) {
                 list = el(tag);
+                // Steps 4 and 5 of something are shown as 4 and 5.
+                if (block.number !== undefined && block.number !== 1) {
+                    (list as HTMLOListElement).start = block.number;
+                }
                 body.appendChild(list);
             }
             const item = el('li');

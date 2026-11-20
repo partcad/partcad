@@ -602,6 +602,7 @@ class JsonRpcBackend implements PartcadBackend {
                     object: a.object,
                     kind: a.kind ?? undefined,
                     thread: a.thread,
+                    answering: a.answering,
                     ref: a.ref,
                     name: a.name,
                     text: a.text,

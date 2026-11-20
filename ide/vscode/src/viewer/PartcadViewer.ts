@@ -890,6 +890,7 @@ export class PartcadViewer implements vscode.Disposable {
         point?: unknown;
         tolerance?: unknown;
         thread?: number;
+        answering?: unknown;
         ref?: string;
         text?: string;
         attachments?: unknown;
@@ -905,6 +906,12 @@ export class PartcadViewer implements vscode.Disposable {
         const post = (payload: { data?: unknown; error?: string }) =>
             void this.panel?.webview.postMessage({ type: answers[message.type], token, ...payload });
         const target = this.lastShow;
+        // Reading the comments, and finding what was clicked, are answers only
+        // the object on screen wants, and either can build its shape: a show of
+        // another one cancels them, as it does every tab's (see 'inFlight').
+        // Writing one is not cancelled: it is somebody's comment.
+        const reading = message.type === 'fetchComments' || message.type === 'locateComment';
+        const request = reading ? this.inFlight.begin() : undefined;
         try {
             if (message.type === 'attachFiles') {
                 post({ data: { files: await this.pickAttachments(message.directory ?? undefined) } });
@@ -927,6 +934,7 @@ export class PartcadViewer implements vscode.Disposable {
                         pkg: target.package,
                         objects: message.objects,
                         anchors: true,
+                        cancellation: request?.token,
                     }),
                 });
                 return;
@@ -939,6 +947,7 @@ export class PartcadViewer implements vscode.Disposable {
                         kind: message.kind,
                         point: message.point,
                         tolerance: message.tolerance,
+                        cancellation: request?.token,
                     }),
                 });
                 return;
@@ -953,6 +962,7 @@ export class PartcadViewer implements vscode.Disposable {
                     object: message.object,
                     kind: message.kind,
                     thread: message.thread,
+                    answering: message.answering,
                     ref: message.ref,
                     text: message.text,
                     attachments: message.attachments,
@@ -960,8 +970,16 @@ export class PartcadViewer implements vscode.Disposable {
                 }),
             });
         } catch (error: any) {
+            if (isCancellation(error)) {
+                // Cancelled because the renderer is no longer waiting for it.
+                return;
+            }
             traceError(`Digital Thread: ${message.type} failed: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
+        } finally {
+            if (request !== undefined) {
+                this.inFlight.end(request);
+            }
         }
     }
 

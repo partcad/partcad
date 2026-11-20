@@ -168,15 +168,47 @@ suite('Viewer comments', () => {
         );
     });
 
+    test('a link keeps the parentheses of its destination, and a list goes on from its first number', () => {
+        assert.deepStrictEqual(parseInline('see [drawing](https://example.org/bracket(left)).'), [
+            { text: 'see ' },
+            { text: 'drawing', href: 'https://example.org/bracket(left)' },
+            { text: '.' },
+        ]);
+        const blocks = parseMarkdown('4. clamp it\n5. drill it\n\n1. again');
+        assert.deepStrictEqual(
+            blocks.map((block) => [block.kind, block.number]),
+            [
+                ['ordered', 4],
+                ['ordered', 5],
+                ['ordered', 1],
+            ],
+        );
+    });
+
+    test('a line is read once, however many delimiters in it are never closed', () => {
+        // Each of these used to read the rest of the line again from every
+        // position: some twenty seconds for a line of them, on the viewer's thread.
+        for (const opener of ['[', '[a](b', '`', '*', '_ ']) {
+            const line = opener.repeat(Math.ceil(200000 / opener.length));
+            const started = Date.now();
+            const runs = parseInline(line);
+            assert.ok(Date.now() - started < 2000, `a line of '${opener}' took ${Date.now() - started} ms`);
+            // Unmatched, it is the text it was.
+            assert.strictEqual(runs.map((run) => run.text).join(''), line);
+        }
+    });
+
     test('an attachment is named relative to the package, and one outside it is refused', () => {
         const root = path.join(os.tmpdir(), 'package');
         const { files, outside } = attachmentNames(root, [
             path.join(root, 'photos', 'crack.jpg'),
             path.join(root, 'notes.md'),
+            // A name that starts with two dots is a file of the package all the same.
+            path.join(root, '..review.txt'),
             path.join(os.tmpdir(), 'elsewhere.txt'),
             root,
         ]);
-        assert.deepStrictEqual(files, ['photos/crack.jpg', 'notes.md']);
+        assert.deepStrictEqual(files, ['photos/crack.jpg', 'notes.md', '..review.txt']);
         assert.deepStrictEqual(outside, [path.join(os.tmpdir(), 'elsewhere.txt'), root]);
     });
 

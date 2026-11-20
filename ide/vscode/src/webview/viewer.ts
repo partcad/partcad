@@ -900,6 +900,8 @@ let commentDraft:
           object: string;
           kind: string | null;
           thread?: number;
+          /** The first comment of that thread, as it was read: the daemon writes the reply only where it still starts so. */
+          answering?: { name: string; date: string; text: string };
           ref?: string;
           /** The node clicked, while which face or edge it is is being found ('locating', its token). */
           path?: number[];
@@ -908,13 +910,26 @@ let commentDraft:
       }
     | undefined;
 
+/** Which draft each request for files to attach was made for: what it picks goes to that draft or nowhere. */
+const attachingFor = new Map<number, NonNullable<typeof commentDraft>>();
+
 /** Another show, or none: what was known about comments was of the last one, and nothing is being written. */
 function resetComments(): void {
+    // Not clickable until the new show's geometry is on the stage and
+    // 'askComments' says it is: a click until then lands on the last object's,
+    // and would be taken for one on the new one.
+    scene?.setPicking(undefined);
     heldComments.reset();
     commentsShown = undefined;
     commentsAsked = false;
     commentQuestions.clear();
+    attachingFor.clear();
     commentDialog?.close();
+}
+
+/** The folder of the package 'object' is declared in, once the daemon has said. */
+function packageDirectory(object: string): string | undefined {
+    return commentsShown?.objects?.[object]?.directory || undefined;
 }
 
 /** The name of the object on screen as a comment is written on it: its root's, or its package's and name. */
@@ -980,6 +995,11 @@ function onComments(data: CommentsData | undefined, error: string | undefined): 
     }
     commentsShown = data;
     heldComments.arrive(data);
+    // A dialog opened before they arrived can attach files now that where the
+    // package is is known.
+    if (commentDraft !== undefined && commentDialog?.isOpen) {
+        commentDialog.setCanAttach(packageDirectory(commentDraft.object) !== undefined);
+    }
     const { threads, comments } = countThreads(data);
     const how = shown?.object?.assembly?.length
         ? 'click a part to start a thread about it'
@@ -1029,16 +1049,23 @@ function openDialog(
     pin?: ThreadPin,
 ): void {
     commentDraft = draft;
-    const directory = commentsShown?.objects?.[draft.object]?.directory;
     dialog().open({
         title,
         subject,
         ready,
         thread: pin?.thread,
         readOnly: readOnlyReason(draft.object),
-        canAttach: Boolean(directory) || commentsShown === undefined,
-        onAttach: () =>
-            askHostComments({ type: 'attachFiles', token: commentQuestion('attach'), directory: directory ?? null }),
+        // Not until the daemon has said where the package is ('onComments').
+        canAttach: packageDirectory(draft.object) !== undefined,
+        onAttach: () => {
+            const directory = packageDirectory(draft.object);
+            if (directory === undefined) {
+                return;
+            }
+            const token = commentQuestion('attach');
+            attachingFor.set(token, draft);
+            askHostComments({ type: 'attachFiles', token, directory });
+        },
         onPost: (text, attachments) => postComment(text, attachments),
         onClose: () => {
             commentDraft = undefined;
@@ -1053,8 +1080,17 @@ function openThread(pin: ThreadPin): void {
         return;
     }
     scene?.setPendingMarker();
+    // What the thread starts with, as it was read: a thread is named by its
+    // position, and one removed before it since would make that another's.
+    const first = pin.thread.comments[0];
     openDialog(
-        { object: pin.object, kind: pin.kind, thread: pin.thread.index, ref: pin.thread.ref ?? undefined },
+        {
+            object: pin.object,
+            kind: pin.kind,
+            thread: pin.thread.index,
+            answering: first ? { name: first.name, date: first.date, text: first.text } : undefined,
+            ref: pin.thread.ref ?? undefined,
+        },
         'Reply',
         threadHeading(pin),
         true,
@@ -1136,6 +1172,7 @@ function postComment(text: string, attachments: string[]): void {
         object: commentDraft.object,
         kind: commentDraft.kind,
         thread: commentDraft.thread,
+        answering: commentDraft.answering,
         ref: commentDraft.ref,
         text,
         attachments: attachments.length > 0 ? attachments : undefined,
@@ -1159,9 +1196,11 @@ function onAdded(token: number, data: CommentAdded | undefined, error: string | 
     askComments(true);
 }
 
-/** Files to attach have been picked, or why they could not be. */
-function onAttached(data: { files?: string[] } | undefined, error: string | undefined): void {
-    if (commentDraft === undefined || !commentDialog?.isOpen) {
+/** Files to attach have been picked, or why they could not be: for the draft they were picked for, if it is still open. */
+function onAttached(token: number, data: { files?: string[] } | undefined, error: string | undefined): void {
+    const draft = attachingFor.get(token);
+    attachingFor.delete(token);
+    if (draft === undefined || draft !== commentDraft || !commentDialog?.isOpen) {
         return;
     }
     if (error !== undefined) {
@@ -1189,7 +1228,7 @@ function onCommentsAnswer(message: CommentsAnswerMessage): void {
     } else if (question === 'add') {
         onAdded(message.token, message.data as CommentAdded | undefined, message.error);
     } else {
-        onAttached(message.data as { files?: string[] } | undefined, message.error);
+        onAttached(message.token, message.data as { files?: string[] } | undefined, message.error);
     }
 }
 

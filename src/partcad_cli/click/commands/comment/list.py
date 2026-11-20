@@ -19,8 +19,9 @@ import sys
 import rich_click as click
 
 from ... import object_kind
+from ...parameters import param_option, param_params
 from ...service import run
-from .add import KINDS
+from .add import COMMENT_HELP, KINDS
 
 
 def _indented(text: str, by: str) -> str:
@@ -56,9 +57,10 @@ def describe(found: dict) -> str:
 @click.option("--sketch", "-s", is_flag=True, help=object_kind.flag_help("a sketch"))
 @click.option("--interface", "-i", is_flag=True, help=object_kind.flag_help("an interface"))
 @click.option("--kind", type=click.Choice(KINDS), default=None, help="The kind of the object, for any kind")
+@(lambda command: param_option(command, help=COMMENT_HELP))
 @click.argument("object", type=str, required=False)
 @click.pass_obj
-def cli(cli_ctx, api, package, assembly, scene, sketch, interface, kind, object):
+def cli(cli_ctx, api, package, assembly, scene, sketch, interface, kind, params, object):
     said = [name for name, flag in (("assembly", assembly), ("scene", scene), ("sketch", sketch)) if flag]
     if interface:
         said.append("interface")
@@ -66,14 +68,17 @@ def cli(cli_ctx, api, package, assembly, scene, sketch, interface, kind, object)
         said.append(kind)
     if len(set(said)) > 1:
         raise click.UsageError("The object is one kind of object, and %s are named" % " and ".join(said))
-    params = {"package": package}
+    request = {"package": package}
     if object:
-        params["object"] = object
+        request["object"] = object
+        request.update(param_params(params))
         if said:
-            params["kind"] = said[0]
-    elif said:
-        raise click.UsageError("A kind is said of an object, and none is named")
-    result = run(cli_ctx, "comment.list", params, needs_context=True)
+            request["kind"] = said[0]
+    elif said or params:
+        raise click.UsageError(
+            "%s said of an object, and none is named" % ("A kind is" if said else "Parameter values are")
+        )
+    result = run(cli_ctx, "comment.list", request, needs_context=True)
     if result is None:
         return
     if api:

@@ -66,6 +66,14 @@ def test_without_an_object_the_comment_is_on_the_package(monkeypatch):
     assert "object" not in params
 
 
+def test_parameter_values_without_an_object_are_refused_before_anything_is_asked(monkeypatch):
+    calls = _calls(monkeypatch, add)
+    result = CliRunner().invoke(cli, ["--no-ansi", "comment", "add", "-m", "x", "--author", "Ada", "-p", "length=10"])
+    assert result.exit_code == 2
+    assert "Parameter values" in result.output
+    assert calls == []
+
+
 def test_nobody_to_sign_it_with_is_refused_before_anything_is_asked(monkeypatch):
     calls = _calls(monkeypatch, add)
     monkeypatch.setattr(add.pc_comments, "author", lambda directory=None: None)

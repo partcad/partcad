@@ -866,6 +866,8 @@ export interface AddCommentMessage {
     object: string;
     kind: string | null;
     thread?: number;
+    /** The first comment of that thread, as it was read: the daemon writes the reply only where it still starts so. */
+    answering?: { name: string; date: string; text: string };
     ref?: string;
     text: string;
     attachments?: string[];

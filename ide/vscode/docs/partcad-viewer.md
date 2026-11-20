@@ -155,7 +155,10 @@ kept only once evaluating it as written selects exactly the clicked element (`el
 with the element's number beside it. The dialog opens at once and says it is finding out; Post waits for the answer.
 What is posted goes to the host, which signs it with `git config user.name` read *there* (`src/viewer/comments.ts`)
 — never the daemon's, which can be on another machine — and has it written (`addComment` → `comment.add`), and the
-comments are asked for again. Attachments are files of the package, which only the host can pick (`attachFiles`,
+comments are asked for again. A reply carries the first comment of its thread as it was read (`answering`), and the
+daemon writes it only where that thread still starts so: a thread is named by its position, which moves when one
+before it is removed. While it is being written, nothing dismisses the dialog — the answer is what says whether it
+was. Each thread's callout has a Reply button, for the keyboard; a click on a link in it only follows the link. Attachments are files of the package, which only the host can pick (`attachFiles`,
 with the package's directory from `comment.list`). An object declared where a comment cannot be written — supplied
 by a plugin, or in a Jinja2 template — has its threads shown and its dialog read-only.
 

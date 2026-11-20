@@ -583,6 +583,13 @@ function refreshMaterialCallouts(): void {
 /** The callout of each thread pinned on the show on stage. */
 let commentCallouts: CSS2DObject[] = [];
 
+/**
+ * What holds a thread's callout on a node that draws nothing of its own - an
+ * assembly - made for it and drawn as that node's item is, as the node's name
+ * is ('addAssemblyCallout'): unticking it in the tree takes its threads away too.
+ */
+let commentHolders: THREE.Object3D[] = [];
+
 /** What a click on a thread's callout does: answer it. */
 let onOpenThread: ((pin: ThreadPin) => void) | undefined;
 
@@ -623,6 +630,16 @@ export function setCommentPins(pins: readonly ThreadPin[], onOpen: (pin: ThreadP
         object.removeFromParent();
     }
     commentCallouts = [];
+    for (const holder of commentHolders) {
+        holder.removeFromParent();
+        for (const drawn of drawnBy.values()) {
+            const at = drawn.indexOf(holder);
+            if (at >= 0) {
+                drawn.splice(at, 1);
+            }
+        }
+    }
+    commentHolders = [];
     onOpenThread = onOpen;
     if (content === undefined) {
         invalidate();
@@ -646,12 +663,11 @@ export function setCommentPins(pins: readonly ThreadPin[], onOpen: (pin: ThreadP
         let holder: THREE.Object3D;
         let world: THREE.Vector3 | undefined;
         if (pin.at !== undefined) {
-            holder = entry.drawn ?? entry.group;
+            holder = commentHolder(entry);
             world = entry.group.localToWorld(new THREE.Vector3(...pin.at).applyMatrix4(TO_GLTF));
         } else {
             const target = pin.target !== undefined ? builtByPath.get(pin.target.join('.')) : undefined;
-            const about = target ?? entry;
-            holder = about.drawn ?? about.group;
+            holder = commentHolder(target ?? entry);
             world = cornerOf(target !== undefined ? pin.target! : pin.path);
         }
         if (world === undefined) {
@@ -662,8 +678,21 @@ export function setCommentPins(pins: readonly ThreadPin[], onOpen: (pin: ThreadP
             const section = el('div', 'comment-thread');
             renderThread(one, section);
             section.title = 'Click to answer';
+            // What answers it from the keyboard: the section is not something
+            // to tab to, and the links in it are each their own.
+            const reply = el('button', 'comment-thread-reply', 'Reply');
+            reply.title = 'Answer this thread';
+            reply.addEventListener('click', (event) => {
+                event.stopPropagation();
+                onOpenThread?.(one);
+            });
+            section.appendChild(reply);
             section.addEventListener('click', (event) => {
                 event.stopPropagation();
+                // A link in a comment goes where it says, and does nothing else.
+                if (event.target instanceof Element && event.target.closest('a') !== null) {
+                    return;
+                }
                 onOpenThread?.(one);
             });
             callout.box.appendChild(section);
@@ -676,6 +705,20 @@ export function setCommentPins(pins: readonly ThreadPin[], onOpen: (pin: ThreadP
         commentCallouts.push(callout.object);
     }
     invalidate();
+}
+
+/** What a node's thread callouts hang from: its own geometry, or a holder drawn as its item is. */
+function commentHolder(entry: Loaded['built'][number]): THREE.Object3D {
+    if (entry.drawn !== undefined) {
+        return entry.drawn;
+    }
+    const holder = new THREE.Group();
+    entry.group.add(holder);
+    // Placed before the callout is placed in it ('worldToLocal').
+    holder.updateMatrixWorld(true);
+    drawnByItem(nodeId(entry.path), holder);
+    commentHolders.push(holder);
+    return holder;
 }
 
 /** The box of what a node holds, on the stage: its own geometry and everything under it. */
@@ -1421,6 +1464,7 @@ export function clearGeometry(): void {
     materialCallouts = [];
     findingCallouts = [];
     commentCallouts = [];
+    commentHolders = [];
     pendingMarker = undefined;
     builtByPath = new Map();
     pathByDrawn = new Map();
@@ -2431,6 +2475,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     materialCallouts = [];
     // So does a thread of comments, and what a click hits is this tree's.
     commentCallouts = [];
+    commentHolders = [];
     pendingMarker = undefined;
     builtByPath = new Map(loaded.built.map((entry) => [entry.path.join('.'), entry]));
     pathByDrawn = new Map(

@@ -224,4 +224,4 @@ def kind(ref) -> typing.Optional[str]:
     """What a selection selects first -- 'faces', 'edges', ... -- or None for no selection."""
     if style(ref) is None:
         return None
-    return ref.strip().split("(", 1)[0]
+    return ref.strip().split("(", 1)[0].strip()

@@ -141,6 +141,70 @@ def test_a_comment_is_written_and_read_back(package):
     assert [c["name"] for c in found["threads"][0]["comments"]] == ["Ada Lovelace", "Charles Babbage"]
 
 
+def test_a_file_through_a_link_out_of_the_package_is_not_one_of_its_files(package):
+    try:
+        (package / "outside").symlink_to(package.parent, target_is_directory=True)
+    except OSError as e:  # Windows, without the privilege to make a link
+        pytest.skip("No symbolic link can be made here: %s" % e)
+    before = (package / "partcad.yaml").read_text()
+    with pytest.raises(JsonRpcError, match="not inside"):
+        operations.comment_add(
+            _session(package),
+            {"package": "//shop", "object": "bracket", "name": "Ada", "text": "x", "attachments": ["outside/x.png"]},
+        )
+    assert (package / "partcad.yaml").read_text() == before
+
+
+def test_a_reply_answering_its_thread_is_written_and_a_name_is_written_as_given_short_of_its_dots(package):
+    session = _session(package)
+    answer = operations.comment_add(
+        session,
+        {
+            "package": "//shop",
+            "object": "bracket",
+            "thread": 1,
+            "answering": {**ADA, "text": "Whole part."},
+            "name": "Charles Babbage",
+            "text": "Agreed.",
+            "attachments": ["photos/./old/../after.jpg"],
+        },
+    )
+    assert answer["thread"] == 1
+    assert answer["comment"]["attachments"] == ["photos/after.jpg"]
+
+
+def test_a_thread_is_anchored_on_the_instance_asked_about(package, monkeypatch):
+    """Its comments are the declaration's; where its face is, is the instance's the view shows."""
+    built = []
+
+    class Instance:
+        async def get_wrapped(self, ctx):
+            return {"brep": b"stand-in"}
+
+        def artifacts_cacheable(self):
+            return True
+
+    def recording(ctx, kind):
+        def got(name):
+            built.append(name)
+            return Instance()
+
+        return got
+
+    async def anchors(ctx, shape, refs, cacheable=True):
+        return {"face:3": [1.0, 2.0, 3.0]}
+
+    monkeypatch.setattr(operations, "_getter", recording)
+    monkeypatch.setattr(measure, "element_anchors", anchors)
+    answer = operations.comment_list(
+        _session(package), {"package": "//shop", "objects": ["//shop:bracket;radius=6"], "anchors": True}
+    )
+    found = answer["objects"]["//shop:bracket;radius=6"]
+    assert found["object"] == "//shop:bracket"
+    assert found["threads"][0]["at"] == [1.0, 2.0, 3.0]
+    assert built == ["//shop:bracket;radius=6"]
+
+
 def test_a_short_form_and_a_colour_are_commented_on_too(package):
     session = _session(package)
     operations.comment_add(session, {"package": "//shop", "object": "bolt", "name": "Ada", "text": "Which grade?"})
@@ -162,6 +226,14 @@ def test_a_short_form_and_a_colour_are_commented_on_too(package):
         ({"object": "bracket", "name": "Ada", "text": "x", "thread": True}, "index of a thread"),
         ({"object": "bracket", "name": "Ada", "text": "x", "attachments": ["/elsewhere/x.png"]}, "not inside"),
         ({"object": "bracket", "name": "Ada", "text": "x", "attachments": ["../x.png"]}, "not inside"),
+        ({"object": "bracket", "name": "Ada", "text": "x", "attachments": ["photos/../../x.png"]}, "not inside"),
+        ({"object": "bracket", "name": "Ada", "text": "x", "attachments": ["."]}, "not inside"),
+        ({"object": "bracket", "name": "Ada", "text": "x", "answering": {"name": "Ada"}}, "'answering'"),
+        (
+            {"object": "bracket", "name": "Ada", "text": "x", "thread": 0, "answering": {**ADA, "text": "Whole part."}},
+            "no longer the thread",
+        ),
+        ({"object": "bracket", "name": "Ada", "text": "{{ x }}"}, "Jinja2"),
         ({"object": "bracket", "name": "Ada", "text": "x", "date": "yesterday"}, "UTC"),
         ({"object": "nothing", "name": "Ada", "text": "x"}, "not found"),
     ],

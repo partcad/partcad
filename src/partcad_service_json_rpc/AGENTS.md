@@ -314,8 +314,12 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   among the wrappers, through `wrapper_measure`). The second writes one comment into the declaration's
   `partcad.yaml` (`Project.add_comment`, ruamel, so the file keeps its comments and a short form is written out as
   the mapping it stands for), and refuses an unsigned one: `name` is the *client's* git identity and is never
-  looked up here. Attachments sent as absolute paths are written relative to the package, and one outside it is
-  refused. The third says which face or edge a point clicked in the 3D view is on, an edge winning within the
+  looked up here. Attachments sent as absolute paths are written relative to the package, and one outside it --
+  once every `..` and every link on the way is followed -- is refused. A reply names its thread by position, which
+  moves when a thread before it is removed, so one that sends `answering` (the thread's first comment, as listed:
+  what the 3D view sends) is refused where the thread there no longer starts with it. Text the file would render as
+  Jinja2 (`{{`) is refused, as is a declaration a YAML anchor shares with another. The anchors of `comment.list`
+  are worked out on the instance named (`bolt;length=10`), and its threads are the declaration's. The third says which face or edge a point clicked in the 3D view is on, an edge winning within the
   `tolerance` the view worked out from a few pixels; it is never cached, since every click is somewhere else.
 * `cmf.info`, behind the Digital Thread's CMF tab (see `partcad/cmf.py`, "What the IDE shows"): for a part, an
   assembly or a scene, a row per item the `cmf` check judges -- the part itself, or every part an assembly holds and

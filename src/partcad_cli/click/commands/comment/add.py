@@ -25,7 +25,11 @@ import rich_click as click
 from partcad_utils import comments as pc_comments
 
 from ... import object_kind
+from ...parameters import HELP as PARAM_HELP
+from ...parameters import param_option, param_params
 from ...service import run
+
+COMMENT_HELP = PARAM_HELP + ". A comment is on the object's declaration, so it is written there whatever the values"
 
 # The kinds a comment can be written on that no flag of their own names.
 KINDS = (
@@ -85,9 +89,12 @@ KINDS = (
 @click.option("--sketch", "-s", is_flag=True, help=object_kind.flag_help("a sketch"))
 @click.option("--interface", "-i", is_flag=True, help=object_kind.flag_help("an interface"))
 @click.option("--kind", type=click.Choice(KINDS), default=None, help="The kind of the object, for any kind")
+@(lambda command: param_option(command, help=COMMENT_HELP))
 @click.argument("object", type=str, required=False)
 @click.pass_obj
-def cli(cli_ctx, text, ref, thread, attachments, author, package, assembly, scene, sketch, interface, kind, object):
+def cli(
+    cli_ctx, text, ref, thread, attachments, author, package, assembly, scene, sketch, interface, kind, params, object
+):
     if text == "-":
         text = sys.stdin.read()
     flagged = [name for name, said in (("assembly", assembly), ("scene", scene), ("sketch", sketch)) if said]
@@ -97,8 +104,11 @@ def cli(cli_ctx, text, ref, thread, attachments, author, package, assembly, scen
         flagged.append(kind)
     if len(set(flagged)) > 1:
         raise click.UsageError("The object is one kind of object, and %s are named" % " and ".join(flagged))
-    if flagged and not object:
-        raise click.UsageError("A kind is said of an object, and none is named: the comment would be on the package")
+    if (flagged or params) and not object:
+        raise click.UsageError(
+            "%s said of an object, and none is named: the comment would be on the package"
+            % ("A kind is" if flagged else "Parameter values are")
+        )
     base = getattr(cli_ctx, "path", None) or os.getcwd()
     name = author or pc_comments.author(base if os.path.isdir(base) else os.path.dirname(base))
     if not name:
@@ -106,7 +116,7 @@ def cli(cli_ctx, text, ref, thread, attachments, author, package, assembly, scen
             "Nobody to sign the comment with: set your name with 'git config --global user.name \"Your Name\"', "
             "or say it with --author"
         )
-    params = {
+    request = {
         "package": package,
         "name": name,
         "text": text,
@@ -117,7 +127,8 @@ def cli(cli_ctx, text, ref, thread, attachments, author, package, assembly, scen
         "attachments": [os.path.abspath(path) for path in attachments] or None,
     }
     if object:
-        params["object"] = object
+        request["object"] = object
+        request.update(param_params(params))
         if flagged:
-            params["kind"] = flagged[0]
-    run(cli_ctx, "comment.add", params, needs_context=True)
+            request["kind"] = flagged[0]
+    run(cli_ctx, "comment.add", request, needs_context=True)

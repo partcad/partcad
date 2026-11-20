@@ -887,21 +887,28 @@ def _declarations_digest(ctx, name: str) -> typing.Optional[str]:
 
         from partcad_utils import comments as pc_comments
 
-        def said(section):
+        kinds = {"colors": "color", "materials": "material", "finishes": "finish"}
+
+        def said(key, section):
             # What a declaration is, without what anybody said about it: a
             # comment written on a colour is no reason to judge its users again.
+            # Nor is the form it is written in, since writing the first comment
+            # on 'red: "#C91A09"' writes it out as the mapping it stands for.
             if not isinstance(section, dict):
                 return section
-            return {
-                name: (
-                    {k: v for k, v in declaration.items() if k != pc_comments.KEY}
-                    if isinstance(declaration, dict)
-                    else declaration
-                )
-                for name, declaration in section.items()
-            }
+            kind = kinds.get(key)
+            result = {}
+            for name, declaration in section.items():
+                if kind is not None and isinstance(declaration, str):
+                    declaration = normalize(kind, declaration)
+                if isinstance(declaration, dict):
+                    declaration = {k: v for k, v in declaration.items() if k != pc_comments.KEY}
+                result[name] = declaration
+            return result
 
-        declared = {key: said(project.config_obj.get(key)) for key in SCOPE_SECTIONS if project.config_obj.get(key)}
+        declared = {
+            key: said(key, project.config_obj.get(key)) for key in SCOPE_SECTIONS if project.config_obj.get(key)
+        }
         project._cmf_declarations_digest = (
             hashlib.sha256(json.dumps(declared, sort_keys=True, default=str).encode()).hexdigest() if declared else None
         )

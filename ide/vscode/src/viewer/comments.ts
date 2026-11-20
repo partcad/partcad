@@ -49,7 +49,9 @@ export function attachmentNames(directory: string, files: readonly string[]): { 
     const root = path.resolve(directory);
     for (const file of files) {
         const relative = path.relative(root, path.resolve(file));
-        if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+        // '..' and what is under it are outside; '..notes.md' is a file of the package.
+        const up = relative === '..' || relative.startsWith(`..${path.sep}`);
+        if (relative === '' || up || path.isAbsolute(relative)) {
             outside.push(file);
         } else {
             named.push(relative.split(path.sep).join('/'));

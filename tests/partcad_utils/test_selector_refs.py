@@ -91,6 +91,8 @@ def test_what_could_be_more_than_a_selection_is_refused_saying_why(ref, why):
 def test_what_a_selection_selects_first():
     assert selector_refs.kind('faces("%PLANE").edges(">Z")') == "faces"
     assert selector_refs.kind("edges().sort_by(Axis.Z)[-1]") == "edges"
+    # Python reads 'faces (">Z")' as the call it is, and so does the guard.
+    assert selector_refs.kind('faces (">Z")') == "faces"
     assert selector_refs.kind("face:12") is None
 
 

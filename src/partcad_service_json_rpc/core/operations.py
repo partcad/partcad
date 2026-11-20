@@ -5547,13 +5547,15 @@ def cam_save(session, params):
 
 
 def _commented(ctx, pc, params, name=None):
-    """``(project, kind, declared name, full name)`` of what a comment request is about.
+    """``(project, kind, declared name, full name, instance)`` of what a comment request is about.
 
     ``object`` (or ``name``, for one of a list) names a declaration, of the
     ``kind`` the request says or of the kind its name is, looked up among the
     kinds a bare name can be; no object at all is the package ``package`` names,
     with kind and declared name None. A parametrized name ('bolt;length=10') is
-    its declaration's: the comments are on what is written.
+    its declaration's: the comments are on what is written. ``instance`` is the
+    full name as asked, values and all: what is built to say where a thread's
+    face is, so that it is pinned on the bolt the view shows.
     """
     from partcad.project import OBJECT_KIND_SECTIONS
     from partcad_utils.utils import parse_parameterized_name
@@ -5563,7 +5565,7 @@ def _commented(ctx, pc, params, name=None):
         project = ctx.get_project(package)
         if project is None:
             raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
-        return project, None, None, project.name
+        return project, None, None, project.name, project.name
     if name is None:
         resolved = _resolve_object(ctx, pc, params)
         if resolved is None:
@@ -5585,7 +5587,7 @@ def _commented(ctx, pc, params, name=None):
     # Every kind a package declares carries comments, and nothing else does.
     if kind not in OBJECT_KIND_SECTIONS:
         raise JsonRpcError(USAGE_ERROR, "A %s carries no comments of its own" % kind)
-    return project, kind, declared, _qualified(package, declared)
+    return project, kind, declared, _qualified(package, declared), _qualified(package, object_name)
 
 
 def _comment_file(project) -> dict:
@@ -5642,24 +5644,34 @@ def _attachment(project, item):
     as 'pc add' does, since it does not share the daemon's working directory;
     one inside the package is written relative to it, and one outside refused --
     a comment is read wherever the package is, and an absolute path is read on
-    one machine. A relative one is taken to be relative to the package already.
+    one machine. A relative one is taken to be relative to the package already,
+    and is written as given, short of its '.' and '..'. Either is inside the
+    package only where it still is once every '..' and every link on the way to
+    it is followed: 'photos/../../x.png', or a link out of the package, is not.
     """
+    import posixpath
+
     if not isinstance(item, str) or not item.strip():
         raise JsonRpcError(USAGE_ERROR, "An attachment is named by its file name, not by %r" % (item,))
     item = item.strip()
-    if not os.path.isabs(item):
-        relative = item.replace("\\", "/")
-    else:
-        directory = getattr(project, "config_dir", None) or ""
-        relative = os.path.relpath(os.path.realpath(item), os.path.realpath(directory)) if directory else ".."
-        relative = relative.replace(os.sep, "/")
-    if relative == ".." or relative.startswith("../") or os.path.isabs(relative):
+    directory = getattr(project, "config_dir", None) or ""
+    given = item if os.path.isabs(item) else item.replace("\\", "/")
+    inside = None
+    if directory:
+        root = os.path.realpath(directory)
+        path = given if os.path.isabs(given) else os.path.join(directory, *given.split("/"))
+        try:
+            inside = os.path.relpath(os.path.realpath(path), root).replace(os.sep, "/")
+        except ValueError:
+            # Windows: a path on another drive is relative to nothing here.
+            inside = None
+    if inside is None or inside in (".", "..") or inside.startswith("../") or os.path.isabs(inside):
         raise JsonRpcError(
             USAGE_ERROR,
             "'%s' is not inside the package '%s', and an attachment is a file of the package: copy it in first"
             % (item, project.name),
         )
-    return relative
+    return inside if os.path.isabs(given) else posixpath.normpath(given)
 
 
 async def _anchor_threads_async(ctx, shape, threads) -> None:
@@ -5719,12 +5731,15 @@ def comment_list(session, params):
     answer = {}
 
     def one(name):
-        project, kind, declared, qualified = _commented(ctx, pc, params, name)
+        # A safe point (see 'cancellation'): what follows can build a shape, and
+        # the view that asked may have moved on to another object since.
+        cancellation.check()
+        project, kind, declared, qualified, instance = _commented(ctx, pc, params, name)
         if project.name not in files:
             files[project.name] = _comment_file(project)
         found = _comments_of(project, kind, declared, qualified, files[project.name])
         if anchors and kind in ("part", "sketch") and found["threads"]:
-            shape = _getter(ctx, kind)(qualified)
+            shape = _getter(ctx, kind)(instance)
             if shape is not None:
                 try:
                     asyncio.run(_anchor_threads_async(ctx, shape, found["threads"]))
@@ -5755,7 +5770,11 @@ def comment_add(session, params):
     ``object`` (and ``kind``) name the declaration, as for ``comment.list``, and
     no object the package ``package`` names. ``thread`` is the index of the
     thread the comment answers, as ``comment.list`` gave it, and absent starts a
-    thread of its own; ``ref`` is what inside the object it is about ('face:12',
+    thread of its own. ``answering`` is the first comment of that thread as
+    ``comment.list`` gave it, and a reply that sends it is refused where the
+    thread at ``thread`` no longer starts with it: a thread is named by its
+    position, which moves when one before it is removed. ``ref`` is what inside
+    the object it is about ('face:12',
     a link name: see 'partcad_utils.comments'). ``name`` is who wrote it, which
     the *client* reads from its own git configuration -- a daemon can be on
     another machine, whose configuration names somebody else -- and is refused
@@ -5773,7 +5792,7 @@ def comment_add(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    project, kind, declared, qualified = _commented(ctx, pc, params)
+    project, kind, declared, qualified, _ = _commented(ctx, pc, params)
     attachments = params.get("attachments")
     if attachments is not None and not isinstance(attachments, list):
         raise JsonRpcError(USAGE_ERROR, "'attachments' is a list of file names")
@@ -5781,6 +5800,15 @@ def comment_add(session, params):
     thread = params.get("thread")
     if thread is not None and (isinstance(thread, bool) or not isinstance(thread, int)):
         raise JsonRpcError(USAGE_ERROR, "'thread' is the index of a thread, as 'pc comment list' gives it")
+    answering = params.get("answering")
+    if answering is not None and (
+        thread is None
+        or not isinstance(answering, dict)
+        or not all(isinstance(answering.get(k), str) for k in ("name", "date", "text"))
+    ):
+        raise JsonRpcError(
+            USAGE_ERROR, "'answering' is the first comment of the thread 'thread' names, as 'comment.list' gave it"
+        )
     try:
         written = pc_comments.entry(
             params.get("name"),
@@ -5789,7 +5817,7 @@ def comment_add(session, params):
             attachments=attachments,
             when=params.get("date"),
         )
-        index = project.add_comment(kind, declared, written, thread=thread)
+        index = project.add_comment(kind, declared, written, thread=thread, answering=answering)
     except ValueError as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
     pc.logging.info(
