@@ -98,6 +98,15 @@ TestKind = Literal["part", "assembly", "scene", "sketch", "interface"]
 # `pc info` also reports on a colour, a material or a finish (`--color`, `-m`,
 # `--finish`), which are looked for only where no object has the name.
 InfoKind = Literal["part", "assembly", "scene", "sketch", "interface", "software", "material", "color", "finish"]
+# What has a history and users: an object -- an interface too -- or a package.
+RevisedKind = Literal["part", "assembly", "scene", "sketch", "interface"]
+Revision = Annotated[
+    str,
+    Field(
+        description="A revision of the package's git repository: a commit id (as much of it as is unique), a tag "
+        "or a branch. It is loaded as '<package>@<sha>' beside what is checked out, and stays loaded."
+    ),
+]
 
 # A name is one object of its package whatever its kind, so the daemon looks the
 # kind up when it is not given; saying it only saves the lookup.
@@ -182,7 +191,11 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
         "declare a test of it with qual_add; read it against another "
         "object -- volume, displacement, mass, and how far apart their surfaces are -- with compare; write STEP, "
         "STL, 3MF and "
-        "the rest with export. To create or change an object, edit partcad.yaml and its script with your own file "
+        "the rest with export. What has become of an object since it was written: its package's revisions with "
+        "revisions, what changed since one, as a unified diff, with diff, what the package depended on then with "
+        "revision_uses, and what uses it with used_by; an object of a package at a revision is "
+        "'//package@<revision>:name'. "
+        "To create or change an object, edit partcad.yaml and its script with your own file "
         "tools -- the daemon reloads what changed -- then render and qual_test again. Everything else PartCAD does "
         "(bom, instructions, cae, cam, simulations, add, import, convert, install) is a daemon method: "
         "list_methods names them and execute runs one. Results carry the daemon's log; when ok is false, the "
@@ -776,6 +789,101 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             return report(outcome, failure=CallFailed("%s does not hold to %s" % (current, reference), outcome))
         return report(outcome)
 
+    @server.tool(title="List a package's revisions", annotations=_READS)
+    async def revisions(
+        ctx: Context,
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+    ) -> CallToolResult:
+        """List the commits that changed the package of an object, or the package itself, newest first.
+
+        `pc revisions list --json`: each commit's id, its first eight characters, its summary, author and time,
+        and which one is checked out ('head'). A package sharing its repository lists the commits that changed its
+        own directory; one in no git repository is not published ('published': false). Any of them is a revision
+        diff, revision_uses and used_by take.
+        """
+        return await run(ctx, "revisions.list", _subject(package, object, kind))
+
+    @server.tool(title="What changed since a revision", annotations=_READS)
+    async def diff(
+        ctx: Context,
+        revision: Revision,
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+        lines: Annotated[
+            int, Field(ge=0, description="Lines of what did not change to show around each change ('-U').")
+        ] = 3,
+    ) -> CallToolResult:
+        """Show what changed in an object -- or, with no object, the package's partcad.yaml -- since a revision.
+
+        `pc revisions diff`: a unified diff of the object at the revision against the object now, each written out
+        as `pc copy` writes one -- rendered, normalized, defaults left out -- so a comment or a reformatted line is
+        no change; for a package, its partcad.yaml as Jinja2 rendered it at each. The diff follows the result as
+        text of its own ("No change since ..." when nothing changed, 'same': true). 'missing' on a side says the
+        object is not declared there.
+        """
+        request = {**_subject(package, object, kind), "revision": revision, "lines": lines}
+        try:
+            outcome = await call(ctx, "revisions.compare", request)
+        except CallFailed as e:
+            return report(e.outcome, failure=e)
+        answer = outcome.result if isinstance(outcome.result, dict) else {}
+        unified = answer.get("unified") or ""
+        # The rows are the IDE's side-by-side view of the same comparison: the
+        # diff after the result says it once, the way an agent reads one.
+        outcome.result = {key: value for key, value in answer.items() if key not in ("rows", "unified")}
+        text = unified if unified else "No change since %s." % (answer.get("short") or revision)
+        return report(outcome, content=[TextContent(type="text", text=text)])
+
+    @server.tool(title="A revision's dependencies", annotations=_READS)
+    async def revision_uses(
+        ctx: Context,
+        revision: Revision,
+        package: PackageName = None,
+        object: SomeObjectName = None,
+    ) -> CallToolResult:
+        """List the dependencies a package declared at a revision, each with the commit it is at.
+
+        `pc revisions uses --json`: of the package named, or of the package the object is in. Each comes with the
+        name that loads it at that commit ('versioned', '<package>@<sha>'), which any tool takes. Loading a
+        dependency may download it.
+        """
+        return await run(ctx, "revisions.uses", {"package": package or ".", "object": object, "revision": revision})
+
+    @server.tool(title="What uses an object", annotations=_READS)
+    async def used_by(
+        ctx: Context,
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+        revision: Annotated[
+            Optional[str],
+            Field(
+                description="Ask about the package at this revision instead of what is checked out "
+                "('pc revisions used-by'): what refers to it by its commit, a tag or a branch."
+            ),
+        ] = None,
+        load: Annotated[
+            bool,
+            Field(
+                description="Load every package of the workspace first -- those in this checkout, none it "
+                "downloads -- so that all of them are asked ('--load'). Without a revision only."
+            ),
+        ] = False,
+    ) -> CallToolResult:
+        """List the loaded objects that use an object -- or anything in a package -- each with how many times.
+
+        `pc used-by --json`, or with a revision `pc revisions used-by --json`. An assembly that places a bolt four
+        times uses it four times. Only what is loaded is looked at, so an empty list is not "nothing uses it":
+        load asks for the workspace's packages to be loaded first.
+        """
+        if revision is not None:
+            request = {"package": package or ".", "object": object, "revision": revision}
+            return await run(ctx, "revisions.used_by", request)
+        return await run(ctx, "usage.used_by", {**_subject(package, object, kind), "load": load})
+
     @server.tool(title="PartCAD version", annotations=_LOCAL)
     async def version(ctx: Context) -> CallToolResult:
         """The version of this server and of the daemon serving the workspace, which should be the same."""
@@ -1041,6 +1149,13 @@ def _kind_flag(kind: Optional[str]) -> dict:
     part looked up, which is the first thing the lookup asks after anyway.
     """
     return {} if kind in (None, "part") else {kind: True}
+
+
+def _subject(package: Optional[str], object: Optional[str], kind: Optional[str]) -> dict:
+    """What `pc revisions` and `pc used-by` ask about: the object, or with none the package (see 'operations_args')."""
+    if not object:
+        return {"package": package or ".", "kind": "package"}
+    return {"package": package, "object": object, **_kind(kind)}
 
 
 def _kind(kind: Optional[str]) -> dict:

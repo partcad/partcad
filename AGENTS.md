@@ -102,7 +102,7 @@ a CAD addon, documentation, or a PartCAD package incubated here until it has a r
   `mcp_server` is a client like `pc` is: an MCP client starts it as a subprocess, it speaks MCP on stdio (the
   official `mcp` SDK, which is why the wheel and the bundle carry pydantic) and framed JSON-RPC to the
   workspace's daemon, and the daemon does the work. It is shaped after cadcraft's and solidcraft's
-  `<app>-cli mcp`: a dozen curated tools with real schemas, each one daemon method with the parameters the `pc`
+  `<app>-cli mcp`: a small set of curated tools with real schemas, each one daemon method with the parameters the `pc`
   command it mirrors sends, plus one `execute` that reaches every method -- so a new daemon method is reachable
   without a new tool, and a tool cannot come to mean something its command does not. Failures are tool results
   with the daemon's log attached, never protocol errors, and the paths an agent names are confined to the
