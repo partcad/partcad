@@ -368,3 +368,46 @@ def test_copy_refuses_a_name_declared_since_the_package_was_loaded(tmp_path):
     with pytest.raises(ValueError, match="could not be declared"):
         copy_object_action(context.root, "sketch", "disc", context.root, "late")
     assert "circle: 1" in open(context.root.config_path, encoding="utf-8").read()
+
+
+# ---- the third review -------------------------------------------------------
+
+
+def test_a_colour_instance_is_its_declaration_with_the_values_as_defaults(tmp_path):
+    root = tmp_path / "c"
+    root.mkdir()
+    (root / "partcad.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": "//",
+                "colors": {
+                    "tint": {"parameters": {"shade": {"type": "string", "default": "FF0000FF"}}, "rgba": "%shade%"}
+                },
+            },
+            sort_keys=False,
+        )
+    )
+    context = pc.Context(str(root), search_root=False)
+
+    copied = serialize.declaration(context.root, "color", "tint;shade=00FF00FF", context.root, "green")
+
+    assert copied["rgba"] == "00FF00FF"
+
+
+def test_an_assy_link_s_material_that_names_another_one_in_the_copy_is_not_copied(ctx):
+    path = os.path.join(ctx.root.config_dir, "pair.assy")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(yaml.safe_dump({"links": [{"part": "cube10", "package": "//", "params": {"material": ":steel"}}]}))
+
+    with pytest.raises(ValueError, match="material: :steel"):
+        serialize.declaration(ctx.root, "assembly", "pair", ctx.get_project("//other"), "pair")
+
+
+def test_an_assy_link_s_material_named_in_full_is_copied(ctx):
+    path = os.path.join(ctx.root.config_dir, "pair.assy")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(yaml.safe_dump({"links": [{"part": "cube10", "package": "//", "params": {"material": "//:steel"}}]}))
+
+    assert serialize.declaration(ctx.root, "assembly", "pair", ctx.get_project("//other"), "pair")["path"] == (
+        "../pair.assy"
+    )

@@ -265,7 +265,8 @@ package's files are in.
 The same works wherever an object is named, on the command line too
 (``pc info //brackets@v1.2:corner``, ``pc copy //brackets@v1.2:corner corner_v1``). A package inside a revision
 may be named at a revision of its own in turn: ``//brackets@v1.2/std@v3:m3`` is the ``std`` that ``v1.2``
-depends on, as it was at ``v3``.
+depends on, as it was at ``v3``. A sub-folder of the revision is not: it is part of that commit, and is named at
+another revision as itself (``//brackets/sub@v3``).
 
 **Every revision is a package of its own in the same context, named after its
 commit.** ``//brackets@v1.2`` and ``//brackets@main`` are each loaded once, as

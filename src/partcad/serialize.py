@@ -215,6 +215,17 @@ def _default_extension(project, kind: str, config: dict) -> typing.Optional[str]
     return None if not extension else "." + extension
 
 
+def _same_cmf(project, target_project, kind: str, value: str) -> bool:
+    """Whether the CMF reference 'value' names one declaration read from either package."""
+    from . import cmf
+
+    ctx = getattr(project, "ctx", None)
+    try:
+        return cmf.canonical(ctx, kind, value, project.name) == cmf.canonical(ctx, kind, value, target_project.name)
+    except Exception:  # pylint: disable=broad-except
+        return False
+
+
 def _assy_file(project, kind: str, name: str, config: dict) -> typing.Optional[str]:
     """The ASSY file an assembly or a scene is read from, or None for one that is not."""
     if kind not in ("assembly", "scene") or config.get("type") != "assy":
@@ -227,7 +238,7 @@ def _assy_file(project, kind: str, name: str, config: dict) -> typing.Optional[s
     return os.path.join(project.config_dir, declared)
 
 
-def _links_not_portable(project, kind: str, name: str, config: dict) -> typing.Optional[str]:
+def _links_not_portable(project, kind: str, name: str, config: dict, target_project=None) -> typing.Optional[str]:
     """Why the ASSY file a copy in another package would read names other objects there, or None.
 
     The copy reads the original's file, and what a link of that file names
@@ -236,15 +247,19 @@ def _links_not_portable(project, kind: str, name: str, config: dict) -> typing.O
     read against the package that declares the assembly -- which for the copy
     is another package, and another bolt. So is a link written in full inside a
     revision: '//pkg:bolt' in a revision of '//pkg' is that revision's bolt
-    ('package_versions.rebase'), and in the copy it would be today's. Refused
-    rather than rewritten: the file is the original's, shared with it.
+    ('package_versions.rebase'), and in the copy it would be today's. And so is
+    a colour, a material or a finish a link's 'params:' give, which is read
+    against the package of the assembly ('AssemblyFactoryAssy.node_params'):
+    one that does not name the same declaration from 'target_project' as from
+    'project' would be another one in the copy. Refused rather than rewritten:
+    the file is the original's, shared with it.
     """
     path = _assy_file(project, kind, name, config)
     if path is None:
         return None
     import yaml
 
-    from . import package_versions
+    from . import cmf, package_versions
 
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -253,7 +268,7 @@ def _links_not_portable(project, kind: str, name: str, config: dict) -> typing.O
         return "its ASSY file %s cannot be read as YAML (a Jinja2 template is not), so its links cannot be checked" % (
             project.rel_path(path)
         )
-    relative, revisions = [], []
+    relative, revisions, cmf_values = [], [], []
 
     def absolute(value) -> bool:
         return isinstance(value, str) and value.startswith("//")
@@ -274,6 +289,16 @@ def _links_not_portable(project, kind: str, name: str, config: dict) -> typing.O
                     check(named)
                 else:
                     relative.append(str(named))
+                params = node.get("params")
+                if isinstance(params, dict) and target_project is not None:
+                    for cmf_kind in cmf.KINDS:
+                        value = params.get(cmf_kind)
+                        if (
+                            isinstance(value, str)
+                            and value.strip()
+                            and not _same_cmf(project, target_project, cmf_kind, value)
+                        ):
+                            cmf_values.append("%s: %s" % (cmf_kind, value))
             connect = node.get("connect")
             if isinstance(connect, dict):
                 for key in ("with", "to"):
@@ -297,6 +322,13 @@ def _links_not_portable(project, kind: str, name: str, config: dict) -> typing.O
             "its ASSY file %s names %s relative to its own package. Copy it within its own package, or write the"
             " names in full" % (project.rel_path(path), listed(relative))
         )
+    if cmf_values:
+        return "its ASSY file %s gives %s, which in %s names another declaration than in %s. Name it in full" % (
+            project.rel_path(path),
+            listed(cmf_values),
+            target_project.name,
+            project.name,
+        )
     if revisions:
         return "its ASSY file %s names %s, which in %s are that revision's and in the copy would be as they are now" % (
             project.rel_path(path),
@@ -316,6 +348,13 @@ def config_of(project, kind: str, name: str):
     if ";" in name:
         if kind in ("sketch", "part", "assembly", "scene"):
             instance = _object(project, kind, name)
+        elif kind in ("color", "material", "finish"):
+            # Its fields rendered with the values, which are its parameters'
+            # defaults ('cmf.with_parameters').
+            try:
+                instance = project.get_cmf(kind, name, quiet=True)
+            except Exception:  # pylint: disable=broad-except
+                instance = None
         elif kind == "interface":
             # Its values canonicalized and applied as a reference's would be
             # ('Project._interface_object'); a command is never refused one.
@@ -390,7 +429,7 @@ def declaration(project, kind: str, name: str, target_project=None, target_name:
 
     if target_project is not project:
         _spell_out_references(project, result)
-        why = _links_not_portable(project, kind, declared_name, config)
+        why = _links_not_portable(project, kind, declared_name, config, target_project)
         if why is not None:
             raise ValueError(
                 "%s:%s cannot be copied into %s: %s" % (project.name, declared_name, target_project.name, why)

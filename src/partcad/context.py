@@ -1044,6 +1044,13 @@ class Context:
         if current is None:
             raise ValueError("there is no package %s" % base)
         repository = package_versions.repository_of(current.config_dir)
+        if repository is None and package_versions.exported_sha(current.config_dir) is not None:
+            # A sub-folder of a revision is part of that commit: another
+            # revision of it would be two commits' files read as one package.
+            raise ValueError(
+                "%s is part of a revision, which has no revisions of its own: name it as %s@%s"
+                % (base, package_versions.unversioned(base), revision)
+            )
         if repository is None:
             raise ValueError("%s is not in a git repository, so it has no revisions" % base)
         downloaded = self.is_downloaded(current)

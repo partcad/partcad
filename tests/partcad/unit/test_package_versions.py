@@ -678,3 +678,30 @@ def test_no_direct_writer_writes_into_a_revision(ctx):
         at_v1.set_sketch_config("s", {"type": "basic", "circle": 1})
     assert at_v1.add_import("x", "../x") is False
     assert open(at_v1.config_path, encoding="utf-8").read() == before
+
+
+# ---- the third review -------------------------------------------------------
+
+
+def test_an_empty_lfs_object_is_written_out_as_an_empty_file(tmp_path):
+    import hashlib
+
+    root = tmp_path / "lfs"
+    repo = pygit2.init_repository(str(root))
+    oid = hashlib.sha256(b"").hexdigest()
+    store = root / ".git" / "lfs" / "objects" / oid[0:2] / oid[2:4]
+    store.mkdir(parents=True)
+    (store / oid).write_bytes(b"")
+    pointer = "version https://git-lfs.github.com/spec/v1\noid sha256:%s\nsize 0\n" % oid
+    (root / "empty.bin").write_text(pointer)
+    _write(root / "partcad.yaml", {"name": "//"})
+    sha = _commit(root, "first")
+
+    dest = package_versions.export(package_versions.Repository(repo, ""), sha, str(tmp_path / "state" / "git"))
+
+    assert (tmp_path / "state" / "git" / os.path.basename(dest) / "empty.bin").read_bytes() == b""
+
+
+def test_a_sub_folder_of_a_revision_has_no_revisions_of_its_own_and_says_where_they_are(ctx, caplog):
+    assert ctx.get_project("//@v1/sub@main") is None
+    assert "name it as //sub@main" in caplog.text

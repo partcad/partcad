@@ -400,7 +400,11 @@ def _write_tree(repo: pygit2.Repository, tree: pygit2.Tree, dest: str, top: bool
                     f.write(target)
         else:
             data = repo[entry.id].data
-            data = _lfs_object(repo, data) or data
+            # The pointer itself only where the object is not here: an empty
+            # object is an empty file, not its pointer.
+            resolved = _lfs_object(repo, data)
+            if resolved is not None:
+                data = resolved
             with open(path, "wb") as f:
                 f.write(data)
             if mode == FileMode.BLOB_EXECUTABLE:
