@@ -294,6 +294,28 @@ def _one_edit_at_a_time(method):
     return locked
 
 
+def _as_read(value):
+    """A string of a comment, written so that PartCAD reads it back as that string.
+
+    'ruamel' writes YAML 1.2 and PartCAD reads YAML 1.1, so a comment that says
+    'yes', 'off' or '0123' written plain would be read back as a boolean or a
+    number: such a value is quoted. One of more than one line is a literal block,
+    stripped of the line break after it ('|-'), the way somebody writing Markdown
+    by hand would write it -- and a block is text whatever it holds.
+    """
+    from ruamel.yaml.scalarstring import LiteralScalarString
+
+    from partcad_utils import config_yaml
+
+    if not isinstance(value, str):
+        return value
+    if "\n" in value:
+        return LiteralScalarString(value)
+    if config_yaml.scalar(value) != value:
+        return SingleQuotedScalarString(value)
+    return value
+
+
 def _readme_cell(text) -> str:
     """A value made safe to put in one cell of a generated markdown table."""
     text = "" if text is None else str(text)
@@ -3959,27 +3981,13 @@ class Project(project_config.Configuration):
                 thread 'thread' to answer.
         """
         from ruamel.yaml.comments import CommentedMap, CommentedSeq
-        from ruamel.yaml.scalarstring import LiteralScalarString
-
         from partcad_utils import comments as pc_comments
+        from partcad_utils import config_yaml
 
         what = "the package '%s'" % self.name if kind is None else "%s '%s'" % (kind, object_name)
-        yaml = ruamel.yaml.YAML()
-        yaml.preserve_quotes = True
-        yaml.width = 4096
-        with open(self.config_path, encoding="utf-8") as fp:
-            text = fp.read()
-        if any(opening in text for opening in ("{{", "{%", "{#")):
-            # As with the CAM tab's settings ('set_machine_settings'): what would
-            # be edited is the template, and what PartCAD reads is what it
-            # renders to.
-            raise ValueError(
-                "'%s' is a Jinja2 template, so a comment on %s cannot be written into it without changing what it"
-                " renders to: write it under 'comments:' by hand" % (self.config_path, what)
-            )
-        config = yaml.load(text)
-        if config is None:
-            config = CommentedMap()
+        # Refused for a Jinja2 template, as every edit is: what would be edited
+        # is the template, and what PartCAD reads is what it renders to.
+        config, yaml = self._load_to_edit("a comment on %s" % what)
         if not isinstance(config, dict):
             raise ValueError("'%s' is not a mapping, so there is nowhere in it to write a comment" % self.config_path)
 
@@ -4012,12 +4020,10 @@ class Project(project_config.Configuration):
 
         written = CommentedMap()
         for key, value in entry.items():
-            if key == "text" and "\n" in value:
-                # A literal block, stripped of the line break after it ('|-'), so
-                # that what is read back is what was written.
-                value = LiteralScalarString(value)
-            elif key == "attachments":
-                value = CommentedSeq(value)
+            if key == "attachments":
+                value = CommentedSeq(_as_read(item) for item in value)
+            else:
+                value = _as_read(value)
             written[key] = value
 
         if thread is None:
@@ -4041,7 +4047,23 @@ class Project(project_config.Configuration):
             replies.append(written)
             index = thread
 
-        self._write_edited(config, yaml)
+        # Read back as PartCAD reads it before it replaces anything: 'ruamel'
+        # writes YAML 1.2 and PartCAD reads YAML 1.1, and a comment that came
+        # back as something else than what was written is not written at all.
+        dumped = io.StringIO()
+        yaml.dump(config, dumped)
+        text = dumped.getvalue()
+        reread = config_yaml.load(text)
+        if kind is not None:
+            reread = (reread.get(OBJECT_KIND_SECTIONS[kind]) or {}).get(object_name)
+        threads_read = pc_comments.threads(reread)
+        comment_read = threads_read[index][-1] if index < len(threads_read) and threads_read[index] else None
+        if comment_read != pc_comments.normalized_entry(dict(written)):
+            raise ValueError(
+                "The comment on %s would not read back as it was written, so nothing was written: %r"
+                % (what, comment_read)
+            )
+        self._write_edited(config, yaml, text)
         return index
 
     # What a declaration written as a string stands for, by kind, so that it can

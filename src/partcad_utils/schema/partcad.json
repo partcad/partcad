@@ -18,7 +18,7 @@
       "type": "object",
       "properties": {
         "ref": {
-          "description": "What inside the object the comment is about, in the terms of the object's kind: 'face:<n>' or 'edge:<n>' for a part or a sketch, numbered as OCCT numbers them, from one (the numbering a topology finding's 'face 3' uses); a link name for an assembly or a scene ('base', 'link#2'), or the link names down to something deeper joined with ':', as a port of something inside is named; for a plugin -- a provider, a repository, a part type, a sketch type -- its entry point: the request it answers ('quote', 'search') or a function of its script; a port for an interface; an object or a dependency for the package itself. Absent: the object as a whole.",
+          "description": "What inside the object the comment is about, in the terms of the object's kind: 'face:<n>' or 'edge:<n>' for a part or a sketch, numbered as OCCT numbers them, from one (the numbering a topology finding's 'face 3' uses), or a selection written the way a script selects -- CadQuery's 'faces(\">Z\")', 'faces(\"%PLANE\").faces(\">Z[-2]\")', or build123d's 'faces().sort_by(Axis.Z)[-1]'; a link name for an assembly or a scene ('base', 'link#2'), or the link names down to something deeper joined with ':', as a port of something inside is named; for a plugin -- a provider, a repository, a part type, a sketch type -- its entry point: the request it answers ('quote', 'search') or a function of its script; a port for an interface; an object or a dependency for the package itself. Absent: the object as a whole.",
           "type": "string",
           "minLength": 1
         },

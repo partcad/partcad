@@ -87,7 +87,10 @@ a CAD addon, documentation, or a PartCAD package incubated here until it has a r
   (`comment.add`, `Project.add_comment`) and lists it (`comment.list`), and the client composes it, signing it
   with **its own** `git config user.name` (`author`), since a daemon can be on somebody else's machine. The
   `ref` grammar (`face:12`, a link path joined with `:`) has a TypeScript twin in
-  `ide/vscode/src/webview/comments.ts`. A comment is not what an object is made of: `comments` is among the keys
+  `ide/vscode/src/webview/comments.ts`. A `ref` may also be a CadQuery selection (`faces(">Z")`) or a build123d
+  one (`faces().sort_by(Axis.Z)[-1]`), evaluated with `eval()` in the sandbox; `selector_refs` is the grammar it is
+  held to first, and `src/partcad/wrappers/selector_refs.py` is a byte-identical copy for the sandbox, which cannot
+  import this package -- a test fails if the two differ: edit the one here and copy it over. A comment is not what an object is made of: `comments` is among the keys
   a shape's cache key leaves out (`partcad.shape._NON_GEOMETRIC_CONFIG_KEYS`), so writing one rebuilds nothing.
 
   `assy_lint` checks an ASSY file or a `partcad.yaml` *as it renders*, and rendering is the other thing both

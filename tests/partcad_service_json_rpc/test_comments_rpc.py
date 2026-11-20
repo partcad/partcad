@@ -42,11 +42,15 @@ def package(tmp_path, monkeypatch):
                 ],
             },
             "bolt": "//pub/std:bolt",
+            "gear": {"type": "cadquery", "comments": [[{**ADA, "ref": 'faces(">Z")', "text": "Top."}]]},
+            "cube": {"type": "build123d"},
         },
         "colors": {"red": {"display": "#C91A09"}},
     }
     (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
     (tmp_path / "photos").mkdir()
+    (tmp_path / "gear.py").write_text("")
+    (tmp_path / "cube.py").write_text("")
 
     async def get_wrapped(self, ctx):
         return {"brep": b"stand-in"}
@@ -173,7 +177,7 @@ def test_what_cannot_be_written_is_refused_with_nothing_written(package, params,
 def test_a_click_is_located_on_a_part(package, monkeypatch):
     asked = []
 
-    async def locate(ctx, shape, point, tolerance=0.0):
+    async def locate(ctx, shape, point, tolerance=0.0, style=None):
         asked.append((point, tolerance))
         return {"ref": "edge:4", "element": "edge", "index": 4, "at": [0, 0, 10], "distance": 0.1}
 
@@ -203,3 +207,69 @@ def test_a_click_that_cannot_be_located_is_refused(package, params, refusal):
     with pytest.raises(JsonRpcError) as refused:
         operations.comment_locate(_session(package), {"package": "//shop", **params})
     assert refusal in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    "part, said, style, answer",
+    [
+        # As the part's script selects: CadQuery's way for a CadQuery part,
+        # build123d's for a build123d one, and the number for anything else.
+        ("gear", None, "cadquery", 'faces(">Z")'),
+        ("cube", None, "build123d", "faces().sort_by(Axis.Z)[-1]"),
+        ("bracket", None, None, "face:6"),
+        # Unless the request says otherwise.
+        ("gear", "number", None, "face:6"),
+        ("bracket", "build123d", "build123d", "faces().sort_by(Axis.Z)[-1]"),
+    ],
+)
+def test_a_click_is_named_the_way_the_parts_script_selects(package, monkeypatch, part, said, style, answer):
+    asked = []
+
+    async def locate(ctx, shape, point, tolerance=0.0, style=None):
+        asked.append(style)
+        written = answer if style else "face:6"
+        return {"ref": written, "element": "face", "index": 6, "at": [0, 0, 5], "distance": 0, "numbered": "face:6"}
+
+    monkeypatch.setattr(measure, "locate_element", locate)
+    request = {"package": "//shop", "object": part, "point": [0, 0, 5], "tolerance": 0.5}
+    if said:
+        request["style"] = said
+    found = operations.comment_locate(_session(package), request)
+    assert asked == [style]
+    assert found["ref"] == answer
+    assert found["numbered"] == "face:6"
+    assert found["style"] == (style or "number")
+    # A selection says which face it comes to beside it; a number is the face.
+    assert found["about"] == ("face 6" if style is None else "%s (face 6)" % answer)
+
+
+def test_a_style_that_is_not_one_is_refused(package):
+    with pytest.raises(JsonRpcError, match="'style'"):
+        operations.comment_locate(
+            _session(package), {"package": "//shop", "object": "gear", "point": [0, 0, 0], "style": "freecad"}
+        )
+
+
+def test_a_thread_about_a_selection_is_anchored_like_one_about_a_face(package, monkeypatch):
+    asked = []
+
+    async def anchors(ctx, shape, refs, cacheable=True):
+        asked.append(refs)
+        return {'faces(">Z")': [0.0, 0.0, 5.0]}
+
+    monkeypatch.setattr(measure, "element_anchors", anchors)
+    answer = operations.comment_list(
+        _session(package), {"package": "//shop", "objects": ["//shop:gear"], "anchors": True}
+    )
+    assert asked == [['faces(">Z")']]
+    assert answer["objects"]["//shop:gear"]["threads"][0]["at"] == [0.0, 0.0, 5.0]
+
+
+def test_a_selection_that_could_be_more_is_refused_with_nothing_written(package):
+    before = (package / "partcad.yaml").read_text()
+    with pytest.raises(JsonRpcError, match="written as a selection"):
+        operations.comment_add(
+            _session(package),
+            {"package": "//shop", "object": "gear", "name": "Ada", "text": "x", "ref": "faces().__class__"},
+        )
+    assert (package / "partcad.yaml").read_text() == before

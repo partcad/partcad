@@ -67,6 +67,9 @@ suite('Viewer comments', () => {
         }
         assert.strictEqual(describeRef('face:12'), 'face 12');
         assert.strictEqual(describeRef('arm:link#1'), 'arm:link#1');
+        // A selection reads as it is written.
+        assert.strictEqual(describeRef('faces().sort_by(Axis.Z)[-1]'), 'faces().sort_by(Axis.Z)[-1]');
+        assert.strictEqual(parseElementRef('faces(">Z")'), undefined);
         assert.strictEqual(describeRef(undefined), 'the whole object');
     });
 
@@ -96,7 +99,12 @@ suite('Viewer comments', () => {
                 '//p:bracket': {
                     object: '//p:bracket',
                     kind: 'part',
-                    threads: [thread(0, 'face:3', 'thin', [1, 2, 3]), thread(1, 'edge:9')],
+                    threads: [
+                        thread(0, 'face:3', 'thin', [1, 2, 3]),
+                        thread(1, 'edge:9'),
+                        // A selection the daemon found where it is, as a CadQuery script writes one.
+                        thread(2, 'faces(">Z")', 'top', [0, 0, 5]),
+                    ],
                 },
                 '//p:arm': { object: '//p:arm', kind: 'assembly', threads: [thread(0, 'link#2')] },
                 '//p:base': { object: '//p:base', error: 'not found' },
@@ -114,11 +122,12 @@ suite('Viewer comments', () => {
             // daemon did not find goes to the part as a whole.
             ['//p:bracket', 0, [1], undefined, [1, 2, 3]],
             ['//p:bracket', 1, [1], undefined, undefined],
+            ['//p:bracket', 2, [1], undefined, [0, 0, 5]],
             ['//p:arm', 0, [2], [2, 1], undefined],
         ]);
         assert.strictEqual(threadHeading(pins[4]), 'face 3 · bracket');
         assert.strictEqual(threadHeading(pins[2]), 'the whole object · frame');
-        assert.deepStrictEqual(countThreads(data), { threads: 7, comments: 7 });
+        assert.deepStrictEqual(countThreads(data), { threads: 8, comments: 8 });
         // A root that does not say its name is named by the caller.
         const alone = pinThreads(
             {},

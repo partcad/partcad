@@ -5666,8 +5666,13 @@ async def _anchor_threads_async(ctx, shape, threads) -> None:
     """Pin each thread of a part's or a sketch's that names a face or an edge: its ``at``, in the shape's own frame."""
     from partcad import measure
     from partcad_utils import comments as pc_comments
+    from partcad_utils import selector_refs
 
-    refs = [thread["ref"] for thread in threads if pc_comments.parse_element_ref(thread["ref"]) is not None]
+    refs = [
+        thread["ref"]
+        for thread in threads
+        if pc_comments.parse_element_ref(thread["ref"]) is not None or selector_refs.style(thread["ref"]) is not None
+    ]
     if not refs:
         return
     tree = await shape.get_wrapped(ctx)
@@ -5811,13 +5816,24 @@ def comment_locate(session, params):
     millimetres, and ``tolerance`` how far from it, in millimetres, an edge
     still counts as clicked -- a few pixels' worth where it landed, which only
     the view knows. Answers ``{object, kind, ref, element, index, at, distance,
-    about}``: 'face:12', its two halves, the point of it nearest the click, how
-    far that is, and the reference in words. Worked out in a sandbox.
+    numbered, style, about}``: what the comment is about, the element's two
+    halves, the point of it nearest the click, how far that is, the element by
+    its number, how ``ref`` is written, and ``ref`` in words. Worked out in a
+    sandbox.
+
+    ``ref`` is written the way the object's script selects things: a CadQuery
+    selection of that one element for a part or a sketch made by CadQuery
+    (``faces(">Z")``), a build123d one for one made by build123d
+    (``faces().sort_by(Axis.Z)[-1]``), and its number (``face:12``) for
+    anything else, or where no selection singles it out. ``style`` --
+    ``cadquery``, ``build123d`` or ``number`` -- says which instead of the
+    object's type.
     """
     import asyncio
 
     from partcad import measure
     from partcad_utils import comments as pc_comments
+    from partcad_utils import selector_refs
 
     ctx = _ctx(session, params)
     if ctx is None:
@@ -5833,6 +5849,12 @@ def comment_locate(session, params):
     tolerance = params.get("tolerance") or 0.0
     if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or not math.isfinite(tolerance):
         raise JsonRpcError(USAGE_ERROR, "'tolerance' is a length in millimetres")
+    style = params.get("style")
+    if style not in (None, selector_refs.CADQUERY, selector_refs.BUILD123D, _BY_NUMBER):
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "'style' is '%s', '%s' or '%s'" % (selector_refs.CADQUERY, selector_refs.BUILD123D, _BY_NUMBER),
+        )
     refusal = "Only a part's or a sketch's faces and edges are located; '%s' is neither"
     _refuse_said_kind(params, ("part", "sketch"), refusal)
     resolved = _resolve_object(ctx, pc, params)
@@ -5844,20 +5866,51 @@ def comment_locate(session, params):
     shape = _getter(ctx, kind)(path)
     if shape is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+    if style is None:
+        style = _selection_style(shape)
+    asked = style if style in (selector_refs.CADQUERY, selector_refs.BUILD123D) else None
 
     async def locate():
         tree = await shape.get_wrapped(ctx)
         if tree is None:
             return None
-        return await measure.locate_element(ctx, tree, point, float(tolerance))
+        return await measure.locate_element(ctx, tree, point, float(tolerance), style=asked)
 
     found = asyncio.run(locate())
     if found is None:
         raise JsonRpcError(USAGE_ERROR, "%s has no face and no edge to comment on" % path)
     found["object"] = path
     found["kind"] = kind
-    found["about"] = pc_comments.describe_ref(found["ref"])
+    found["numbered"] = found.get("numbered") or found["ref"]
+    found["style"] = selector_refs.style(found["ref"]) or _BY_NUMBER
+    about = pc_comments.describe_ref(found["ref"])
+    if found["style"] != _BY_NUMBER:
+        # What the selection comes to, beside it: the reader sees which face it is.
+        about = "%s (%s)" % (about, pc_comments.describe_ref(found["numbered"]))
+    found["about"] = about
     return found
+
+
+# What 'comment.locate' names an element by where no library's selection is wanted.
+_BY_NUMBER = "number"
+
+
+def _selection_style(shape):
+    """How a comment on 'shape' selects a face or an edge: as its script would -- CadQuery's or build123d's way -- or by number.
+
+    The type the object is finally made by: an alias or an enrich of a CadQuery
+    part is CadQuery geometry, and is selected the way that part's script would.
+    """
+    from partcad_utils import selector_refs
+
+    final = getattr(shape, "get_final_config", None)
+    config = final() if callable(final) else getattr(shape, "config", None)
+    made_by = (config or {}).get("type") if isinstance(config, dict) else None
+    if made_by == "cadquery":
+        return selector_refs.CADQUERY
+    if made_by == "build123d":
+        return selector_refs.BUILD123D
+    return _BY_NUMBER
 
 
 def supply_quote(session, params):

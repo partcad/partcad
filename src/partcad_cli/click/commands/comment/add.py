@@ -6,6 +6,7 @@
 """`pc comment add` -- write a comment on an object, or on the package, into its `partcad.yaml`.
 
     pc comment add bracket -m "This face is **too thin** to print." --ref face:12
+    pc comment add bracket -m "Chamfer this." --ref 'edges("|Z").edges(">X")'          # a CadQuery selection
     pc comment add bracket -m "Thickened to 2 mm." --reply 0 --attach photos/after.jpg
     pc comment add -m "Release notes go in CHANGELOG.md from now on."      # the package itself
 
@@ -62,7 +63,10 @@ KINDS = (
     "--ref",
     type=str,
     default=None,
-    help="What inside the object it is about: 'face:12' or 'edge:3' of a part, a link name of an assembly",
+    help=(
+        "What inside the object it is about: 'face:12' or 'edge:3' of a part, or a selection -- CadQuery's "
+        "'faces(\">Z\")', build123d's 'faces().sort_by(Axis.Z)[-1]' -- or a link name of an assembly"
+    ),
 )
 @click.option(
     "--reply", "thread", type=int, default=None, help="The thread it answers, as 'pc comment list' numbers it"

@@ -227,3 +227,17 @@ def test_a_comment_rebuilds_nothing(tmp_path):
     keys = [pc.Context(str(path)).get_part("bracket").hash.get() for path in (plain, commented)]
     assert keys[0] is not None
     assert keys[0] == keys[1]
+
+
+@pytest.mark.parametrize("said", ["yes", "off", "0123", "1e3", "null", "- thicken it", "~", "2026-11-19", "> 5"])
+def test_a_comment_reads_back_as_the_text_it_was_whatever_yaml_11_makes_of_it(tmp_path, said):
+    """ruamel writes YAML 1.2 and PartCAD reads YAML 1.1, where 'yes' is true and '0123' is 83."""
+    project = _package(tmp_path, "parts:\n  bracket:\n    type: basic\n    cylinder: {radius: 4, height: 10}\n")
+    project.add_comment("part", "bracket", pc_comments.entry("No", said, ref="link#2"))
+    from partcad_utils import config_yaml
+
+    (comment,) = config_yaml.load((tmp_path / "partcad.yaml").read_text())["parts"]["bracket"]["comments"][0]
+    assert (comment["name"], comment["text"], comment["ref"]) == ("No", said, "link#2")
+    assert pc_comments.threads(pc.Context(str(tmp_path)).get_project("//").object_config("part", "bracket")) == [
+        [{"ref": "link#2", "name": "No", "date": comment["date"], "text": said}]
+    ]

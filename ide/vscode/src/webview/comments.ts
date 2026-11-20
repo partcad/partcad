@@ -10,7 +10,10 @@
 // who ('name', from git), when ('date', UTC to the second), what ('text',
 // Markdown) and what goes with it ('attachments'). 'ref' says what *inside* the
 // object a thread is about, in the terms of the object's kind: 'face:12' or
-// 'edge:3' of a part or a sketch, a link of an assembly or a scene - the link
+// 'edge:3' of a part or a sketch - or a selection, as its script would make one:
+// CadQuery's 'faces(">Z")', build123d's 'faces().sort_by(Axis.Z)[-1]', which the
+// daemon answers for a click on a part made by either ('comment.locate', and
+// 'partcad_utils/selector_refs.py') - a link of an assembly or a scene - the link
 // names down to it joined with ':', the way a port of something inside is named
 // ('shape_ports.qualify', and 'reportedAs' in 'tree.ts'). The normative
 // description, and the Python twin of the grammar, is 'partcad_utils/comments.py'.
@@ -47,7 +50,11 @@ export interface CommentThread {
     ref: string | null;
     /** The same, in words: 'face 12', 'base', 'the whole object'. */
     about: string;
-    /** For a face or an edge, a point on it in the object's own frame, in millimetres. */
+    /**
+     * For a face or an edge - by its number, or a CadQuery or build123d
+     * selection of it - a point on it in the object's own frame, in millimetres,
+     * where the daemon could work one out.
+     */
     at?: [number, number, number];
     comments: CommentEntry[];
 }
@@ -83,6 +90,10 @@ export interface CommentLocated {
     at: [number, number, number];
     distance: number;
     about: string;
+    /** The element by its number ('face:12'), whatever 'ref' is. */
+    numbered?: string;
+    /** How 'ref' is written: 'cadquery', 'build123d' or 'number' - as the part's type says. */
+    style?: string;
 }
 
 /** The answer to 'comment.add'. */
@@ -187,7 +198,7 @@ export function pinThreads(root: ShowNode, data: CommentsData | undefined, rootN
                 continue;
             }
             const pin: ThreadPin = { path, object: name, kind: found?.kind ?? null, thread };
-            if (thread.at !== undefined && parseElementRef(thread.ref) !== undefined) {
+            if (thread.at !== undefined) {
                 pin.at = thread.at;
             } else if (thread.ref) {
                 const target = findLink(node, thread.ref);

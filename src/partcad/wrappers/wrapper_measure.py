@@ -57,13 +57,16 @@ def process(request):
         # when they are asked to compare displacements.
         return _displacement(request["shape"])
     if operation == "anchors":
-        # Where the faces and edges comments name are: a point on each, which
-        # the 3D view pins a thread's callout to (see 'element_refs').
+        # Where the faces and edges comments name are -- by number, or by a
+        # CadQuery or build123d selection -- a point on each, which the 3D view
+        # pins a thread's callout to (see 'element_refs').
         return element_refs.anchors(request["shape"], request.get("refs") or [])
     if operation == "locate":
         # Which face or edge a point clicked in the 3D view is on, as a comment
         # names it.
-        return element_refs.locate(request["shape"], request["point"], request.get("tolerance") or 0.0)
+        return element_refs.locate(
+            request["shape"], request["point"], request.get("tolerance") or 0.0, style=request.get("style")
+        )
     raise ValueError("Unknown measure operation: %r" % (operation,))
 
 

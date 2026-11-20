@@ -90,7 +90,21 @@ first comment is about:
 - a part or a sketch: one of its faces or edges, ``face:<n>`` or ``edge:<n>``, numbered from one in the order
   OCCT numbers them -- the numbering a topology finding's "face 3" uses. A number belongs to the shape it was
   written against: a model edited so that its faces are numbered differently leaves a thread on a face it was
-  not about, and one numbered past its last face is shown on the part as a whole;
+  not about, and one numbered past its last face is shown on the part as a whole. Or a **selection**, written
+  the way a script selects, which outlives an edit that renumbers the faces:
+
+  - a CadQuery one -- a chain of ``Workplane`` selections, each with a string selector, and ``first()``,
+    ``last()`` or ``item(<n>)``: ``faces(">Z")``, ``edges("|Z and >X")``, ``faces("%PLANE").faces(">Z[-2]")``;
+  - a build123d one -- ``faces()``, ``edges()``, ``vertices()``... and the ``ShapeList`` methods after it, with
+    numbers, ``Axis``, ``GeomType``, ``SortBy``, ``Plane`` and ``Vector`` for arguments:
+    ``faces().sort_by(Axis.Z)[-1]``, ``edges().filter_by(GeomType.CIRCLE).group_by(Axis.Z)[0]``.
+
+  The first call tells the two apart: a CadQuery selection hands it a selector, a build123d one hands it
+  nothing. A selection is evaluated against the shape, in a sandbox, with Python's ``eval()`` -- held to that
+  grammar first, so that it can call the library's selectors and nothing else -- and a thread about one is
+  pinned to what it selects. Clicking a part made by CadQuery or by build123d in the 3D view writes a selection
+  in that library's terms, the shortest one that selects the clicked face or edge alone, with its number beside it
+  in the dialog; a part made any other way, or a face no short selection singles out, gets its number;
 - an assembly or a scene: a link, by the name the ASSY file addresses it by (its ``name:``, the object it
   places, or ``link#2``), or something deeper by the link names down to it joined with ``:``, the way a port of
   something inside is named;

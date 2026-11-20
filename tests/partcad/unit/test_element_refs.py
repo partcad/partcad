@@ -141,3 +141,122 @@ def test_the_core_measures_a_shape_in_its_own_frame():
     assert shape_envelope.KEY_LOCATION in placed
     plain = {shape_envelope.KEY_BREP: b"..."}
     assert measure._own_frame(plain) is plain
+
+
+# --- Selections ----------------------------------------------------------------
+
+
+def _plate():
+    """A 40 x 20 x 5 plate with a hole through it: faces of three kinds, edges of two."""
+    pytest.importorskip("build123d")
+    import build123d as bd
+
+    return (bd.Box(40, 20, 5) - bd.Cylinder(3, 5)).wrapped
+
+
+def _is(shape, element, chosen):
+    import element_refs
+
+    pieces = element_refs._elements(shape, element)
+    return [next(n for n, piece in enumerate(pieces, 1) if piece.IsSame(found)) for found in chosen]
+
+
+def test_a_build123d_selection_is_what_build123d_selects():
+    import element_refs
+
+    plate = _plate()
+    (top,) = element_refs.select(plate, "faces().sort_by(Axis.Z)[-1]")
+    assert element_refs.anchors(plate, ["faces().sort_by(Axis.Z)[-1]"])["faces().sort_by(Axis.Z)[-1]"][2] == (
+        pytest.approx(2.5)
+    )
+    assert len(element_refs.select(plate, "edges().filter_by(GeomType.CIRCLE)")) == 2
+    assert _is(plate, "face", [top]) == [int(element_refs.locate(plate, [10, 5, 2.5], 0.1)["ref"].split(":")[1])]
+
+
+def test_what_is_more_than_a_selection_is_refused_before_it_is_evaluated():
+    import element_refs
+
+    for ref in ('faces().sort_by(__import__("os").system("echo x"))', "faces().__class__", "face:1", "base"):
+        with pytest.raises(ValueError):
+            element_refs.select(_plate(), ref)
+
+
+def test_a_selection_that_selects_nothing_is_left_out_like_a_face_the_shape_lacks():
+    import element_refs
+
+    assert element_refs.anchors(_plate(), ["faces().filter_by(GeomType.SPHERE)", 'faces(">Q")']) == {}
+
+
+def test_every_face_and_edge_of_a_build123d_part_gets_a_build123d_selection_of_it_alone():
+    import element_refs
+
+    plate = _plate()
+    for element in ("face", "edge"):
+        for index in range(1, len(element_refs._elements(plate, element)) + 1):
+            written = element_refs.selection_for(plate, element, index, "build123d")
+            assert written and written.startswith(element + "s()"), (element, index, written)
+            assert _is(plate, element, element_refs.select(plate, written)) == [index], written
+
+
+def test_a_click_on_a_build123d_part_is_named_as_build123d_selects():
+    import element_refs
+
+    found = element_refs.locate(_plate(), [10, 5, 2.5], 0.1, style="build123d")
+    assert found["ref"] == "faces().sort_by(Axis.Z)[-1]"
+    assert found["numbered"] == "face:%d" % found["index"]
+    # Without a style it is the number, as it always was.
+    assert element_refs.locate(_plate(), [10, 5, 2.5], 0.1)["ref"] == found["numbered"]
+
+
+def test_a_selection_reads_the_way_a_person_writes_one():
+    """An axis before a direction: 'the left edge at the back', not a vector nobody would type."""
+    import element_refs
+
+    box = _box(40.0, 20.0, 10.0)
+    written = {element_refs.selection_for(box, "edge", n, "build123d") for n in range(1, 13)}
+    assert not any("Axis((" in text for text in written), written
+
+
+def test_every_face_and_edge_of_a_cadquery_part_gets_a_cadquery_selection_of_it_alone():
+    import element_refs
+
+    cq = pytest.importorskip("cadquery")
+    plate = cq.Workplane().box(40, 20, 5).faces(">Z").workplane().hole(6).val().wrapped
+    for element in ("face", "edge"):
+        for index in range(1, len(element_refs._elements(plate, element)) + 1):
+            written = element_refs.selection_for(plate, element, index, "cadquery")
+            assert written and written.startswith(element + 's("'), (element, index, written)
+            assert _is(plate, element, element_refs.select(plate, written)) == [index], written
+
+
+def _example(name):
+    import asyncio
+
+    ctx = pc.init("examples")
+    part = ctx.get_part(name)
+    return ctx, part, asyncio.run(part.get_wrapped(ctx))
+
+
+def test_a_cadquery_part_is_selected_by_cadquery_in_its_sandbox():
+    """End to end: the CadQuery layer is asked for, and CadQuery answers the click and the selection."""
+    import asyncio
+
+    from partcad import measure
+
+    ctx, cube, tree = _example("//produce_part_cadquery_primitive:cube")
+    found = asyncio.run(measure.locate_element(ctx, tree, [0.0, 0.0, 10.0], 0.01, style="cadquery"))
+    assert found["ref"].startswith('faces("'), found
+    at = asyncio.run(measure.element_anchors(ctx, tree, [found["ref"], 'edges("|Z")'], cacheable=False))
+    assert set(at) == {found["ref"], 'edges("|Z")'}
+
+
+def test_a_build123d_part_is_selected_by_build123d_in_its_sandbox():
+    import asyncio
+
+    from partcad import measure
+
+    ctx, cube, tree = _example("//produce_part_build123d_primitive:cube")
+    found = asyncio.run(measure.locate_element(ctx, tree, [0.0, 0.0, 0.0], 1000.0, style="build123d"))
+    assert found["ref"].startswith("edges()"), found
+    at = asyncio.run(measure.element_anchors(ctx, tree, [found["ref"]], cacheable=False))
+    assert set(at) == {found["ref"]}

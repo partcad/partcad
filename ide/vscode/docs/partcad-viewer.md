@@ -146,7 +146,13 @@ pixels and under a second is a click rather than a turn of the camera, and a ray
 part of an assembly starts a thread on the assembly about the link it is (`linkRef`); a click on a part or a sketch
 shown on its own asks the daemon which face or edge it landed on (`locateComment` → `comment.locate`), sending the
 point in the node's own frame in millimetres and how many millimetres a few pixels are there, which is how near an
-edge a click still counts as on it. The dialog opens at once and says it is finding out; Post waits for the answer.
+edge a click still counts as on it. The daemon names it the way the part's script would: for a part made by
+CadQuery, the shortest chain of CadQuery string selectors that selects it alone (`faces(">Z")`,
+`edges("<X").edges("<Y")`); for one made by build123d, of `ShapeList` methods (`faces().sort_by(Axis.Z)[-1]`); for
+anything else, or where no short chain singles it out, its number (`face:12`). Every chain is tried on the shape and
+kept only once evaluating it as written selects exactly the clicked element (`element_refs.selection_for`, with
+`partcad_utils/selector_refs.py` the grammar a selection is held to before it is evaluated), and the dialog shows it
+with the element's number beside it. The dialog opens at once and says it is finding out; Post waits for the answer.
 What is posted goes to the host, which signs it with `git config user.name` read *there* (`src/viewer/comments.ts`)
 — never the daemon's, which can be on another machine — and has it written (`addComment` → `comment.add`), and the
 comments are asked for again. Attachments are files of the package, which only the host can pick (`attachFiles`,

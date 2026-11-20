@@ -29,7 +29,10 @@ Each comment has ``name`` (who wrote it: their ``git config user.name``),
 (Markdown) and, where it has any, ``attachments`` (files, relative to the
 package). ``ref`` says what *inside* the object it is about, in the terms of the
 object's kind (see :func:`describe_ref`), and a comment with none is about the
-object as a whole. What a thread is about is the ``ref`` of its first comment
+object as a whole. For a part or a sketch that is one face or edge by its number
+(``face:12``), or a selection written the way its script would select it -- a
+CadQuery one, ``faces(">Z")``, or a build123d one,
+``faces().sort_by(Axis.Z)[-1]`` -- whose grammar is ``selector_refs``. What a thread is about is the ``ref`` of its first comment
 (:func:`thread_ref`); a reply carries the same one.
 
 A comment says nothing about what an object *is*: nothing PartCAD builds,
@@ -50,6 +53,8 @@ extension, whose TypeScript twin of the reference grammar is
 import datetime
 import re
 import typing
+
+from . import selector_refs
 
 # The key a declaration and a package carry their threads under.
 KEY = "comments"
@@ -113,7 +118,7 @@ def parse_element_ref(ref) -> typing.Optional[typing.Tuple[str, int]]:
 
 
 def describe_ref(ref) -> str:
-    """What a reference points at, as a sentence says it: 'face 12', 'link#2', or 'the whole object'."""
+    """What a reference points at, as a sentence says it: 'face 12', 'link#2', 'faces(">Z")' or 'the whole object'."""
     if not ref:
         return "the whole object"
     element = parse_element_ref(ref)
@@ -207,6 +212,9 @@ def entry(
         if not isinstance(ref, str):
             raise ValueError("What a comment is about is named by a string, not by %r" % (ref,))
         ref = ref.strip()
+        wrong = selector_refs.problem(ref)
+        if wrong:
+            raise ValueError("'%s' is written as a selection, and %s (see 'pc comment add --help')" % (ref, wrong))
         if ref:
             result["ref"] = ref
     result["name"] = name

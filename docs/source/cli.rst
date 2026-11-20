@@ -718,7 +718,8 @@ Object commands
 ``pc comment add``
   Write a comment on an object -- or, with no object named, on the package -- into its ``partcad.yaml`` (see
   :ref:`comments`). ``pc comment add bracket -m "This face is **too thin**." --ref face:12`` starts a thread
-  about one face of a part; ``--reply <n>`` answers thread ``n`` instead, by the index ``pc comment list``
+  about one face of a part, and ``--ref 'faces(">Z")'`` or ``--ref 'faces().sort_by(Axis.Z)[-1]'`` about the
+  face a CadQuery or a build123d selection selects; ``--reply <n>`` answers thread ``n`` instead, by the index ``pc comment list``
   shows; ``--attach <file>`` names a file of the package that goes with it, and may be repeated. The text is
   Markdown, and ``-m -`` reads it from standard input. The comment is signed with ``git config user.name`` on
   the machine the command runs on -- never the daemon's, which can be somebody else's -- and dated now, in UTC;

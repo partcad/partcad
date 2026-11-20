@@ -145,6 +145,17 @@ its compound, rather than as the tree of what it places (see :ref:`part-compound
      - ``pc qual add``
      - Declares a qualification test of an object in its package's ``partcad.yaml``, as
        ``<object>.qual.<subtype>.<name>``: a built-in test's parameters, a plugin's test (``path``), or a simulation.
+   * - ``comment_list``
+     - ``pc comment list``
+     - The threads of comments on an object, or on a package, each with what it is about and every comment of it
+       (see :ref:`comments`).
+   * - ``comment_add``
+     - ``pc comment add``
+     - Writes a comment on an object, or on a package, into its ``partcad.yaml``: a thread of its own, or a reply
+       (``thread``). ``ref`` says what it is about -- ``face:12``, a CadQuery selection such as ``faces(">Z")``, a
+       build123d one such as ``faces().sort_by(Axis.Z)[-1]``, a link of an assembly. Signed with the user's
+       ``git config user.name`` on this machine unless ``author`` says otherwise; ``execute`` signs a
+       ``comment.add`` that names nobody the same way.
    * - ``lint``
      - ``pc lint``
      - Checks a package's ``partcad.yaml``, ASSY files and scripts.

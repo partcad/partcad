@@ -27,7 +27,15 @@ from .process_crash import describe_exit_code
 _DEPENDENCIES = (sandbox_versions.OCP,)
 
 
-async def _run(ctx, request, cacheable: bool = True, script: str = "measure.py"):
+# What evaluating a CadQuery selection needs on top of the sandbox's own
+# environment: CadQuery, and the OCP build it runs on. Asked for with a session,
+# which runs the wrapper in the layer every CadQuery part runs in (see
+# 'runtime_python.base_requirements'), and so one a package with CadQuery parts
+# has provisioned already.
+CADQUERY_LAYER = (sandbox_versions.CADQUERY, sandbox_versions.CADQUERY_OCP)
+
+
+async def _run(ctx, request, cacheable: bool = True, script: str = "measure.py", layer=()):
     if ctx is None:
         raise ValueError("A context is required to run the '%s' measurement" % request.get("operation"))
 
@@ -39,17 +47,20 @@ async def _run(ctx, request, cacheable: bool = True, script: str = "measure.py")
         "%s#%s" % (script.rsplit(".", 1)[0], operation),
         script,
         cache_artifacts.request_key(request) if cacheable else None,
-        _DEPENDENCIES,
+        _DEPENDENCIES + tuple(layer),
     )
     response_serialized = await cache_artifacts.restore_response_async(cache, artifact)
     cached = response_serialized is not None
     if not cached:
         runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
+        session = runtime.get_session("measure:%s" % operation) if layer else None
         for dep in _DEPENDENCIES:
             await runtime.ensure_async(dep)
+        for dep in layer:
+            await runtime.ensure_async(dep, session=session)
 
         command = [wrapper.get(script), operation]
-        exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+        exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, session=session)
         if exitcode != 0 and not errors:
             errors = "measure '%s' failed: %s" % (operation, describe_exit_code(exitcode))
         if errors:
@@ -185,30 +196,41 @@ def _own_frame(shape):
 async def element_anchors(ctx, shape, refs, cacheable: bool = True) -> dict:
     """Where each face or edge 'refs' names is, as '{ref: [x, y, z]}': what a comment's callout is pinned to.
 
-    'refs' are references as a comment writes them ('face:12', 'edge:3', see
-    'partcad_utils.comments'); one to an element the shape does not have is
-    left out of the answer. Each point is on its element, in the shape's own
-    frame, in millimetres (see 'element_refs' among the wrappers). Remembered
-    like any measurement, by the shape and the references.
+    'refs' are references as a comment writes them -- 'face:12', 'edge:3', or a
+    CadQuery or build123d selection (see 'partcad_utils.comments'); one to
+    nothing the shape has is left out of the answer. Each point is on what it
+    names, in the shape's own frame, in millimetres (see 'element_refs' among
+    the wrappers). A CadQuery selection is evaluated by CadQuery, in the layer
+    it runs in. Remembered like any measurement, by the shape and the references.
     """
+    from partcad_utils import selector_refs
+
     asked = sorted({ref for ref in refs or [] if isinstance(ref, str)})
     if not asked:
         return {}
-    return await _run(ctx, {"operation": "anchors", "shape": _own_frame(shape), "refs": asked}, cacheable)
+    layer = CADQUERY_LAYER if any(selector_refs.style(ref) == selector_refs.CADQUERY for ref in asked) else ()
+    request = {"operation": "anchors", "shape": _own_frame(shape), "refs": asked}
+    return await _run(ctx, request, cacheable, layer=layer)
 
 
-async def locate_element(ctx, shape, point, tolerance: float = 0.0):
-    """Which face or edge of 'shape' the point 'point' is on: '{"ref", "element", "index", "at", "distance"}', or None.
+async def locate_element(ctx, shape, point, tolerance: float = 0.0, style=None):
+    """Which face or edge of 'shape' the point 'point' is on: '{"ref", "element", "index", "at", "distance", "numbered"}', or None.
 
     'point' is in the shape's own frame, in millimetres - where a click in the
     3D view landed on its tessellation - and an edge nearer it than 'tolerance'
-    is preferred to the face it bounds. Never remembered: every click is
-    somewhere else.
+    is preferred to the face it bounds. 'style' 'cadquery' or 'build123d' names
+    it with a selection in that library's terms where one selects it alone (and
+    a CadQuery one is found by CadQuery, in its layer), and by its number
+    otherwise. Never remembered: every click is somewhere else.
     """
+    from partcad_utils import selector_refs
+
     request = {
         "operation": "locate",
         "shape": _own_frame(shape),
         "point": [float(value) for value in point],
         "tolerance": float(tolerance or 0.0),
+        "style": style,
     }
-    return await _run(ctx, request, cacheable=False)
+    layer = CADQUERY_LAYER if style == selector_refs.CADQUERY else ()
+    return await _run(ctx, request, cacheable=False, layer=layer)
