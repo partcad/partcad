@@ -18,6 +18,7 @@ array
 assemblies
 assembly
 assy
+attachments
 au
 auto
 axis
@@ -54,6 +55,7 @@ color
 colors
 command
 comment
+comments
 companions
 compound
 conductivity
@@ -78,6 +80,7 @@ cylindrical
 dam
 damper
 damping
+date
 default
 defects
 dem
@@ -409,6 +412,7 @@ tags
 tar
 target
 temperature
+text
 thermal
 thickness
 thread
