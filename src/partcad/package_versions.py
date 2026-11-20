@@ -22,9 +22,10 @@ commit.** '//pkg@v1.2' and '//pkg@main' resolve to a commit, and the package is
 loaded once, as '//pkg@<the full commit id>' -- its objects are
 '//pkg@<sha>:<name>', and a reference it makes to itself (relative, or by the
 name it declares for itself, see 'Project.relocate') stays inside that revision.
-The other names it was asked for by are *aliases* of that one package
-('Context.project_aliases'), not second copies: two spellings of one commit are
-one package, and two revisions of one package are two.
+Asked for by another name, it is that one package, not a second copy: two
+spellings of one commit are one package, and two revisions of one package are
+two. A shortened commit id is remembered as an alias ('Context.project_aliases');
+a tag or a branch is resolved again each time, since it can move.
 
 **The files come from '~/.partcad/git', never from the working tree.** The
 commit's tree is written out of the repository's object database into a
@@ -380,9 +381,18 @@ def _write_tree(repo: pygit2.Repository, tree: pygit2.Tree, dest: str, top: bool
     """
     os.makedirs(dest, exist_ok=True)
     for entry in tree:
-        if top and entry.name == GUARD:
+        # Without regard to case: on a file system that ignores it, a
+        # '.Partcad.git.exported' is the guard's path all the same.
+        if top and entry.name.lower() == GUARD.lower():
             raise ValueError("The commit holds '%s', which is PartCAD's own name for an exported revision" % GUARD)
         path = os.path.join(dest, entry.name)
+        if os.path.lexists(path):
+            # Two names of one tree that the file system takes for one ('A'
+            # and 'a' where case is ignored): what is written second would be
+            # written through what was written first -- a link to anywhere.
+            raise ValueError(
+                "The commit holds '%s' and another entry this file system takes for the same name" % entry.name
+            )
         mode = entry.filemode
         if mode == FileMode.TREE:
             _write_tree(repo, repo[entry.id], path)

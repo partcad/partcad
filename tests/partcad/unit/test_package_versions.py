@@ -146,10 +146,13 @@ def test_a_revision_is_loaded_under_its_commit_and_answers_to_its_tag(ctx, repo)
     assert project.revision_sha == first
     assert project.revision_of == "//"
     assert project.config_obj["desc"] == "version one"
-    # The tag is another name of it, not a second copy.
-    assert ctx.project_aliases["//@v1"] == project.name
+    # The tag names the commit loaded once, not a second copy. Read again each
+    # time, a tag is not remembered; the start of the commit's id is.
+    assert ctx.get_project("//@v1") is project
+    assert "//@v1" not in ctx.project_aliases
     assert ctx.get_project("//@%s" % first) is project
     assert ctx.get_project("//@%s" % first[:8]) is project
+    assert ctx.project_aliases["//@%s" % first[:8]] == project.name
     assert "//@v1" not in ctx.projects
 
 
@@ -1029,3 +1032,45 @@ def test_a_requirement_only_an_object_can_have_is_unreadable_and_a_failure_is_re
 
 def test_a_package_is_its_own(ctx):
     assert requirements._is_own(ctx, ctx.root, "//")
+
+
+# ---- the fourth review ----------------------------------------------------------
+
+
+def test_a_branch_is_read_again_when_it_has_moved_on(ctx, repo):
+    root, first, second = repo
+    git = pygit2.Repository(str(root))
+    branch = git.branches.local.create("feature", git[first])
+
+    assert ctx.get_project("//@feature").revision_sha == first
+    branch.set_target(second)
+
+    # The same warm context: the branch is where it is now, not where it was.
+    assert ctx.get_project("//@feature").revision_sha == second
+
+
+def test_a_commit_holding_the_guard_s_name_in_another_case_is_not_written_out(tmp_path):
+    root = tmp_path / "cased"
+    repo = pygit2.init_repository(str(root))
+    _write(root / "partcad.yaml", {"name": "//"})
+    (root / package_versions.GUARD.upper()).write_text("not a guard")
+    sha = _commit(root, "first")
+
+    with pytest.raises(ValueError, match="PartCAD's own name"):
+        package_versions.export(package_versions.Repository(repo, ""), sha, str(tmp_path / "state" / "git"))
+
+
+def test_an_entry_the_file_system_takes_for_one_already_written_is_refused(tmp_path):
+    # What a case-insensitive file system does with 'A' and 'a': the second
+    # finds the first already there. Made here by writing it beforehand.
+    root = tmp_path / "twice"
+    repo = pygit2.init_repository(str(root))
+    _write(root / "partcad.yaml", {"name": "//"})
+    sha = _commit(root, "first")
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    (dest / "partcad.yaml").symlink_to(tmp_path / "elsewhere.yaml")
+
+    with pytest.raises(ValueError, match="takes for the same name"):
+        package_versions._write_tree(repo, repo[sha].peel(pygit2.Commit).tree, str(dest), top=True)
+    assert not (tmp_path / "elsewhere.yaml").exists()

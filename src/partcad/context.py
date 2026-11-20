@@ -1083,7 +1083,12 @@ class Context:
                 return None
             project.revision_sha = sha
             project.revision_of = base
-        if revision != sha:
+        # Remembered only for what cannot move: a commit id, or the start of
+        # one. A tag or a branch is read again each time it is asked for, so
+        # that a context a daemon keeps warm follows 'main' when it moves on
+        # instead of answering with the commit it was first loaded at; the
+        # commit is still loaded once, under its id.
+        if revision != sha and sha.startswith(revision.lower()):
             self.project_aliases[package_versions.versioned_name(base, revision)] = project.name
         return project
 

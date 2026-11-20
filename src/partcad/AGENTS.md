@@ -1344,8 +1344,9 @@ at all).
 - **A package at a revision is a package of its own** (`package_versions.py`, `Context.get_versioned_project`).
   `[<path>/]<name>@<revision>` -- a commit id, a tag, a branch -- is loaded once per commit, as
   `<path>/<name>@<full commit id>`, from the commit's tree written out into `~/.partcad/git` (never from the
-  working tree), and every other name it was asked by is an alias in `Context.project_aliases`, kept apart from
-  `Context.projects` so that nothing walking the loaded packages meets one package twice. A package without `@`
+  working tree). A shortened commit id it was asked by is an alias in `Context.project_aliases`, kept apart from
+  `Context.projects` so that nothing walking the loaded packages meets one package twice; a tag or a branch is
+  resolved again on every lookup, so that a daemon's warm context follows a branch that moves. A package without `@`
   is loaded exactly as before. A reference a revision makes to its own package or below is rebased into the
   revision (`package_versions.rebase`, applied by `Project.relocate`); one out of it is not. A downloaded
   dependency at the commit it is checked out at is still written out on its own, so that nothing writes into a
