@@ -45,6 +45,21 @@ function focusable(root: HTMLElement): HTMLElement[] {
     );
 }
 
+/**
+ * What stands for 'opener' now that it is gone from the page: a thread's Reply
+ * is drawn again whenever the comments are, and carries its thread's key
+ * ('data-thread', see 'setCommentPins' in 'scene.ts') to be found by.
+ */
+function replacementOf(opener: HTMLElement | undefined): HTMLElement | undefined {
+    const key = opener?.dataset.thread;
+    if (key === undefined) {
+        return undefined;
+    }
+    return Array.from(document.querySelectorAll<HTMLElement>('[data-thread]')).find(
+        (element) => element.dataset.thread === key && element.isConnected,
+    );
+}
+
 export interface CommentDialogOptions {
     /** What the dialog is for, in its heading: "New comment", "Reply". */
     title: string;
@@ -245,9 +260,7 @@ export class CommentDialog {
         this.busy = false;
         const opener = this.opener;
         this.opener = undefined;
-        if (opener?.isConnected) {
-            opener.focus();
-        }
+        (opener?.isConnected ? opener : replacementOf(opener))?.focus();
         options?.onClose();
     }
 
