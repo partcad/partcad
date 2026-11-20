@@ -435,3 +435,24 @@ def test_a_package_whose_parts_draw_on_nothing_else_has_no_dependencies(tmp_path
         ("has_dependencies", True),
         ("has_private_dependencies", True),
     }
+
+
+def test_unified_is_what_git_diff_writes():
+    text = revisions.unified("a\nb\nc\n", "a\nB\nc\n", "//@x:o", "//:o", context=1)
+
+    assert text == "--- //@x:o\n+++ //:o\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+    assert revisions.unified("same\n", "same\n", "x", "y") == ""
+
+
+def test_unified_says_where_a_last_line_has_no_newline():
+    text = revisions.unified("a", "b", "x", "y")
+
+    assert text.splitlines()[-1] == "\\ No newline at end of file"
+
+
+def test_load_workspace_loads_what_is_in_the_checkout_and_no_download(ctx):
+    assert "//sub" not in ctx.projects
+
+    usage.load_workspace(ctx)
+
+    assert "//sub" in ctx.projects

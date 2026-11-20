@@ -1290,6 +1290,67 @@ Object commands
   The Digital Thread's Revisions tab writes both sides of a comparison the same way, which is why it shows what
   changed in what an object *means* rather than in how it was written.
 
+``pc revisions list``
+  List the commits that changed a package, newest first, ``*`` marking the one checked out -- what the
+  Digital Thread's Operations > Revisions tab lists down its left::
+
+    pc revisions list [OBJECT]
+
+  Of the package ``OBJECT`` is in, or with no ``OBJECT`` of the package ``-P`` selects (this one by default). A
+  package that shares its repository with others lists the commits that changed its own directory. A package in
+  no git repository, or with nothing of it committed, is *not published yet*. ``--json`` prints the daemon's
+  answer.
+
+``pc revisions diff``
+  Show what changed in an object since a revision, as a unified diff -- what the Revisions tab draws side by
+  side::
+
+    pc revisions diff REVISION [OBJECT]
+
+  ``REVISION`` is a commit id (as much of it as is unique), a tag or a branch; the package is loaded at it beside
+  what is checked out (see :ref:`package-revisions`). Both sides are ``OBJECT`` written out as ``pc copy`` writes
+  one -- rendered, normalized, defaults left out -- so what differs is what the object *means*, and a comment or a
+  reformatted line is no difference. With no ``OBJECT``, the package's ``partcad.yaml`` as Jinja2 rendered it at
+  each. Nothing is printed when nothing changed; ``--exit-code`` exits with 1 when something did, as
+  ``git diff --exit-code`` does, ``-U``/``--context`` sets how many unchanged lines surround each change, and
+  ``--json`` prints the comparison side by side as well.
+
+  .. code-block:: shell
+
+    pc revisions diff v1.2 bracket          # the bracket now, against the bracket as tagged v1.2
+    pc revisions diff HEAD~3                # the package's partcad.yaml, three commits ago and now
+    pc revisions diff --exit-code main :bracket || echo "changed since main"
+
+``pc revisions uses``
+  List the dependencies a package declared at a revision, each with the commit it is at and the name that loads
+  it there (``<package>@<sha>``, which any command takes) -- the Revisions tab's *Uses (Dependencies)*::
+
+    pc revisions uses REVISION [OBJECT]
+
+  Loading a dependency may download it.
+
+``pc revisions used-by``
+  List the objects PartCAD has loaded that use a package at a revision -- by its commit, a tag, a branch, or as
+  the dependency checked out there -- each with how many times: the Revisions tab's *Used By*::
+
+    pc revisions used-by REVISION [OBJECT]
+
+``pc used-by``
+  List the objects PartCAD has loaded that use an object -- or, with no ``OBJECT``, anything in the package
+  ``-P`` selects -- each with how many times; an assembly that places a bolt four times uses it four times. The
+  Digital Thread's Operations > Used By tab::
+
+    pc used-by [OBJECT]
+
+  Only what is loaded is looked at, so ``--load`` loads every package of the workspace first: the packages in
+  this checkout, sub-folders and local dependencies, and none it downloads. An assembly that has been built is
+  counted by what it places, one not built yet by what its declaration names.
+
+  .. code-block:: shell
+
+    pc used-by --load bracket
+    pc used-by --json -P //vendor/fasteners
+
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. The object is found by its name whatever its kind (see
   :ref:`object-names`). Choose the format with ``-t``:

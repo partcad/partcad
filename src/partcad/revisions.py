@@ -114,12 +114,40 @@ def _row(tag: str, a: list, b: list, i, j) -> dict:
     }
 
 
-def compare(ctx, project, kind: str, name: typing.Optional[str], revision: str) -> dict:
-    """The object now and at 'revision', side by side: {'revision', 'short', 'left', 'right', 'same', 'rows'}.
+# How many lines of what did not change a unified diff shows around a change, by default: git's.
+UNIFIED_CONTEXT = 3
+
+
+def unified(
+    left: typing.Optional[str],
+    right: typing.Optional[str],
+    from_label: str,
+    to_label: str,
+    context: int = UNIFIED_CONTEXT,
+) -> str:
+    """The two texts as a unified diff, the way 'git diff' writes one; empty when they are the same.
+
+    What the command line and an agent read where the IDE shows the two sides
+    side by side ('side_by_side'): the same comparison, of the same texts.
+    """
+    a = (left or "").splitlines(keepends=True)
+    b = (right or "").splitlines(keepends=True)
+    lines = []
+    for line in difflib.unified_diff(a, b, fromfile=from_label, tofile=to_label, n=max(0, int(context))):
+        lines.append(line if line.endswith("\n") else line + "\n\\ No newline at end of file\n")
+    return "".join(lines)
+
+
+def compare(ctx, project, kind: str, name: typing.Optional[str], revision: str, context: int = UNIFIED_CONTEXT) -> dict:
+    """The object now and at 'revision': {'revision', 'short', 'left', 'right', 'same', 'rows', 'unified'}.
 
     The revision is the left side and the context as it is now the right, the
     way a change reads: from what it was to what it is. A side where the object
-    is not declared says so ('missing') and is compared as empty.
+    is not declared says so ('missing') and is compared as empty. 'rows' is the
+    comparison side by side, for the IDE; 'unified' the same as a unified diff,
+    with 'context' lines around each change, for the command line and agents --
+    '<package>@<short>:<name>' against '<package>:<name>', or for a package its
+    'partcad.yaml' at each.
     """
     current = current_project(ctx, project)
     if current is None:
@@ -137,6 +165,15 @@ def compare(ctx, project, kind: str, name: typing.Optional[str], revision: str) 
     )
     left = object_text(at_revision, kind, name)
     right = object_text(current, kind, name)
+    short = package_versions.short(sha)
+    if kind == PACKAGE:
+        from partcad_utils.utils import get_child_project_path
+
+        from_label = get_child_project_path("%s@%s" % (current.name, short), "partcad.yaml")
+        to_label = get_child_project_path(current.name, "partcad.yaml")
+    else:
+        from_label = "%s@%s:%s" % (current.name, short, name)
+        to_label = "%s:%s" % (current.name, name)
     return {
         "package": current.name,
         "revision": sha,
@@ -146,4 +183,5 @@ def compare(ctx, project, kind: str, name: typing.Optional[str], revision: str) 
         "right": {"label": "Current", "missing": right is None},
         "same": (left or "") == (right or ""),
         "rows": side_by_side(left, right),
+        "unified": unified(left, right, from_label, to_label, context),
     }

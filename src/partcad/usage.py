@@ -246,6 +246,41 @@ def revision_used_by(ctx, base: str, sha: str) -> list:
     return used_by(ctx, lambda other, _name: inside(other), inside)
 
 
+# The dependency types whose files are not in this checkout: a package downloaded,
+# unpacked or served by something else.
+_FETCHED = ("git", "tar", "external")
+
+
+def load_workspace(ctx, project=None) -> int:
+    """Load every package of the workspace below 'project' (the root by default), and say how many there are.
+
+    The packages whose files are in this checkout: sub-folders, and dependencies
+    declared with a local 'path'. Not what the workspace downloads - a 'pc init'
+    package imports the whole public index, and loading that to ask who uses
+    a bracket would be a download of everything. What 'Used By' looks at is
+    what is loaded (see the module's description); this is how a command makes
+    that the workspace rather than whatever happened to be asked for before.
+    """
+    start = project if project is not None else ctx.root
+    seen = set()
+    stack = [start]
+    while stack:
+        current = stack.pop()
+        if current is None or current.name in seen or getattr(current, "broken", False):
+            continue
+        seen.add(current.name)
+        declared = current.dependencies() or {}
+        for child in current.get_child_project_names() or []:
+            config = declared.get(child[len(current.name.rstrip("/")) + 1 :])
+            if isinstance(config, dict) and (config.get("type") in _FETCHED or config.get("url")):
+                continue
+            try:
+                stack.append(ctx.get_project(child))
+            except Exception as e:  # pylint: disable=broad-except
+                pc_logging.debug("Not loading %s: %s" % (child, e))
+    return len(seen)
+
+
 def dependencies(ctx, project) -> list:
     """The packages 'project' declares as dependencies, each with the commit it is at.
 

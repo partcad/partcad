@@ -62,22 +62,32 @@ what its declaration names.
 On the command line
 ===================
 
-There is no command that lists a history -- ``git log`` does that -- but every
-part of the tab is reachable from one:
+Every view of the tab is a command, asking the daemon what the tab asks it:
 
 .. code-block:: shell
 
+  pc revisions list bracket                     # the package's commits, newest first
+  pc revisions diff v1.2 bracket                # what changed since v1.2, as a unified diff
+  pc revisions diff v1.2                        # the package's partcad.yaml, as rendered at each
+  pc revisions uses v1.2                        # what it depended on then, each at its commit
+  pc revisions used-by v1.2                     # what loaded uses the package at v1.2
+  pc used-by --load bracket                     # what in this workspace uses the bracket
   pc info //@v1.2:bracket                       # an object at a revision
   pc copy //@v1.2:bracket bracket_v1            # brought back under a name of its own
-  pc copy --dry-run bracket x                   # the text the tab compares
   pc ide view --operations-revisions :bracket   # this tab
   pc ide view --operations-used-by :bracket
+
+Where the tab draws a comparison side by side, ``pc revisions diff`` prints it
+as a unified diff -- the same comparison of the same two texts, written by the
+daemon (see ``pc revisions diff`` in :doc:`/cli`).
 
 Agent skills
 ============
 
-None of its own. An agent reaches the same answers through the MCP server's
-``execute``, which calls the daemon methods the tab is drawn from:
+None of its own. An agent reaches the same answers through the MCP server
+(``pc mcp``), whose ``revisions``, ``diff``, ``revision_uses`` and ``used_by``
+tools are these commands, the diff unified as the command prints it -- and
+through ``execute``, which reaches the daemon methods the tab is drawn from:
 ``revisions.list``, ``revisions.compare``, ``revisions.uses``,
 ``revisions.used_by`` and ``usage.used_by``.
 

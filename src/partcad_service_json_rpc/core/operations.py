@@ -4600,13 +4600,15 @@ def revisions_list(session, params):
 
 
 def revisions_compare(session, params):
-    """An object as the context holds it and as it was at a revision, side by side.
+    """An object as the context holds it and as it was at a revision, side by side and as a unified diff.
 
     Each side is the object written out the way ``pc copy`` writes one -- or,
     for ``kind: package``, the package's ``partcad.yaml`` as Jinja2 rendered it
     when PartCAD read it -- and the answer is the rows of a side-by-side view
-    (see ``partcad.revisions.compare``). The revision is loaded as
-    ``<package>@<revision>`` into the same context, where it stays.
+    (see ``partcad.revisions.compare``), and the same as a unified diff
+    (``unified``, with ``lines`` lines around each change): what the IDE
+    draws, and what ``pc revisions diff`` and an agent read. The revision is
+    loaded as ``<package>@<revision>`` into the same context, where it stays.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -4627,9 +4629,19 @@ def revisions_compare(session, params):
         project = ctx.get_project(package)
         if project is None:
             raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+        if _said_kind(params) is None:
+            # Looked up, as every command that takes a name looks it up: an
+            # assembly compared as a part would be "not declared" on both sides.
+            kind = project.object_kind(name) or kind
+    # 'lines', not 'context', which is the context a request is about.
+    lines = params.get("lines")
+    try:
+        lines = revisions.UNIFIED_CONTEXT if lines is None else int(lines)
+    except (TypeError, ValueError) as e:
+        raise JsonRpcError(USAGE_ERROR, "'lines' is a number of lines, not %r" % (lines,)) from e
     with pc.logging.Process("Compare", project.name, revision):
         try:
-            return revisions.compare(ctx, project, kind, name, revision)
+            return revisions.compare(ctx, project, kind, name, revision, context=lines)
         except ValueError as e:
             raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
@@ -4694,8 +4706,10 @@ def usage_used_by(session, params):
     """The objects the context has loaded that refer to an object, or with ``kind: package`` to a package.
 
     Each with how many times it does: an assembly placing a bolt four times
-    uses it four times. What the IDE's Operations > Used By tab lists (see
-    ``partcad.usage``); nothing is loaded or built to answer.
+    uses it four times. What the IDE's Operations > Used By tab lists, and
+    ``pc used-by`` (see ``partcad.usage``); nothing is loaded or built to
+    answer, unless ``load`` asks for every package of the workspace to be
+    loaded first (``usage.load_workspace``).
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -4703,6 +4717,11 @@ def usage_used_by(session, params):
     pc = session.partcad
     from partcad import usage
 
+    if params.get("load"):
+        # 'pc used-by --load': the workspace's own packages, all of them, so
+        # that the answer is about the workspace (see 'usage.load_workspace').
+        with pc.logging.Process("Load", ctx.name):
+            usage.load_workspace(ctx)
     if _said_kind(params) == "package":
         project = _package_of_request(ctx, pc, {"package": params.get("package")})
         return {"object": project.name, "objects": usage.package_used_by(ctx, project.name)}

@@ -204,3 +204,46 @@ def test_a_package_has_no_ports_of_its_own_to_require(session):
         operations.requirements_add(
             session, {"package": "//", "kind": "package", "requirement": "port", "name": "top", "value": None}
         )
+
+
+def test_a_comparison_is_a_unified_diff_too(session):
+    answer = operations.revisions_compare(
+        session, {"package": "//", "object": "cube", "kind": "part", "revision": session.first, "lines": 0}
+    )
+
+    first = session.first[:8]
+    assert answer["unified"].splitlines() == [
+        "--- //@%s:cube" % first,
+        "+++ //:cube",
+        "@@ -3 +3 @@",
+        "-  cuboid: 1",
+        "+  cuboid: 2",
+    ]
+
+
+def test_a_comparison_looks_the_kind_up(session):
+    answer = operations.revisions_compare(session, {"package": "//", "object": "cube", "revision": session.first})
+
+    assert answer["left"]["missing"] is False and answer["right"]["missing"] is False
+
+
+def test_a_comparison_refuses_a_number_of_lines_that_is_none(session):
+    with pytest.raises(JsonRpcError):
+        operations.revisions_compare(
+            session, {"package": "//", "object": "cube", "revision": session.first, "lines": "many"}
+        )
+
+
+def test_used_by_can_load_the_workspace_first(session, tmp_path):
+    root = tmp_path / "repo"
+    (root / "users").mkdir()
+    (root / "users" / "partcad.yaml").write_text(
+        yaml.safe_dump({"parts": {"peg": {"type": "alias", "source": "//:cube"}}}, sort_keys=False)
+    )
+    session.partcad_ctx = pc.Context(str(root), search_root=False)
+
+    before = operations.usage_used_by(session, {"package": "//", "object": "cube", "kind": "part"})
+    after = operations.usage_used_by(session, {"package": "//", "object": "cube", "kind": "part", "load": True})
+
+    assert "//users:peg" not in [row["object"] for row in before["objects"]]
+    assert "//users:peg" in [row["object"] for row in after["objects"]]
