@@ -8,6 +8,7 @@
 import json
 import os
 
+import pytest
 from click.testing import CliRunner
 
 from partcad_cli.click.command import cli
@@ -120,3 +121,44 @@ def test_the_threads_are_listed_with_the_index_a_reply_names(monkeypatch):
 
     result = CliRunner().invoke(cli, ["--no-ansi", "comment", "list", "--json", "bracket"])
     assert json.loads(result.output) == answer
+
+
+def test_one_that_is_not_found_says_so_among_the_rest():
+    assert list_command.describe({"object": "//p:nothing", "error": "//p:nothing is not found"}) == (
+        "//p:nothing: //p:nothing is not found"
+    )
+    assert list_command.describe({"object": "//p", "kind": None, "threads": []}) == "The package //p: no comments"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["comment", "list", "-i", "--kind", "color", "red"],
+        ["comment", "add", "-i", "--kind", "color", "red", "-m", "x", "--author", "Ada"],
+    ],
+)
+def test_two_kinds_said_of_one_object_are_refused_before_anything_is_asked(monkeypatch, command):
+    calls = _calls(monkeypatch, add if command[1] == "add" else list_command)
+    result = CliRunner().invoke(cli, ["--no-ansi", *command])
+    assert result.exit_code == 2
+    assert "one kind of object" in result.output
+    assert calls == []
+
+
+@pytest.mark.parametrize("said", [["--kind", "color"], ["-p", "length=10"]])
+def test_what_is_said_of_an_object_with_none_named_is_refused(monkeypatch, said):
+    calls = _calls(monkeypatch, list_command)
+    result = CliRunner().invoke(cli, ["--no-ansi", "comment", "list", *said])
+    assert result.exit_code == 2
+    assert "none is named" in result.output
+    assert calls == []
+
+
+def test_a_comment_is_read_from_standard_input_with_dash(monkeypatch):
+    calls = _calls(monkeypatch, add)
+    result = CliRunner().invoke(
+        cli, ["--no-ansi", "comment", "add", "bracket", "-m", "-", "--author", "Ada"], input="From **stdin**.\n"
+    )
+    assert result.exit_code == 0, result.output
+    ((_, params, _),) = calls
+    assert params["text"] == "From **stdin**.\n"
