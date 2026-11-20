@@ -5644,13 +5644,11 @@ def _attachment(project, item):
     as 'pc add' does, since it does not share the daemon's working directory;
     one inside the package is written relative to it, and one outside refused --
     a comment is read wherever the package is, and an absolute path is read on
-    one machine. A relative one is taken to be relative to the package already,
-    and is written as given, short of its '.' and '..'. Either is inside the
-    package only where it still is once every '..' and every link on the way to
-    it is followed: 'photos/../../x.png', or a link out of the package, is not.
+    one machine. A relative one is taken to be relative to the package already.
+    Either is inside the package only where it still is once every '..' and
+    every link on the way to it is followed -- 'photos/../../x.png', or a link
+    out of the package, is not -- and is written as the file so found.
     """
-    import posixpath
-
     if not isinstance(item, str) or not item.strip():
         raise JsonRpcError(USAGE_ERROR, "An attachment is named by its file name, not by %r" % (item,))
     item = item.strip()
@@ -5675,7 +5673,9 @@ def _attachment(project, item):
             "'%s' is not inside the package '%s', and an attachment is a file of the package: copy it in first"
             % (item, project.name),
         )
-    return inside if rooted else posixpath.normpath(given)
+    # As it was checked, with every link followed: 'jump/../x' read lexically
+    # is 'x', and with 'jump' a link it is somewhere else altogether.
+    return inside
 
 
 async def _anchor_threads_async(ctx, shape, threads) -> None:

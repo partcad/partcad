@@ -960,7 +960,10 @@ function commentQuestion(kind: 'comments' | 'locate' | 'add' | 'attach'): number
 function askComments(again = false): void {
     const ticked = labels.get('comments');
     const onScreen = tabs.current === 'design' && designTabs.current === '3d';
-    scene?.setPicking(ticked && onScreen && shown?.object ? onPicked : undefined);
+    // Not before this show's geometry is on the stage: until then what is drawn
+    // is the last show's, and a click on it would be taken for one on this.
+    const staged = heldComments.isOnStage;
+    scene?.setPicking(ticked && onScreen && staged && shown?.object ? onPicked : undefined);
     if (!ticked || shown === undefined) {
         labelBoxes3d.setNote(undefined, 'comments');
         commentDialog?.close();

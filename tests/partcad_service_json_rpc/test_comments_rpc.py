@@ -155,6 +155,20 @@ def test_a_file_through_a_link_out_of_the_package_is_not_one_of_its_files(packag
     assert (package / "partcad.yaml").read_text() == before
 
 
+def test_an_attachment_is_written_as_the_file_it_was_checked_to_be(package):
+    """'jump/../report.txt' with 'jump' a link is not 'report.txt': the file found is what is written."""
+    (package / "nest" / "child").mkdir(parents=True)
+    try:
+        (package / "jump").symlink_to(package / "nest" / "child", target_is_directory=True)
+    except OSError as e:  # Windows, without the privilege to make a link
+        pytest.skip("No symbolic link can be made here: %s" % e)
+    answer = operations.comment_add(
+        _session(package),
+        {"package": "//shop", "object": "bracket", "name": "Ada", "text": "x", "attachments": ["jump/../report.txt"]},
+    )
+    assert answer["comment"]["attachments"] == ["nest/report.txt"]
+
+
 def test_a_reply_answering_its_thread_is_written_and_a_name_is_written_as_given_short_of_its_dots(package):
     session = _session(package)
     answer = operations.comment_add(
