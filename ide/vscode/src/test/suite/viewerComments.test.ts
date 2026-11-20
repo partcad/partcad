@@ -174,6 +174,13 @@ suite('Viewer comments', () => {
             { text: 'drawing', href: 'https://example.org/bracket(left)' },
             { text: '.' },
         ]);
+        // To any depth; and one that does not balance is the text it was.
+        assert.deepStrictEqual(parseInline('[drawing](https://example.org/bracket(left(inner)))'), [
+            { text: 'drawing', href: 'https://example.org/bracket(left(inner))' },
+        ]);
+        assert.deepStrictEqual(parseInline('[a](b(c) d'), [{ text: '[a](b(c) d' }]);
+        assert.deepStrictEqual(parseInline('[a](b))'), [{ text: 'a', href: 'b' }, { text: ')' }]);
+        assert.deepStrictEqual(parseInline('[a]()'), [{ text: '[a]()' }]);
         const blocks = parseMarkdown('4. clamp it\n5. drill it\n\n1. again');
         assert.deepStrictEqual(
             blocks.map((block) => [block.kind, block.number]),
@@ -188,7 +195,7 @@ suite('Viewer comments', () => {
     test('a line is read once, however many delimiters in it are never closed', () => {
         // Each of these used to read the rest of the line again from every
         // position: some twenty seconds for a line of them, on the viewer's thread.
-        for (const opener of ['[', '[a](b', '`', '*', '_ ']) {
+        for (const opener of ['[', '[a](b', '[a](((', '`', '*', '_ ']) {
             const line = opener.repeat(Math.ceil(200000 / opener.length));
             const started = Date.now();
             const runs = parseInline(line);

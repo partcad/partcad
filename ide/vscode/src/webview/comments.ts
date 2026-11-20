@@ -289,9 +289,8 @@ export interface MarkdownBlock {
  * None of them reads past the next character that would open or close the same
  * form - a link's text and its destination stop at the next bracket - so a line
  * is read once over however many delimiters in it are never closed: a line of
- * a thousand '[' does not read the rest of the line a thousand times. A link's
- * destination may hold a pair of parentheses, as a URL does
- * ('https://example.org/bracket(left)'), but not a bracket.
+ * a thousand '[' does not read the rest of the line a thousand times. A link is
+ * read by 'linkAt', since its destination's parentheses balance to any depth.
  */
 const INLINE: { pattern: RegExp; run: (found: RegExpExecArray) => MarkdownRun; wordStart?: boolean }[] = [
     { pattern: /`([^`]+)`/y, run: (found) => ({ text: found[1], code: true }) },
@@ -303,11 +302,45 @@ const INLINE: { pattern: RegExp; run: (found: RegExpExecArray) => MarkdownRun; w
         run: (found) => ({ text: found[1], emphasis: true }),
         wordStart: true,
     },
-    {
-        pattern: /\[([^[\]]+)\]\(((?:[^()[\]\s]|\([^()[\]\s]*\))+)\)/y,
-        run: (found) => ({ text: found[1], href: found[2] }),
-    },
 ];
+
+/**
+ * The link that starts at 'at' - '[text](destination)' - and where it ends, or
+ * undefined for none. The destination may hold parentheses, balanced to any
+ * depth, as a URL does ('https://example.org/bracket(left(inner))'), and no
+ * space and no bracket; the text no bracket. So it reads no further than the
+ * next bracket, or the end of the destination.
+ */
+function linkAt(line: string, at: number): { end: number; run: MarkdownRun } | undefined {
+    if (line[at] !== '[') {
+        return undefined;
+    }
+    let close = at + 1;
+    while (close < line.length && line[close] !== '[' && line[close] !== ']') {
+        close += 1;
+    }
+    if (line[close] !== ']' || close === at + 1 || line[close + 1] !== '(') {
+        return undefined;
+    }
+    const start = close + 2;
+    let depth = 0;
+    for (let k = start; k < line.length; k += 1) {
+        const c = line[k];
+        if (c === '(') {
+            depth += 1;
+        } else if (c === ')') {
+            if (depth === 0) {
+                return k === start
+                    ? undefined
+                    : { end: k + 1, run: { text: line.slice(at + 1, close), href: line.slice(start, k) } };
+            }
+            depth -= 1;
+        } else if (c === '[' || c === ']' || /\s/.test(c)) {
+            return undefined;
+        }
+    }
+    return undefined;
+}
 
 /** The runs of one line of text. */
 export function parseInline(line: string): MarkdownRun[] {
@@ -332,6 +365,15 @@ export function parseInline(line: string): MarkdownRun[] {
                 taken = found[0].length;
                 break;
             }
+        }
+        const link = taken === 0 ? linkAt(line, i) : undefined;
+        if (link !== undefined) {
+            if (plain) {
+                runs.push({ text: plain });
+                plain = '';
+            }
+            runs.push(link.run);
+            taken = link.end - i;
         }
         if (taken === 0) {
             plain += line[i];
