@@ -590,6 +590,21 @@ let commentCallouts: CSS2DObject[] = [];
  */
 let commentHolders: THREE.Object3D[] = [];
 
+/** Each thread's Reply button on the stage, by 'threadKey'. */
+let replyButtons = new Map<string, HTMLElement>();
+
+/**
+ * The thread whose Reply had the focus when the callouts were replaced - the
+ * dialog gives it back on closing, and a comment just written replaces them -
+ * given to the new one once it is drawn: three's renderer puts it in the page.
+ */
+let focusReply: string | undefined;
+
+/** A thread, as the Reply that answers it is known across a refresh. */
+function threadKey(pin: ThreadPin): string {
+    return `${pin.object}#${pin.thread.index}`;
+}
+
 /** What a click on a thread's callout does: answer it. */
 let onOpenThread: ((pin: ThreadPin) => void) | undefined;
 
@@ -626,6 +641,11 @@ let pressed: { x: number; y: number; time: number } | undefined;
 
 /** Pin a callout on every thread, replacing the ones pinned before; 'onOpen' answers one that is clicked. */
 export function setCommentPins(pins: readonly ThreadPin[], onOpen: (pin: ThreadPin) => void): void {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.classList.contains('comment-thread-reply') && active.dataset.thread) {
+        focusReply = active.dataset.thread;
+    }
+    replyButtons = new Map();
     for (const object of commentCallouts) {
         object.removeFromParent();
     }
@@ -682,6 +702,8 @@ export function setCommentPins(pins: readonly ThreadPin[], onOpen: (pin: ThreadP
             // to tab to, and the links in it are each their own.
             const reply = el('button', 'comment-thread-reply', 'Reply');
             reply.title = 'Answer this thread';
+            reply.dataset.thread = threadKey(one);
+            replyButtons.set(threadKey(one), reply);
             reply.addEventListener('click', (event) => {
                 event.stopPropagation();
                 onOpenThread?.(one);
@@ -2996,6 +3018,15 @@ function animate(): void {
         const started = performance.now();
         drawStage();
         labelRenderer.render(scene, drawingCamera());
+        if (focusReply !== undefined) {
+            // Unless something else has taken the focus meanwhile.
+            const button = replyButtons.get(focusReply);
+            focusReply = undefined;
+            const idle = document.activeElement === null || document.activeElement === document.body;
+            if (button?.isConnected && idle) {
+                button.focus();
+            }
+        }
         drawTime = performance.now() - started;
     }
     reportFrameRate(now, draws, drawTime);
