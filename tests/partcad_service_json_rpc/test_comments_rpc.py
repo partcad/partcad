@@ -12,6 +12,8 @@ worked out in a sandbox ('element_refs' among the wrappers, tested in
 what is pinned is the method -- what it lists, writes and refuses.
 """
 
+import os
+
 import pytest
 import yaml
 
@@ -156,7 +158,7 @@ def test_a_file_through_a_link_out_of_the_package_is_not_one_of_its_files(packag
 
 
 def test_an_attachment_is_written_as_the_file_it_was_checked_to_be(package):
-    """'jump/../report.txt' with 'jump' a link is not 'report.txt': the file found is what is written."""
+    """The file found is what is written: with 'jump' a link, 'jump/../report.txt' is not 'report.txt' on POSIX."""
     (package / "nest" / "child").mkdir(parents=True)
     try:
         (package / "jump").symlink_to(package / "nest" / "child", target_is_directory=True)
@@ -166,7 +168,10 @@ def test_an_attachment_is_written_as_the_file_it_was_checked_to_be(package):
         _session(package),
         {"package": "//shop", "object": "bracket", "name": "Ada", "text": "x", "attachments": ["jump/../report.txt"]},
     )
-    assert answer["comment"]["attachments"] == ["nest/report.txt"]
+    # The file the system opens by that name: POSIX follows 'jump' and then its
+    # '..'; Windows takes '..' off the name before it follows any link.
+    opened = "report.txt" if os.name == "nt" else "nest/report.txt"
+    assert answer["comment"]["attachments"] == [opened]
 
 
 def test_a_reply_answering_its_thread_is_written_and_a_name_is_written_as_given_short_of_its_dots(package):
