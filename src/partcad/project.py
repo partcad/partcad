@@ -3678,6 +3678,36 @@ class Project(project_config.Configuration):
             raise
 
     @_one_edit_at_a_time
+    def edit_package_declaration(self, edit, what: str = "the change", keys=None, read_back=None):
+        """Change this package's own declaration -- the top of its 'partcad.yaml' -- as 'edit_object_declaration' changes an object's.
+
+        What a package's own 'requirements:' are written with: 'edit' is handed
+        the document's mapping and changes it in place, and 'read_back' is handed
+        it as it was, as edited, and as PartCAD reads it out of the text about to
+        be written. Refused, with ValueError, for a template, and for a key the
+        edit changes that is shared through a YAML anchor.
+        """
+        config, yaml = self._load_to_edit(what)
+        shared = _shared_by_alias(config, config, keys or ())
+        if shared is not None:
+            raise ValueError(
+                "The package '%s' shares %s with another declaration through a YAML anchor or a merge key, so %s"
+                " would change both: write it by hand" % (self.name, shared, what)
+            )
+        before = copy.deepcopy(config) if read_back is not None else None
+        result = edit(config)
+        text = None
+        if read_back is not None:
+            from partcad_utils import config_yaml
+
+            written = io.StringIO()
+            yaml.dump(config, written)
+            text = written.getvalue()
+            read_back(before, config, config_yaml.load(text))
+        self._write_edited(config, yaml, text)
+        return result
+
+    @_one_edit_at_a_time
     def edit_object_declaration(
         self, kind: str, object_name: str, edit, what: str = "the change", keys=None, read_back=None
     ):

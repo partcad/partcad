@@ -166,3 +166,41 @@ def test_copy_from_a_revision(session):
 def test_copy_refuses(session, params):
     with pytest.raises(JsonRpcError):
         operations.copy_object(session, params)
+
+
+def test_a_package_s_requirements_say_what_can_be_added_to_them(session):
+    answer = operations.requirements_check(session, {"package": "//", "kind": "package"})
+
+    assert answer["kinds"] == ["feature", "has"]
+    assert answer["editable"] is None
+    assert answer["declared"] == answer["section"]
+
+
+def test_a_feature_and_a_yes_or_no_requirement_are_added_to_a_package_and_taken_out(session):
+    added = operations.requirements_add(
+        session,
+        {"package": "//", "kind": "package", "requirement": "feature", "name": "light", "value": "weighs little"},
+    )
+    operations.requirements_add(
+        session,
+        {"package": "//", "kind": "package", "requirement": "has", "name": "private_dependencies", "value": False},
+    )
+
+    assert added["kind"] == "package"
+    answer = operations.requirements_check(session, {"package": "//", "kind": "package"})
+    assert [feature["name"] for feature in answer["features"]] == ["cubes", "light"]
+    assert answer["declared"]["has_private_dependencies"] is False
+
+    operations.requirements_remove(
+        session, {"package": "//", "kind": "package", "requirement": "feature", "name": "light"}
+    )
+
+    answer = operations.requirements_check(session, {"package": "//", "kind": "package"})
+    assert [feature["name"] for feature in answer["features"]] == ["cubes"]
+
+
+def test_a_package_has_no_ports_of_its_own_to_require(session):
+    with pytest.raises(JsonRpcError):
+        operations.requirements_add(
+            session, {"package": "//", "kind": "package", "requirement": "port", "name": "top", "value": None}
+        )

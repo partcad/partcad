@@ -669,7 +669,13 @@ export class RequirementsView {
     private kindStrip(): HTMLElement {
         const strip = el('div', 'requirements-add');
         strip.appendChild(el('span', 'requirements-add-label', 'Add:'));
+        // Only what this object may hold: a package's own section is features
+        // and what its parts have, and the daemon says so ('kinds').
+        const offered = this.data?.kinds;
         for (const [kind, label] of KINDS) {
+            if (offered !== undefined && !offered.includes(kind)) {
+                continue;
+            }
             strip.appendChild(
                 this.button(label, 'requirements-button', `Add a requirement of this kind (pc req add ${kind})`, () =>
                     this.open(kind),

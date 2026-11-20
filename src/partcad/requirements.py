@@ -1858,6 +1858,15 @@ async def _verify_package_has(ctx, project, entries) -> None:
             unknown.append("%s:%s could not be made%s" % (project.name, name, why))
         else:
             parts.append(part)
+    built_from = [entry for entry in entries if HAS_KEYS[entry[0].name] in (DEPENDENCIES, PRIVATE_DEPENDENCIES)]
+    entries = [entry for entry in entries if entry not in built_from]
+    if built_from:
+        if unknown:
+            for _, check in built_from:
+                check.passed = False
+                check.detail = "not known: %s" % _first_few(unknown)
+        else:
+            await _verify_package_dependencies(ctx, project, parts, built_from)
     for requirement, check in entries:
         if unknown:
             check.passed = False
@@ -1890,6 +1899,55 @@ async def _verify_package_has(ctx, project, entries) -> None:
         check.passed = has == requirement.required
         if has and not requirement.required:
             detail = "it has one, and is required not to: %s" % detail
+        check.detail = detail
+
+
+async def _verify_package_dependencies(ctx, project, parts, entries) -> None:
+    """Hold a package to 'has_dependencies' and 'has_private_dependencies': what any part it declares draws on.
+
+    Of a package, what its parts draw on, together - not what its 'dependencies:'
+    import, which may be more than anything uses. A package its own parts are in
+    (the package itself, one under it) is no dependency of it.
+    """
+    from . import object_dependencies
+
+    packages, unknown = {}, []
+    for part in parts:
+        try:
+            found = await object_dependencies.collect_async(ctx, part)
+        except Exception as e:  # pylint: disable=broad-except
+            unknown.append("%s:%s: %s" % (part.project_name, part.name, e))
+            continue
+        unknown.extend(found.unknown)
+        for package, uses in found.packages.items():
+            if package == project.name or package.startswith(project.name.rstrip("/") + "/"):
+                continue
+            packages.setdefault(package, []).extend(use for use in uses if use not in packages.get(package, []))
+    for requirement, check in entries:
+        private = HAS_KEYS[requirement.name] == PRIVATE_DEPENDENCIES
+        drawn = (
+            {package: uses for package, uses in packages.items() if not object_dependencies.is_public(package)}
+            if private
+            else packages
+        )
+        has = bool(drawn)
+        if not has and unknown:
+            check.passed = False
+            check.detail = "not known: %s" % _first_few(unknown)
+            continue
+        what = "a package outside %s" % object_dependencies.PUBLIC if private else "another package"
+        if has:
+            detail = "its parts draw on %s" % object_dependencies.describe(drawn)
+            if not requirement.required:
+                detail = "it is required not to draw on %s, and its parts do: %s" % (
+                    what,
+                    object_dependencies.describe(drawn),
+                )
+        elif not parts:
+            detail = "the package declares no parts"
+        else:
+            detail = "its parts draw on no %s" % what[2:]
+        check.passed = has == requirement.required
         check.detail = detail
 
 

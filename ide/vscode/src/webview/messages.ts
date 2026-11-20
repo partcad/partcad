@@ -1586,6 +1586,12 @@ export interface RequirementsData {
     /** The yes-or-no requirements, as 'has_<name>' names them: 'material', 'private_dependencies', ... */
     // eslint-disable-next-line @typescript-eslint/naming-convention
     has_names?: string[];
+    /**
+     * The kinds of requirement this object may hold, as 'pc req add' names
+     * them, where it is not all of them: a package's own section is features
+     * and yes-or-no requirements of its parts alone.
+     */
+    kinds?: string[];
 }
 
 /** One commit that changed a package, as 'revisions.list' answers. */

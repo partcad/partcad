@@ -4163,7 +4163,9 @@ def requirements_check(session, params):
 
         with pc.logging.Process("Requirements", project.name):
             report = asyncio.run(requirements.check_package_async(ctx, project, verify=bool(params.get("verify"))))
-        return report.to_dict()
+        answer = report.to_dict()
+        answer.update(_package_requirements_sections(project))
+        return answer
     getters = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene, "sketch": ctx.get_sketch}
     refusal = "Only packages, parts, assemblies, scenes and sketches declare requirements; '%s' is none of them"
     _refuse_said_kind(params, getters, refusal)
@@ -4252,6 +4254,77 @@ def _requirements_sections(ctx, package, kind, name, obj) -> dict:
         "physics_fields": fields,
         "has_names": requirements_edit.has_names(),
     }
+
+
+# The kinds of requirement a package's own section may hold: the rest are of one
+# object's geometry (see 'requirements.PACKAGE_SECTIONS').
+_PACKAGE_REQUIREMENTS = ("feature", "has")
+
+
+def _package_requirements_sections(project) -> dict:
+    """'_requirements_sections' of a package: its own section, which is the one it is read with."""
+    from partcad import requirements_edit
+
+    own = project.config_obj.get("requirements") if isinstance(project.config_obj, dict) else None
+    section = None if own is None else requirements_edit.section_as_data(requirements_edit.structured(own))
+    return {
+        "section": section,
+        "declared": section,
+        "source": None,
+        "editable": _package_not_editable(project),
+        "physics_fields": {},
+        "has_names": requirements_edit.has_names(),
+        "kinds": list(_PACKAGE_REQUIREMENTS),
+    }
+
+
+def _package_not_editable(project):
+    """Why a package's own requirements cannot be written into its 'partcad.yaml', or None when they can."""
+    if getattr(project, "revision_sha", None) or "@" in project.name:
+        return "it is a revision, which is never written to"
+    config_path = getattr(project, "config_path", None)
+    if not config_path:
+        return "it has no 'partcad.yaml' of its own"
+    try:
+        with open(config_path, encoding="utf-8") as fp:
+            text = fp.read()
+    except OSError as e:
+        return "its 'partcad.yaml' cannot be read: %s" % e
+    if any(opening in text for opening in ("{{", "{%", "{#")):
+        return "its 'partcad.yaml' is a Jinja2 template, which is written by hand"
+    return None
+
+
+def _edit_package_requirements(session, params, edit, what):
+    """'requirements.add' or 'requirements.remove' of a package's own section: (package, what was changed)."""
+    from partcad import requirements_edit
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    project = _package_of_request(ctx, session.partcad, {"package": params.get("package")})
+    requirement = params.get("requirement")
+    if requirement not in _PACKAGE_REQUIREMENTS:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "A package requires features and yes-or-no facts of its parts ('feature', 'has'), not '%s': require that"
+            " of the objects themselves" % requirement,
+        )
+    why = _package_not_editable(project)
+    if why is not None:
+        raise JsonRpcError(USAGE_ERROR, "The requirements of %s cannot be changed: %s" % (project.name, why))
+    try:
+        said = project.edit_package_declaration(
+            edit,
+            what,
+            keys=requirements_edit.TOUCHED,
+            read_back=requirements_edit.read_back(requirement, params.get("name"), params.get("instances") or None),
+        )
+    except (requirements_edit.EditError, ValueError) as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    # Written behind the context's back, as 'copy.object' writes.
+    ctx.reload_packages([project.name])
+    return project, said
 
 
 def _requirements_not_editable(ctx, package, kind, name, obj):
@@ -4359,6 +4432,29 @@ def requirements_add(session, params):
 
     from partcad import requirements, requirements_edit
 
+    if _said_kind(params) == "package":
+        # A package's own section: its features, and what every part it declares has.
+        value = params.get("value")
+        if params.get("text"):
+            value = _typed(value)
+        edited = _edit_package_requirements(
+            session,
+            params,
+            lambda declaration: requirements_edit.add(
+                declaration,
+                params.get("requirement"),
+                params.get("name"),
+                value,
+                replace=bool(params.get("replace")),
+            ),
+            "its requirements",
+        )
+        if edited is None:
+            return None
+        project, said = edited
+        session.partcad.logging.info("Required of %s: %s" % (project.name, said))
+        return {"object": project.name, "kind": "package", "changed": said}
+
     found = _requirement_object(session, params)
     if found is None:
         return None
@@ -4413,6 +4509,24 @@ def requirements_remove(session, params):
     ``with_references``, which takes it out of those as well.
     """
     from partcad import requirements_edit
+
+    if _said_kind(params) == "package":
+        edited = _edit_package_requirements(
+            session,
+            params,
+            lambda declaration: requirements_edit.remove(
+                declaration,
+                params.get("requirement"),
+                params.get("name"),
+                with_references=bool(params.get("with_references")),
+            ),
+            "its requirements",
+        )
+        if edited is None:
+            return None
+        project, said = edited
+        session.partcad.logging.info("No longer required of %s: %s" % (project.name, said))
+        return {"object": project.name, "kind": "package", "changed": said}
 
     found = _requirement_object(session, params)
     if found is None:

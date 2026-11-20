@@ -404,3 +404,34 @@ def test_a_yes_or_no_requirement_of_a_package_with_no_parts_holds(tmp_path):
     assert report["verified"] is True
     assert [(check["name"], check["passed"]) for check in report["requirements"]] == [("has_weight", True)]
     assert report["requirements"][0]["detail"] == "the package declares no parts"
+
+
+def test_a_package_whose_parts_draw_on_nothing_else_has_no_dependencies(tmp_path):
+    _write(
+        tmp_path / "own" / "partcad.yaml",
+        {
+            "name": "//",
+            "requirements": {"has_dependencies": False, "has_private_dependencies": False},
+            "parts": {"cube": _cube(10), "copy": {"type": "alias", "source": ":cube"}},
+        },
+    )
+    context = pc.Context(str(tmp_path / "own"), search_root=False)
+
+    async def built(self, ctx):
+        # Nothing to build: what a part is in is not what this is about.
+        self._metadata = {}
+        return object()
+
+    import partcad.part
+
+    original = partcad.part.Part.get_wrapped
+    partcad.part.Part.get_wrapped = built
+    try:
+        report = asyncio.run(requirements.check_package_async(context, context.root, verify=True)).to_dict()
+    finally:
+        partcad.part.Part.get_wrapped = original
+
+    assert {(check["name"], check["passed"]) for check in report["requirements"]} == {
+        ("has_dependencies", True),
+        ("has_private_dependencies", True),
+    }
