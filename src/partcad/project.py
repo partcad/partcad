@@ -3981,6 +3981,7 @@ class Project(project_config.Configuration):
                 thread 'thread' to answer.
         """
         from ruamel.yaml.comments import CommentedMap, CommentedSeq
+
         from partcad_utils import comments as pc_comments
         from partcad_utils import config_yaml
 
