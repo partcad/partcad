@@ -38,6 +38,14 @@ def _commit(path, message, tag=None) -> str:
     return str(oid)
 
 
+def _symlink_or_skip(target, link):
+    """A symbolic link, or the test skipped where this host will not make one (Windows without the privilege)."""
+    try:
+        os.symlink(str(target), str(link))
+    except (OSError, NotImplementedError) as e:
+        pytest.skip("this host makes no symbolic links: %s" % e)
+
+
 def _write(path, config):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(config, sort_keys=False))
@@ -479,7 +487,7 @@ def test_a_commit_holding_the_export_guard_is_not_written_out(tmp_path):
     _write(root / "partcad.yaml", {"name": "//", "parts": {"cube": _cube(1)}})
     target = tmp_path / "victim.txt"
     target.write_text("keep me")
-    os.symlink(str(target), str(root / package_versions.GUARD))
+    _symlink_or_skip(target, root / package_versions.GUARD)
     sha = _commit(root, "first", tag="v1")
     # Not through 'repository_of', which the guard in the working tree already
     # turns away: what is pinned is that writing the commit out refuses it.
@@ -772,7 +780,7 @@ def test_a_tree_is_written_out_as_a_checkout_would_be(tmp_path):
     _write(root / "partcad.yaml", {"name": "//"})
     (root / "run.sh").write_text("#!/bin/sh\n")
     os.chmod(str(root / "run.sh"), 0o755)
-    os.symlink("partcad.yaml", str(root / "link.yaml"))
+    _symlink_or_skip("partcad.yaml", root / "link.yaml")
     sha = _commit(root, "first")
     repository = package_versions.Repository(repo, "")
     cache = tmp_path / "state" / "git"
@@ -1069,8 +1077,38 @@ def test_an_entry_the_file_system_takes_for_one_already_written_is_refused(tmp_p
     sha = _commit(root, "first")
     dest = tmp_path / "dest"
     dest.mkdir()
-    (dest / "partcad.yaml").symlink_to(tmp_path / "elsewhere.yaml")
+    (dest / "partcad.yaml").write_text("already here")
+
+    with pytest.raises(ValueError, match="takes for the same name"):
+        package_versions._write_tree(repo, repo[sha].peel(pygit2.Commit).tree, str(dest), top=True)
+    assert (dest / "partcad.yaml").read_text() == "already here"
+
+
+def test_an_entry_already_written_as_a_link_is_not_written_through(tmp_path):
+    root = tmp_path / "through"
+    repo = pygit2.init_repository(str(root))
+    _write(root / "partcad.yaml", {"name": "//"})
+    sha = _commit(root, "first")
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    _symlink_or_skip(tmp_path / "elsewhere.yaml", dest / "partcad.yaml")
 
     with pytest.raises(ValueError, match="takes for the same name"):
         package_versions._write_tree(repo, repo[sha].peel(pygit2.Commit).tree, str(dest), top=True)
     assert not (tmp_path / "elsewhere.yaml").exists()
+
+
+def test_a_branch_named_like_the_start_of_its_commit_is_still_a_branch(ctx, repo):
+    root, first, second = repo
+    git = pygit2.Repository(str(root))
+    name = first[:7]
+    branch = git.branches.local.create(name, git[first])
+
+    assert ctx.get_project("//@" + name).revision_sha == first
+    assert "//@" + name not in ctx.project_aliases
+    branch.set_target(second)
+    assert ctx.get_project("//@" + name).revision_sha == second
+    # The start of a commit's id that is no branch or tag is remembered.
+    package_versions_repository = package_versions.Repository(git, "")
+    assert package_versions.names_a_commit(package_versions_repository, second[:7], second)
+    assert not package_versions.names_a_commit(package_versions_repository, "v1", first)

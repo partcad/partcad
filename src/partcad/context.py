@@ -1088,7 +1088,7 @@ class Context:
         # that a context a daemon keeps warm follows 'main' when it moves on
         # instead of answering with the commit it was first loaded at; the
         # commit is still loaded once, under its id.
-        if revision != sha and sha.startswith(revision.lower()):
+        if revision != sha and package_versions.names_a_commit(repository, revision, sha):
             self.project_aliases[package_versions.versioned_name(base, revision)] = project.name
         return project
 

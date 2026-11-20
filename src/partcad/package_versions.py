@@ -78,6 +78,8 @@ _LFS_POINTER = b"version https://git-lfs.github.com/spec/v1"
 # one, and is never made into a path -- 'oid sha256:/home/me/secret' would
 # otherwise be read and written out into the revision.
 _LFS_OID = re.compile(r"^[0-9a-f]{64}$")
+# What may be a commit id, or the start of one.
+_COMMIT_PREFIX = re.compile(r"^[0-9a-f]{4,40}$")
 
 # How many commits a listing of a package's revisions looks at, at most, to find
 # 'REVISIONS_LIMIT' that changed it: a package added late to a long history is
@@ -330,6 +332,30 @@ def _local_commit(repo: pygit2.Repository, revision: str) -> typing.Optional[pyg
         except (ValueError, pygit2.GitError):
             continue
     return None
+
+
+def names_a_commit(repository: Repository, revision: str, sha: str) -> bool:
+    """Whether 'revision' named the commit 'sha' by its id, or the start of it, rather than by a branch or a tag.
+
+    What cannot move. A branch called 'cafe' that points at a commit 'cafe...'
+    is still a branch: git resolves a reference before an abbreviated id, so
+    the name says nothing about where it will point next.
+    """
+    revision = revision.lower()
+    if not _COMMIT_PREFIX.match(revision) or not sha.lower().startswith(revision):
+        return False
+    repo = repository.repo
+    for name in ("refs/tags/" + revision, "refs/heads/" + revision, "refs/remotes/origin/" + revision):
+        try:
+            repo.lookup_reference(name)
+            return False
+        except (KeyError, ValueError, pygit2.GitError):
+            pass
+    try:
+        repo.lookup_reference_dwim(revision)
+        return False
+    except (KeyError, ValueError, pygit2.GitError):
+        return True
 
 
 def resolve(repository: Repository, revision: str, fetch: bool = False, user_config=None) -> str:
