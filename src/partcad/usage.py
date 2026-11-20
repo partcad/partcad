@@ -47,28 +47,51 @@ def _canonical(ctx, package: str) -> str:
     A revision named by a tag or a branch that nothing has loaded yet is read as
     the commit it names in the package's repository, as it would be loaded -
     without loading it, and without fetching anything: what is asked is which
-    revision a declaration means, not what is in it.
+    revision a declaration means, not what is in it. Each '@' along the name is
+    read so ('//outer@v1/dep@v2'), against the package it follows, as far as
+    what is loaded already says.
     """
     known = ctx.project_aliases.get(package)
     if known is not None or package in ctx.projects or not package_versions.is_versioned(package):
         return known or package
-    for base, revision, rest in package_versions.candidates(package):
-        current = ctx.projects.get(base)
-        repository = package_versions.repository_of(current.config_dir) if current is not None else None
-        if repository is None:
-            continue
+    base, selector = package_versions.split(package)
+    found = _at_revision(ctx, base, selector)
+    return package if found is None else found
+
+
+def _at_revision(ctx, name: str, selector: str) -> typing.Optional[str]:
+    """The loaded name of the package 'name' at the revision 'selector' starts with, and of what the rest names below it.
+
+    None when 'name' is not loaded or has no repository, or nothing in it is
+    what 'selector' names - which nothing here fetches.
+    """
+    loaded = ctx.project_aliases.get(name, name)
+    current = ctx.projects.get(loaded)
+    repository = package_versions.repository_of(current.config_dir) if current is not None else None
+    if repository is None:
+        return None
+    for revision, rest in package_versions.selector_candidates(selector):
         try:
             sha = package_versions.resolve(repository, revision)
         except ValueError:
             continue
-        versioned = package_versions.versioned_name(base, sha)
-        versioned = ctx.project_aliases.get(versioned, versioned)
-        if not rest:
-            return versioned
-        from partcad_utils.utils import get_child_project_path
+        versioned = package_versions.versioned_name(loaded, sha)
+        return _below(ctx, ctx.project_aliases.get(versioned, versioned), rest)
+    return None
 
-        return get_child_project_path(versioned, rest)
-    return package
+
+def _below(ctx, name: str, rest: str) -> str:
+    """The loaded name of what 'rest' names below the package 'name', which may be at a revision of its own."""
+    if not rest:
+        return name
+    from partcad_utils.utils import get_child_project_path
+
+    path, separator, selector = rest.partition(package_versions.SEPARATOR)
+    child = get_child_project_path(name, path) if path else name
+    if not separator:
+        return child
+    found = _at_revision(ctx, child, selector)
+    return found if found is not None else child + package_versions.SEPARATOR + selector
 
 
 def _strip_parameters(name: str) -> str:

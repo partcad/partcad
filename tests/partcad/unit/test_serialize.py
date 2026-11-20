@@ -266,3 +266,105 @@ def test_an_instance_is_its_declaration_with_the_values_as_defaults(ctx):
     copied = serialize.declaration(ctx.root, "part", "sized;width=7")
 
     assert copied["parameters"]["width"] == 7
+
+
+# ---- the second review ------------------------------------------------------
+
+
+def test_a_copy_of_raw_software_under_the_name_of_its_file_s_stem_keeps_the_file(tmp_path):
+    # Raw software has no extension of its own: without 'path', 'boot' is the
+    # file 'boot', not 'boot.bin'.
+    root = tmp_path / "s"
+    root.mkdir()
+    (root / "partcad.yaml").write_text(yaml.safe_dump({"name": "//", "software": {"fw": {"path": "boot.bin"}}}))
+    (root / "boot.bin").write_bytes(b"\0")
+    context = pc.Context(str(root), search_root=False)
+
+    assert serialize.declaration(context.root, "software", "fw", context.root, "boot")["path"] == "boot.bin"
+
+
+def test_a_copy_names_a_file_its_type_would_not_find_by_the_new_name(tmp_path):
+    # A 'step' part called 'shell' looks for 'shell.step', not 'shell.stp'.
+    root = tmp_path / "p"
+    root.mkdir()
+    (root / "partcad.yaml").write_text(
+        yaml.safe_dump({"name": "//", "parts": {"old": {"type": "step", "path": "shell.stp"}}}, sort_keys=False)
+    )
+    (root / "shell.stp").write_text("ISO-10303-21;\nEND-ISO-10303-21;\n")
+    context = pc.Context(str(root), search_root=False)
+
+    assert serialize.declaration(context.root, "part", "old", context.root, "shell")["path"] == "shell.stp"
+
+
+def test_an_interface_instance_is_its_declaration_with_the_values_as_defaults(tmp_path):
+    root = tmp_path / "i"
+    root.mkdir()
+    (root / "partcad.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": "//",
+                "interfaces": {
+                    "hole": {
+                        "ports": {"h": {"location": [[0, 0, 0], [0, 0, 1], 0]}},
+                        "parameters": {"size": {"type": "float", "default": 3.0}},
+                    }
+                },
+            },
+            sort_keys=False,
+        )
+    )
+    context = pc.Context(str(root), search_root=False)
+
+    copied = serialize.declaration(context.root, "interface", "hole;size=4", context.root, "hole4")
+
+    assert copied["parameters"]["size"] in (4, 4.0, {"type": "float", "default": 4.0})
+
+
+def test_an_assy_file_of_a_revision_naming_the_revision_s_own_package_is_not_copied_out_of_it(tmp_path, monkeypatch):
+    import pygit2
+
+    root = tmp_path / "r"
+    pygit2.init_repository(str(root))
+    (root / "partcad.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": "//",
+                "parts": {"cube": {"type": "basic", "cuboid": 1}},
+                "assemblies": {"pair": {"type": "assy"}},
+            },
+            sort_keys=False,
+        )
+    )
+    # Written in full: today's '//' as far as the working tree goes, the
+    # revision's own inside the revision.
+    (root / "pair.assy").write_text(yaml.safe_dump({"links": [{"part": "cube", "package": "//"}]}))
+    (root / "other").mkdir()
+    (root / "other" / "partcad.yaml").write_text("parts: {}\n")
+    repo = pygit2.Repository(str(root))
+    repo.index.add_all()
+    repo.index.write()
+    signature = pygit2.Signature("Test", "test@example.com", 1_700_000_000, 0)
+    sha = str(repo.create_commit("HEAD", signature, signature, "first", repo.index.write_tree(), []))
+    context = pc.Context(str(root), search_root=False)
+    monkeypatch.setattr(context.user_config, "internal_state_dir", str(tmp_path / "state"))
+    at_first = context.get_project("//@" + sha)
+
+    with pytest.raises(ValueError, match="that revision's"):
+        serialize.declaration(at_first, "assembly", "pair", context.get_project("//other"), "pair")
+    # The working tree's file says the same of today's '//', and is copied.
+    assert serialize.declaration(context.root, "assembly", "pair", context.get_project("//other"), "pair")
+
+
+def test_copy_refuses_a_name_declared_since_the_package_was_loaded(tmp_path):
+    root = tmp_path / "late"
+    root.mkdir()
+    (root / "partcad.yaml").write_text(
+        yaml.safe_dump({"name": "//", "sketches": {"disc": {"type": "basic", "circle": 5}}}, sort_keys=False)
+    )
+    context = pc.Context(str(root), search_root=False)
+    with open(context.root.config_path, "a", encoding="utf-8") as f:
+        f.write("  late:\n    type: basic\n    circle: 1\n")
+
+    with pytest.raises(ValueError, match="could not be declared"):
+        copy_object_action(context.root, "sketch", "disc", context.root, "late")
+    assert "circle: 1" in open(context.root.config_path, encoding="utf-8").read()

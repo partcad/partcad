@@ -437,9 +437,8 @@ class Context:
         self.projects = {}
         # Other names a package in 'self.projects' answers to: a revision asked
         # for by a tag or a branch ('//pkg@v1.2') is the package loaded under
-        # its commit ('//pkg@<sha>'), and a commit a downloaded dependency is
-        # checked out at is that dependency as loaded (see
-        # 'get_versioned_project'). Alias -> the name in 'self.projects'; kept
+        # its commit ('//pkg@<sha>') (see 'get_versioned_project'). Alias ->
+        # the name in 'self.projects'; kept
         # apart from it so that nothing walking the loaded packages meets one
         # package twice.
         self.project_aliases = {}
@@ -1051,12 +1050,12 @@ class Context:
         sha = package_versions.resolve(repository, revision, fetch=downloaded, user_config=self.user_config)
         name = package_versions.versioned_name(base, sha)
 
+        # Written out even where a copy PartCAD downloaded is checked out at
+        # this very commit: that copy is the package without a revision, which
+        # may be written to, and a revision never is (see
+        # 'Project.not_written_to') -- answered with it, '//dep@<sha>' would be
+        # a way to write into '//dep' that nothing refuses.
         project = self._registered_project(name)
-        if project is None and downloaded and repository.head() == sha:
-            # A copy PartCAD checked out at this very commit, with nothing of
-            # anybody's in it: the revision is the package already loaded.
-            self.project_aliases[name] = current.name
-            project = current
         if project is None:
             root = package_versions.export(repository, sha, os.path.join(self.user_config.internal_state_dir, "git"))
             path = os.path.join(root, *repository.relpath.split("/")) if repository.relpath else root

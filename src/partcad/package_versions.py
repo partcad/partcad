@@ -35,10 +35,10 @@ read. A package without '@' is loaded the way it always was, under its plain
 name: the working tree's for the package the user is in, and the downloaded
 copy's for a dependency.
 
-A dependency PartCAD downloaded is itself checked out at a commit, with nothing
-of anybody's in its working tree, so '//pkg@<that commit>' *is* the package
-already loaded as '//pkg': it is answered with that package, as an alias, rather
-than written out and loaded a second time (see 'Context.get_versioned_project').
+A dependency PartCAD downloaded is itself checked out at a commit, and
+'//pkg@<that commit>' is still written out and loaded on its own: the copy is the
+package without a revision, which may be written to, and a revision never is
+(see 'Context.get_versioned_project' and 'Project.not_written_to').
 
 What a revision cannot reach is a relative reference *out of* the package
 ('../other:part'): that names the other package as it is loaded now, because the
@@ -407,15 +407,24 @@ def _write_tree(repo: pygit2.Repository, tree: pygit2.Tree, dest: str, top: bool
                 os.chmod(path, 0o755)
 
 
+# What the name of a revision written out by 'export' starts with. A copy of a
+# downloaded dependency is named by 'cache_dir_name', which starts with a hex
+# digest, so no copy's name starts with this.
+EXPORT_PREFIX = "revision-"
+
+
 def export(repository: Repository, sha: str, git_cache_dir: str) -> str:
     """The directory the commit 'sha' of 'repository' is written out in, writing it if it is not there yet.
 
-    Named the way a downloaded dependency's copy is ('cache_dir_name'), after
-    the repository and the commit, so the two sit side by side in
-    '~/.partcad/git' and the healthcheck and 'pc system status' see both. Written
-    into a temporary directory and moved into place, under a lock, so that two
-    processes asking for one revision at once write it once and neither reads it
-    half written.
+    Kept in '~/.partcad/git' beside the copies of downloaded dependencies, so
+    the healthcheck and 'pc system status' see both, and named after the
+    repository and the commit as they are ('cache_dir_name') -- behind
+    'EXPORT_PREFIX', which no copy's name starts with: a dependency pinned to
+    this very commit is checked out under the name 'cache_dir_name' gives, and
+    a copy and an export at one path would each take the other for something
+    half written and delete it. Written into a temporary directory and moved
+    into place, under a lock, so that two processes asking for one revision at
+    once write it once and neither reads it half written.
 
     Returns the directory of the repository's working tree; the package is at
     'repository.relpath' under it.
@@ -423,7 +432,7 @@ def export(repository: Repository, sha: str, git_cache_dir: str) -> str:
     from .project_factory_git import cache_dir_name
 
     os.makedirs(git_cache_dir, exist_ok=True)
-    name = cache_dir_name(repository.identity, sha)
+    name = EXPORT_PREFIX + cache_dir_name(repository.identity, sha)
     dest = os.path.join(git_cache_dir, name)
     guard = os.path.join(dest, GUARD)
     if os.path.exists(guard):

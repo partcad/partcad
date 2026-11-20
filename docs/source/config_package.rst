@@ -282,10 +282,9 @@ commit is written out of the repository into a directory named after the
 repository and the commit, beside the copies of the dependencies PartCAD
 downloads, so uncommitted edits are part of no revision, and a revision reads the
 same however often it is read. A package without ``@`` is loaded the way it always
-was, under its plain name. A dependency PartCAD downloaded is checked out at one
-commit with nothing of anybody's in it, so ``<dependency>@<that commit>`` is the
-dependency as already loaded, and is answered with it rather than written out a
-second time. A revision a downloaded dependency does not have is fetched from
+was, under its plain name. ``<dependency>@<commit>`` is written out on its own even
+for the commit a downloaded dependency is checked out at, so that it is read-only
+like every revision. A revision a downloaded dependency does not have is fetched from
 where it came from; one the repository of the package you are in does not have is
 not -- what it lacks is yours to fetch.
 

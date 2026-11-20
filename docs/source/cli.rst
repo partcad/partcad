@@ -1283,7 +1283,8 @@ Object commands
   is never written to; ``--dry-run`` prints the declaration without writing it. An assembly or a scene read from
   an ASSY file is copied into another package only when that file names every object in full
   (``//package:name``): the copy reads the original's file, and a link written ``part: bolt`` would there name the
-  other package's bolt.
+  other package's bolt. Out of a revision, it is copied only when that file names nothing of the revision's own
+  package, since inside the revision ``//pkg:bolt`` is the revision's bolt and in the copy it would be today's.
 
   .. code-block:: shell
 

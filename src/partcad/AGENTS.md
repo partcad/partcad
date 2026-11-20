@@ -1348,7 +1348,9 @@ at all).
   `Context.projects` so that nothing walking the loaded packages meets one package twice. A package without `@`
   is loaded exactly as before. A reference a revision makes to its own package or below is rebased into the
   revision (`package_versions.rebase`, applied by `Project.relocate`); one out of it is not. A downloaded
-  dependency at the commit it is checked out at is answered with itself. `revision.package_revision` knows a
+  dependency at the commit it is checked out at is still written out on its own, so that nothing writes into a
+  revision through the copy (`Project.not_written_to` refuses every write into a revision; the export is named
+  apart from the copies, behind `package_versions.EXPORT_PREFIX`). `revision.package_revision` knows a
   revision's commit from the guard `export` leaves (`exported_sha`), not from a repository, and
   `repository_of` refuses an export, which a home directory kept in git would otherwise answer for.
 - **An object's declaration can be written back out of the context** (`serialize.py`). What `pc copy` writes and

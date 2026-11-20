@@ -72,7 +72,7 @@ def copy_object_action(
     }
     if dry_run:
         return result
-    if not target_project.add_object_config(section, target_name, serialize.styled(declaration)):
+    if not target_project.add_object_config(section, target_name, serialize.styled(declaration), replace=False):
         raise ValueError("%s could not be declared in %s" % (result["target"], target_project.config_path))
     result["written"] = True
     pc_logging.info("Declared %s, a copy of %s" % (result["target"], result["source"]))

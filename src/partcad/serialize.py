@@ -163,6 +163,14 @@ def _file_path(project, kind: str, name: str, config: dict, target_project, targ
     if config.get("fileFrom") is not None:
         # Downloaded: 'path' is where it is kept, which the declaration says or not.
         return config.get("path")
+    if (
+        "path" not in config
+        and target_name == name
+        and os.path.realpath(target_project.config_dir) == os.path.realpath(project.config_dir)
+    ):
+        # Under the same name beside it: where the original found its file
+        # without being told is where the copy finds it.
+        return None
     if "path" not in config:
         # Where a file of its own would be if it had one: '<name>.<extension>'.
         # Nothing there, and nothing named, is an object with no file -- a basic
@@ -175,11 +183,36 @@ def _file_path(project, kind: str, name: str, config: dict, target_project, targ
     if not isinstance(source_file, str) or not source_file:
         return config.get("path")
     source_file = os.path.normpath(os.path.abspath(source_file))
-    extension = os.path.splitext(source_file)[1]
-    default = os.path.normpath(os.path.join(os.path.abspath(target_project.config_dir), target_name + extension))
-    if default == source_file:
-        return None
+    extension = _default_extension(project, kind, config)
+    if extension is not None:
+        default = os.path.normpath(os.path.join(os.path.abspath(target_project.config_dir), target_name + extension))
+        if default == source_file:
+            return None
     return os.path.relpath(source_file, os.path.abspath(target_project.config_dir)).replace(os.sep, "/")
+
+
+def _default_extension(project, kind: str, config: dict) -> typing.Optional[str]:
+    """What the factory of the object's type puts after its name when no 'path' says where its file is.
+
+    The type's, not the file's: a '.stp' part is read as '<name>.step' without a
+    'path' to say otherwise, and raw software as '<name>', whatever the file it
+    was declared at is called. None where that is not known, which keeps 'path'.
+    """
+    if kind == "software":
+        # 'SoftwareFactoryRaw': a firmware image is a '.bin' or an '.img' or
+        # neither, so the name is the whole default.
+        return ""
+    from .project import OBJECT_KIND_SECTIONS
+
+    section = OBJECT_KIND_SECTIONS.get(kind)
+    kind_type = config.get("type")
+    if section is None or not isinstance(kind_type, str):
+        return None
+    try:
+        extension = project.extension_for(section, kind_type)
+    except Exception:  # pylint: disable=broad-except
+        return None
+    return None if not extension else "." + extension
 
 
 def _assy_file(project, kind: str, name: str, config: dict) -> typing.Optional[str]:
@@ -201,13 +234,17 @@ def _links_not_portable(project, kind: str, name: str, config: dict) -> typing.O
     without a package ('part: bolt'), or with one relative to the file's
     ('package: ../std'), or the interface a 'connect:' names without one, is
     read against the package that declares the assembly -- which for the copy
-    is another package, and another bolt. Refused rather than rewritten: the
-    file is the original's, shared with it.
+    is another package, and another bolt. So is a link written in full inside a
+    revision: '//pkg:bolt' in a revision of '//pkg' is that revision's bolt
+    ('package_versions.rebase'), and in the copy it would be today's. Refused
+    rather than rewritten: the file is the original's, shared with it.
     """
     path = _assy_file(project, kind, name, config)
     if path is None:
         return None
     import yaml
+
+    from . import package_versions
 
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -216,22 +253,32 @@ def _links_not_portable(project, kind: str, name: str, config: dict) -> typing.O
         return "its ASSY file %s cannot be read as YAML (a Jinja2 template is not), so its links cannot be checked" % (
             project.rel_path(path)
         )
-    found = []
+    relative, revisions = [], []
 
     def absolute(value) -> bool:
         return isinstance(value, str) and value.startswith("//")
 
+    def check(value) -> None:
+        if not absolute(value):
+            relative.append(str(value))
+        elif package_versions.rebase(project.name, value) != value:
+            revisions.append(value)
+
     def walk(node):
         if isinstance(node, dict):
-            if any(key in node for key in ("part", "assembly", "scene")) and not absolute(node.get("package")):
+            if any(key in node for key in ("part", "assembly", "scene")):
                 named = next(node[key] for key in ("part", "assembly", "scene") if key in node)
-                if not (absolute(named) and ":" in str(named)):
-                    found.append(str(named))
+                if absolute(node.get("package")):
+                    check(node["package"])
+                elif absolute(named) and ":" in str(named):
+                    check(named)
+                else:
+                    relative.append(str(named))
             connect = node.get("connect")
             if isinstance(connect, dict):
                 for key in ("with", "to"):
-                    if isinstance(connect.get(key), str) and not absolute(connect[key]):
-                        found.append(connect[key])
+                    if isinstance(connect.get(key), str):
+                        check(connect[key])
             for value in node.values():
                 walk(value)
         elif isinstance(node, list):
@@ -239,12 +286,24 @@ def _links_not_portable(project, kind: str, name: str, config: dict) -> typing.O
                 walk(value)
 
     walk(document)
-    if not found:
-        return None
-    shown = ", ".join("'%s'" % each for each in found[:3]) + (
-        " and %d more" % (len(found) - 3) if len(found) > 3 else ""
-    )
-    return "its ASSY file %s names %s relative to its own package" % (project.rel_path(path), shown)
+
+    def listed(found) -> str:
+        return ", ".join("'%s'" % each for each in found[:3]) + (
+            " and %d more" % (len(found) - 3) if len(found) > 3 else ""
+        )
+
+    if relative:
+        return (
+            "its ASSY file %s names %s relative to its own package. Copy it within its own package, or write the"
+            " names in full" % (project.rel_path(path), listed(relative))
+        )
+    if revisions:
+        return "its ASSY file %s names %s, which in %s are that revision's and in the copy would be as they are now" % (
+            project.rel_path(path),
+            listed(revisions),
+            project.name,
+        )
+    return None
 
 
 def config_of(project, kind: str, name: str):
@@ -254,8 +313,19 @@ def config_of(project, kind: str, name: str):
     declaration as that instance has it: the values as its parameters'
     defaults.
     """
-    if ";" in name and kind in ("sketch", "part", "assembly", "scene"):
-        instance = _object(project, kind, name)
+    if ";" in name:
+        if kind in ("sketch", "part", "assembly", "scene"):
+            instance = _object(project, kind, name)
+        elif kind == "interface":
+            # Its values canonicalized and applied as a reference's would be
+            # ('Project._interface_object'); a command is never refused one.
+            try:
+                instance = project.get_interface(name)
+            except Exception:  # pylint: disable=broad-except
+                instance = None
+        else:
+            # No other kind takes parameter values.
+            return None
         config = getattr(instance, "config", None) if instance is not None else None
         return config if isinstance(config, dict) else None
     if kind in _DECLARED:
@@ -323,8 +393,7 @@ def declaration(project, kind: str, name: str, target_project=None, target_name:
         why = _links_not_portable(project, kind, declared_name, config)
         if why is not None:
             raise ValueError(
-                "%s:%s cannot be copied into %s: %s. Copy it within its own package, or write the names in full"
-                % (project.name, declared_name, target_project.name, why)
+                "%s:%s cannot be copied into %s: %s" % (project.name, declared_name, target_project.name, why)
             )
 
     for key in [key for key, value in result.items() if value is None]:

@@ -1922,12 +1922,18 @@ def _is_own(ctx, project, package: str) -> bool:
     By where its files are rather than by its name: every package is named
     under the root's, '//', and a dependency of a package is named under it --
     neither makes it the package's own. A sub-folder, or a dependency declared
-    with a local path inside the package, is.
+    with a local path inside the package, is -- in a downloaded copy or a
+    revision as much as in a working tree, since a package's sub-folders are
+    downloaded (or written out) with it. What PartCAD downloads for a package
+    that it did not download is never its own, wherever the cache happens to be:
+    a workspace in the home directory has '~/.partcad/git' inside it.
     """
     if package == project.name:
         return True
     other = ctx.projects.get(ctx.project_aliases.get(package, package))
-    if other is None or getattr(other, "revision_sha", None) or ctx.is_downloaded(other):
+    if other is None or getattr(other, "revision_sha", None):
+        return False
+    if ctx.is_downloaded(other) and not ctx.is_downloaded(project):
         return False
     import os
 

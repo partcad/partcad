@@ -266,11 +266,11 @@ def test_a_package_is_compared_by_its_rendered_configuration(ctx, repo):
     assert "desc: version two" in rights
 
 
-def test_an_object_not_declared_at_the_revision_is_compared_with_nothing(ctx, repo):
+def test_an_object_not_declared_at_the_revision_is_compared_with_nothing(ctx, repo, monkeypatch):
     root, first, _ = repo
     _write(root / "partcad.yaml", {"name": "//", "parts": {"cube": _cube(30), "new": _cube(1)}})
     context = pc.Context(str(root), search_root=False)
-    context.user_config.internal_state_dir = ctx.user_config.internal_state_dir
+    monkeypatch.setattr(context.user_config, "internal_state_dir", ctx.user_config.internal_state_dir)
 
     compared = revisions.compare(context, context.root, "part", "new", first)
 
@@ -300,7 +300,7 @@ def test_what_uses_an_object_is_counted_among_what_is_loaded(ctx):
     ]
 
 
-def test_what_uses_a_revision_is_what_names_it_by_any_of_its_names(ctx, repo, tmp_path):
+def test_what_uses_a_revision_is_what_names_it_by_any_of_its_names(ctx, repo, tmp_path, monkeypatch):
     root, first, _ = repo
     _write(
         root / "users" / "partcad.yaml",
@@ -312,7 +312,7 @@ def test_what_uses_a_revision_is_what_names_it_by_any_of_its_names(ctx, repo, tm
         },
     )
     context = pc.Context(str(root), search_root=False)
-    context.user_config.internal_state_dir = str(tmp_path / "state")
+    monkeypatch.setattr(context.user_config, "internal_state_dir", str(tmp_path / "state"))
     context.get_project("//users")
     # Loaded, as the IDE would have by the time anyone asked.
     context.get_part("//users:old")
@@ -324,7 +324,7 @@ def test_what_uses_a_revision_is_what_names_it_by_any_of_its_names(ctx, repo, tm
     assert not any(row["package"].startswith("//@") for row in used)
 
 
-def test_an_assembly_that_places_one_part_twice_uses_it_twice(ctx, repo, tmp_path):
+def test_an_assembly_that_places_one_part_twice_uses_it_twice(ctx, repo, tmp_path, monkeypatch):
     root, first, _ = repo
     _write(root / "users" / "partcad.yaml", {"assemblies": {"pair": {"type": "assy"}}})
     (root / "users" / "pair.assy").write_text(
@@ -338,7 +338,7 @@ def test_an_assembly_that_places_one_part_twice_uses_it_twice(ctx, repo, tmp_pat
         )
     )
     context = pc.Context(str(root), search_root=False)
-    context.user_config.internal_state_dir = str(tmp_path / "state")
+    monkeypatch.setattr(context.user_config, "internal_state_dir", str(tmp_path / "state"))
     assembly = context.get_assembly("//users:pair")
     asyncio.run(assembly.do_instantiate())
 
@@ -406,7 +406,7 @@ def test_a_yes_or_no_requirement_of_a_package_with_no_parts_holds(tmp_path):
     assert report["requirements"][0]["detail"] == "the package declares no parts"
 
 
-def test_a_package_whose_parts_draw_on_nothing_else_has_no_dependencies(tmp_path):
+def test_a_package_whose_parts_draw_on_nothing_else_has_no_dependencies(tmp_path, monkeypatch):
     _write(
         tmp_path / "own" / "partcad.yaml",
         {
@@ -424,12 +424,12 @@ def test_a_package_whose_parts_draw_on_nothing_else_has_no_dependencies(tmp_path
 
     import partcad.part
 
-    original = partcad.part.Part.get_wrapped
-    partcad.part.Part.get_wrapped = built
-    try:
-        report = asyncio.run(requirements.check_package_async(context, context.root, verify=True)).to_dict()
-    finally:
-        partcad.part.Part.get_wrapped = original
+    # Through monkeypatch, which takes the attribute off 'Part' again: 'Part'
+    # inherits 'get_wrapped', and putting back what 'Part.get_wrapped' read
+    # would leave 'Shape's method set on 'Part', where every later test that
+    # patches 'Shape.get_wrapped' no longer reaches a part.
+    monkeypatch.setattr(partcad.part.Part, "get_wrapped", built)
+    report = asyncio.run(requirements.check_package_async(context, context.root, verify=True)).to_dict()
 
     assert {(check["name"], check["passed"]) for check in report["requirements"]} == {
         ("has_dependencies", True),
@@ -470,19 +470,24 @@ def test_an_lfs_pointer_whose_id_is_not_a_sha256_is_never_read(tmp_path):
     assert package_versions._lfs_object(repo, pointer) is None
 
 
-def test_a_commit_holding_the_export_guard_is_not_written_out(tmp_path, monkeypatch):
+def test_a_commit_holding_the_export_guard_is_not_written_out(tmp_path):
     root = tmp_path / "evil"
     pygit2.init_repository(str(root))
     _write(root / "partcad.yaml", {"name": "//", "parts": {"cube": _cube(1)}})
     target = tmp_path / "victim.txt"
     target.write_text("keep me")
     os.symlink(str(target), str(root / package_versions.GUARD))
-    _commit(root, "first", tag="v1")
-    context = pc.Context(str(root), search_root=False)
-    monkeypatch.setattr(context.user_config, "internal_state_dir", str(tmp_path / "state"))
+    sha = _commit(root, "first", tag="v1")
+    # Not through 'repository_of', which the guard in the working tree already
+    # turns away: what is pinned is that writing the commit out refuses it.
+    repository = package_versions.Repository(pygit2.Repository(str(root)), "")
+    cache = tmp_path / "state" / "git"
 
-    assert context.get_project("//@v1") is None
+    with pytest.raises(Exception):
+        package_versions.export(repository, sha, str(cache))
     assert target.read_text() == "keep me"
+    # Nothing written out, half or whole: what is left is the export's lock.
+    assert not [name for name in os.listdir(cache) if os.path.isdir(cache / name)]
 
 
 def test_a_revision_inside_a_revision_is_read_as_one(ctx, repo):
@@ -601,3 +606,75 @@ def test_a_placement_with_parameter_values_uses_the_object_it_is_of():
     count = usage._uses(Ctx(), Project(), "assembly", "pair", {"type": "assy"}, lambda p, n: (p, n) == ("//", "cube"))
 
     assert count == 2
+
+
+def _downloaded(tmp_path, monkeypatch):
+    """A package with a history, kept where PartCAD keeps what it downloads, and a context of it."""
+    state = tmp_path / "state"
+    checkout = state / "git" / "0123456789abcdef-main"
+    pygit2.init_repository(str(checkout))
+    _write(checkout / "partcad.yaml", {"name": "//", "parts": {"cube": _cube(1)}})
+    _write(checkout / "sub" / "partcad.yaml", {"parts": {"peg": {"type": "alias", "source": "//:cube"}}})
+    sha = _commit(checkout, "first")
+    context = pc.Context(str(checkout), search_root=False)
+    monkeypatch.setattr(context.user_config, "internal_state_dir", str(state))
+    return context, checkout, sha
+
+
+def test_a_downloaded_package_at_the_commit_it_is_checked_out_at_is_a_revision_of_its_own(tmp_path, monkeypatch):
+    context, checkout, sha = _downloaded(tmp_path, monkeypatch)
+    assert context.is_downloaded(context.root)
+
+    at_head = context.get_project("//@" + sha)
+
+    assert at_head is not context.root
+    assert at_head.not_written_to() is not None
+    assert context.root.not_written_to() is None
+    # Beside the checkout, under a name no checkout has, and the checkout untouched.
+    export = os.path.dirname(os.path.realpath(at_head.config_path))
+    assert os.path.basename(export).startswith(package_versions.EXPORT_PREFIX)
+    assert os.path.realpath(checkout) != export
+    assert (checkout / ".git").exists()
+
+
+def test_a_downloaded_package_s_own_sub_package_is_its_own(tmp_path, monkeypatch):
+    context, _, _ = _downloaded(tmp_path, monkeypatch)
+    context.get_project("//sub")
+    elsewhere = tmp_path / "state" / "git" / "fedcba9876543210-main"
+    _write(elsewhere / "partcad.yaml", {"parts": {"b": _cube(1)}})
+    context.projects["//far"] = pc.Context(str(elsewhere), search_root=False).root
+
+    assert requirements._is_own(context, context.root, "//sub")
+    assert not requirements._is_own(context, context.root, "//far")
+
+
+def test_each_revision_along_a_name_is_read_as_the_commit_it_names(ctx, repo, tmp_path):
+    _, first, _ = repo
+    dep = tmp_path / "dep"
+    pygit2.init_repository(str(dep))
+    _write(dep / "partcad.yaml", {"parts": {"a": _cube(1)}})
+    inner = _commit(dep, "dep", tag="v2")
+    outer = "//@" + first
+    assert ctx.get_project("//@v1") is not None
+    # A dependency of the revision, with a history of its own, loaded already.
+    ctx.projects[outer + "/dep"] = pc.Context(str(dep), search_root=False).root
+    ctx.get_project("//sub")
+
+    assert usage._canonical(ctx, "//sub@v1") == "//sub@" + first
+    assert usage._canonical(ctx, "//@v1/dep@v2") == "%s/dep@%s" % (outer, inner)
+    # A package in no repository of its own keeps the revision it was asked at.
+    assert usage._canonical(ctx, "//@v1/sub@v1") == "%s/sub@v1" % outer
+
+
+def test_no_direct_writer_writes_into_a_revision(ctx):
+    at_v1 = ctx.get_project("//@v1")
+    before = open(at_v1.config_path, encoding="utf-8").read()
+
+    with pytest.raises(ValueError):
+        at_v1.set_part_config("cube", {"type": "basic", "cuboid": 1})
+    with pytest.raises(ValueError):
+        at_v1.update_part_config("cube", {"cuboid": 1})
+    with pytest.raises(ValueError):
+        at_v1.set_sketch_config("s", {"type": "basic", "circle": 1})
+    assert at_v1.add_import("x", "../x") is False
+    assert open(at_v1.config_path, encoding="utf-8").read() == before

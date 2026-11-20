@@ -302,3 +302,24 @@ def test_used_by_an_instance_is_used_by_its_object(session):
     answer = operations.usage_used_by(session, {"package": "//", "object": "cube", "params": ["x=1"], "kind": "part"})
 
     assert answer["object"] == "//:cube"
+
+
+def test_a_comparison_looks_up_a_kind_that_is_not_the_default(session):
+    # A sketch, so that a lookup falling back to 'part' would read both sides as missing.
+    root = session.partcad_ctx.root.config_dir
+    config = yaml.safe_load(open(session.partcad_ctx.root.config_path).read())
+    config["sketches"] = {"outline": {"type": "basic", "circle": 1}}
+    with open(session.partcad_ctx.root.config_path, "w") as f:
+        f.write(yaml.safe_dump(config, sort_keys=False))
+    sketched = _commit(root, "sketched")
+    config["sketches"]["outline"]["circle"] = 2
+    with open(session.partcad_ctx.root.config_path, "w") as f:
+        f.write(yaml.safe_dump(config, sort_keys=False))
+    session.partcad_ctx.reload_packages(["//"])
+
+    answer = operations.revisions_compare(session, {"package": "//", "object": "outline", "revision": sketched})
+
+    assert answer["left"]["missing"] is False and answer["right"]["missing"] is False
+    assert [(row["left"], row["right"]) for row in answer["rows"] if row["tag"] == "replace"] == [
+        ("  circle: 1", "  circle: 2")
+    ]
