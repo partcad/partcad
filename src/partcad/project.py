@@ -397,6 +397,56 @@ def _enriches_being_made() -> list:
     return making
 
 
+def _named_objects(sketches, interfaces, parts, assemblies, scenes) -> list:
+    """The objects a request names, as (kind, name), in the order 'render_async' takes the kinds in."""
+    return [
+        (kind, name)
+        for kind, names in (
+            ("sketch", sketches),
+            ("interface", interfaces),
+            ("part", parts),
+            ("assembly", assemblies),
+            ("scene", scenes),
+        )
+        for name in names or []
+    ]
+
+
+def _unfinalized_reason(shape) -> typing.Optional[str]:
+    """Why a run over its whole package leaves 'shape' out, or None when it does not.
+
+    A shape that is not finalized is left out of what its package produces and
+    qualifies as a whole: 'pc render', 'pc export' and 'pc qual test' naming no
+    object, and every run over a subtree. Only a 'kicad' part is not finalized
+    unless it says otherwise (see 'Shape.__init__'), which is how CI's runs over
+    every example were kept from building the board when 'finalized' was
+    introduced (#354, "handle test lock up"). Naming the object is asking for
+    it, and 'render_async' then writes it like any other.
+    """
+    if getattr(shape, "finalized", True):
+        return None
+    if "finalized" in (shape.config or {}):
+        return "it declares 'finalized: false'"
+    return "a '%s' part is not finalized, and a run over its whole package leaves it out" % shape.config.get("type")
+
+
+def _leaves_out_unfinalized(shape, hint: typing.Optional[str] = None) -> bool:
+    """Whether a run over its whole package passes over 'shape', saying so when it does.
+
+    It used to be passed over without a word, which is how a render of the
+    KiCad example ended well having written nothing. Said at the level
+    '--fast-only' says the same kind of thing at (see 'fast_only.leaves_out').
+    """
+    reason = _unfinalized_reason(shape)
+    if reason is None:
+        return False
+    pc_logging.info(
+        "Skipping the %s '%s:%s': %s%s"
+        % (shape.kind, shape.project_name, shape.name, reason, "; %s" % hint if hint else "")
+    )
+    return True
+
+
 @telemetry.instrument()
 class Project(project_config.Configuration):
     sketches: dict[str, sketch.Sketch]
@@ -4072,8 +4122,9 @@ class Project(project_config.Configuration):
             # bounds) is dropped from 'config_dict' as it is asked for.
             for name in list(config_dict):
                 obj = getter(name)
-                # skip testing objects that are not finalized
-                if obj and (not hasattr(obj, "finalized") or obj.finalized):
+                # Skip testing objects that are not finalized, and say so (an
+                # interface has no such attribute, and is always tested).
+                if obj and not _leaves_out_unfinalized(obj):
                     if fast_only and fast_only_mod.leaves_out(obj):
                         continue
                     yield obj
@@ -4181,13 +4232,30 @@ class Project(project_config.Configuration):
         written to and not the documents: a bill of materials or an instruction
         book is an account of what an assembly is made of, which its compound
         no longer says.
+
+        Naming objects asks for those objects, and every one of them that ends
+        up with no file at all is reported, with the reason: asked for by name,
+        nothing is passed over in silence. Naming none asks for whatever the
+        package produces, which leaves out what is not finalized (see
+        '_unfinalized_reason') -- and says so, the way '--fast-only' does.
         """
+        # Read before the enumeration below turns "nothing named" into "all of them".
+        asked = _named_objects(sketches, interfaces, parts, assemblies, scenes)
         with pc_logging.Action("RenderPkg", self.name):
             # A skipped package has nothing to render, and must not be asked to:
             # its declarations are still in 'config_obj' (nothing rewrites the
             # file), so enumerating them would resolve every one of them to None
             # and fail the whole render with an 'EmptyShapesError'.
             if self.skipped:
+                # Said here as well as when the package was loaded: a warm
+                # daemon loaded it for some earlier request, so that line is
+                # not in the log of the one that named the object. Not an error,
+                # for the reason the exclusion never is (see 'get_skipped_object_clause').
+                for kind, name in asked:
+                    pc_logging.info(
+                        "Nothing is written for the %s '%s:%s': its package is excluded by 'unless' (%s)"
+                        % (kind, self.name, name, self.skipped_by)
+                    )
                 return
 
             options_project = self.ctx.get_project(options_package) if options_package else None
@@ -4211,6 +4279,23 @@ class Project(project_config.Configuration):
                 # gets neither its files nor its documents: an instruction book
                 # is illustrated with the assembly, which is building it.
                 shapes = fast_only_mod.without_slow(shapes)
+
+            if not asked:
+                # The same place and the same reason as '--fast-only' above.
+                # Only a run over the whole package: an object that is named is
+                # asked for, and written whatever this would say of it. The
+                # KiCad board 'pc render -t png Arduino_Nano' names used to be
+                # left out of its own request without a word, the command
+                # ending well with no file written.
+                shapes = [shape for shape in shapes if not _leaves_out_unfinalized(shape, "name it to have it written")]
+
+            # The objects that were named and are written as no file type at
+            # all, with the configuration that decided it: each is reported
+            # once the documents below have had their turn, since a document
+            # may be what was asked for ('pc render -t readme -a widget').
+            unwritten = []
+            # The objects a document was written of, as (kind, name).
+            documented = set()
 
             # The merged output configuration of each shape, kept for the
             # document pass below: that is where a 'filter:' declared on a
@@ -4261,7 +4346,7 @@ class Project(project_config.Configuration):
                     for format_name in formats
                     if named_elsewhere or self._should_render_format(format_name, shape_cfg, format, shape.kind)
                 ]
-                if selected and (not hasattr(shape, "finalized") or shape.finalized):
+                if selected:
                     tasks.append(
                         shape.render_async(
                             ctx=self.ctx,
@@ -4292,6 +4377,8 @@ class Project(project_config.Configuration):
                             **(render_opts or {}),
                         )
                     )
+                elif asked:
+                    unwritten.append((shape, shape_cfg))
 
             await asyncio.gather(*tasks)
 
@@ -4304,6 +4391,7 @@ class Project(project_config.Configuration):
                 for assembly_name in self._assembly_documents_to_render(
                     shapes, assemblies, format, document_format, render
                 ):
+                    documented.add(("assembly", assembly_name))
                     view = await self._document_view_async(
                         shapes, configured, "assembly", assembly_name, document_format, link_filter
                     )
@@ -4324,6 +4412,7 @@ class Project(project_config.Configuration):
             # assembly guide is an account of putting something together, and
             # nothing in a scene was put together (see 'partcad.scene').
             for scene_name in self._assembly_documents_to_render(shapes, scenes, format, "readme", render, "scene"):
+                documented.add(("scene", scene_name))
                 await self.render_assembly_readme_async(
                     scene_name,
                     render,
@@ -4338,6 +4427,49 @@ class Project(project_config.Configuration):
             # were asked for: their own documents are what was requested.
             if (format == "readme" and not assemblies and not scenes) or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
+                if format == "readme":
+                    # The document asked for, and the one a part or a sketch
+                    # has: it is what lists them.
+                    documented.update((shape.kind, shape.name) for shape, _ in unwritten)
+
+            for shape, shape_cfg in unwritten:
+                if (shape.kind, shape.name) not in documented:
+                    pc_logging.error(
+                        "Nothing is written for the %s '%s:%s': %s"
+                        % (shape.kind, self.name, shape.name, self._why_unwritten(shape, shape_cfg, format))
+                    )
+            # Not enumerated above at all (see '_enumerate_shapes_async'), so
+            # a request for one used to write nothing and say nothing.
+            for name in interfaces or []:
+                pc_logging.error(
+                    "Nothing is written for the interface '%s:%s': an interface is a set of ports, "
+                    "with no geometry of its own to write" % (self.name, name)
+                )
+
+    def _why_unwritten(self, shape, shape_cfg, format) -> str:
+        """Why a shape that was asked for by name is written as no file type, in words.
+
+        The two ways '_should_render_format' answers no for every file type:
+        nothing configured, when no file type was named; and a named one that is
+        not a file of this kind of object, either because its configuration
+        excludes the kind or because it is a document PartCAD writes of
+        something else (an instruction book is an assembly's).
+        """
+        if format is None:
+            return (
+                "no file type it can be written as is declared for it under 'render:' or 'export:'. "
+                "Name one with '-t'"
+            )
+        plural = OBJECT_KIND_SECTIONS.get(shape.kind, shape.kind)
+        section = shape_cfg.get(format)
+        if isinstance(section, dict) and plural in (section.get("exclude") or []):
+            return "the file type '%s' is configured to exclude %s" % (format, plural)
+        if output.is_document_format(format, shape_cfg):
+            return "'%s' is a document PartCAD writes of a package or an assembly, not a file of a %s" % (
+                format,
+                shape.kind,
+            )
+        return "it is not written as '%s'" % format
 
     async def _document_view_async(self, shapes, configured, kind, name, document_format, link_filter):
         """The object a generated document is of, or ``None`` for the object itself.

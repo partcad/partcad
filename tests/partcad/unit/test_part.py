@@ -225,8 +225,8 @@ def test_part_example_build123d_primitive():
     assert wrapped is not None
 
 
-def test_part_example_kicad():
-    """Instantiate all parts from the example: part_kicad"""
+def test_part_example_kicad(tmp_path):
+    """Instantiate all parts from the example: part_kicad, and write the board when it is named"""
     # Skip this test on macOS
     if os.environ.get("ACTIONS_RUNTIME_TOKEN") is not None:
         # This is a GitHub Actions environment
@@ -274,3 +274,10 @@ def test_part_example_kicad():
 
     wrapped = ctx.get_part_shape("//produce_part_kicad:Arduino_Nano")
     assert wrapped is not None
+
+    # What 'pc export -t step Arduino_Nano' asks of the package. A 'kicad' part
+    # is not finalized, and that used to leave it out of a request that named it
+    # as well as of a run over the whole package: the command ended well, having
+    # written nothing (see 'test_render_named.py').
+    kicad_package.render(parts=["Arduino_Nano"], format="step", output_dir=str(tmp_path))
+    assert (tmp_path / "Arduino_Nano.step").stat().st_size > 0
