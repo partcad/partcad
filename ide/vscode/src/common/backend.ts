@@ -667,7 +667,8 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.requirements', (a) =>
             this.send(
                 'requirements.check',
-                { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify },
+                // A package is asked about as a package: it names no object.
+                { package: a.pkg, object: a.kind === 'package' ? undefined : a.name, kind: a.kind, verify: a.verify },
                 a.cancellation,
             ),
         );
@@ -683,6 +684,28 @@ class JsonRpcBackend implements PartcadBackend {
                 a.cancellation,
             );
         });
+        // The Operations tabs. Revisions: the commits that changed the package
+        // of what is on screen; that object (or package) compared with one of
+        // them, both written out as 'pc copy' would write them; and what the
+        // package declares as its dependencies, and what the loaded packages
+        // use of it, at one. Used By: what among the loaded packages uses the
+        // object on screen, and how many times. A package names no object.
+        const operationsParams = (a: any) => ({
+            package: a.pkg,
+            object: a.kind === 'package' ? undefined : a.name,
+            kind: a.kind,
+        });
+        reg('partcad.revisionsList', (a) => this.send('revisions.list', operationsParams(a), a.cancellation));
+        reg('partcad.revisionsCompare', (a) =>
+            this.send('revisions.compare', { ...operationsParams(a), revision: a.revision }, a.cancellation),
+        );
+        reg('partcad.revisionsUses', (a) =>
+            this.send('revisions.uses', { ...operationsParams(a), revision: a.revision }, a.cancellation),
+        );
+        reg('partcad.revisionsUsedBy', (a) =>
+            this.send('revisions.used_by', { ...operationsParams(a), revision: a.revision }, a.cancellation),
+        );
+        reg('partcad.usedBy', (a) => this.send('usage.used_by', operationsParams(a), a.cancellation));
         // The Qualification tabs: every test of the subtypes asked for 'pc qual
         // test' runs on one object, and with 'verify' how each came out.
         reg('partcad.qualReport', (a) =>
@@ -812,6 +835,10 @@ class JsonRpcBackend implements PartcadBackend {
                     // eslint-disable-next-line @typescript-eslint/naming-convention
                     viewport_up: a.viewportUp,
                     section: a.section,
+                    // The Draft tab, for a sketch: one view of its plane rather
+                    // than the three planes and the perspective of a solid.
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    single_view: a.singleView,
                 },
                 a.cancellation,
             ),

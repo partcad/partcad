@@ -57,6 +57,7 @@ from . import (
     material,
     material_config,
     output,
+    package_versions,
     part_config,
 )
 from . import part_factory_alias as pfa
@@ -405,6 +406,12 @@ class Project(project_config.Configuration):
     providers: dict[str, plugin_provider.Provider]
     repositories: dict[str, plugin_repository.Repository]
     software: dict[str, pc_software.Software]
+
+    # The commit this package was read at, and the package it is a revision of,
+    # for a package loaded as '<name>@<revision>' (see 'partcad.package_versions');
+    # None for every other package, which is read from wherever it is loaded.
+    revision_sha: typing.Optional[str] = None
+    revision_of: typing.Optional[str] = None
 
     class MaterialLock(object):
         """The lock of one CMF declaration ('partcad.cmf'): materials, colours and finishes alike.
@@ -1482,6 +1489,17 @@ class Project(project_config.Configuration):
         return False
 
     def relocate(self, pattern: str) -> str:
+        """Rewrites a reference this package authored to where what it names is loaded.
+
+        Against the name the package declares for itself (see
+        '_relocate_declared'), and then -- for a package loaded at a revision,
+        or inside one -- into that revision: '//pkg@<sha>' and every package
+        under it read '//pkg:widget' as '//pkg@<sha>:widget', because the
+        revision was written against itself (see 'package_versions.rebase').
+        """
+        return package_versions.rebase(self.name, self._relocate_declared(pattern))
+
+    def _relocate_declared(self, pattern: str) -> str:
         """Rewrites a reference this package authored against its own name.
 
         A package declares its identity ('name' in its configuration) but may
@@ -2028,6 +2046,7 @@ class Project(project_config.Configuration):
         """
         Save the updated sketch configuration to the project configuration file.
         """
+        self._refuse_if_not_written_to("the sketch '%s'" % sketch_name)
         if "name" in sketch_config:
             del sketch_config["name"]
         if "orig_name" in sketch_config:
@@ -3355,6 +3374,10 @@ class Project(project_config.Configuration):
         unpinned one this exists to avoid (the same rule 'pc add part <url>'
         follows for a file's 'fileHash').
         """
+        why = self.not_written_to()
+        if why is not None:
+            pc_logging.error("Not adding the dependency '%s' to '%s': %s" % (alias, self.name, why))
+            return False
         if ":" in location:
             location_param = "url"
             if location.endswith(".tar.gz"):
@@ -3560,7 +3583,7 @@ class Project(project_config.Configuration):
         )
 
     @_one_edit_at_a_time
-    def add_object_config(self, section: str, name: str, obj: dict) -> bool:
+    def add_object_config(self, section: str, name: str, obj: dict, replace: bool = True) -> bool:
         """Write one object declaration into this package's 'partcad.yaml'.
 
         The one place a declaration is added, so that a locally added file and
@@ -3568,8 +3591,15 @@ class Project(project_config.Configuration):
         'ruamel' keeps the rest of the document as the author wrote it.
 
         Refused, with the reason logged and False returned, for a name another
-        kind of object of the package already has (see 'name_taken').
+        kind of object of the package already has (see 'name_taken'), and -- with
+        'replace' off -- for one this section declares already, in the file as it
+        is read here, under the edit lock: a declaration written since the
+        package was loaded is not replaced by one that never saw it.
         """
+        why = self.not_written_to()
+        if why is not None:
+            pc_logging.error("Not adding '%s' to '%s': %s" % (name, self.name, why))
+            return False
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
         # Wide enough that nothing here is ever folded onto a second line. The
@@ -3594,6 +3624,12 @@ class Project(project_config.Configuration):
         config_section = config.get(section)
         if config_section is None:
             config_section = {}
+        if not replace and name in config_section:
+            pc_logging.error(
+                "Not adding the %s '%s' to '%s': it declares one of that name already"
+                % (kind or section, name, self.name)
+            )
+            return False
         config_section[name] = obj
         config[section] = config_section
 
@@ -3602,6 +3638,24 @@ class Project(project_config.Configuration):
             fp.close()
 
         return True
+
+    def not_written_to(self) -> typing.Optional[str]:
+        """Why nothing may be written into this package's 'partcad.yaml', or None when it may.
+
+        A package loaded at a revision ('//pkg@<sha>', or a package inside one)
+        is a commit written out into '~/.partcad/git': a change made there would
+        change what that commit is taken to hold for everyone who reads it next.
+        Every writer asks this first, so that no path into the file forgets to.
+        """
+        if self.revision_sha or package_versions.is_versioned(self.name):
+            return "it is a revision of its package, which is never written to"
+        return None
+
+    def _refuse_if_not_written_to(self, what: str) -> None:
+        """Raise ValueError, before anything is changed, where 'not_written_to' has a reason."""
+        why = self.not_written_to()
+        if why is not None:
+            raise ValueError("%s: %s cannot be written: %s" % (self.name, what, why))
 
     def _load_to_edit(self, what: str):
         """This package's 'partcad.yaml', read to be written back as its author wrote it, and how to write it.
@@ -3613,6 +3667,7 @@ class Project(project_config.Configuration):
         mapping in a mapping, and would be written back as one. 'what' is what
         was going to be written, for that message.
         """
+        self._refuse_if_not_written_to(what)
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
         # Wide enough that nothing is folded onto a second line: see 'add_object_config'.
@@ -3658,6 +3713,36 @@ class Project(project_config.Configuration):
             with contextlib.suppress(OSError):
                 os.remove(temporary)
             raise
+
+    @_one_edit_at_a_time
+    def edit_package_declaration(self, edit, what: str = "the change", keys=None, read_back=None):
+        """Change this package's own declaration -- the top of its 'partcad.yaml' -- as 'edit_object_declaration' changes an object's.
+
+        What a package's own 'requirements:' are written with: 'edit' is handed
+        the document's mapping and changes it in place, and 'read_back' is handed
+        it as it was, as edited, and as PartCAD reads it out of the text about to
+        be written. Refused, with ValueError, for a template, and for a key the
+        edit changes that is shared through a YAML anchor.
+        """
+        config, yaml = self._load_to_edit(what)
+        shared = _shared_by_alias(config, config, keys or ())
+        if shared is not None:
+            raise ValueError(
+                "The package '%s' shares %s with another declaration through a YAML anchor or a merge key, so %s"
+                " would change both: write it by hand" % (self.name, shared, what)
+            )
+        before = copy.deepcopy(config) if read_back is not None else None
+        result = edit(config)
+        text = None
+        if read_back is not None:
+            from partcad_utils import config_yaml
+
+            written = io.StringIO()
+            yaml.dump(config, written)
+            text = written.getvalue()
+            read_back(before, config, config_yaml.load(text))
+        self._write_edited(config, yaml, text)
+        return result
 
     @_one_edit_at_a_time
     def edit_object_declaration(
@@ -3912,6 +3997,7 @@ class Project(project_config.Configuration):
 
     @_one_edit_at_a_time
     def set_part_config(self, part_name, part_config):
+        self._refuse_if_not_written_to("the part '%s'" % part_name)
         if "name" in part_config:
             del part_config["name"]
         if "orig_name" in part_config:
@@ -3939,6 +4025,7 @@ class Project(project_config.Configuration):
 
     @_one_edit_at_a_time
     def update_part_config(self, part_name, part_config_update: dict[str, typing.Any]):
+        self._refuse_if_not_written_to("the part '%s'" % part_name)
         pc_logging.debug("Updating part config: %s: %s" % (part_name, part_config_update))
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True

@@ -1636,6 +1636,34 @@ async def _verify_dependencies(ctx, shape, entries) -> None:
         check.detail = detail
 
 
+async def _parts_lacking(ctx, parts, component: str, where: str, shape=None) -> tuple:
+    """(what each of 'parts' lacks of 'component', which of them could not be asked), as sentences.
+
+    A part that is 'shape' itself is not named in its sentence: a report on one
+    part is about that part already.
+    """
+    lacking, unknown = [], []
+    for part in parts:
+        named = "%s:%s" % (part.project_name, part.name)
+        try:
+            built = await part.get_wrapped(ctx)
+        except Exception as e:
+            built, why = None, ": %s" % e
+        else:
+            why = ""
+        if built is None:
+            unknown.append("%s did not build%s" % (named, why))
+            continue
+        # Asked as 'pc info' asks it: an alias records no summary of its
+        # own, and answers with the one of the part it stands for.
+        metadata = await part.get_metadata_async(ctx) or {}
+        summary = metadata.get(shape_envelope.METADATA_CMF)
+        why = _part_lacks(ctx, part, summary, component, where)
+        if why is not None:
+            lacking.append(why if part is shape else "%s: %s" % (named, why))
+    return lacking, unknown
+
+
 async def _verify_has(ctx, shape, entries) -> None:
     """Hold the object to each yes-or-no requirement: of an assembly, of every part in it."""
     kind = getattr(shape, "kind", None)
@@ -1675,25 +1703,7 @@ async def _verify_has(ctx, shape, entries) -> None:
                 check.detail = "not known: its parts could not be listed: %s" % parts
                 continue
             component, where = HAS_KEYS[requirement.name]
-            lacking, unknown = [], []
-            for part in parts:
-                named = "%s:%s" % (part.project_name, part.name)
-                try:
-                    built = await part.get_wrapped(ctx)
-                except Exception as e:
-                    built, why = None, ": %s" % e
-                else:
-                    why = ""
-                if built is None:
-                    unknown.append("%s did not build%s" % (named, why))
-                    continue
-                # Asked as 'pc info' asks it: an alias records no summary of its
-                # own, and answers with the one of the part it stands for.
-                metadata = await part.get_metadata_async(ctx) or {}
-                summary = metadata.get(shape_envelope.METADATA_CMF)
-                why = _part_lacks(ctx, part, summary, component, where)
-                if why is not None:
-                    lacking.append(why if part is shape else "%s: %s" % (named, why))
+            lacking, unknown = await _parts_lacking(ctx, parts, component, where, shape)
             if unknown:
                 # Not known is not met, whichever way it is required: a part
                 # that did not build is in nothing anybody can tell.
@@ -1786,6 +1796,219 @@ async def check_async(ctx, shape, verify: bool = True) -> Report:
         except Exception as e:  # pylint: disable=broad-except
             pc_logging.debug("%s: the %s requirements could not be checked: %s" % (object_name, section, e))
             for _, check in entries:
+                if check.passed is None:
+                    check.passed = False
+                    check.detail = "could not be checked: %s" % e
+    report.verified = True
+    return report
+
+
+# ---------------------------------------------------------------------------
+# What a package is required to be
+# ---------------------------------------------------------------------------
+
+# The sections a package's own 'requirements:' may have: the features it has to
+# provide, in words, and the yes-or-no requirements, which of a package are
+# said of every part it declares -- as of an assembly they are said of every
+# part in it. Ports, interfaces, physical properties and a match are properties
+# of one object's geometry, and a package has none: they are required of its
+# objects, each in its own declaration.
+PACKAGE_SECTIONS = (FEATURES, HAS)
+
+
+def parse_package(raw) -> typing.Optional[Declaration]:
+    """The requirements a package's own 'requirements:' section declares, or None when it has none.
+
+    Read by 'parse', so that a package's section is written the way an object's
+    is; a section a package cannot have is kept as a requirement that cannot be
+    read, so that it fails rather than vanishes.
+    """
+    declaration = parse(raw)
+    if declaration is None:
+        return None
+    for section, entries in ((PORTS, declaration.ports), (INTERFACES, declaration.interfaces)):
+        if entries:
+            declaration.problems.append(
+                Problem(
+                    section, section, "a package has no %s of its own: require them of the objects that do" % section
+                )
+            )
+    for section, entries in ((PHYSICS, declaration.physics), (MATCH, declaration.match)):
+        if entries:
+            declaration.problems.append(
+                Problem(
+                    section, section, "a package is not one object: require '%s' of the objects it declares" % section
+                )
+            )
+    declaration.ports, declaration.interfaces, declaration.physics, declaration.match = [], [], [], []
+    return declaration
+
+
+async def _verify_package_has(ctx, project, entries) -> None:
+    """Hold every part 'project' declares to each yes-or-no requirement of the package."""
+    parts, unknown = [], []
+    for name in project.object_names("part"):
+        try:
+            part = await project.get_part_async(name, quiet=True)
+        except Exception as e:  # pylint: disable=broad-except
+            part, why = None, ": %s" % e
+        else:
+            why = ""
+        if part is None:
+            unknown.append("%s:%s could not be made%s" % (project.name, name, why))
+        else:
+            parts.append(part)
+    built_from = [entry for entry in entries if HAS_KEYS[entry[0].name] in (DEPENDENCIES, PRIVATE_DEPENDENCIES)]
+    entries = [entry for entry in entries if entry not in built_from]
+    if built_from:
+        if unknown:
+            for _, check in built_from:
+                check.passed = False
+                check.detail = "not known: %s" % _first_few(unknown)
+        else:
+            await _verify_package_dependencies(ctx, project, parts, built_from)
+    for requirement, check in entries:
+        if unknown:
+            check.passed = False
+            check.detail = "not known: %s" % _first_few(unknown)
+            continue
+        if not parts:
+            # Of no part, either way: there is nothing to have it or lack it.
+            check.passed = True
+            check.detail = "the package declares no parts"
+            continue
+        # Each part held to it on its own: 'has_material: false' is that no
+        # part has one, which "not every part has one" is not.
+        verdicts, not_built = [], []
+        if HAS_KEYS[requirement.name] is None:
+            what = "every part's mass is known"
+            for part in parts:
+                value, source = (await resolve_physics_async(ctx, part, ["mass"]))["mass"]
+                named = "%s:%s" % (part.project_name, part.name)
+                if value is None:
+                    verdicts.append((False, "%s: not known: %s" % (named, source)))
+                else:
+                    verdicts.append((True, "%s: %s (%s)" % (named, _quantity("mass", value), source)))
+        else:
+            component, where = HAS_KEYS[requirement.name]
+            what = "every %s of every part is in a %s that is a claim" % (where, _WORDS[component])
+            for part in parts:
+                lacking, unbuilt = await _parts_lacking(ctx, [part], component, where)
+                if unbuilt:
+                    not_built.extend(unbuilt)
+                elif lacking:
+                    verdicts.append((False, lacking[0]))
+                else:
+                    verdicts.append((True, "%s:%s" % (part.project_name, part.name)))
+        if not_built:
+            check.passed = False
+            check.detail = "not known: %s" % _first_few(not_built)
+            continue
+        failing = [why for has, why in verdicts if has != requirement.required]
+        check.passed = not failing
+        if requirement.required:
+            check.detail = what if not failing else _first_few(failing)
+        else:
+            check.detail = (
+                "no part has one"
+                if not failing
+                else "it is required that no part has one, and these do: %s" % _first_few(failing)
+            )
+
+
+def _is_own(ctx, project, package: str) -> bool:
+    """Whether 'package' is 'project' or one of its own: its files in the package's checkout, not fetched.
+
+    By where its files are rather than by its name: every package is named
+    under the root's, '//', and a dependency of a package is named under it --
+    neither makes it the package's own. A sub-folder, or a dependency declared
+    with a local path inside the package, is -- in a downloaded copy or a
+    revision as much as in a working tree, since a package's sub-folders are
+    downloaded (or written out) with it. What PartCAD downloads for a package
+    that it did not download is never its own, wherever the cache happens to be:
+    a workspace in the home directory has '~/.partcad/git' inside it.
+    """
+    if package == project.name:
+        return True
+    other = ctx.projects.get(ctx.project_aliases.get(package, package))
+    if other is None or getattr(other, "revision_sha", None):
+        return False
+    if ctx.is_downloaded(other) and not ctx.is_downloaded(project):
+        return False
+    import os
+
+    root = os.path.realpath(project.config_dir)
+    return os.path.realpath(other.config_dir).startswith(root.rstrip(os.sep) + os.sep)
+
+
+async def _verify_package_dependencies(ctx, project, parts, entries) -> None:
+    """Hold a package to 'has_dependencies' and 'has_private_dependencies': what any part it declares draws on.
+
+    Of a package, what its parts draw on, together - not what its 'dependencies:'
+    import, which may be more than anything uses. A package of its own (see
+    '_is_own') is no dependency of it.
+    """
+    from . import object_dependencies
+
+    packages, unknown = {}, []
+    for part in parts:
+        try:
+            found = await object_dependencies.collect_async(ctx, part)
+        except Exception as e:  # pylint: disable=broad-except
+            unknown.append("%s:%s: %s" % (part.project_name, part.name, e))
+            continue
+        unknown.extend(found.unknown)
+        for package, uses in found.packages.items():
+            if _is_own(ctx, project, package):
+                continue
+            packages.setdefault(package, []).extend(use for use in uses if use not in packages.get(package, []))
+    for requirement, check in entries:
+        private = HAS_KEYS[requirement.name] == PRIVATE_DEPENDENCIES
+        drawn = (
+            {package: uses for package, uses in packages.items() if not object_dependencies.is_public(package)}
+            if private
+            else packages
+        )
+        has = bool(drawn)
+        if not has and unknown:
+            check.passed = False
+            check.detail = "not known: %s" % _first_few(unknown)
+            continue
+        what = "a package outside %s" % object_dependencies.PUBLIC if private else "another package"
+        if has:
+            detail = "its parts draw on %s" % object_dependencies.describe(drawn)
+            if not requirement.required:
+                detail = "it is required not to draw on %s, and its parts do: %s" % (
+                    what,
+                    object_dependencies.describe(drawn),
+                )
+        elif not parts:
+            detail = "the package declares no parts"
+        else:
+            detail = "its parts draw on no %s" % what[2:]
+        check.passed = has == requirement.required
+        check.detail = detail
+
+
+async def check_package_async(ctx, project, verify: bool = True) -> Report:
+    """The requirements of a package and, with 'verify', whether it meets each (see 'check_async')."""
+    raw = project.config_obj.get(SECTION) if isinstance(project.config_obj, dict) else None
+    declaration = parse_package(raw)
+    report = Report(project.name, "package", declaration)
+    if declaration is None:
+        report.verified = verify
+        return report
+    for problem in declaration.problems:
+        report.checks.append(Check(problem.section, problem.name, "unreadable", passed=False, detail=problem.detail))
+    sections = _declared_checks(declaration)
+    report.checks.extend(check for _, check in sections[HAS])
+    if not verify:
+        return report
+    if sections[HAS]:
+        try:
+            await _verify_package_has(ctx, project, sections[HAS])
+        except Exception as e:  # pylint: disable=broad-except
+            for _, check in sections[HAS]:
                 if check.passed is None:
                     check.passed = False
                     check.detail = "could not be checked: %s" % e

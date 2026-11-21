@@ -348,6 +348,10 @@ class FakeProject:
         """
         return name.partition(";")[0] in getattr(self, self._sections[kind])
 
+    def not_written_to(self):
+        """Why nothing may be written into this package, as 'Project.not_written_to()' answers it: never, here."""
+        return None
+
     def get_child_project_names(self):
         return list(self.children)
 

@@ -955,6 +955,28 @@
         }
       ]
     },
+    "package-requirements": {
+      "description": "What this package is required to be, written before it is: the features it has to provide, in words, and the yes-or-no requirements, which of a package are said of every part it declares (the IDE's Requirements tab checks them, as the daemon's 'requirements.check' does). Ports, interfaces, physical properties and 'match' are properties of one object's geometry, and are required of the objects themselves. A paragraph, a list of paragraphs, or a mapping of headings to paragraphs is also accepted and read as features.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        {
+          "type": "object",
+          "properties": {
+            "features": { "$ref": "#/definitions/requirement-features" },
+            "has_color": { "type": "boolean", "description": "true: every face of every part the package declares is in a colour that is a CMF declaration claiming it can be had. false: none may be." },
+            "has_material": { "type": "boolean", "description": "true: every solid of every part the package declares is in a material that is a CMF declaration claiming it can be had. false: none may be." },
+            "has_finish": { "type": "boolean", "description": "true: every face of every part the package declares is in a finish that is a CMF declaration claiming it can be had. false: none may be." },
+            "has_weight": { "type": "boolean", "description": "true: PartCAD knows what every part the package declares weighs. false: it must not." },
+            "has_mass": { "type": "boolean", "description": "The same requirement as 'has_weight'." },
+            "has_dependencies": { "type": "boolean", "description": "true: some part the package declares draws on another package. false: none may - everything its parts are made of is the package's own (or PartCAD's built-in)." },
+            "has_private_dependencies": { "type": "boolean", "description": "true: some part the package declares draws on a package outside //pub. false: none may - whoever gets the package can get everything its parts need from the public index." }
+          },
+          "not": { "anyOf": [{ "required": ["ports"] }, { "required": ["interfaces"] }, { "required": ["physics"] }, { "required": ["match"] }] },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      ]
+    },
     "requirement-features": {
       "type": ["object", "null"],
       "description": "The features this object has to have: a name for each, and a sentence saying what it is. A 'qual: sim:' entry may name the one it demonstrates ('feature:'); the rest are judged by whoever reads the evidence -- see the '/pc:validate' skill",
@@ -2154,6 +2176,9 @@
       "description": "What this package is, in prose. Rendered at the top of the package's generated README, and allowed the same length as the 'docs' fields beside it.",
       "type": "string",
       "maxLength": 5000
+    },
+    "requirements": {
+      "$ref": "#/definitions/package-requirements"
     },
     "private": {
       "type": "boolean",

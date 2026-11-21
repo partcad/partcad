@@ -108,6 +108,21 @@ const TAB_COMMANDS: Record<string, string> = {
     // What the object declares under 'qual: sim:', read rather than run; a
     // request naming one of them runs it instead (see 'SIMULATION_RUN').
     simulation: 'partcad.simulateList',
+    // The Operations tabs. Revisions asks four questions of one package - its
+    // commits, the object compared with one of them, and what the package uses
+    // and is used by at it - and which one travels as 'query' (see
+    // 'REVISIONS_COMMANDS'). Used By is what uses the object, among what the
+    // daemon has loaded.
+    revisions: 'partcad.revisionsList',
+    usedby: 'partcad.usedBy',
+};
+
+/** What each question the Revisions tab asks is put to the daemon as. */
+const REVISIONS_COMMANDS: Record<string, string> = {
+    list: 'partcad.revisionsList',
+    compare: 'partcad.revisionsCompare',
+    uses: 'partcad.revisionsUses',
+    usedBy: 'partcad.revisionsUsedBy',
 };
 
 /** What the Simulation tab asks when it names a simulation: run it, 'pc qual test --simulation -f <name>'. */
@@ -180,6 +195,11 @@ interface FetchTabRequest extends RenderRequest {
     viewportUp?: number[];
     /** On the 2D and Draft tabs: what to cut the object to, as the view panel's sliders say. */
     section?: Record<string, [number, number]>;
+    /** On the Draft tab, for a sketch: the one view its drawing is laid out with. */
+    singleView?: string;
+    /** On the Revisions tab: which of its questions this is ('REVISIONS_COMMANDS'), and of which revision. */
+    query?: string;
+    revision?: string;
 }
 
 /** A file a render tab is showing, kept until the next one replaces it. */
@@ -341,6 +361,18 @@ export class PartcadViewer implements vscode.Disposable {
         this.handle({ type: MSG_SHOW, name, kind, package: pkg, object: null });
     }
 
+    /**
+     * Show a package: what the explorer does with one.
+     *
+     * Made here for the reason a declaration's show is: a package has no shape
+     * to send over the viewer protocol. What the panel has to say about it - its
+     * requirements, its revisions, what uses it - it asks the daemon, as it asks
+     * about any object, with the package as both the package and the name.
+     */
+    public showPackage(pkg: string): void {
+        this.handle({ type: MSG_SHOW, name: pkg, kind: 'package', package: pkg, object: null });
+    }
+
     /** Route a protocol message from a connected PartCAD to the webview. */
     public handle(message: ViewerMessage): void {
         if (message.type === MSG_CLEAR) {
@@ -485,7 +517,12 @@ export class PartcadViewer implements vscode.Disposable {
             void this.panel?.webview.postMessage({ type: 'tabData', tab, token, ...payload });
         };
 
-        const command = tab === 'simulation' && message.scenario ? SIMULATION_RUN : TAB_COMMANDS[tab];
+        const command =
+            tab === 'simulation' && message.scenario
+                ? SIMULATION_RUN
+                : tab === 'revisions'
+                  ? REVISIONS_COMMANDS[message.query ?? 'list']
+                  : TAB_COMMANDS[tab];
         if (command === undefined) {
             post({ error: `There is nothing to fill the '${tab}' tab with.` });
             return;
@@ -499,7 +536,11 @@ export class PartcadViewer implements vscode.Disposable {
         // Replacing whatever this tab asked for last, unless this is a run: see
         // 'inFlight'.
         const run = analysis || command === SIMULATION_RUN;
-        const request = this.inFlight.begin(run ? undefined : tab);
+        // The Revisions tab's questions are four, and a newer one of each kind
+        // replaces only an older one of the same kind: comparing another
+        // revision does not take back the list it was chosen from.
+        const key = tab === 'revisions' ? `${tab}:${message.query ?? 'list'}` : tab;
+        const request = this.inFlight.begin(run ? undefined : key);
         try {
             // The commands are registered by the backend, so an absent one means
             // no PartCAD is connected -- which is worth saying plainly rather
@@ -521,6 +562,9 @@ export class PartcadViewer implements vscode.Disposable {
                 // whichever package draws it, and whatever its file type is
                 // called. The 2D tab leaves it to the file type.
                 args.visuals = tab === 'draft' ? false : undefined;
+                // A drawing of a plane: one view of it, face on, rather than the
+                // three planes and the perspective of a solid's.
+                args.singleView = tab === 'draft' ? message.singleView : undefined;
                 // What the control pane beside the drawing asked for: the links
                 // to keep, and which of the port overlays to draw. Passed on as
                 // it arrived -- the filter is a mask of link names, which this
@@ -573,6 +617,14 @@ export class PartcadViewer implements vscode.Disposable {
                 // Said rather than defaulted to a part: a declaration's name is
                 // found only by its kind, and an object's is looked up.
                 args.kind = target.kind ?? undefined;
+                post({ data: await vscode.commands.executeCommand(command, args) });
+                return;
+            }
+            if (tab === 'revisions' || tab === 'usedby') {
+                // A package's own, or the package of the object on screen; and,
+                // asked of a revision, which one.
+                args.kind = target.kind ?? 'part';
+                args.revision = message.revision;
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
@@ -1167,6 +1219,12 @@ export class PartcadViewer implements vscode.Disposable {
                     void this.saveRendered(message.tab ?? '');
                 } else if (message.type === 'showObject') {
                     void this.showObject(message.package, message.name, message.kind);
+                } else if (message.type === 'openPackage') {
+                    // The Revisions tab's Uses: the package, in the Package
+                    // Explorer (see 'PartcadExplorer.openPackage').
+                    if (message.package) {
+                        void vscode.commands.executeCommand('partcad.openInExplorer', message.package);
+                    }
                 } else if (message.type === 'showSection') {
                     void this.showSection(message.token ?? 0, message.section, {
                         extraDetails: message.extraDetails,
@@ -1415,7 +1473,13 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="pane-emulation" class="pane" hidden></div>
 						</div>
 						</div>
-						<div id="pane-operations" class="pane" hidden></div>
+						<div id="pane-operations" class="pane pane-group" hidden>
+						<div id="operations-tabs" class="tabs sub-tabs" hidden></div>
+						<div class="panes">
+						<div id="pane-revisions" class="pane" hidden></div>
+						<div id="pane-usedby" class="pane" hidden></div>
+						</div>
+						</div>
 					</div>
 				</div>
 				<script nonce="${nonce}" src="${scriptUri}"></script>

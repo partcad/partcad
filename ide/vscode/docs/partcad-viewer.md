@@ -451,6 +451,8 @@ the protocol has no authentication.
 | `src/webview/cae.ts` | What an Analysis tab draws of the selected scenario: the result model, and the findings |
 | `src/webview/scenarioList.ts` | The list of declared entries the Simulation and Analysis tabs share: rows, verdict marks, the keyboard |
 | `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the video of each run with the scene before and after it as its still |
+| `src/webview/revisions.ts` | The Revisions tab (Operations): the commits that changed the package, the selected one compared with what is on screen side by side, and what the package uses and is used by at it |
+| `src/webview/usedBy.ts` | The Used By tab (Operations), and the Revisions tab's Used By view: the loaded objects that use something, with how many times each |
 | `src/webview/videoPlayer.ts` | The player the Simulation tab plays a run's video in: Video.js, MSE, the still, and full screen |
 | `src/partcad/simulation.py` | What `qual: sim:` declares, how a run goes, and the pictures and the video a plugin is asked for |
 | `src/partcad/cae.py` | What a part declares about an analysis -- its named scenarios -- and in what units |
@@ -672,6 +674,25 @@ that runs it as its tooltip (`pc cae fea -f loaded`), then an **LLM** banner on 
 names the skill that does it: "Validate using /pc-validate". The LLM is on the features a simulation or an
 analysis already stands behind as well, because each demonstrates the claim it was written for and cannot say
 whether that is the whole of the feature.
+
+**Operations** is what has become of the object since: **Revisions** and **Used By**, for every object whose
+package is known and for a package itself. Neither is asked for before it is looked at.
+
+**Revisions** lists the commits that changed the object's package, newest first (`revisions.list`, which walks
+the package's directory in its git repository first-parent, so a package sharing a repository lists its own
+history), each as the first eight characters of its id, the checked-out one marked. A package in no repository,
+or with nothing committed, says "This package is not published yet". Selecting a revision asks
+`revisions.compare`: the daemon loads the package at that revision into the same context
+(`<package>@<sha>`, see `partcad/package_versions.py`), writes the object out on both sides as `pc copy` would
+(for a package, takes its `partcad.yaml` as Jinja2 rendered it when it was read), and answers with the rows of a
+side-by-side view, revision on the left, now on the right; the webview only colours them. The folded views along
+the bottom are the Simulation tab's: **Uses (Dependencies)** (`revisions.uses`, the dependencies the package
+declares at that revision, each with its commit, each opening in the Package Explorer) and **Used By**
+(`revisions.used_by`), each asked for the first time it is opened, for the revision on screen.
+
+**Used By** is `usage.used_by`: the objects the daemon has loaded that refer to the one on screen, each with how
+many times -- a built assembly counts each placement. Nothing is loaded or built to answer, and the tab says it
+looked only at what is loaded.
 
 **Bill of Materials** is `Assembly.get_bom_detailed_async()` — the tree flattened and counted, with the store
 data that says what to order — in the columns `pc bom` prints it in.

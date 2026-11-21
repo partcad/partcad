@@ -295,6 +295,9 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                     }
 
                     partcadExplorer?.setRoot(root);
+                    // The workspace's own package again, whatever the tree was
+                    // listing in its place (see 'partcad.openInExplorer').
+                    await vscode.commands.executeCommand('setContext', 'partcad.explorerAway', false);
 
                     await installPackageOnOpen(context, serverId, configPath);
                 }),
@@ -996,7 +999,29 @@ location: [[100, 0, 0], [0, 0, 1], 0]
 
             await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
             await partcadInspector?.inspectPackage(pkg);
+            // And in the Digital Thread: its requirements, its revisions and what
+            // uses it, which the panel asks the daemon for as it does about any
+            // object (see 'PartcadViewer.showPackage'). The row's 'name' is the
+            // package's full name; its 'pkg' is the package it is listed under.
+            if (typeof pkg?.name === 'string' && pkg.name) {
+                partcadViewer?.showPackage(pkg.name);
+            }
             await vscode.commands.executeCommand('partcad.getStats');
+        }),
+        registerCommand(`partcad.openInExplorer`, async (name: string) => {
+            // A package listed in place of the workspace's, with a row that goes
+            // back (see 'PartcadExplorer.openPackage'): what the Digital Thread's
+            // Revisions tab opens a dependency with.
+            if (typeof name !== 'string' || !name) {
+                return;
+            }
+            partcadExplorer?.openPackage(name);
+            await vscode.commands.executeCommand('setContext', 'partcad.explorerAway', true);
+            await vscode.commands.executeCommand('partcadExplorer.focus');
+        }),
+        registerCommand(`partcad.explorerHome`, async () => {
+            partcadExplorer?.goHome();
+            await vscode.commands.executeCommand('setContext', 'partcad.explorerAway', false);
         }),
         registerCommand(`partcad.inspectSketch`, async (sketch, params, doNotMemorize) => {
             if (!doNotMemorize) {

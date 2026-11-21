@@ -21,8 +21,9 @@ import type { SpaceMouseSettings } from './spacemouse';
  * Two levels of them. The panel's own strip is five groups, always the same
  * five: 'design', the object itself; 'analysis', what analysing it says;
  * 'manufacturing', what making it takes; 'qualification', whether it is what it
- * claims to be and does what it is supposed to; and 'operations', which has
- * nothing in it yet and is shown disabled. Each group is a strip of its own:
+ * claims to be and does what it is supposed to; and 'operations', what has
+ * become of it since: 'revisions', its package's history, each revision
+ * compared with it, and 'usedby', what uses it. Each group is a strip of its own:
  * the object as '3d' (first, always), '2d', 'draft' and 'cmf' (what each of
  * its items is in: colour, material, finish); 'fea', 'dynamic',
  * 'thermal' and 'cfd'; 'bvb' (Build vs Buy), 'build', 'supply' (labelled Buy),
@@ -36,7 +37,10 @@ import type { SpaceMouseSettings } from './spacemouse';
  *
  * A colour, a material or a finish opened from the explorer is not an object
  * with a shape, and has none of that: Design alone, opened and not shown, with
- * 'cmf' the one tab in it (see 'isDeclaration').
+ * 'cmf' the one tab in it (see 'isDeclaration'). Fewer of the groups apply to
+ * the other kinds too (see 'tabsFor' in 'viewer.ts'): an interface is Design -
+ * its 3D view alone - and Operations; a sketch is Requirements, Design - '2d'
+ * and 'draft' - and Operations; and a package is Requirements and Operations.
  */
 export type TabId =
     | 'requirements'
@@ -63,7 +67,9 @@ export type TabId =
     | 'emulation'
     | 'basic'
     | 'topology'
-    | 'other';
+    | 'other'
+    | 'revisions'
+    | 'usedby';
 
 /**
  * The Qualification tabs drawn from 'qual.report', each the tests of one subtype
@@ -130,6 +136,7 @@ export const TAB_GROUPS: Partial<Record<TabId, TabId[]>> = {
     // Not 'emulation' (Process Emulation) yet: it holds nothing and is always
     // disabled, so a request for it could never be met.
     qualification: ['basic', 'topology', 'simulation', 'other'],
+    operations: ['revisions', 'usedby'],
 };
 
 /** The group a tab of 'TAB_GROUPS' is in, or undefined for anything else. */
@@ -736,7 +743,26 @@ export interface FetchTabMessage {
      * whole object.
      */
     section?: ViewSection;
+    /**
+     * On the Draft tab: the one view a drawing of a plane is laid out with,
+     * instead of the three planes and the perspective a drawing of a solid has
+     * - which a sketch, being flat, is not. 'top' looks at the plane a sketch is
+     * drawn in face on.
+     */
+    singleView?: string;
+    /**
+     * On the Revisions tab: which of its questions this is - the package's
+     * commits ('list', the default), the object compared with one of them
+     * ('compare'), what the package declares as its dependencies at one
+     * ('uses'), or what the loaded packages use of it ('usedBy').
+     */
+    query?: RevisionsQuery;
+    /** On the Revisions tab, but for 'list': the revision asked about, as a commit id. */
+    revision?: string;
 }
+
+/** The questions the Revisions tab asks (see 'FetchTabMessage.query'). */
+export type RevisionsQuery = 'list' | 'compare' | 'uses' | 'usedBy';
 
 /**
  * A cross-section as it travels: the axes that cut, each with the slab it keeps,
@@ -810,6 +836,17 @@ export interface ShowObjectMessage {
     package: string;
     name: string;
     kind: string;
+}
+
+/**
+ * Renderer to host: open a package in the Package Explorer - its contents
+ * listed there in place of the workspace's, with a way back. What a row of the
+ * Revisions tab's "Uses (Dependencies)" view opens: the dependency, or the
+ * dependency at the commit it is at ('<package>@<sha>').
+ */
+export interface OpenPackageMessage {
+    type: 'openPackage';
+    package: string;
 }
 
 /**
@@ -1549,6 +1586,94 @@ export interface RequirementsData {
     /** The yes-or-no requirements, as 'has_<name>' names them: 'material', 'private_dependencies', ... */
     // eslint-disable-next-line @typescript-eslint/naming-convention
     has_names?: string[];
+    /**
+     * The kinds of requirement this object may hold, as 'pc req add' names
+     * them, where it is not all of them: a package's own section is features
+     * and yes-or-no requirements of its parts alone.
+     */
+    kinds?: string[];
+}
+
+/** One commit that changed a package, as 'revisions.list' answers. */
+export interface RevisionEntry {
+    sha: string;
+    /** Its first eight characters, which is how a revision is shown. */
+    short: string;
+    summary: string;
+    author: string;
+    /** When it was committed, in seconds since the epoch. */
+    time: number;
+}
+
+/** A package's history: what the Revisions tab lists. */
+export interface RevisionsData {
+    package: string;
+    /** Whether anything of the package was ever committed: if not, it is "not published yet". */
+    published: boolean;
+    /** The commit checked out, where the package is in a repository. */
+    head: string | null;
+    /** Newest first. */
+    revisions: RevisionEntry[];
+}
+
+/** One row of a side-by-side comparison: a line of either side, or of both. */
+export interface CompareRow {
+    tag: 'equal' | 'replace' | 'delete' | 'insert';
+    left: string | null;
+    right: string | null;
+    leftLine: number | null;
+    rightLine: number | null;
+}
+
+/** The object (or package) at a revision on the left, and as it is now on the right ('revisions.compare'). */
+export interface CompareData {
+    package: string;
+    revision: string;
+    short: string;
+    /** The name the revision was loaded under. */
+    loaded: string;
+    left: { label: string; missing: boolean };
+    right: { label: string; missing: boolean };
+    same: boolean;
+    rows: CompareRow[];
+}
+
+/** One dependency a package declares at a revision, with the commit it is at ('revisions.uses'). */
+export interface DependencyRow {
+    /** As the package declares it. */
+    name: string;
+    /** The name it is loaded under at that revision. */
+    package: string;
+    /** The same package without a revision, where the context has one. */
+    current: string | null;
+    sha: string | null;
+    short: string | null;
+    /** The name that loads it at that commit, '<package>@<sha>'. */
+    versioned: string | null;
+    type: string | null;
+}
+
+export interface UsesData {
+    package: string;
+    revision: string | null;
+    loaded: string;
+    dependencies: DependencyRow[];
+}
+
+/** One loaded object that uses something, and how many times ('usage.used_by', 'revisions.used_by'). */
+export interface UsedByRow {
+    object: string;
+    package: string;
+    name: string;
+    kind: string;
+    count: number;
+}
+
+export interface UsedByData {
+    object?: string;
+    package?: string;
+    revision?: string | null;
+    objects: UsedByRow[];
 }
 
 /** One simulation an object declares, as 'qual.simulations' answers: its 'qual: sim:' entry. */

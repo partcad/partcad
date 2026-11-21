@@ -73,6 +73,12 @@ and a mistyped filename costs a message rather than a round trip. The same modul
 `pc render` and `pc export`, so the three commands cannot come to read the argument differently; what a filter
 *means* is `partcad_utils.assy_filter`, read by both ends.
 
+**`pc copy` is a daemon command, and what it writes is the context's, not the file's.** It writes a
+declaration, so it is a daemon client like `pc filter`; and the declaration it writes is the source object as the
+context holds it -- rendered, normalized, defaults left out (`partcad.serialize`) -- which is a thing only the
+process holding the context can produce. Its source may be a revision (`//pkg@v1.2:bracket`), loaded into that
+context beside the working tree.
+
 **`pc lint` sits on both sides of the line, one mode each.** `pc lint [-P/-r]` checks a *package*: which
 packages, resolved how, with which files, is the package graph, so it is a thin daemon client like any other.
 `pc lint --file` checks the *files named on the command line*, in this process: an ASSY file and a

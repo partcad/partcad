@@ -163,6 +163,14 @@ command_groups = [
             # one object into another format; `filter` writes a second object
             # made of some of the first one's links.
             "filter",
+            # Beside `filter`: a second object out of the first, all of it, and
+            # written as the context holds it rather than as the file says it.
+            "copy",
+            # What has become of an object since it was written -- the IDE's
+            # Operations tabs: the package's history, what changed since a
+            # revision, and what among the loaded packages uses it.
+            "revisions",
+            "used-by",
             "export",
             "render",
             # Beside `render` because `pc render -t pdf` writes the same book:

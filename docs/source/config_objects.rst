@@ -242,7 +242,8 @@ it will be left pointing at nothing.
 Requirements
 ------------
 
-A part, an assembly, a scene or a sketch may say what it is required to be.
+A part, an assembly, a scene or a sketch may say what it is required to be,
+and so may a package (see below).
 Requirements are written before the design is, from the point of view of
 whoever asked for it, and they are what the design is judged against: by
 ``pc qual test``, by the simulations that name them, and by whoever reads the
@@ -480,6 +481,27 @@ of the mapping that is not one of the five above is a feature named after it.
           The outer dimensions of the part have to be ...
         esthetic: |
           The part has to look like ...
+
+**A package may state requirements of its own**, at the top of its
+``partcad.yaml``, and they are a subset of an object's: the ``features`` it has
+to provide, in words, and the yes-or-no ``has_color``, ``has_material``,
+``has_finish`` and ``has_weight`` (``has_mass``), which of a package are said of
+**every part it declares** -- as of an assembly they are said of every part in it.
+Ports, interfaces, physical properties and ``match`` are properties of one
+object's geometry, and are required of the objects themselves; written on a
+package, each is reported as a requirement that cannot be read. The Digital
+Thread shows a package's requirements on its Requirements tab when the package
+is selected in the Package Explorer, and checks the yes-or-no ones there.
+
+.. code-block:: yaml
+
+  # partcad.yaml
+  name: //vendor/fasteners
+  requirements:
+    features:
+      metric: Every fastener is metric, M2 to M12
+    has_material: true    # every part declares what it is made of
+    has_weight: true      # and what it weighs
 
 .. _files:
 
