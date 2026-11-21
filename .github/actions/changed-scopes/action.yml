@@ -112,6 +112,17 @@ outputs:
       the source (which is where the test itself lives, under "tests/"), and to
       what PartCAD is built out of.
     value: ${{ steps.classify.outputs.ide-e2e }}
+  app-image:
+    description: >
+      Build the PartCAD image ("tools/containers/partcad", published as
+      "ghcr.io/partcad/partcad") out of this commit, and run it the way a person
+      does -- "dev-tools/ci/test-partcad-image.sh". On a change to the image or
+      to the three scripts that build and test it, to what PartCAD is built
+      out of, to the sandbox images it is built on, and to CI. Not on a source
+      change alone, for the reason the bundles are not: what makes the image
+      differ from a working wheel is what went into it, and the version bump
+      on "devel" is a deep run, which builds and tests it regardless.
+    value: ${{ steps.classify.outputs.app-image }}
   images:
     description: >
       Build PartCAD's own container images out of this commit, publish them
@@ -220,7 +231,7 @@ runs:
 
         if [ "${ALL}" = "true" ]; then
           add code; add deps; add docs; add ai; add devcontainer; add vscode
-          add ide; add packaging; add ci; add containers; add schema; add browsers
+          add ide; add packaging; add ci; add containers; add schema; add browsers; add appimage
         else
           while IFS= read -r f; do
             [ -n "${f}" ] || continue
@@ -300,6 +311,13 @@ runs:
               # Markdown file that turned out to be *data* under "src/" still
               # counts as code.
               add docs ;;
+            tools/containers/partcad/*|dev-tools/ci/build-partcad-image.sh|dev-tools/ci/test-partcad-image.sh|dev-tools/ci/mcp_smoke.py)
+              # The PartCAD image: PartCAD itself, as an image a person pulls.
+              # Named before the rule below because it is not one of the images
+              # PartCAD runs things in -- nothing pulls it on PartCAD's behalf,
+              # so a change to it rebuilds and tests it ("app-image") and leaves
+              # the eleven sandbox images alone. Source as well, like the rest.
+              add appimage; add code ;;
             tools/containers/*|dev-tools/ci/build-sandbox-image.sh)
               # What PartCAD's own images are built from: the Dockerfiles, and
               # the one script that builds a sandbox image (both the job that
@@ -414,6 +432,11 @@ runs:
         # "images" output for why, and for what to do when a workflow change
         # does need the images rebuilt.
         emit images              containers
+        # The PartCAD image is built on the sandbox base, so a change to that
+        # rebuilds it too; and it is a wheel installed into an image, so a
+        # dependency change does. See the note on the "app-image" output for why
+        # a source change alone does not.
+        emit app-image           appimage containers deps ci
 
         {
           echo "### Changed scopes"
@@ -427,7 +450,7 @@ runs:
           echo "| Subject | Runs |"
           echo "| --- | --- |"
           for subject in wheel docs pytest behave examples devcontainer \
-                         devcontainer-pytest bundle ide vsix plugin browsers ide-e2e; do
+                         devcontainer-pytest bundle ide vsix plugin browsers ide-e2e app-image; do
             value=$(grep -m1 "^${subject}=" "${GITHUB_OUTPUT}" | cut -d= -f2)
             printf '| `%s` | %s |\n' "${subject}" "$([ "${value}" = "true" ] && echo yes || echo no)"
           done

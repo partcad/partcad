@@ -496,3 +496,113 @@ def test_only_the_named_agents_are_given_the_server(tmp_path):
 def test_every_agent_has_somewhere_to_put_the_server():
     """An agent added to AGENTS without one would get the skills and silently no server."""
     assert sorted(ai_agents.MCP_CONFIGS) == sorted(ai_agents.AGENTS)
+
+
+# --------------------------------------------------------------------------- #
+# The server in the PartCAD image                                              #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def in_the_image(monkeypatch):
+    """What the PartCAD image sets on everything that runs in it."""
+    from partcad_utils import app_image
+
+    monkeypatch.setenv(app_image.MANAGED_BY_ENV, app_image.MANAGED_BY_IMAGE)
+    monkeypatch.delenv(app_image.IMAGE_ENV, raising=False)
+
+
+@pytest.fixture
+def not_in_the_image(monkeypatch):
+    from partcad_utils import app_image
+
+    monkeypatch.delenv(app_image.MANAGED_BY_ENV, raising=False)
+
+
+def test_in_the_image_the_agents_are_given_docker_run(tmp_path, in_the_image):
+    """Its user has no `pc` outside the container: the agent starts the image instead."""
+    ai_agents.install_agent_skills(str(tmp_path))
+
+    claude = read_json(tmp_path / ".mcp.json")["mcpServers"]["partcad"]
+    assert claude == {
+        "type": "stdio",
+        "command": "docker",
+        "args": [
+            "run",
+            "-i",
+            "--rm",
+            "-v",
+            "partcad-home:/home/pc/.partcad",
+            "-v",
+            "${PWD}:${PWD}",
+            "-w",
+            "${PWD}",
+            "ghcr.io/partcad/partcad",
+            "-p",
+            "${PWD}",
+            "mcp",
+        ],
+    }
+    cursor = read_json(tmp_path / ".cursor" / "mcp.json")["mcpServers"]["partcad"]
+    assert cursor["command"] == "docker"
+    assert cursor["args"][5:9] == ["-v", "${workspaceFolder}:${workspaceFolder}", "-w", "${workspaceFolder}"]
+    assert cursor["args"][-3:] == ["-p", "${workspaceFolder}", "mcp"]
+
+
+def test_the_docker_entry_mounts_the_workspace_where_it_is_on_the_host(repository, in_the_image):
+    """A path PartCAD reports is then the path the agent, on the host, would use; the package may be deeper."""
+    package = repository / "packages" / "widget"
+    package.mkdir(parents=True)
+
+    ai_agents.install_agent_skills(str(package))
+
+    args = read_json(repository / ".mcp.json")["mcpServers"]["partcad"]["args"]
+    mount = args[args.index("-w") - 1]
+    source, _, target = mount.partition(":")
+    assert source == target == args[args.index("-w") + 1] == "${PWD}"
+    assert args[-3:] == ["-p", "${PWD}/packages/widget", "mcp"]
+
+
+def test_the_docker_entry_does_not_hand_over_the_hosts_docker(tmp_path, in_the_image):
+    """The socket gives the container the host's Docker; that is for a person to add, knowingly."""
+    ai_agents.install_agent_skills(str(tmp_path))
+
+    for path in (tmp_path / ".mcp.json", tmp_path / ".cursor" / "mcp.json"):
+        assert not any("docker.sock" in arg for arg in read_json(path)["mcpServers"]["partcad"]["args"])
+
+
+def test_the_way_to_start_it_can_be_chosen_either_way(tmp_path, monkeypatch, in_the_image):
+    ai_agents.install_agent_skills(str(tmp_path), mcp_via="pc")
+    assert read_json(tmp_path / ".mcp.json")["mcpServers"]["partcad"]["command"] == "pc"
+
+    monkeypatch.delenv("PARTCAD_MANAGED_BY")
+    ai_agents.install_agent_skills(str(tmp_path), mcp_via="docker")
+    assert read_json(tmp_path / ".mcp.json")["mcpServers"]["partcad"]["command"] == "docker"
+
+
+def test_outside_the_image_the_default_is_pc(tmp_path, not_in_the_image):
+    assert ai_agents.default_mcp_via() == "pc"
+    ai_agents.install_agent_skills(str(tmp_path))
+    assert read_json(tmp_path / ".mcp.json")["mcpServers"]["partcad"]["command"] == "pc"
+
+
+def test_the_image_named_is_the_one_this_runs_in(tmp_path, monkeypatch, in_the_image):
+    """A fork's image starts the fork's image."""
+    monkeypatch.setenv("PARTCAD_IMAGE", "ghcr.io/someone/partcad")
+    entry = ai_agents.mcp_server_entry("cursor", str(tmp_path), str(tmp_path), "docker")
+    assert "ghcr.io/someone/partcad" in entry["args"]
+
+
+def test_an_unknown_way_to_start_it_is_an_error():
+    with pytest.raises(ValueError):
+        ai_agents.mcp_server_entry("claude", "/repo", "/repo", "podman")
+
+
+def test_the_docker_entry_runs_the_command_the_image_has():
+    """`<image> -p <package> mcp`: the image's entrypoint hands an option to `pc`."""
+    from partcad_cli.click.command import cli
+
+    entry = ai_agents.mcp_server_entry("claude", "/repo", "/repo", "docker")
+    image = entry["args"].index("ghcr.io/partcad/partcad")
+    assert entry["args"][image + 1] in next(param for param in cli.params if param.name == "path").opts
+    assert cli.get_command(None, entry["args"][-1]) is not None

@@ -16,6 +16,10 @@ Two kinds of image live here, and they are not the same kind of thing.
 * **Application images** -- `partcad-container-kicad`. A tool PartCAD drives rather than an interpreter it
   runs scripts in.
 
+And one that is not PartCAD's to pull at all: **`partcad/`**, published as `ghcr.io/partcad/partcad`, is PartCAD
+itself for whoever would rather `docker run` it than install it. It is built on the Python base image, but nothing
+below about how PartCAD runs a container, or about the base image contract, is about it -- see its own `README.md`.
+
 A plugin's runtime image belongs in the plugin's own repository, not here: an image built here would make a
 release of PartCAD carry a release of somebody else's runtime, and the two do not move together. The CalculiX
 runtime was built here and now is not — see `partcad/partcad-cae-calculix` for what that looks like.

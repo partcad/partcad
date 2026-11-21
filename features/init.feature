@@ -93,6 +93,18 @@ Feature: `pc init` command
     And a file named ".mcp.json" should not exist
     And a file named ".cursor/mcp.json" should not exist
 
+  @pc-init @agent-skills @mcp
+  Scenario: Have the agents start the MCP server from the PartCAD image
+    # What "pc init" does by default when it runs in that image, whose user has
+    # no "pc" outside it, and what anyone can ask for.
+    Given a file named "partcad.yaml" does not exist
+    When I run "pc --no-ansi init --mcp-via docker"
+    Then the command should exit with a status code of "0"
+    And a file named ".mcp.json" should contain "ghcr.io/partcad/partcad"
+    And a file named ".mcp.json" should contain "partcad-home:/home/pc/.partcad"
+    And a file named ".cursor/mcp.json" should contain "${workspaceFolder}:${workspaceFolder}"
+    And a file named ".mcp.json" should not contain "docker.sock"
+
   @pc-init @agent-skills @skills-only
   Scenario: Install the skills into a repository that has a package already
     # The package this would have created exists, which is the usual reason to

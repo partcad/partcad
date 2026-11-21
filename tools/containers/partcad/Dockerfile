@@ -1,0 +1,184 @@
+# PartCAD itself, as an image: `pc`, `pc mcp`, the daemon and the remote Docker
+# service, for whoever would rather `docker run` it than install it.
+#
+#     docker run --rm -it \
+#       -v partcad-home:/home/pc/.partcad -v "$PWD:$PWD" -w "$PWD" \
+#       ghcr.io/partcad/partcad render my_part
+#
+# Not a sandbox image, and not one PartCAD ever pulls by itself: those are the
+# `partcad-container-*` images beside this directory, which PartCAD resolves and
+# replaces on its own. This one is pulled by a person, which is why it is
+# published as a plain multi-architecture tag (`0.10.20`, `0.10`, `latest`)
+# rather than with the `-<arch>` suffix `docker_image.candidates` appends, and
+# why `pc system prune` leaves it alone (`partcad.app` below).
+#
+# Built on the GStreamer flavour of the Python base image, because everything a
+# sandbox needs in order to render *inside this container* is already there: the
+# shared libraries an OpenCASCADE wheel `dlopen()`s, the prebuilt `pycairo` wheel
+# PNG renders need, cadmpeg for the native CAD formats, and GStreamer for the
+# video file types. In the base's own terms this is a derived image, and the
+# contract in `../README.md` is what it builds on.
+#
+# Two ways to run it, and both are the same image:
+#
+# * Without the Docker socket, every CAD script runs in a conda sandbox inside
+#   this container -- micromamba, below, which is what provisions an interpreter
+#   of whatever version a package asks for. The container is the isolation.
+# * With the host's socket mounted, PartCAD finds a daemon and uses its `docker`
+#   sandbox, KiCad and plugins' own containers, in `upload` mode
+#   (`PC_USE_DOCKER_REMOTE`, below) -- see the README beside this file for why
+#   `mount` mode cannot work from in here.
+#
+# See `README.md` beside this file, and "Docker" in
+# `docs/source/installation.rst`, for how it is meant to be run.
+
+# The Python base image this is built on, and its tag without the architecture.
+# `dev-tools/ci/build-partcad-image.sh` always says which: the release's
+# `<release>-py<version>-gstreamer`, or the tag a CI run built its own images
+# under. The default is the moving tag of the last release, so that a plain
+# `docker build` of this file works too. The architecture is appended from the
+# platform being built, because the base images are published per architecture
+# and not as a manifest list.
+ARG BASE_IMAGE=ghcr.io/partcad/partcad-container-python
+ARG BASE_TAG=py3.11-gstreamer
+ARG TARGETARCH
+
+FROM ${BASE_IMAGE}:${BASE_TAG}-${TARGETARCH}
+
+# The release this image carries, and the reference it is published as. The
+# second is what `pc init` writes into an agent's MCP configuration when it runs
+# in here, and what `pc upgrade` tells you to pull instead.
+ARG PARTCAD_VERSION
+ARG PARTCAD_IMAGE=ghcr.io/partcad/partcad
+# The conda this image carries: the same micromamba release the standalone
+# bundles carry (`MICROMAMBA_VERSION` in `dev-tools/pyinstaller/build.sh`), and
+# a test holds the two to one value.
+ARG MICROMAMBA_VERSION=2.9.0-0
+ARG TARGETARCH
+
+USER root
+
+# `partcad.image` is inherited from the base and cannot be taken away by a
+# derived image, so this says what it is on top: the application a person
+# pulled, which `pc system prune` must not delete from under them (see
+# `partcad.docker_prune.LABEL_APP`). `io.modelcontextprotocol.server.name` is
+# how the MCP Registry decides this image is the server `server.json` names; the
+# `org.opencontainers` ones are what GHCR shows on the package's page, and the
+# `source` one is what links the package to this repository.
+LABEL partcad.app="1" \
+      partcad.flavor="app" \
+      partcad.version="${PARTCAD_VERSION}" \
+      io.modelcontextprotocol.server.name="io.github.partcad/partcad" \
+      org.opencontainers.image.title="PartCAD" \
+      org.opencontainers.image.description="PartCAD: the pc command line, the MCP server (pc mcp) and the daemon, with conda and OpenSCAD" \
+      org.opencontainers.image.source="https://github.com/partcad/partcad" \
+      org.opencontainers.image.documentation="https://partcad.readthedocs.io/en/latest/installation.html#docker-image" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.version="${PARTCAD_VERSION}"
+
+# What the base does not carry and a person running PartCAD needs:
+#
+# * `openscad` -- PartCAD treats it as part of the toolchain (`pc healthcheck`
+#   asks after it, and a `.scad` part fails without it); Debian's build, the one
+#   `dev-tools/setup-native.sh` installs too, because it exists for both
+#   architectures and the bundles' snapshot does not.
+# * `git-lfs` -- packages keep their renders and meshes in LFS, and a clone
+#   without it holds pointers where the files should be.
+# * `tini` -- PID 1. `pc` starts a daemon beside itself, and as PID 1 it would
+#   neither reap it nor be stopped by `docker stop`, which sends a SIGTERM that
+#   PID 1 ignores unless it installed a handler. The `--init` flag does the same
+#   and is one more thing to forget in an MCP client's configuration.
+# * `curl` -- what CI scripts run in this image reach for.
+#
+# Unpinned for the reason the base's own packages are: see DL3008 there.
+# hadolint ignore=DL3008
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends curl git-lfs openscad tini \
+  && rm -rf /var/lib/apt/lists/*
+
+# Every RUN below in bash with pipefail: the checksum is read through a pipe,
+# and a download that failed must not reach `sha256sum` as an empty line.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# micromamba, installed as itself on PATH, where `partcad_utils.conda` looks for
+# it after a `mamba` and a `conda`. Verified against the checksum the release
+# publishes beside it, the way the bundles verify theirs.
+RUN set -eu; \
+    case "${TARGETARCH}" in \
+      amd64) artifact=micromamba-linux-64 ;; \
+      arm64) artifact=micromamba-linux-aarch64 ;; \
+      *) echo "no micromamba build is mapped for ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    base="https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}"; \
+    curl -fsSL --retry 5 --retry-all-errors -o /usr/local/bin/micromamba "${base}/${artifact}"; \
+    expected="$(curl -fsSL --retry 5 --retry-all-errors "${base}/${artifact}.sha256" | cut -d' ' -f1)"; \
+    echo "${expected}  /usr/local/bin/micromamba" | sha256sum --check -; \
+    chmod 0755 /usr/local/bin/micromamba; \
+    micromamba --version
+
+# The wheel, as the exact file this release uploaded to PyPI (or, in a test
+# build, the wheel of the tree under test): taken from a build context of its
+# own, `wheels`, so that what gets installed is never a second build of the
+# source. The `lint` extra because the bundles carry it too. DL3013 asks for a
+# `==<version>`, which a wheel *file* states in its name, and which is checked
+# against `PARTCAD_VERSION` below.
+# hadolint ignore=DL3013
+RUN --mount=type=bind,from=wheels,target=/tmp/wheels \
+    set -eu; \
+    set -- /tmp/wheels/partcad-*-py3-none-any.whl; \
+    if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then \
+      echo "the 'wheels' build context must hold exactly one partcad wheel" >&2; ls -l /tmp/wheels >&2; exit 1; \
+    fi; \
+    PIP_ROOT_USER_ACTION=ignore pip install --no-cache-dir "$1[lint]"; \
+    if [ -n "${PARTCAD_VERSION}" ]; then \
+      installed="$(python3 -c 'import partcad_cli; print(partcad_cli.__version__)')"; \
+      [ "${installed}" = "${PARTCAD_VERSION}" ] || { echo "the wheel is ${installed}, not ${PARTCAD_VERSION}" >&2; exit 1; }; \
+    fi
+
+# Where everything PartCAD keeps lives: the base points the state directory at
+# `/dot-partcad`, which is right for a sandbox and wrong here, where it is the
+# one directory worth keeping in a volume. conda's root prefix -- its package
+# cache -- goes in beside the sandboxes, as the bundles put it, so that one
+# volume keeps both and `pc system reset` clears both.
+#
+# Writable by any uid, like the base's `/dot-partcad` and for the same reason:
+# the entrypoint runs PartCAD as the owner of the working directory, which is
+# 1000 on one machine and 1001 on the next. Sticky, so one uid cannot remove
+# another's files. A new named volume is created with this mode.
+RUN mkdir -p /home/pc/.partcad /work /usr/local/share/partcad \
+  && chown pc:pc /home/pc/.partcad /work \
+  && chmod 1777 /home/pc /home/pc/.partcad
+
+ENV HOME=/home/pc \
+    PC_INTERNAL_STATE_DIR=/home/pc/.partcad \
+    MAMBA_ROOT_PREFIX=/home/pc/.partcad/conda \
+    PC_USE_DOCKER_REMOTE=true \
+    PARTCAD_MANAGED_BY=docker-image \
+    PARTCAD_IMAGE=${PARTCAD_IMAGE}
+
+# The names `docker run <image> <name> ...` hands to `pc`, worked out from the
+# wheel just installed rather than written down here, so that a new command is
+# one without anybody remembering this file. See the entrypoint.
+RUN python3 -c "import click; from partcad_cli.click.command import cli; \
+print('\n'.join(cli.list_commands(click.Context(cli))))" > /usr/local/share/partcad/commands \
+  && grep -qx render /usr/local/share/partcad/commands \
+  && grep -qx mcp /usr/local/share/partcad/commands \
+  && rm -rf /root/.partcad /home/pc/.partcad/* \
+  && chmod 1777 /home/pc/.partcad
+
+COPY partcad/entrypoint.sh /usr/local/bin/partcad-entrypoint
+RUN chmod 0755 /usr/local/bin/partcad-entrypoint
+
+COPY partcad/verify.sh /usr/local/share/partcad/verify.sh
+RUN sh /usr/local/share/partcad/verify.sh
+
+WORKDIR /work
+
+# Root, so that the entrypoint can become whoever owns the working directory --
+# and, given the host's Docker socket, join the group that may use it. It drops
+# to that user before PartCAD runs, and `--user` skips it altogether. DL3002
+# is about an image whose process stays root, which PartCAD's never does.
+# hadolint ignore=DL3002
+USER root
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/partcad-entrypoint"]
+CMD ["--help"]

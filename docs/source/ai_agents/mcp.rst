@@ -27,9 +27,18 @@ Starting
   PC_PATH=packages/robot pc mcp            # the same, from the environment
   uvx partcad mcp                          # without installing PartCAD first
 
+  # or in a container, with the CAD scripts the agent writes running in there too
+  docker run -i --rm -v partcad-home:/home/pc/.partcad -v "$PWD:$PWD" -w "$PWD" ghcr.io/partcad/partcad mcp
+
 Nothing is started until the first tool call that needs the daemon, so a server started in a directory that
 is not a package yet still starts, and says so when it is asked to do something. Its log goes to stderr, which
 MCP clients show in their server logs; stdout is the protocol.
+
+``uvx`` is the lightest way to run it where `uv <https://docs.astral.sh/uv/>`_ is installed, and what the MCP
+Registry offers first. The PartCAD image, ``ghcr.io/partcad/partcad``, is the way to keep what the agent runs
+off your machine: the scripts it writes run in a sandbox inside the container, which can reach the workspace and
+nothing else of yours. Setting it up for each client, and giving it the host's Docker for KiCad and
+containerized plugins, is under :ref:`docker-image`.
 
 *******************
 Setting up a client
@@ -92,8 +101,10 @@ The MCP Registry
 ================
 
 The server is listed in the `MCP Registry <https://registry.modelcontextprotocol.io>`_ as
-``io.github.partcad/partcad``, which is what clients that install servers from the registry find. Such a client
-runs it as ``uvx partcad mcp``, and offers ``PC_PATH`` for the package to serve.
+``io.github.partcad/partcad``, which is what clients that install servers from the registry find. It lists two
+ways to run it: ``uvx partcad mcp``, offering ``PC_PATH`` for the package to serve; and the image
+``ghcr.io/partcad/partcad``, run by ``docker`` with the workspace you name mounted at ``/workspace`` and the
+``partcad-home`` volume for its sandboxes. Neither passes the host's Docker socket.
 
 *****
 Tools

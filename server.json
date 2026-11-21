@@ -33,6 +33,50 @@
           "isRequired": false
         }
       ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/partcad/partcad:0.10.20",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--mount",
+          "value": "type=bind,src={workspace},dst=/workspace",
+          "isRequired": true,
+          "description": "The PartCAD workspace to serve: the directory holding partcad.yaml, or a repository above it.",
+          "variables": {
+            "workspace": {
+              "description": "The absolute path of the workspace on this machine.",
+              "format": "filepath",
+              "isRequired": true
+            }
+          }
+        },
+        {
+          "type": "named",
+          "name": "-w",
+          "value": "/workspace",
+          "isRequired": true,
+          "description": "Serve the workspace mounted above, and write into it as the user who owns it."
+        },
+        {
+          "type": "named",
+          "name": "--mount",
+          "value": "type=volume,src=partcad-home,dst=/home/pc/.partcad",
+          "isRequired": true,
+          "description": "Keep PartCAD's sandboxes and caches between runs. Without it every run builds a CAD sandbox from nothing, which takes minutes."
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
     }
   ]
 }

@@ -677,6 +677,167 @@ larger than the rest of PartCAD put together:
 Enabling ``cacheS3`` without it reports an error naming the package to install
 and leaves the remaining tiers working.
 
+.. _docker-image:
+
+======
+Docker
+======
+
+PartCAD is also an image, ``ghcr.io/partcad/partcad``: the ``pc`` command line, the MCP server and the daemon,
+with conda and OpenSCAD in it, for a machine where you would rather run a container than install anything. It
+suits two things in particular -- the MCP server of an AI agent, whose CAD scripts then run inside a container
+rather than on your machine, and a CI job. It does not suit designing parts by hand, which wants the editor and
+the 3D view of the :ref:`PartCAD IDE <partcad-ide>` or the :ref:`extension <vscode-extension>`.
+
+.. code-block:: shell
+
+  $ docker run --rm -it \
+      -v partcad-home:/home/pc/.partcad -v "$PWD:$PWD" -w "$PWD" \
+      ghcr.io/partcad/partcad render my_part
+
+What follows the image is ``pc``'s command line: ``... ghcr.io/partcad/partcad render my_part`` is
+``pc render my_part``, and ``... ghcr.io/partcad/partcad --help`` lists the commands. Anything that is not one
+of ``pc``'s commands runs as it is, so ``... ghcr.io/partcad/partcad bash`` is a shell in the image.
+
+Your files, and PartCAD's
+=========================
+
+``-v "$PWD:$PWD" -w "$PWD"`` mounts the directory you are in at the same path inside the container and works
+there. The same path is deliberate: every path PartCAD prints -- in its log, in the result of an MCP tool, in a
+file it writes -- is then a path on your machine as well. PartCAD runs as the user who owns that directory, so
+what it writes there is yours; ``-e PC_UID=<uid> -e PC_GID=<gid>`` says otherwise, and ``--user`` is honoured.
+
+``-v partcad-home:/home/pc/.partcad`` keeps what PartCAD keeps between runs -- its sandboxes, its conda
+package cache, its caches -- in a named volume. Without it every run builds a CAD sandbox from nothing, which
+takes minutes. ``docker volume rm partcad-home`` starts over.
+
+CAD scripts run in a conda sandbox inside the container, so a package asking for a particular Python version
+gets that version, as it does on a machine with conda.
+
+With the host's Docker
+======================
+
+Mounted like that, the container cannot start containers of its own, and three things need one: a KiCad PCB, a
+plugin that declares a ``container:``, and a package that names a ``dockerImage``. Give it the host's Docker and
+they work:
+
+.. code-block:: shell
+
+  $ docker run --rm -it \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v partcad-home:/home/pc/.partcad -v "$PWD:$PWD" -w "$PWD" \
+      ghcr.io/partcad/partcad render my_part
+
+PartCAD then runs its sandboxes, KiCad and plugins in containers beside this one, on the host's Docker, and
+sends them the files they need instead of mounting them. Nothing else needs configuring: the image finds the
+socket, joins the group that may use it, and sets ``useDockerRemote`` (see :ref:`python-sandbox`).
+
+.. warning::
+
+  The Docker socket is control of the host's Docker, which is as good as root on the host. Give it only to a
+  container you would trust with that -- and think twice before giving it to an AI agent's MCP server, whose
+  scripts otherwise run inside the container and can reach nothing but your workspace and the volume.
+
+Where the socket is somewhere else, mount it at ``/var/run/docker.sock`` all the same:
+
+* **Docker Desktop** on macOS and Windows: as above. From PowerShell or ``cmd``, write the source as
+  ``//var/run/docker.sock``.
+* **Rootless Docker**: ``-v "$XDG_RUNTIME_DIR/docker.sock:/var/run/docker.sock"``.
+* **Podman**: ``-v "$XDG_RUNTIME_DIR/podman/podman.sock:/var/run/docker.sock"``, after
+  ``systemctl --user start podman.socket``.
+
+``pc healthcheck --filters docker`` in the container says whether it has a Docker to use, and what to add if not.
+
+As an MCP server
+================
+
+``pc mcp`` serves the Model Context Protocol on stdio in the image as it does anywhere else (see
+:doc:`/ai_agents/mcp`), so the client starts ``docker run -i`` where it would have started ``pc``. Cursor and
+Visual Studio Code fill the workspace in themselves:
+
+.. code-block:: json
+
+  {
+    "mcpServers": {
+      "partcad": {
+        "command": "docker",
+        "args": ["run", "-i", "--rm", "-v", "partcad-home:/home/pc/.partcad",
+                 "-v", "${workspaceFolder}:${workspaceFolder}", "-w", "${workspaceFolder}",
+                 "ghcr.io/partcad/partcad", "mcp"]
+      }
+    }
+  }
+
+(Visual Studio Code's ``.vscode/mcp.json`` calls the object ``servers`` rather than ``mcpServers``.) In Claude
+Code, from the package's directory, which the shell then writes into the configuration:
+
+.. code-block:: shell
+
+  $ claude mcp add partcad -- docker run -i --rm -v partcad-home:/home/pc/.partcad \
+      -v "$PWD:$PWD" -w "$PWD" ghcr.io/partcad/partcad mcp
+
+Claude Desktop starts servers from no particular directory, so write the package's absolute path in place of
+``${workspaceFolder}``.
+
+``pc init`` run in the image writes such an entry into the ``.mcp.json`` and ``.cursor/mcp.json`` of the
+repository it sets up, because there is no ``pc`` outside the container to name; ``pc init --mcp-via docker``
+does the same anywhere, and ``--mcp-via pc`` the opposite. None of these passes the Docker socket: add it to the
+arguments yourself, knowing what it gives away.
+
+The first tool call that builds something builds the sandbox too, which is minutes on a new volume and may be
+longer than your client waits. Running any ``render`` once, with the same volume, gets that out of the way.
+
+In CI
+=====
+
+In GitHub Actions, run the job in the image:
+
+.. code-block:: yaml
+
+  jobs:
+    render:
+      runs-on: ubuntu-latest
+      container: ghcr.io/partcad/partcad:0.10
+      steps:
+        - uses: actions/checkout@v4
+        - run: pc --no-ansi render -r
+
+In GitLab CI:
+
+.. code-block:: yaml
+
+  render:
+    image: ghcr.io/partcad/partcad:0.10
+    script:
+      - pc --no-ansi qual test
+
+Both run their steps in the image as root and without its entrypoint, which in a throwaway CI container is
+what you want. Cache ``/home/pc/.partcad`` between jobs to keep the sandbox. KiCad and containerized plugins
+need a Docker daemon here too: a runner that hands its socket to jobs gives them one, and so does a
+``docker:dind`` service with ``DOCKER_HOST`` pointed at it -- PartCAD sends containers their files either way.
+
+Versions and upgrading
+======================
+
+Every release is published for ``linux/amd64`` and ``linux/arm64`` under three tags: ``<version>``, which never
+changes and is the one to pin; ``<major>.<minor>``, the newest release of that series; and ``latest``.
+Upgrading is pulling:
+
+.. code-block:: shell
+
+  $ docker pull ghcr.io/partcad/partcad
+
+``pc upgrade`` inside the container refuses and says so, because it would change that one container and the
+next ``docker run`` would start the old PartCAD again.
+
+What it does not do
+===================
+
+There is no editor and no 3D view in a container. ``pc ide view`` shows a part in the IDE or the extension on
+the machine that runs it, and ``pc ide open`` opens a CAD application there; use the :ref:`PartCAD IDE
+<partcad-ide>`, the :ref:`extension <vscode-extension>`, or the :ref:`command line tools <standalone-cli>` for
+those.
+
 .. _vscode-extension:
 
 ============================

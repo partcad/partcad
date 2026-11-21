@@ -136,3 +136,16 @@ def test_labels_are_found_under_attrs_too():
 
 def test_something_with_no_name_at_all_still_logs_as_something():
     assert docker_prune.name_of(types.SimpleNamespace(id="sha256:beef", short_id="beef")) == "beef"
+
+
+def test_the_partcad_image_is_never_pruned():
+    """PartCAD itself, which a person pulled: built on the sandbox base, so it inherits that label too."""
+    app = _image(
+        tags=["ghcr.io/partcad/partcad:0.8.40"],
+        labels={"partcad.image": "1", "partcad.version": "0.8.40", docker_prune.LABEL_APP: "1"},
+    )
+    sandbox = _image(tags=["pc:old"], labels={"partcad.image": "1", "partcad.version": "0.8.40"})
+    client = _Client(images=[app, sandbox])
+
+    assert docker_prune.managed_images(client) == [sandbox]
+    assert docker_prune.managed_images(client, stale_only=True, version="0.8.58") == [sandbox]

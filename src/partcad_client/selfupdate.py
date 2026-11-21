@@ -64,6 +64,8 @@ import zipfile
 from hashlib import sha256
 from typing import Callable, List, Optional
 
+from partcad_utils import app_image
+
 from . import __version__
 
 # How PartCAD was installed.
@@ -71,6 +73,7 @@ KIND_STANDALONE = "standalone"  # the frozen PyInstaller bundle
 KIND_WHEEL = "wheel"  # `pip install partcad`
 KIND_SOURCE = "source"  # an editable install of a source checkout
 KIND_IDE_MANAGED = "ide-managed"  # a bundle an editor extension downloaded and owns
+KIND_IMAGE = "image"  # the PartCAD container image, `ghcr.io/partcad/partcad`
 
 # Set by the PartCAD extension on the terminals it opens, beside the PATH entry
 # that puts these tools there in the first place. An extension-managed bundle is
@@ -81,7 +84,7 @@ KIND_IDE_MANAGED = "ide-managed"  # a bundle an editor extension downloaded and 
 # The variable is the exact signal for the case it covers -- a terminal the
 # extension opened -- and `_is_extension_managed()` below is the fallback for a
 # bundle reached any other way.
-MANAGED_BY_ENV = "PARTCAD_MANAGED_BY"
+MANAGED_BY_ENV = app_image.MANAGED_BY_ENV
 MANAGED_BY_EXTENSION = "vscode-extension"
 
 DEFAULT_REPOSITORY = "partcad/partcad"
@@ -149,9 +152,15 @@ def _is_extension_managed() -> bool:
 
 
 def installation_kind() -> str:
-    """Classify this installation as standalone, wheel, source, or extension-managed."""
+    """Classify this installation as standalone, wheel, source, extension-managed, or the image."""
     if _is_extension_managed():
         return KIND_IDE_MANAGED
+    # The image's PartCAD is a wheel in `site-packages`, so without this it would
+    # read as `KIND_WHEEL` and `pc upgrade` would pip-install a newer one into a
+    # container -- gone the next time the image is run, and meanwhile replacing
+    # the PartCAD that image was tested with. A newer PartCAD is a newer image.
+    if app_image.running_in_image():
+        return KIND_IMAGE
     if getattr(sys, "frozen", False):
         return KIND_STANDALONE
     module_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
@@ -296,6 +305,20 @@ def check(repo: Optional[str] = None, to_version: Optional[str] = None) -> dict:
                 '"Update PartCAD" in the PartCAD Explorer -- and it will bring a matching '
                 "PartCAD with it. Upgrading from here would install a second copy the "
                 "extension does not know about."
+            ),
+        }
+    if kind == KIND_IMAGE:
+        return {
+            "kind": kind,
+            "current": current,
+            "latest": None,
+            "pinned": to_version,
+            "update_available": False,
+            "reason": (
+                "This PartCAD is the PartCAD container image, and is replaced by pulling a newer one: "
+                "`docker pull %s:%s` on the machine that runs it. Upgrading from inside the container would "
+                "change only this container, and the next `docker run` would start the old PartCAD again."
+                % (app_image.image(), to_version or "latest")
             ),
         }
     if kind == KIND_SOURCE:
