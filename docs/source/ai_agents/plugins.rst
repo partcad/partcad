@@ -45,18 +45,22 @@ command line tool state the same version when they came from the same release.
 Gemini CLI
 ==========
 
-The same branch is a Gemini CLI extension too: its root holds a ``gemini-extension.json``, which is where
-Gemini CLI looks for one, beside the Claude Code marketplace.
+PartCAD is a Gemini CLI extension too. Every release carries it, so installing it from the repository installs it
+from the latest release, and updating it follows the releases:
 
 .. code-block:: shell
 
-  gemini extensions install https://github.com/partcad/partcad --ref plugin-dist
+  gemini extensions install https://github.com/partcad/partcad
   gemini extensions update partcad        # after a release
 
 It carries every skill, as ``pc-<name>``; the MCP server, ``pc mcp``, for the workspace Gemini CLI is working
 in; and a short ``GEMINI.md`` that tells the model what PartCAD is and that the skills exist. The extension is
 versioned with the release, like the Claude plugin. It needs ``pc`` on ``PATH`` for its server -- the
 ``pc-setup`` skill installs it.
+
+The ``plugin-dist`` branch holds the same extension at its root, beside the Claude Code marketplace, and
+``--ref plugin-dist`` installs it from there instead. Gemini CLI looks for a *release* of that name first, and
+asks whether to clone the branch when it finds none; answer yes.
 
 ``pc init --agents gemini`` is the per-repository alternative: the skills in ``.agents/skills``, the server in
 ``.gemini/settings.json``, and ``AGENTS.md`` added to the files Gemini CLI reads.

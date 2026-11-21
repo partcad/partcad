@@ -427,10 +427,33 @@ class McpConfig:
     """
 
     path: str
-    key: str = "mcpServers"
+    # The key holding the servers, or the path of keys to it.
+    key: object = "mcpServers"
     project: Optional[str] = None
     extra: tuple = ()
     toml: bool = False
+    # The command as one array (`["pc", "-p", ..., "mcp"]`) rather than a
+    # `command` and its `args`.
+    command_array: bool = False
+    # Other files the agent reads the same configuration from: the first of
+    # them that exists is written instead of `path`, so that a repository using
+    # one is not given a second.
+    alternatives: tuple = ()
+    # What a file created from nothing starts with, before the servers.
+    preamble: tuple = ()
+    # Where an older form of the configuration held the servers, by key path:
+    # PartCAD's entry there is removed when it is written where they are now.
+    legacy_key: tuple = ()
+
+    def keys(self) -> tuple:
+        return (self.key,) if isinstance(self.key, str) else tuple(self.key)
+
+    def file(self, root: str) -> str:
+        """The file to write under `root`: an existing alternative, or `path`."""
+        for candidate in (self.path, *self.alternatives):
+            if os.path.lexists(os.path.join(root, candidate)):
+                return os.path.join(root, candidate)
+        return os.path.join(root, self.path)
 
 
 MCP_CONFIGS = {
@@ -441,6 +464,26 @@ MCP_CONFIGS = {
     "zed": McpConfig(os.path.join(".zed", "settings.json"), key="context_servers"),
     "kiro": McpConfig(os.path.join(".kiro", "settings", "mcp.json")),
     "devin": McpConfig(os.path.join(".devin", "mcp_config.json")),
+    # OpenCode 2 nests servers under `mcp.servers` and describes one as a
+    # `type` and a `command` array (`Mcp.LocalConfigEncoded` in
+    # https://opencode.ai/config.json). The servers OpenCode 1 kept directly
+    # under `mcp` still load, migrated, but that form is deprecated -- so an
+    # entry of PartCAD's left there by hand is moved rather than duplicated.
+    # A relative package is relative to the workspace, which is where OpenCode
+    # starts a server unless told otherwise.
+    "opencode": McpConfig(
+        "opencode.json",
+        key=("mcp", "servers"),
+        extra=(("type", "local"),),
+        command_array=True,
+        alternatives=(
+            "opencode.jsonc",
+            os.path.join(".opencode", "opencode.json"),
+            os.path.join(".opencode", "opencode.jsonc"),
+        ),
+        preamble=(("$schema", "https://opencode.ai/config.json"),),
+        legacy_key=("mcp",),
+    ),
 }
 
 # The agents that are given no MCP configuration, and why: an agent added to
@@ -453,9 +496,6 @@ MCP_NOT_WRITTEN = {
     # server under the same name. The Copilot cloud agent reads its servers from
     # the repository's settings on GitHub, not from a file.
     "copilot": "the PartCAD extension registers it with VS Code; see 'Visual Studio Code' in the MCP documentation",
-    # Its configuration file has changed shape (`mcp` holding servers, then
-    # `mcp.servers`), and a file merged into in the wrong shape is a broken one.
-    "opencode": "its configuration format is in flux; see 'OpenCode' in the MCP documentation",
 }
 
 
@@ -473,7 +513,10 @@ def mcp_server_entry(agent: str, root: str, package_dir: str) -> dict:
     else:
         path = config.project if relative == os.curdir else config.project + "/" + relative
     # Claude Code reads an entry with no "type" as stdio, and says so in its
-    # documentation by always writing it out; the others have no such field.
+    # documentation by always writing it out; OpenCode requires one, "local";
+    # the others have no such field.
+    if config.command_array:
+        return {**dict(config.extra), "command": ["pc", "-p", path, "mcp"]}
     return {**dict(config.extra), "command": "pc", "args": ["-p", path, "mcp"]}
 
 
@@ -488,7 +531,7 @@ def install_mcp_config(agent: str, root: str, package_dir: str) -> bool:
     `_writable_destination` gives.
     """
     config = MCP_CONFIGS[agent]
-    path = os.path.join(root, config.path)
+    path = config.file(root)
     if os.path.islink(path):
         pc_logging.warning("Not adding the MCP server: '%s' is a symbolic link" % path)
         return False
@@ -497,10 +540,18 @@ def install_mcp_config(agent: str, root: str, package_dir: str) -> bool:
         return _install_toml_server(path, config.key, entry)
 
     def add(document: dict) -> Optional[str]:
-        if not isinstance(document.get(config.key, {}), dict):
-            return "it has no '%s' object to add to" % config.key
-        servers = document.setdefault(config.key, {})
-        if servers.get(MCP_SERVER_NAME) == entry:
+        if not document:
+            document.update(dict(config.preamble))
+        servers = document
+        for key in config.keys():
+            if not isinstance(servers.get(key, {}), dict):
+                return "its '%s' is not an object to add to" % ".".join(config.keys())
+            servers = servers.setdefault(key, {})
+        legacy = document
+        for key in config.legacy_key:
+            legacy = legacy.get(key) if isinstance(legacy, dict) else None
+        moved = isinstance(legacy, dict) and config.legacy_key and legacy.pop(MCP_SERVER_NAME, None) is not None
+        if servers.get(MCP_SERVER_NAME) == entry and not moved:
             return ""
         servers[MCP_SERVER_NAME] = entry
         return None

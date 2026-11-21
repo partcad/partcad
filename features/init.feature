@@ -110,6 +110,7 @@ Feature: `pc init` command
     And a file named ".zed/settings.json" should be created
     And a file named ".devin/mcp_config.json" should be created
     And a file named ".kiro/settings/mcp.json" should be created
+    And a file named "opencode.json" should be created
 
   @pc-init @agent-skills
   Scenario: Install the skills without touching AGENTS.md

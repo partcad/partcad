@@ -28,6 +28,8 @@
 #   OUT_DIR/gemini-extension.json             the same skills and MCP server as a
 #   OUT_DIR/GEMINI.md                         Gemini CLI extension, at the root
 #   OUT_DIR/skills/pc-<name>/SKILL.md         (see gemini_extension.py)
+#   OUT_DIR/<platform>.partcad-gemini-extension-<version>.tar.gz
+#                                             the same, as release assets
 #
 # The archive carries the version, like every other asset on a PartCAD release,
 # and that version is the repository's: "dev-tools/bumpversion.toml" moves
@@ -110,8 +112,14 @@ claude plugin validate "$OUT_DIR"
 #
 # (`pytest tests/partcad_cli/unit/test_ai_agent_skills.py` reads them for real
 # too, on every commit, which is where a contributor sees it first.)
-echo "==> Validating materialized plugin"
-claude plugin validate "$OUT_DIR/$PLUGIN_NAME"
+#
+# With the directory's profile: Anthropic's plugin directory is where people
+# look for a plugin, and a submission is refused for what that profile checks --
+# a README and a license in the plugin, among others. "plugin-dist" is the
+# branch a submission tracks, so what is built here is what is submitted, and
+# this keeps it something the directory would take.
+echo "==> Validating materialized plugin (as the plugin directory would)"
+claude plugin validate --profile directory "$OUT_DIR/$PLUGIN_NAME"
 
 # The archive is a required output, not a bonus. It used to be written only
 # "if command -v zip", which was harmless while nothing read it; the release
@@ -131,6 +139,6 @@ echo "==> Wrote plugin archive: $OUT_DIR/$ARCHIVE"
 # manifest only at the root of what it installs, and "plugin-dist" is that root.
 # Written last, after the Claude side has been validated and archived, so that
 # nothing of it can end up in the plugin or in its archive.
-python3 "$SCRIPT_DIR/gemini_extension.py" "$OUT_DIR"
+python3 "$SCRIPT_DIR/gemini_extension.py" "$OUT_DIR" --archives
 
 echo "==> Done. Symlink-free artifact at: $OUT_DIR ($PLUGIN_NAME $PLUGIN_VERSION)"

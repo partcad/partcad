@@ -2,6 +2,9 @@
   "name": "pc",
   "version": "0.10.29",
   "description": "Mechanical and robotics engineering with PartCAD",
+  "license": "Apache-2.0",
+  "homepage": "https://partcad.org",
+  "repository": "https://github.com/partcad/partcad",
   "author": {
     "name": "Roman Kuzmenko",
     "email": "rkuz@partcad.org"

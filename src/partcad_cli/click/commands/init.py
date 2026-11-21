@@ -159,11 +159,17 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
     with pc.telemetry.set_context(cli_ctx.otel_context):
         # ctx: pc.Context = cli_ctx.get_partcad_context()
 
-        if click_ctx.parent.params.get("package") is not None:
-            if os.path.isdir(click_ctx.parent.params.get("package")):
-                dst_path = os.path.join(click_ctx.parent.params.get("package"), "partcad.yaml")
+        # The global `-p`/`--path`, which `pc` stores as "path": a directory to
+        # create the package in, or the `partcad.yaml` itself. This used to ask
+        # for "package" -- the name `pc add` gives its own option -- which the
+        # top-level command has no parameter of, so `pc -p <dir> init` wrote
+        # into the current directory instead, skills and all.
+        package_path = click_ctx.parent.params.get("path")
+        if package_path is not None:
+            if os.path.isdir(package_path):
+                dst_path = os.path.join(package_path, "partcad.yaml")
             else:
-                dst_path = click_ctx.parent.params.get("package")
+                dst_path = package_path
         else:
             dst_path = "partcad.yaml"
 

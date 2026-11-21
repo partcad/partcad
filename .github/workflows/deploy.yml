@@ -486,6 +486,19 @@ jobs:
           else
             echo "${plugin} $(stat -c%s "${plugin}") bytes"
           fi
+          # And the Gemini CLI extension, once per platform prefix: Gemini CLI
+          # picks a release asset by that prefix, and without one for the
+          # platform it is on it installs the source tarball, which has no
+          # extension at its root.
+          for platform in linux darwin win32; do
+            archive="$(find release/plugin -type f -name "${platform}.partcad-gemini-extension-${RELEASE_VERSION}.tar.gz" | head -n 1)"
+            if [ -z "${archive}" ]; then
+              echo "::error::no Gemini CLI extension archive for ${platform}"
+              missing=1
+            else
+              echo "${archive} $(stat -c%s "${archive}") bytes"
+            fi
+          done
           exit "${missing}"
 
       # What the release carries, written down for the clients that download

@@ -52,7 +52,7 @@ Beside the skills it writes, unless told not to:
 
 * **the MCP server**, ``pc mcp``, into each agent's project configuration -- ``.mcp.json``,
   ``.cursor/mcp.json``, ``.codex/config.toml``, ``.gemini/settings.json``, ``.zed/settings.json``,
-  ``.kiro/settings/mcp.json``, ``.devin/mcp_config.json`` -- merged in beside whatever servers are there
+  ``.kiro/settings/mcp.json``, ``.devin/mcp_config.json``, ``opencode.json`` -- merged in beside whatever servers are there
   already (``--no-mcp`` skips it; see :doc:`/ai_agents/mcp`);
 * **a PartCAD section of** ``AGENTS.md``, the project instructions nearly every agent reads before anything
   else (``--no-instructions`` skips it). It says what the package is and where, how to run ``pc`` so its output

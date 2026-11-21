@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 import sys
+import tarfile
 
 import pytest
 import yaml
@@ -28,7 +29,7 @@ LIBRARY = os.path.join(ROOT, "ai-agents", "common", "skills")
 def extension(tmp_path_factory):
     out = tmp_path_factory.mktemp("extension")
     # `-I`: the script must work with nothing installed, as on a bare runner.
-    subprocess.run([sys.executable, "-I", SCRIPT, str(out)], check=True, capture_output=True)
+    subprocess.run([sys.executable, "-I", SCRIPT, str(out), "--archives"], check=True, capture_output=True)
     return out
 
 
@@ -66,3 +67,24 @@ def test_the_context_names_every_skill(extension):
     context = (extension / "GEMINI.md").read_text(encoding="utf-8")
     for name in os.listdir(extension / "skills"):
         assert "`%s`" % name in context
+
+
+def test_every_platform_gemini_cli_names_gets_the_same_release_archive(extension):
+    """Gemini CLI takes the release asset prefixed with its platform; an unprefixed one only if it is the only one."""
+    version = json.loads((extension / "gemini-extension.json").read_text(encoding="utf-8"))["version"]
+    archives = sorted(path.name for path in extension.glob("*.tar.gz"))
+    assert archives == [
+        "%s.partcad-gemini-extension-%s.tar.gz" % (platform, version) for platform in ("darwin", "linux", "win32")
+    ]
+    contents = {(extension / name).read_bytes() for name in archives}
+    assert len(contents) == 1
+
+
+def test_an_archive_holds_the_extension_at_its_root_and_nothing_of_the_claude_plugin(extension, tmp_path):
+    archive = next(extension.glob("linux.*.tar.gz"))
+    with tarfile.open(archive) as tar:
+        names = tar.getnames()
+        tar.extractall(tmp_path, filter="data")
+    assert {name.split("/")[0] for name in names} == {"gemini-extension.json", "GEMINI.md", "skills"}
+    assert (tmp_path / "gemini-extension.json").read_bytes() == (extension / "gemini-extension.json").read_bytes()
+    assert sorted(os.listdir(tmp_path / "skills")) == sorted(os.listdir(extension / "skills"))

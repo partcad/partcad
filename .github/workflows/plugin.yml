@@ -135,6 +135,64 @@ jobs:
           done
           exit "${missing}"
 
+      # And the same as the Claude smoke test below, for Gemini CLI: validate
+      # the extension, install it the way a user does, and ask what it loaded.
+      # The CLI is pinned, as Claude Code is not, because Gemini CLI changes
+      # what `extensions list` prints between releases and this reads it. It
+      # asks whether to trust the folder it installs from whatever `--consent`
+      # says, hence the answer on stdin; the throwaway $HOME keeps all of it out
+      # of the runner's.
+      - name: Smoke test — install the Gemini CLI extension and inventory it
+        env:
+          GEMINI_CLI_VERSION: "0.70.0"
+        run: |
+          set -euo pipefail
+          npm install -g "@google/gemini-cli@${GEMINI_CLI_VERSION}"
+          out="${PWD}/ai-agents/.build/marketplace"
+          export HOME="$(mktemp -d)"
+          gemini extensions validate "${out}"
+          printf 'y\n' | gemini extensions install "${out}" --consent
+          # It prints the list on stderr.
+          gemini extensions list 2>&1 | tee "${RUNNER_TEMP}/gemini-extensions.txt"
+          if ! grep -qE "partcad \(" "${RUNNER_TEMP}/gemini-extensions.txt"; then
+            echo "::error::Gemini CLI did not install the 'partcad' extension"
+            exit 1
+          fi
+          if ! grep -A1 "MCP servers:" "${RUNNER_TEMP}/gemini-extensions.txt" | grep -qE "^ +partcad$"; then
+            echo "::error::the installed extension does not declare the 'partcad' MCP server"
+            exit 1
+          fi
+          expected=0
+          for source in ai-agents/common/skills/*/SKILL.md; do
+            name="pc-$(basename "$(dirname "${source}")")"
+            expected=$((expected + 1))
+            if ! grep -qE "^ +${name}: " "${RUNNER_TEMP}/gemini-extensions.txt"; then
+              echo "::error::${name} is not among the skills Gemini CLI loaded"
+              exit 1
+            fi
+          done
+          echo "OK: Gemini CLI loaded ${expected} skills and the 'partcad' MCP server"
+
+          # And each release archive, which is what an install from the
+          # repository's latest release unpacks: the extension has to be at its
+          # root, whole.
+          count=0
+          for archive in "${out}"/*.partcad-gemini-extension-*.tar.gz; do
+            unpacked="$(mktemp -d)"
+            tar -xzf "${archive}" -C "${unpacked}"
+            gemini extensions validate "${unpacked}"
+            if ! diff -r "${unpacked}/skills" "${out}/skills" >/dev/null; then
+              echo "::error::$(basename "${archive}") does not hold the extension's skills"
+              exit 1
+            fi
+            count=$((count + 1))
+          done
+          if [ "${count}" -ne 3 ]; then
+            echo "::error::expected a release archive for each of linux, darwin and win32; found ${count}"
+            exit 1
+          fi
+          echo "OK: ${count} release archives hold the extension"
+
       # Validation reads the manifests; this installs the artifact the way a
       # user does and asks what the session would actually load. A plugin whose
       # manifests are valid and whose skills do not load is the failure that
@@ -189,7 +247,13 @@ jobs:
           # directory, and a name matching either would be merged into the
           # wrong one.
           name: partcad-plugin
-          path: ai-agents/.build/marketplace/pc-*.zip
+          # With the Gemini CLI extension's release archives, one per platform
+          # prefix Gemini CLI looks for (see "gemini_extension.py"): the
+          # release is where `gemini extensions install <repository>` and
+          # `gemini extensions update` find it.
+          path: |
+            ai-agents/.build/marketplace/pc-*.zip
+            ai-agents/.build/marketplace/*.partcad-gemini-extension-*.tar.gz
           if-no-files-found: error
 
       # The same content unpacked, which is what the "plugin-dist" branch is:
@@ -204,6 +268,7 @@ jobs:
           path: |
             ai-agents/.build/marketplace
             !ai-agents/.build/marketplace/*.zip
+            !ai-agents/.build/marketplace/*.tar.gz
           if-no-files-found: error
           # Without this the catalog does not travel: ".claude-plugin" is a
           # hidden directory and hidden files are excluded by default, silently

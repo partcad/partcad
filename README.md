@@ -28,7 +28,7 @@ Pick one. Every option ends up with the same `pc` command line tool and the same
 | Python             | `pip install -U partcad`                                                                                                                                                                                                             |
 | Visual Studio Code | `code --install-extension PartCAD.partcad-official` ([marketplace](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official))                                                                                     |
 | Claude Code        | `/plugin marketplace add partcad/partcad@plugin-dist`, then `/plugin install pc@partcad`, then `/pc:setup`                                                                                                                            |
-| Gemini CLI         | `gemini extensions install https://github.com/partcad/partcad --ref plugin-dist`; its `pc-setup` skill installs `pc`                                                                                                                  |
+| Gemini CLI         | `gemini extensions install https://github.com/partcad/partcad`; its `pc-setup` skill installs `pc`                                                                                                                                    |
 
 The standalone command line tools without Python, the snap, the FreeCAD add-on, the MCP server for other AI
 agents (with one-click installs for Cursor and Visual Studio Code), and the per-OS notes are all in

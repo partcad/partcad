@@ -812,3 +812,80 @@ def test_the_vscode_install_link_is_the_server_the_documentation_shows():
     assert inner.startswith("vscode:mcp/install?")
     config = json.loads(urllib.parse.unquote(inner[len("vscode:mcp/install?") :]))
     assert config == {"name": "partcad", "type": "stdio", "command": "pc", "args": ["-p", "${workspaceFolder}", "mcp"]}
+
+
+# --- OpenCode's V2 configuration ---
+
+
+def test_opencode_is_given_a_server_in_its_current_shape(repository):
+    """`mcp.servers.<name>`, a `type` and the command as one array (`Mcp.LocalConfigEncoded`)."""
+    package = repository / "packages" / "widget"
+    package.mkdir(parents=True)
+
+    assert ai_agents.install_mcp_config("opencode", str(repository), str(package))
+
+    config = read_json(repository / "opencode.json")
+    assert config["$schema"] == "https://opencode.ai/config.json"
+    assert config["mcp"]["servers"]["partcad"] == {"type": "local", "command": ["pc", "-p", "packages/widget", "mcp"]}
+
+
+def test_opencodes_deprecated_entry_of_ours_is_moved_and_the_rest_kept(tmp_path):
+    """OpenCode 2 migrates a server kept directly under `mcp`; two of ours, in both places, would be one too many."""
+    before = {
+        "$schema": "https://opencode.ai/config.json",
+        "model": "theirs",
+        "mcp": {
+            "partcad": {"type": "local", "command": ["old-pc", "mcp"]},
+            "github": {"type": "local", "command": ["gh"]},
+        },
+    }
+    (tmp_path / "opencode.json").write_text(json.dumps(before), encoding="utf-8")
+
+    assert ai_agents.install_mcp_config("opencode", str(tmp_path), str(tmp_path))
+
+    config = read_json(tmp_path / "opencode.json")
+    assert config["model"] == "theirs"
+    assert "partcad" not in config["mcp"]
+    assert config["mcp"]["github"] == {"type": "local", "command": ["gh"]}
+    assert config["mcp"]["servers"]["partcad"]["command"] == ["pc", "-p", ".", "mcp"]
+
+
+@pytest.mark.parametrize("existing", ["opencode.jsonc", ".opencode/opencode.json"])
+def test_the_opencode_file_a_repository_already_has_is_the_one_written(tmp_path, existing):
+    """OpenCode merges every file it finds; a second one beside the first would be one more place to look."""
+    path = tmp_path.joinpath(*existing.split("/"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"model": "theirs"}', encoding="utf-8")
+
+    assert ai_agents.install_mcp_config("opencode", str(tmp_path), str(tmp_path))
+
+    assert read_json(path)["mcp"]["servers"]["partcad"]["type"] == "local"
+    assert not (tmp_path / "opencode.json").exists() or existing == "opencode.json"
+
+
+def test_an_opencode_file_with_comments_is_left_alone(tmp_path):
+    text = '{\n  // mine\n  "model": "theirs"\n}\n'
+    (tmp_path / "opencode.jsonc").write_text(text, encoding="utf-8")
+
+    assert not ai_agents.install_mcp_config("opencode", str(tmp_path), str(tmp_path))
+
+    assert (tmp_path / "opencode.jsonc").read_text(encoding="utf-8") == text
+
+
+def test_the_opencode_documentation_shows_what_pc_init_writes():
+    """One snippet, and it is the configuration `pc init` produces -- so the two cannot come to differ."""
+    import re
+
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "docs", "source", "ai_agents", "mcp.rst")
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    section = text[text.index("OpenCode\n========\n") : text.index("Claude Desktop\n==============")]
+    blocks = re.findall(r"\.\. code-block:: json\n\n((?:  .*\n|\n)+)", section)
+    assert len(blocks) == 1
+    documented = json.loads(blocks[0])
+
+    config = ai_agents.MCP_CONFIGS["opencode"]
+    assert documented == {
+        **dict(config.preamble),
+        "mcp": {"servers": {"partcad": ai_agents.mcp_server_entry("opencode", "/r", "/r")}},
+    }

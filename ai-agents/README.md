@@ -162,14 +162,14 @@ smoke install fails if the installed plugin does not report it.
 `partcad` entry into each agent's own project configuration instead — `.mcp.json`
 for Claude Code, `.cursor/mcp.json`, `.codex/config.toml` (TOML, edited as text
 so its comments survive), `.gemini/settings.json`, `.zed/settings.json`,
-`.kiro/settings/mcp.json` and `.devin/mcp_config.json` — pointed at the package
-with `-p`, which is the one thing a plugin cannot know in a repository whose
-package is in a subdirectory, and leaves every other server in those files
-alone. A file it cannot merge into without losing something (JSON with
-comments, a server of that name written inline) is left as it is, with a
-warning. GitHub Copilot gets none, because the VS Code extension registers the
-server already, and OpenCode none, because its format is in flux; see
-`MCP_NOT_WRITTEN`. Re-running it rewrites the `partcad` entry; `--no-mcp` leaves
+`.kiro/settings/mcp.json`, `.devin/mcp_config.json` and `opencode.json` (in
+OpenCode 2's `mcp.servers` shape, moving an entry of ours out of the deprecated
+flat one) — pointed at the package with `-p`, which is the one thing a plugin
+cannot know in a repository whose package is in a subdirectory, and leaves every
+other server in those files alone. A file it cannot merge into without losing
+something (JSON with comments, a server of that name written inline) is left as
+it is, with a warning. GitHub Copilot gets none, because the VS Code extension
+registers the server already; see `MCP_NOT_WRITTEN`. Re-running it rewrites the `partcad` entry; `--no-mcp` leaves
 every file untouched.
 
 ### What a re-run does
@@ -393,21 +393,30 @@ The plugin folder is named `claude`, but the command namespace comes from
 
 ## Gemini CLI
 
-The `plugin-dist` branch is a Gemini CLI extension as well as a Claude Code
-marketplace: `materialize.sh` ends by running `scripts/gemini_extension.py`,
-which writes `gemini-extension.json`, `GEMINI.md` and `skills/pc-<skill>/` at the
-root of the same tree — the root, because Gemini CLI reads an extension's
-manifest nowhere else. So
+PartCAD is a Gemini CLI extension as well as a Claude Code plugin, published two
+ways by the same build. `materialize.sh` ends by running
+`scripts/gemini_extension.py`, which writes `gemini-extension.json`, `GEMINI.md`
+and `skills/pc-<skill>/` at the root of the marketplace tree — the root, because
+Gemini CLI reads an extension's manifest nowhere else — and then the same three
+as release archives:
 
-```text
-gemini extensions install https://github.com/partcad/partcad --ref plugin-dist
-```
+- **On every release**, as `linux.`, `darwin.` and `win32.partcad-gemini-extension-<version>.tar.gz`.
+  `gemini extensions install https://github.com/partcad/partcad` installs from
+  the latest release, and takes the asset whose name starts with its platform;
+  an unprefixed one it would take only if it were the release's only asset, and
+  a PartCAD release has dozens. So the one extension is three identical
+  archives. Without one for its platform it would unpack the source tarball,
+  which has no extension at its root. `gemini extensions update` follows the
+  releases from then on.
+- **On `plugin-dist`**, where `--ref plugin-dist` finds it (after Gemini CLI has
+  looked for a release of that name and asked to clone the branch instead).
 
-installs the same skills, the same MCP server and the same release as
-`/plugin install pc@partcad`. The version is read from `plugin.json`, so there
-is nothing more to bump. `plugin.yml` checks every skill came through under its
-`pc-` name, `deploy.yml` refuses to publish a tree without the manifest, and
-`tests/dev_tools/test_gemini_extension.py` runs the script on every commit.
+The version is read from `plugin.json`, so there is nothing more to bump.
+`plugin.yml` installs the extension with a pinned Gemini CLI, checks that it
+loaded every skill and the MCP server, and validates each archive;
+`deploy.yml` refuses to publish a release without the three archives or a
+`plugin-dist` without the manifest; and `tests/dev_tools/test_gemini_extension.py`
+runs the script on every commit.
 
 ## Local use (Claude)
 
@@ -454,6 +463,37 @@ Installs on macOS and Linux dereference the `skills` symlink by themselves, but
 **Windows git checkouts may not preserve symlinks**, which would ship an empty
 plugin. That is what the materialized artifact is for, and why both published
 forms are symlink-free.
+
+### Where people find it
+
+What the release does by itself:
+
+- **The MCP Registry** gets `io.github.partcad/partcad` (`server.json`) after
+  every PyPI upload. The registry is meant to be read by downstream catalogues,
+  which poll it; PulseMCP, for one, says it picks servers up from there.
+- **Gemini CLI's extension gallery** crawls GitHub daily for public
+  repositories with the topic `gemini-cli-extension` and an extension at the
+  root of the repository *or of a release archive*, which every release now
+  carries. The topic is a repository setting; it is not set from here.
+- **skills.sh** lists what people install with `npx skills add <owner>/<repo>`,
+  ranked by installs, with no publishing step. Which of this repository's
+  directories it scans for skills has not been checked from here.
+
+And what needs a maintainer once, after which the release keeps it current:
+
+- **Anthropic's plugin directory**: a submission at claude.ai/directory/manage
+  that tracks `plugin-dist`, path `pc`. The directory refuses a plugin without a
+  README or a license, which is why `materialize.sh` validates with
+  `--profile directory` — what `plugin-dist` carries is what would be
+  submitted. It warns that there is no icon: a square PNG of 512 px or more,
+  which it reads once, at the first submission. Every `.png` here is in LFS and
+  no workflow checks LFS out, so one would need an exemption in
+  `.gitattributes`.
+- **GitHub's MCP registry** (github.com/mcp, which Visual Studio Code's MCP
+  gallery reads) onboards a server by hand; once onboarded, versions follow the
+  MCP Registry.
+- **Docker's MCP catalog** takes a pull request with a `server.yaml`, and an
+  image to run.
 
 To rebuild the artifacts without cutting a release, run the `Plugin` workflow
 from the Actions tab. To republish `plugin-dist` alone, re-run the `Deployment`

@@ -870,13 +870,13 @@ def test_every_skill_is_a_prompt_named_as_it_is_outside_the_claude_plugin(tmp_pa
     assert sorted(prompt.name for prompt in prompts) == ["pc-" + skill for skill in agent_skills.available_skills()]
     for prompt in prompts:
         assert prompt.description, prompt.name
-        assert [argument.name for argument in prompt.arguments] == ["arguments"]
+        assert [argument.name for argument in prompt.arguments] == ["request"]
         assert not prompt.arguments[0].required
 
 
 def test_a_prompt_is_the_skill_with_the_request_in_place_of_its_arguments(tmp_path):
     _, server = serve(tmp_path)
-    got = using(server, lambda client: client.get_prompt("pc-add-interfaces", {"arguments": "//pub/x:bolt"}))
+    got = using(server, lambda client: client.get_prompt("pc-add-interfaces", {"request": "//pub/x:bolt"}))
     text = got.messages[0].content.text
     assert "$ARGUMENTS" not in text
     assert "//pub/x:bolt" in text
@@ -952,3 +952,87 @@ def test_the_instructions_point_at_the_skills(tmp_path):
 def body_text(result) -> str:
     assert isinstance(result.content[0], TextContent)
     return result.content[0].text
+
+
+# --- A client that sends a request a word at a time ---------------------------
+
+
+def using_as(server, client_name, body):
+    """`using`, as the client `client_name` -- which is what decides how a skill prompt's arguments are shaped."""
+    from mcp_types import Implementation
+
+    async def main():
+        async with Client(server, client_info=Implementation(name=client_name, version="1")) as client:
+            return await body(client)
+
+    return anyio.run(main)
+
+
+def test_claude_code_is_told_of_an_argument_per_word(tmp_path):
+    """Claude Code zips the words typed after a prompt's command onto its arguments and drops the rest."""
+    _, server = serve(tmp_path)
+    prompts = using_as(server, "claude-code", lambda client: client.list_prompts()).prompts
+
+    skill = next(prompt for prompt in prompts if prompt.name == "pc-gen-part")
+    names = [argument.name for argument in skill.arguments]
+    assert names[0] == "request"
+    assert len(names) == mcp_server.REQUEST_WORDS
+    assert not any(argument.required for argument in skill.arguments)
+
+
+def test_every_other_client_is_told_of_one(tmp_path):
+    """Visual Studio Code asks for each argument in a box of its own; thirty-two boxes is not a prompt."""
+    _, server = serve(tmp_path)
+    for name in ("Visual Studio Code", "gemini-cli-mcp-client", "opencode"):
+        prompts = using_as(server, name, lambda client: client.list_prompts()).prompts
+        assert all([argument.name for argument in prompt.arguments] == ["request"] for prompt in prompts), name
+
+
+def test_the_words_are_put_back_together_into_the_request(tmp_path):
+    """What Claude Code sends for `/mcp__partcad__pc-add-interfaces //pub/x:bolt so it fits an M4 nut`."""
+    _, server = serve(tmp_path)
+    words = "//pub/x:bolt so it fits an M4 nut".split(" ")
+    arguments = {"request": words[0], **{str(index + 1): word for index, word in enumerate(words) if index}}
+
+    got = using_as(server, "claude-code", lambda client: client.get_prompt("pc-add-interfaces", arguments))
+
+    text = got.messages[0].content.text
+    assert "The request: //pub/x:bolt so it fits an M4 nut\n" in text
+    assert "(`//pub/x:bolt so it fits an M4 nut`)" in text
+
+
+def test_a_request_that_filled_every_word_says_it_may_go_on():
+    words = {"request": "w1", **{str(index): "w%d" % index for index in range(2, mcp_server.REQUEST_WORDS + 1)}}
+
+    joined = mcp_server.join_request(words)
+
+    assert joined.startswith("w1 w2 w3 ")
+    assert joined.endswith(" w%d ..." % mcp_server.REQUEST_WORDS)
+
+
+def test_a_prompt_that_is_not_a_skill_is_not_reshaped(tmp_path):
+    _, server = serve(tmp_path)
+
+    @server.prompt(name="other")
+    def other(value: str = "") -> str:
+        return value
+
+    prompts = using_as(server, "claude-code", lambda client: client.list_prompts()).prompts
+    assert [argument.name for argument in next(p for p in prompts if p.name == "other").arguments] == ["value"]
+
+
+def test_gemini_cli_is_told_the_request_is_required(tmp_path):
+    """Gemini CLI fills only required arguments from what is typed after a command, and drops it otherwise."""
+    _, server = serve(tmp_path)
+    prompts = using_as(server, "gemini-cli-mcp-client", lambda client: client.list_prompts()).prompts
+
+    skill = next(prompt for prompt in prompts if prompt.name == "pc-gen-part")
+    assert [(argument.name, argument.required) for argument in skill.arguments] == [("request", True)]
+
+
+def test_no_other_client_is_made_to_give_a_request(tmp_path):
+    """Visual Studio Code would refuse to run `/pc-setup` until something was typed into its box."""
+    _, server = serve(tmp_path)
+    for name in ("Visual Studio Code", "opencode", "claude-code"):
+        prompts = using_as(server, name, lambda client: client.list_prompts()).prompts
+        assert not any(argument.required for prompt in prompts for argument in prompt.arguments), name

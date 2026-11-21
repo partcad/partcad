@@ -30,17 +30,31 @@ importing its package would pull in more than this needs.
 The version is the Claude plugin manifest's, which `dev-tools/bumpversion.toml`
 moves with the release: no second literal to bump.
 
+It also writes the extension as release archives, for
+
+    gemini extensions install https://github.com/partcad/partcad
+
+which installs from the latest GitHub release rather than from a branch, and is
+what `gemini extensions update` then follows. Gemini CLI takes the release asset
+whose name starts with `<platform>.<arch>.` or `<platform>.` (`linux`, `darwin`,
+`win32`), and uses an unprefixed one only when it is the release's *only* asset
+-- a PartCAD release has dozens -- so the one platform-independent extension is
+written three times, once under each prefix (`ARCHIVE_PLATFORMS`). The archives
+hold the extension at their root, which is where Gemini CLI looks.
+
 Usage:
 
-    python3 ai-agents/scripts/gemini_extension.py OUT_DIR
+    python3 ai-agents/scripts/gemini_extension.py OUT_DIR [--archives]
 """
 
 import importlib.util
+import io
 import json
 import os
 import re
 import shutil
 import sys
+import tarfile
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 SKILLS_DIR = os.path.join(ROOT, "ai-agents", "common", "skills")
@@ -51,6 +65,13 @@ AGENT_SKILLS = os.path.join(ROOT, "src", "partcad_utils", "agent_skills.py")
 # and the name `gemini extensions update` and `uninstall` take. Lowercase and
 # dashes only.
 NAME = "partcad"
+
+# The platforms Gemini CLI names a release asset after (Node's `os.platform()`).
+ARCHIVE_PLATFORMS = ("linux", "darwin", "win32")
+
+# What an extension archive holds, out of OUT_DIR -- which is also the Claude
+# marketplace, none of which belongs in it.
+EXTENSION_FILES = ("gemini-extension.json", "GEMINI.md", "skills")
 
 # What Gemini CLI reads into every session the extension is enabled in. Short,
 # because it is in every session: what PartCAD is, how to run it so its output
@@ -134,13 +155,47 @@ def write(out_dir: str) -> list:
     return names
 
 
+def archive_name(platform: str, version: str) -> str:
+    return "%s.%s-gemini-extension-%s.tar.gz" % (platform, NAME, version)
+
+
+def write_archives(out_dir: str) -> list:
+    """Write the extension in `out_dir` as one `.tar.gz` per platform prefix, beside it. Returns their paths.
+
+    Built in memory once and written three times, so the three are the same
+    bytes; every entry is stamped with the same time and owner, so a rebuild of
+    one tree is the same archive.
+    """
+    version = _version()
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz", format=tarfile.PAX_FORMAT) as tar:
+
+        def normalized(info):
+            info.mtime, info.uid, info.gid, info.uname, info.gname = 0, 0, 0, "", ""
+            return info
+
+        for name in EXTENSION_FILES:
+            tar.add(os.path.join(out_dir, name), arcname=name, filter=normalized)
+    paths = []
+    for platform in ARCHIVE_PLATFORMS:
+        path = os.path.join(out_dir, archive_name(platform, version))
+        with open(path, "wb") as f:
+            f.write(buffer.getvalue())
+        paths.append(path)
+    return paths
+
+
 def main(argv: list) -> int:
-    if len(argv) != 2:
+    args = [arg for arg in argv[1:] if arg != "--archives"]
+    if len(args) != 1:
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2
-    os.makedirs(argv[1], exist_ok=True)
-    names = write(argv[1])
-    print("==> Wrote the Gemini CLI extension '%s' (%d skills) into %s" % (NAME, len(names), argv[1]))
+    os.makedirs(args[0], exist_ok=True)
+    names = write(args[0])
+    print("==> Wrote the Gemini CLI extension '%s' (%d skills) into %s" % (NAME, len(names), args[0]))
+    if "--archives" in argv[1:]:
+        for path in write_archives(args[0]):
+            print("==> Wrote the Gemini CLI extension archive: %s" % path)
     return 0
 
 

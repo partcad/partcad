@@ -163,19 +163,23 @@ Devin Desktop reads for a project and the one to commit, in the same shape as Ki
 OpenCode
 ========
 
-``pc init`` writes OpenCode no server -- the shape of its configuration has changed between releases, and a
-file merged into in the wrong shape is a broken one. In ``opencode.json``, in the shape its documentation
-gives today (an older OpenCode takes the ``partcad`` entry directly under ``mcp``):
+``pc init --agents opencode`` (or ``pc init`` in a repository with an ``opencode.json`` or an ``.opencode``) adds
+it to ``opencode.json`` -- or to the ``opencode.jsonc`` or ``.opencode/opencode.json`` the repository already
+has -- in the shape OpenCode 2 reads, with the package relative to the workspace, where OpenCode starts it:
 
 .. code-block:: json
 
   {
+    "$schema": "https://opencode.ai/config.json",
     "mcp": {
       "servers": {
         "partcad": { "type": "local", "command": ["pc", "-p", ".", "mcp"] }
       }
     }
   }
+
+A ``partcad`` entry directly under ``mcp``, the shape OpenCode 1 used and OpenCode 2 still migrates, is moved
+under ``servers`` rather than left beside it.
 
 Claude Desktop
 ==============
@@ -304,11 +308,23 @@ Skills
 Every one of PartCAD's :doc:`/ai_agents/skills` is served three ways, because MCP clients differ in which of
 the three they show:
 
-* **a prompt**, ``pc-<name>``, with one optional argument, ``arguments``: the request, which takes the place
-  of the ``$ARGUMENTS`` the skill is written around. This is what a client offers as a slash command --
-  ``/pc-gen-part`` in Gemini CLI and OpenCode, ``/mcp__partcad__pc-gen-part`` in Claude Code and Devin
-  Desktop. Claude Code passes each word as a separate argument, so there the plugin's ``/pc:gen-part`` is the
-  better way in.
+* **a prompt**, ``pc-<name>``, with one optional argument, ``request``, which takes the place of the
+  ``$ARGUMENTS`` the skill is written around. This is what a client offers as a slash command --
+  ``/pc-gen-part`` in Gemini CLI, ``/partcad:pc-gen-part`` in OpenCode, ``/mcp__partcad__pc-gen-part`` in Claude
+  Code and Devin Desktop.
+
+  Claude Code splits what is typed after the command on spaces and hands the words to the prompt's arguments
+  one each, in order, dropping whatever is left over -- quotes do not hold words together -- so a prompt with
+  one argument would be sent the first word of the request. So when the client is Claude Code (as it says
+  when it connects), each skill's prompt is listed with an argument per word, thirty-two of them (``request``,
+  ``2``, ``3``, ...), and the words are put back together before the skill sees them. Claude Code also shows
+  the model the whole of what was typed, as the command's arguments, and the prompt says that text wins should
+  a request ever be longer.
+
+  Gemini CLI gets the opposite treatment: it hands what is typed after a command only to arguments a prompt
+  *requires*, all of it when one is, so it is told the request is required. Every other client is told of one
+  optional argument: Visual Studio Code, for one, asks for each argument in a box of its own and would not
+  run ``/pc-setup`` until something was typed into it.
 * **the** ``skill`` **tool**, which every client has: ``skill`` with a ``name`` returns that skill, and
   without one lists them all. The server's instructions tell the agent to read the skill for a kind of work
   before doing it, and this is also how it follows a skill that names another (``/pc-gen-sketch`` from
