@@ -78,7 +78,13 @@ Feature: `pc init` command
     And a file named ".cursor/skills/pc-init/SKILL.md" should be created
     And a file named ".cursor/skills/init/SKILL.md" should not exist
     And the skill "pc-init" should be named after its directory
+    # GitHub Copilot, Codex, Gemini CLI, Zed, OpenCode and Devin all read this
+    # one directory, so it is written once, for all of them.
+    And a file named ".agents/skills/pc-init/SKILL.md" should be created
     And STDERR should contain "Installed the 'pc' plugin"
+    # And the project instructions nearly every agent reads first.
+    And a file named "AGENTS.md" should be created
+    And STDERR should contain "Wrote the PartCAD section"
     # And the MCP server the skills' agent can drive PartCAD through.
     And a file named ".mcp.json" should be created
     And a file named ".cursor/mcp.json" should be created
@@ -92,6 +98,26 @@ Feature: `pc init` command
     And a file named ".cursor/skills/pc-init/SKILL.md" should be created
     And a file named ".mcp.json" should not exist
     And a file named ".cursor/mcp.json" should not exist
+
+  @pc-init @agent-skills @agents
+  Scenario: Install the skills for every agent PartCAD knows
+    Given a file named "partcad.yaml" does not exist
+    When I run "pc --no-ansi init --skills-only --agents all"
+    Then the command should exit with a status code of "0"
+    And a file named ".kiro/skills/pc-init/SKILL.md" should be created
+    And a file named ".codex/config.toml" should be created
+    And a file named ".gemini/settings.json" should be created
+    And a file named ".zed/settings.json" should be created
+    And a file named ".devin/mcp_config.json" should be created
+    And a file named ".kiro/settings/mcp.json" should be created
+
+  @pc-init @agent-skills
+  Scenario: Install the skills without touching AGENTS.md
+    Given a file named "partcad.yaml" does not exist
+    When I run "pc --no-ansi init --no-instructions"
+    Then the command should exit with a status code of "0"
+    And a file named ".cursor/skills/pc-init/SKILL.md" should be created
+    And a file named "AGENTS.md" should not exist
 
   @pc-init @agent-skills @skills-only
   Scenario: Install the skills into a repository that has a package already

@@ -126,6 +126,7 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
             "version",
             "list_methods",
             "execute",
+            "skill",
         ]
     )
     for tool in tools:
@@ -855,3 +856,99 @@ def test_qual_add_declares_a_test_as_pc_qual_add_does(tmp_path):
     )
     assert request["entry"] == {"lockfile": "rover.lockwire.yaml"}
     assert request["assembly"] is True
+
+
+# --- Skills ------------------------------------------------------------------
+
+
+def test_every_skill_is_a_prompt_named_as_it_is_outside_the_claude_plugin(tmp_path):
+    """`/pc:gen-part` in the Claude plugin is `pc-gen-part` everywhere else, a prompt included."""
+    from partcad_utils import agent_skills
+
+    _, server = serve(tmp_path)
+    prompts = using(server, lambda client: client.list_prompts()).prompts
+    assert sorted(prompt.name for prompt in prompts) == ["pc-" + skill for skill in agent_skills.available_skills()]
+    for prompt in prompts:
+        assert prompt.description, prompt.name
+        assert [argument.name for argument in prompt.arguments] == ["arguments"]
+        assert not prompt.arguments[0].required
+
+
+def test_a_prompt_is_the_skill_with_the_request_in_place_of_its_arguments(tmp_path):
+    _, server = serve(tmp_path)
+    got = using(server, lambda client: client.get_prompt("pc-add-interfaces", {"arguments": "//pub/x:bolt"}))
+    text = got.messages[0].content.text
+    assert "$ARGUMENTS" not in text
+    assert "//pub/x:bolt" in text
+    # Front matter is the skill's metadata, not instructions to follow.
+    assert not text.startswith("---")
+    assert "description:" not in text.split("---", 2)[-1][:200]
+
+
+def test_a_skill_names_other_skills_as_they_are_served_here(tmp_path):
+    """A `/pc:gen-sketch` left in the text names a namespace that exists only in Claude Code."""
+    _, server = serve(tmp_path)
+    text = body_text(call(server, "skill", {"name": "pc-gen-part"}))
+    assert "pc:gen-sketch" not in text
+    assert "/pc-gen-sketch" in text
+
+
+def test_the_skill_tool_says_where_the_skills_files_are(tmp_path):
+    """Two skills run a script that lives beside them; an agent reading one here has no directory otherwise."""
+    from partcad_utils import agent_skills
+
+    _, server = serve(tmp_path)
+    text = body_text(call(server, "skill", {"name": "gen-sketch"}))
+    directory = os.path.join(agent_skills.SKILLS_DIR, "gen-sketch")
+    assert directory in text
+    assert os.path.isfile(os.path.join(directory, "measure.py"))
+
+
+@pytest.mark.parametrize("name", ["gen-part", "pc-gen-part", "pc:gen-part", "/pc:gen-part", "/pc-gen-part"])
+def test_a_skill_is_found_however_it_is_spelled(tmp_path, name):
+    _, server = serve(tmp_path)
+    result = call(server, "skill", {"name": name})
+    assert not result.is_error
+    assert "'pc-gen-part'" in body_text(result)
+
+
+def test_the_skill_tool_lists_the_skills_when_asked_for_none(tmp_path):
+    from partcad_utils import agent_skills
+
+    _, server = serve(tmp_path)
+    listed = body(call(server, "skill"))["skills"]
+    assert [entry["name"] for entry in listed] == ["pc-" + skill for skill in agent_skills.available_skills()]
+    assert all(entry["summary"] for entry in listed)
+
+
+def test_an_unknown_skill_is_a_failed_result_naming_the_real_ones(tmp_path):
+    _, server = serve(tmp_path)
+    result = call(server, "skill", {"name": "pc-nope"})
+    assert result.is_error
+    assert "pc-gen-part" in body(result)["error"]
+
+
+def test_a_skill_is_a_resource_too(tmp_path):
+    _, server = serve(tmp_path)
+
+    async def read(client):
+        templates = await client.list_resource_templates()
+        return (
+            [str(template.uri_template) for template in templates.resource_templates],
+            await client.read_resource("partcad://skills/pc-render"),
+        )
+
+    templates, render = using(server, read)
+    assert templates == ["partcad://skills/{name}"]
+    assert "'pc-render'" in render.contents[0].text
+
+
+def test_the_instructions_point_at_the_skills(tmp_path):
+    text = mcp_server.instructions(Bridge(str(tmp_path)), PathScope([str(tmp_path)]))
+    assert "skill tool" in text
+    assert "pc-<skill>" in text
+
+
+def body_text(result) -> str:
+    assert isinstance(result.content[0], TextContent)
+    return result.content[0].text

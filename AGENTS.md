@@ -743,13 +743,16 @@ bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `
 same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux bundle and is
 built but not published yet.
 
-**The MCP server, `pc mcp`, is in the wheel and every bundle, and is published four more ways**, none of them an
+**The MCP server, `pc mcp`, is in the wheel and every bundle, and is published five more ways**, none of them an
 artifact of its own: `server.json` at the root is the **MCP Registry** entry (`io.github.partcad/partcad`, run as
 `uvx partcad mcp`), which `deploy.yml` publishes after the PyPI upload on `main`, signing in with GitHub's OIDC
 token -- no secret, because a workflow in a repository owned by `partcad` is what grants that namespace; the `pc`
 plugin carries it in `ai-agents/claude/.mcp.json`; the VS Code extension registers it with the editor
-(`ide/vscode/src/common/mcp.ts`); and `pc init` writes it into the `.mcp.json` and `.cursor/mcp.json` of the
-repository it sets up. The registry proves the wheel is ours by finding `mcp-name: io.github.partcad/partcad` in
+(`ide/vscode/src/common/mcp.ts`); `pc init` writes it into each agent's project configuration in the repository it
+sets up (`.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml` and the rest -- `MCP_CONFIGS` in
+`partcad.ai_agents`); and the Gemini CLI extension on `plugin-dist` declares it in its `gemini-extension.json`
+(`ai-agents/scripts/gemini_extension.py`). It serves the agent skills as well -- as prompts, a `skill` tool and
+resources, read with `partcad_utils.agent_skills` out of the running PartCAD. The registry proves the wheel is ours by finding `mcp-name: io.github.partcad/partcad` in
 its PyPI description, which is `README.md` -- so **that line in the README is load-bearing**, and a published
 version is final, which is why `server.json` is in `dev-tools/bumpversion.toml` and
 `tests/dev_tools/test_mcp_registry.py` holds it to the release, the README and the `pc` command line.
@@ -775,7 +778,8 @@ reads. It has no version of its own — `plugin.json` is in `dev-tools/bumpversi
 and it must not get one back: it had one, and stayed at 0.1.0 for twenty-three releases because publishing it
 meant remembering a tag nobody pushed. **The skills it is made of also ship in the wheel**, through two symlinks
 under `src/partcad/ai_agents` into `ai-agents/`, because `pc init` installs them into the repository it creates a
-package in and the wheel is what a user has: the plugin for Claude Code, `pc-`-prefixed copies for Cursor. The
+package in and the wheel is what a user has: the plugin for Claude Code, `pc-`-prefixed copies for Cursor, for
+Kiro and for the agents sharing `.agents/skills` (Copilot, Codex, Gemini CLI, Zed, OpenCode, Devin). The
 skills stay at the top of the repository where a visitor finds them, and there is one copy of each file.
 So `ai-agents/common` is *both* the plugin and the distribution, which is why `.github/actions/changed-scopes`
 classifies it into both buckets, why `pyproject.toml` and `dev-tools/pyinstaller/partcad.spec` both name it as

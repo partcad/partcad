@@ -21,17 +21,60 @@ The skills ship inside the ``partcad`` wheel, so if you have PartCAD you have th
   pc init --skills-only   # installs the skills into a repository that already has a package
   pc init --no-skills     # skips them
 
-``pc init`` writes the Claude Code plugin into the repository and ``pc-``-prefixed copies into
-``.cursor/skills``, so an agent opening that repository finds them with nothing to install. :doc:`/ai_agents/plugins`
-covers the other way in -- installing the published plugin into the agent instead of into the repository.
+``pc init`` installs them into the repository, where each agent looks for a project's skills, so an agent
+opening that repository finds them with nothing to install:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Directory
+     - Read by
+   * - ``.claude/skills/pc/``
+     - Claude Code, as the ``pc`` plugin: ``/pc:<name>``
+   * - ``.cursor/skills/pc-<name>/``
+     - Cursor
+   * - ``.agents/skills/pc-<name>/``
+     - GitHub Copilot, Codex, Gemini CLI, Zed, OpenCode and Devin Desktop (Windsurf) -- one copy for all six
+   * - ``.kiro/skills/pc-<name>/``
+     - Kiro
+
+Every agent but Claude Code has no plugin to put the skills in a namespace of their own, so there they are
+``pc-``-prefixed, and the ``/pc:<name>`` references between them are rewritten to match.
+
+Which of them ``pc init`` writes is ``--agents``. By default it is Claude Code, Cursor and ``.agents/skills``,
+plus every other agent the repository already shows signs of -- a ``.kiro``, a ``.codex``, a ``.gemini`` or a
+``GEMINI.md``, a ``.zed``, a ``.devin`` or ``.windsurf``, an ``opencode.json`` -- so a new repository is not
+given a directory for every agent there is. ``--agents all`` writes every one, and ``--agents kiro,codex``
+just those (``windsurf`` is accepted for ``devin``).
+
+Beside the skills it writes, unless told not to:
+
+* **the MCP server**, ``pc mcp``, into each agent's project configuration -- ``.mcp.json``,
+  ``.cursor/mcp.json``, ``.codex/config.toml``, ``.gemini/settings.json``, ``.zed/settings.json``,
+  ``.kiro/settings/mcp.json``, ``.devin/mcp_config.json`` -- merged in beside whatever servers are there
+  already (``--no-mcp`` skips it; see :doc:`/ai_agents/mcp`);
+* **a PartCAD section of** ``AGENTS.md``, the project instructions nearly every agent reads before anything
+  else (``--no-instructions`` skips it). It says what the package is and where, how to run ``pc`` so its output
+  can be read, how to check a change, and which skills there are and where. Only the text between its
+  ``<!-- BEGIN partcad ... -->`` and ``<!-- END partcad -->`` markers is PartCAD's: a re-run replaces that and
+  keeps everything around it. Claude Code reads ``AGENTS.md`` itself only where there is no ``CLAUDE.md``, so
+  an existing ``CLAUDE.md`` gets one line, ``@AGENTS.md``, which imports it; and Gemini CLI, which reads
+  ``GEMINI.md`` unless told otherwise, is told to read ``AGENTS.md`` too, in ``.gemini/settings.json``.
+
+:doc:`/ai_agents/plugins` covers the other ways in -- installing the published plugin into Claude Code, or the
+extension into Gemini CLI, instead of into the repository. And an agent with none of these gets the skills
+from the MCP server: ``pc mcp`` serves every one of them as a prompt, ``pc-<name>``, and through its ``skill``
+tool (see :ref:`mcp-skills`), read from the PartCAD that is running, so they are never older than it.
 
 Re-running ``pc init`` updates the installed copies and **removes the skills PartCAD has stopped shipping**.
 A retired skill left behind goes on describing a command line that has moved, and an agent follows it anyway.
-Under ``.cursor/skills`` only copies PartCAD stamped are removed, since the ``pc-`` prefix is not proof of
+Outside the Claude plugin only copies PartCAD stamped are removed, since the ``pc-`` prefix is not proof of
 authorship.
 
-``pc healthcheck`` reports installed skills that came from an older PartCAD than the one now installed:
-``pc upgrade`` replaces PartCAD and leaves the skills where they are, so something has to notice.
+``pc healthcheck`` reports installed skills, and an ``AGENTS.md`` section, that came from an older PartCAD than
+the one now installed: ``pc upgrade`` replaces PartCAD and leaves them where they are, so something has to
+notice.
 
 
 ========================
@@ -39,8 +82,9 @@ The skills PartCAD ships
 ========================
 
 Fifteen of them. The name in each heading is what you type in Claude Code; under
-Cursor the same skill is ``pc-<name>``, and an agent that chooses skills by their
-description will reach for the right one without being told.
+every other agent, and as a prompt of ``pc mcp``, the same skill is ``pc-<name>``,
+and an agent that chooses skills by their description will reach for the right one
+without being told.
 
 
 Setting up

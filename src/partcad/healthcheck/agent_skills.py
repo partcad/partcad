@@ -20,8 +20,10 @@ version running and offers to reinstall, which is `pc init --skills-only` and
 which also retires whatever PartCAD has stopped shipping.
 
 Each agent is asked in its own terms. Claude Code has the plugin manifest, whose
-`version` moves with the release. Cursor has no manifest, so the skills carry a
-`metadata.partcad` stamp instead -- see `STAMP_KEY` in `partcad.ai_agents`, and
+`version` moves with the release. The others -- `.cursor/skills`,
+`.agents/skills`, `.kiro/skills` -- have no manifest, so the skills carry a
+`metadata.partcad` stamp instead, and the `AGENTS.md` section carries the version
+in its opening marker -- see `STAMP_KEY` in `partcad.ai_agents`, and
 the note there about why neither of those is a literal anybody has to remember
 to bump.
 """
@@ -35,18 +37,21 @@ from .tests import HealthCheckReport, HealthCheckTest
 
 
 class AgentSkillsCheck(HealthCheckTest):
-    """Report AI agent skills that an older PartCAD installed."""
+    """Report AI agent skills, and the `AGENTS.md` section, that an older PartCAD installed."""
 
     def __init__(self):
         super().__init__(
             name="AgentSkills",
-            tags=["skills", "agents", "claude", "cursor"],
+            tags=["skills", "agents", "claude", "cursor", "copilot", "codex", "gemini", "kiro"],
             description="check whether the installed AI agent skills match this PartCAD",
         )
         # Where `pc init` would have put them: the repository holding the
         # current directory, or the directory itself when it is in none.
         self._root = find_repository_root(os.getcwd()) or os.path.abspath(os.getcwd())
+        # What was found stale: the `SKILL_TARGETS` to reinstall, and whether
+        # the `AGENTS.md` section is one of them.
         self._stale: list[str] = []
+        self._stale_instructions = False
 
     def auto_fixable(self) -> bool:
         return True
@@ -54,17 +59,27 @@ class AgentSkillsCheck(HealthCheckTest):
     def _claude_plugin(self) -> str:
         return os.path.join(self._root, ai_agents.CLAUDE_SKILLS_DIR, ai_agents.plugin_name())
 
-    def _cursor_skills(self) -> str:
-        return os.path.join(self._root, ai_agents.CURSOR_SKILLS_DIR)
+    def _prefixed_targets(self) -> dict:
+        """Every place prefixed skills are installed, by `SKILL_TARGETS` name: `.cursor/skills`, `.agents/skills`, ..."""
+        return {
+            target: os.path.join(self._root, directory)
+            for target, (directory, _) in ai_agents.SKILL_TARGETS.items()
+            if target != "claude"
+        }
+
+    def _agents_md(self) -> str:
+        return os.path.join(self._root, ai_agents.AGENTS_MD)
 
     def is_applicable(self) -> bool:
         """Only where somebody has installed them. Absent is not stale."""
-        if os.path.isdir(self._claude_plugin()):
+        if os.path.isdir(self._claude_plugin()) or self._instructions_version() is not None:
             return True
-        cursor = self._cursor_skills()
-        if not os.path.isdir(cursor):
-            return False
-        return any(name.startswith(ai_agents.CURSOR_PREFIX) for name in os.listdir(cursor))
+        for directory in self._prefixed_targets().values():
+            if os.path.isdir(directory) and any(
+                name.startswith(ai_agents.CURSOR_PREFIX) for name in os.listdir(directory)
+            ):
+                return True
+        return False
 
     def _claude_version(self):
         """The version in the installed plugin manifest, or None if unreadable."""
@@ -75,8 +90,17 @@ class AgentSkillsCheck(HealthCheckTest):
         except (OSError, UnicodeDecodeError, ValueError):
             return None
 
-    def _cursor_versions(self) -> dict:
-        """The stamp on each installed Cursor skill that carries one.
+    def _instructions_version(self):
+        """The version that wrote the PartCAD section of `AGENTS.md`, or None where there is none."""
+        try:
+            with open(self._agents_md(), "r", encoding="utf-8") as f:
+                return ai_agents.instructions_version(f.read())
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    @staticmethod
+    def _prefixed_versions(directory: str) -> dict:
+        """The stamp on each installed prefixed skill in `directory` that carries one.
 
         A skill with no stamp is not reported: it is either a user's own or one
         an older PartCAD wrote before stamping existed, and neither is something
@@ -84,15 +108,14 @@ class AgentSkillsCheck(HealthCheckTest):
         for the same reason.
         """
         versions = {}
-        cursor = self._cursor_skills()
-        if not os.path.isdir(cursor):
+        if not os.path.isdir(directory):
             return versions
 
-        for name in sorted(os.listdir(cursor)):
+        for name in sorted(os.listdir(directory)):
             if not name.startswith(ai_agents.CURSOR_PREFIX):
                 continue
             try:
-                with open(os.path.join(cursor, name, "SKILL.md"), "r", encoding="utf-8") as f:
+                with open(os.path.join(directory, name, "SKILL.md"), "r", encoding="utf-8") as f:
                     stamp = ai_agents.stamped_version(f.read())
             except (OSError, UnicodeDecodeError):
                 continue
@@ -100,9 +123,14 @@ class AgentSkillsCheck(HealthCheckTest):
                 versions[name] = stamp
         return versions
 
+    def _cursor_versions(self) -> dict:
+        """The stamps on the Cursor skills (see `_prefixed_versions`)."""
+        return self._prefixed_versions(self._prefixed_targets()["cursor"])
+
     def test(self) -> HealthCheckReport:
         self.findings = []
         self._stale = []
+        self._stale_instructions = False
 
         claude = self._claude_version()
         if claude is not None and claude != __version__:
@@ -112,12 +140,22 @@ class AgentSkillsCheck(HealthCheckTest):
                 % (self._claude_plugin(), claude, __version__)
             )
 
-        outdated = sorted({name for name, stamp in self._cursor_versions().items() if stamp != __version__})
-        if outdated:
-            self._stale.append("cursor")
+        for target, directory in self._prefixed_targets().items():
+            outdated = sorted(
+                {name for name, stamp in self._prefixed_versions(directory).items() if stamp != __version__}
+            )
+            if outdated:
+                self._stale.append(target)
+                self.findings.append(
+                    "%d skill(s) in '%s' are from an older PartCAD: %s"
+                    % (len(outdated), directory, ", ".join(outdated))
+                )
+
+        written = self._instructions_version()
+        if written is not None and written != __version__:
+            self._stale_instructions = True
             self.findings.append(
-                "%d Cursor skill(s) in '%s' are from an older PartCAD: %s"
-                % (len(outdated), self._cursor_skills(), ", ".join(outdated))
+                "The PartCAD section of '%s' is from PartCAD %s; this is %s" % (self._agents_md(), written, __version__)
             )
 
         if self.findings:
@@ -126,15 +164,30 @@ class AgentSkillsCheck(HealthCheckTest):
         return HealthCheckReport(self.name, self.findings)
 
     def fix(self) -> bool:
-        """Reinstall for the agents that were found stale, and only those.
+        """Reinstall what was found stale, and only that.
 
         Installing for an agent whose skills are not here would be creating a
         `.cursor/skills` for somebody who does not use Cursor, which is not a
-        repair.
+        repair; nor is writing an `AGENTS.md` section into a repository that
+        had none.
         """
-        if not self._stale:
+        if not self._stale and not self._stale_instructions:
             return True
-        # The skills, and nothing else: the MCP entry `pc init` writes beside
-        # them is not stale when the skills are, and a repair that recreates an
-        # `.mcp.json` its user deleted is not one.
-        return ai_agents.install_agent_skills(self._root, self._stale, mcp=False)
+        ok = True
+        for target in self._stale:
+            ok = ai_agents.SKILL_TARGETS[target][1](self._root) and ok
+        if self._stale_instructions:
+            # The package the section names is where it says it is: the one in
+            # the repository, found the way `pc init` would find it.
+            ok = ai_agents.install_instructions(self._root, self._package_dir()) and ok
+        # The MCP entries `pc init` writes beside the skills are not stale when
+        # the skills are, and a repair that recreates an `.mcp.json` its user
+        # deleted is not one -- so they are not touched here.
+        return ok
+
+    def _package_dir(self) -> str:
+        """The directory of the package the `AGENTS.md` section is about: the current one, or the repository's root."""
+        here = os.path.abspath(os.getcwd())
+        if os.path.isfile(os.path.join(here, "partcad.yaml")):
+            return here
+        return self._root

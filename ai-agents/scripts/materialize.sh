@@ -25,6 +25,9 @@
 #   OUT_DIR/pc/.claude-plugin/plugin.json     the plugin manifest
 #   OUT_DIR/pc/skills/<name>/SKILL.md         real files (no symlinks)
 #   OUT_DIR/pc-<version>.zip                  plugin archive (`zip` required)
+#   OUT_DIR/gemini-extension.json             the same skills and MCP server as a
+#   OUT_DIR/GEMINI.md                         Gemini CLI extension, at the root
+#   OUT_DIR/skills/pc-<name>/SKILL.md         (see gemini_extension.py)
 #
 # The archive carries the version, like every other asset on a PartCAD release,
 # and that version is the repository's: "dev-tools/bumpversion.toml" moves
@@ -123,5 +126,11 @@ fi
 ARCHIVE="$PLUGIN_NAME-$PLUGIN_VERSION.zip"
 ( cd "$OUT_DIR" && rm -f "$ARCHIVE" && zip -qr "$ARCHIVE" "$PLUGIN_NAME" )
 echo "==> Wrote plugin archive: $OUT_DIR/$ARCHIVE"
+
+# The Gemini CLI extension, at the root of the same tree: Gemini CLI reads its
+# manifest only at the root of what it installs, and "plugin-dist" is that root.
+# Written last, after the Claude side has been validated and archived, so that
+# nothing of it can end up in the plugin or in its archive.
+python3 "$SCRIPT_DIR/gemini_extension.py" "$OUT_DIR"
 
 echo "==> Done. Symlink-free artifact at: $OUT_DIR ($PLUGIN_NAME $PLUGIN_VERSION)"

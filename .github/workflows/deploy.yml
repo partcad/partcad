@@ -744,6 +744,12 @@ jobs:
             echo "::error::no pc/.mcp.json in the artifact"
             missing=1
           fi
+          # The Gemini CLI extension rides on the same branch, at its root,
+          # which is the only place Gemini CLI looks for its manifest.
+          if [ ! -f marketplace/gemini-extension.json ]; then
+            echo "::error::no gemini-extension.json in the artifact"
+            missing=1
+          fi
           if find marketplace -type l | grep -q .; then
             echo "::error::the tree contains symlinks; it must not"
             find marketplace -type l

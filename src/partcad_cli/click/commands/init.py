@@ -119,10 +119,12 @@ class DynamicPromptOption(click.Option):
 @click.option(
     "--agents",
     type=str,
-    default="all",
+    default="default",
     show_default=True,
     show_envvar=True,
-    help="Which agents to install the skills for: 'all', or a comma-separated list (claude, cursor)",
+    help="Which agents to install the skills for: 'default' (Claude Code, Cursor, GitHub Copilot, and every other "
+    "agent this repository already has a directory for), 'all', or a comma-separated list (claude, cursor, copilot, "
+    "codex, gemini, zed, opencode, devin or windsurf, kiro)",
 )
 @click.option(
     "--mcp/--no-mcp",
@@ -130,7 +132,16 @@ class DynamicPromptOption(click.Option):
     is_flag=True,
     default=True,
     show_envvar=True,
-    help="With the skills, add the PartCAD MCP server (pc mcp) to the agents' .mcp.json and .cursor/mcp.json",
+    help="With the skills, add the PartCAD MCP server (pc mcp) to each agent's project configuration "
+    "(.mcp.json, .cursor/mcp.json, .codex/config.toml, ...)",
+)
+@click.option(
+    "--instructions/--no-instructions",
+    "instructions",
+    is_flag=True,
+    default=True,
+    show_envvar=True,
+    help="With the skills, write a PartCAD section into the repository's AGENTS.md, which most coding agents read",
 )
 @click.option(
     "-p",
@@ -161,11 +172,19 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
         # about the repository around the package rather than the package.
         install_skills = kwargs.pop("skills")
         skills_only = kwargs.pop("skills_only")
-        # "all" rather than a literal list, so that an agent added to
-        # "partcad.ai_agents.AGENTS" is installed for without touching the CLI.
-        agents = kwargs.pop("agents")
-        agents = None if agents.strip() == "all" else [a.strip() for a in agents.split(",") if a.strip()]
+        # "default" and "all" rather than literal lists, so that an agent added
+        # to "partcad.ai_agents.AGENT_SPECS" is installed for without touching
+        # the CLI. "default" is None: which agents that is depends on the
+        # repository, which is only known once the package's directory is.
+        agents = kwargs.pop("agents").strip()
+        if agents == "default":
+            agents = None
+        elif agents == "all":
+            agents = list(pc.ai_agents.AGENT_SPECS)
+        else:
+            agents = [a.strip() for a in agents.split(",") if a.strip()]
         mcp = kwargs.pop("mcp")
+        instructions = kwargs.pop("instructions")
 
         if skills_only:
             # The whole command, for a repository that has a package already --
@@ -176,7 +195,7 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
             if not install_skills:
                 pc.logging.error("'--skills-only' and '--no-skills' ask for opposite things")
                 return
-            if not pc.install_agent_skills(os.path.dirname(os.path.abspath(dst_path)), agents, mcp):
+            if not pc.install_agent_skills(os.path.dirname(os.path.abspath(dst_path)), agents, mcp, instructions):
                 # An error here, unlike below: installing them is the whole of
                 # what was asked for, so there is nothing left that succeeded.
                 pc.logging.error("Failed installing the AI agent skills!")
@@ -216,10 +235,10 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
             package_dir = os.path.dirname(os.path.abspath(dst_path))
             pc.add_render_configuration(package_dir)
             # And what the agent in the editor needs to press it: the skills
-            # that teach it to drive PartCAD, for Claude Code and for Cursor.
+            # that teach it to drive PartCAD, for whichever agents are used here.
             # Reported the same way, and a failure to install them is not a
             # failure to create the package either.
             if install_skills:
-                pc.install_agent_skills(package_dir, agents, mcp)
+                pc.install_agent_skills(package_dir, agents, mcp, instructions)
         else:
             pc.logging.error(f"Failed creating '{dst_path}'!")

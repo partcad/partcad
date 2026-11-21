@@ -112,6 +112,29 @@ jobs:
           fi
           exit "${missing}"
 
+      # The Gemini CLI extension at the root of the same tree (see
+      # "ai-agents/scripts/gemini_extension.py"). Gemini CLI reads its manifest
+      # only at the root of what it installs, and drops a skill whose name it
+      # does not accept without a word, so this checks the manifest is there and
+      # every skill came through under the name every agent but Claude Code
+      # knows it by.
+      - name: Assert the Gemini CLI extension carries every skill
+        run: |
+          set -euo pipefail
+          out=ai-agents/.build/marketplace
+          python3 -c 'import json, sys; m = json.load(open(sys.argv[1])); assert m["name"] == "partcad" and m["mcpServers"]["partcad"]["command"] == "pc", m' \
+            "${out}/gemini-extension.json"
+          test -f "${out}/GEMINI.md"
+          missing=0
+          for source in ai-agents/common/skills/*/SKILL.md; do
+            name="pc-$(basename "$(dirname "${source}")")"
+            if ! grep -qx "name: ${name}" "${out}/skills/${name}/SKILL.md" 2>/dev/null; then
+              echo "::error::${name} is not in the Gemini CLI extension under its own name"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
       # Validation reads the manifests; this installs the artifact the way a
       # user does and asks what the session would actually load. A plugin whose
       # manifests are valid and whose skills do not load is the failure that
