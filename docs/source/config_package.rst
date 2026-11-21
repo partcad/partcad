@@ -240,6 +240,61 @@ found", under a name that keeps the ``..`` it had left over (``../..:x`` written
 in ``//vendor`` is ``//..:x``), because a reference that miscounted its levels
 should not quietly name some other package.
 
+.. _package-revisions:
+
+A package at a revision
+-----------------------
+
+A reference names a package as it is loaded: the working tree for the package you
+are in, the commit a dependency is pinned to for one PartCAD downloaded. Writing
+``@<revision>`` after the package's name -- ``[<path>/]<name>@<revision>`` -- names
+the package *as it was* at that revision instead: a commit id (whole, or as many
+of its characters as make it unique), a tag or a branch of the git repository the
+package's files are in.
+
+.. code-block:: yaml
+
+  parts:
+    bracket-v1:
+      type: alias
+      source: //brackets@v1.2:corner        # the corner bracket as tagged v1.2
+    bracket-pinned:
+      type: alias
+      source: ../brackets@3f2a9c1e:corner   # and as it was at one commit
+
+The same works wherever an object is named, on the command line too
+(``pc info //brackets@v1.2:corner``, ``pc copy //brackets@v1.2:corner corner_v1``). A package inside a revision
+may be named at a revision of its own in turn: ``//brackets@v1.2/std@v3:m3`` is the ``std`` that ``v1.2``
+depends on, as it was at ``v3``. A sub-folder of the revision is not: it is part of that commit, and is named at
+another revision as itself (``//brackets/sub@v3``).
+
+**Every revision is a package of its own in the same context, named after its
+commit.** ``//brackets@v1.2`` and ``//brackets@main`` are each loaded once, as
+``//brackets@<the full commit id>``, and the names they were asked by are other
+names of that one package -- two spellings of one commit are one package, and
+two revisions are two. Its objects are ``//brackets@<commit id>:<name>``. A
+reference the revision makes to its own package, or to a package under it, stays
+inside the revision: a ``//brackets:plate`` written in it is the plate *at that
+revision*. A reference out of it -- to a package beside it -- names that package
+as it is loaded now.
+
+**The files come from** ``~/.partcad/git`` **, never from the working tree.** The
+commit is written out of the repository into a directory named after the
+repository and the commit, beside the copies of the dependencies PartCAD
+downloads, so uncommitted edits are part of no revision, and a revision reads the
+same however often it is read. A package without ``@`` is loaded the way it always
+was, under its plain name. ``<dependency>@<commit>`` is written out on its own even
+for the commit a downloaded dependency is checked out at, so that it is read-only
+like every revision. A revision a downloaded dependency does not have is fetched from
+where it came from; one the repository of the package you are in does not have is
+not -- what it lacks is yours to fetch.
+
+A package in no git repository has no revisions, and naming one at a revision is
+"not found". **Nothing is ever written into a revision**: an edit, a requirement added or a copy aimed at one is
+refused, since it would change what that commit is taken to hold. The Digital Thread's :doc:`Revisions tab
+</digital_thread/lifecycle/operations>` lists the revisions of a package and
+compares any of them with what is on screen.
+
 .. _templates:
 
 =========
@@ -699,7 +754,26 @@ declaration is still asked for, and should declare the parameters an instance
 may be given, so that ``pc info`` and the canonical spelling of a name both know
 them.
 
-Responses are cached per key (in memory and on disk), so a repository that is
-slow or remote is queried as little as possible. See
+Keep nothing beyond the process
+-------------------------------
+
+A repository that serves somebody else's data, fetched with the user's own
+credentials under terms that limit keeping it -- Google's, for the Google Earth
+package -- says so in its ``meta``:
+
+.. code-block:: json
+
+  {"objectKinds": ["part"], "instanceKinds": ["part"], "persist": false}
+
+PartCAD then keeps every other answer of that package in the memory of the
+process that fetched it, and writes none of them to disk; a file the package
+serves is written to disk only because a part type reads a path, and is removed
+when the process exits. The ``meta`` itself is still kept, since it is what
+says so. The objects should say ``cache: false`` as well, so that what is built
+of them is not kept either.
+
+Responses are cached per key (in memory and, unless the package says
+``"persist": false``, on disk), so a repository that is slow or remote is
+queried as little as possible. See
 ``examples/plugin_repository_basic``, ``examples/plugin_repository_full`` (an
 HTTP-backed repository) and ``examples/plugin_repository_tree`` (a hierarchy).

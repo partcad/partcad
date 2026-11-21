@@ -29,6 +29,7 @@ import {
     FetchFormatsMessage,
     FetchTabMessage,
     GeometryMissingMessage,
+    OpenPackageMessage,
     SaveCamMessage,
     EditRequirementMessage,
     SaveChoicesMessage,
@@ -80,6 +81,12 @@ export function openSource(path: string): void {
 
 /** Ask the host to show another object in the panel: an artifact a check left behind. */
 export function showObject(message: ShowObjectMessage): void {
+    vscode.postMessage(message);
+}
+
+/** Ask the host to list a package in the Package Explorer: a dependency the Revisions tab lists. */
+export function openPackage(name: string): void {
+    const message: OpenPackageMessage = { type: 'openPackage', package: name };
     vscode.postMessage(message);
 }
 

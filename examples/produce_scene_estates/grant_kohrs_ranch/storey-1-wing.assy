@@ -1,0 +1,119 @@
+# First floor (rear wing) of Grant-Kohrs Ranch, Ranch House: its floor, its rooms' walls, its furniture. Written by '../make_estate.py'.
+links:
+  - part: floor
+    name: floor
+    params: {storey: 1, part: wing}
+    fixed: true
+  - scene: room-1-8
+    name: room-1-8
+    description: "Sitting Room (22'-6\" x 21'-2\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-sofa
+    name: room-1-8-crestwood-sofa-1
+    location: [[11446.4, 11114, 301.2], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-coffeetable
+    name: room-1-8-appleseed-coffeetable-1
+    location: [[8858, 9695, 301], [0, 0, 1], 90]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-8-crestwood-chair-1
+    location: [[11484.1, 7766.5, 301.2], [0, 0, 1], 270]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-8-crestwood-chair-2
+    location: [[6231.9, 9523.5, 301.2], [0, 0, 1], 90]
+    fixed: true
+  - part: eurekaconsole
+    name: room-1-8-eurekaconsole-1
+    location: [[8901, 6455.8, 301], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-1-13
+    name: room-1-13
+    description: "Kitchen (13'-6\" x 21'-3\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: stove
+    name: room-1-13-stove-1
+    location: [[8860.3, 23360, 313], [0, 0, 1], 180]
+    fixed: true
+  - part: eastrural-table
+    name: room-1-13-eastrural-table-1
+    location: [[8812, 25006.5, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: eastrural-chair
+    name: room-1-13-eastrural-chair-1
+    location: [[7862.5, 23272.5, 305], [0, 0, 1], 180]
+    fixed: true
+  - part: eastrural-chair
+    name: room-1-13-eastrural-chair-2
+    location: [[9812.5, 23272.5, 305], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-1-14
+    name: room-1-14
+    description: "Pantry (6'-11\" x 14'-11\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: stove
+    name: room-1-14-stove-1
+    location: [[7844.8, 21179.5, 313], [0, 0, 1], 180]
+    fixed: true
+  - part: eastrural-chair
+    name: room-1-14-eastrural-chair-1
+    location: [[8797, 21092, 305], [0, 0, 1], 180]
+    fixed: true
+  - part: eastrural-chair
+    name: room-1-14-eastrural-chair-2
+    location: [[6847, 21092, 305], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-1-15
+    name: room-1-15
+    description: "Dining Room (24'-2\" x 19'-3\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: dellwood-diningtable
+    name: room-1-15-dellwood-diningtable-1
+    location: [[7842, 16949.3, 300.7], [0, 0, 1], 90]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-15-dellwood-diningchair-1
+    location: [[8726.9, 16548.3, 301], [0, 0, 1], 270]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-15-dellwood-diningchair-2
+    location: [[8726.9, 17333.7, 301], [0, 0, 1], 270]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-15-dellwood-diningchair-3
+    location: [[6957.2, 16553.3, 301], [0, 0, 1], 90]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-15-dellwood-diningchair-4
+    location: [[6957.2, 17338.7, 301], [0, 0, 1], 90]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-15-dellwood-diningchair-5
+    location: [[7839.5, 15678.6, 301], [0, 0, 1], 180]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-15-dellwood-diningchair-6
+    location: [[7844.5, 18208.4, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-15-aftonconsole-1
+    location: [[9772, 17630.1, 301], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-1-16
+    name: room-1-16
+    description: "Back Hall with service stair"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-1-16-jennings-bench-1
+    location: [[11700.9, 18088.3, 301], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-16-aftonconsole-1
+    location: [[11708.5, 16283.6, 301], [0, 0, 1], 270]
+    fixed: true

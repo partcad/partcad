@@ -6,15 +6,16 @@ manufacturable products as code: parts and sketches made by CAD scripts
 (build123d, CadQuery, OpenSCAD) or read from files (STEP, STL, ...), assemblies
 and scenes that place them, and the requirements each is held to.
 
-It brings fifteen skills and one MCP server.
+It brings PartCAD's skills and one MCP server.
 
 - `/pc:setup` puts PartCAD's `pc` command on this machine, and the PartCAD
   extension into Visual Studio Code or VSCodium when the session runs there.
 - `/pc:init` creates a package; `/pc:gen` generates a part, an assembly, a
   scene or a sketch from a description, and `/pc:gen-part`, `/pc:gen-assembly`,
-  `/pc:gen-scene` and `/pc:gen-sketch` each of those directly. Every one of
-  them settles dimensions on measured sketches first, and checks what it built
-  by rendering it from several angles.
+  `/pc:gen-scene` and `/pc:gen-sketch` each of those directly. They settle
+  dimensions on measured sketches first, and check what they built by rendering
+  it from several angles. `/pc:gen-landscape` builds a piece of the real world,
+  from public elevation and map data, as a scene to test things in.
 - `/pc:validate` holds an object to its requirements; `/pc:add-interfaces`
   gives a part ports so others mate to it; `/pc:sim-assembly-fea` turns a
   simulation into a stress analysis of one part.

@@ -5,24 +5,34 @@
 #
 
 # This script is executed within the python sandbox environment (python runtime)
-# to read the outline of a sketch as the walls that follow it (see
+# to read a sketch of a plan as the walls that stand on it (see
 # 'partcad.scene_factory_walls'). The sketch arrives as a BREP envelope, and what
-# goes back is plain data: one entry per edge of the outline, in the order a
-# walk around it meets them, saying where it starts, which way it sets off, how
-# long it is and how it bends - which is everything a 'wall' part needs to be
-# placed along it.
+# goes back is plain data: the walls of each thing the plan draws, one entry per
+# edge, in the order a walk along it meets them, saying where it starts, which
+# way it sets off, how long it is and how it bends - which is everything a 'wall'
+# part needs to be placed along it.
 #
-# The walk goes clockwise, seen from above, whichever way the sketch was drawn.
-# A wall is seen from its right (see 'wrapper_wall.py'), and the right of a
-# clockwise walk is the inside of what it walks around: so every wall of the
-# room looks into the room, and from outside the room every wall is looked
-# through.
+# A plan draws three kinds of thing, told apart by their geometry alone:
 #
-# Only an outline that is one closed loop of straight lines and arcs of circles,
-# drawn on the XY plane, is read. Anything else is refused, in words, rather than
-# approximated: a second loop is a second room or a column nobody said how to
-# draw, a spline is a wall nobody can build out of straight and arc walls, and a
-# guess at either is a room that is not the one that was drawn.
+#   * an **outline** - a face's outer boundary, or a closed loop inside no other -
+#     is a room. It is walked clockwise, seen from above, whichever way it was
+#     drawn. A wall is seen from its right (see 'wrapper_wall.py'), and the right
+#     of a clockwise walk is the inside: every wall of the room looks into it,
+#     and from outside the room every wall is looked through.
+#   * a **closed space** - a hole in a face, or a closed loop inside an outline -
+#     is a closet, a shaft, a column: a space walled in rather than looked into.
+#     It is walked anticlockwise, so that every wall of it looks out, into the
+#     room around it, and its thickness goes into the space.
+#   * a **standalone wall** - a line, or lines joined end to end, that close
+#     nothing - is a wall standing in a room, walked the way it was drawn, its
+#     thickness on its left.
+#
+# Only straight lines and arcs of circles, drawn on the XY plane, are read.
+# Anything else is refused, in words, rather than approximated - a spline is a
+# wall nobody can build out of straight and arc walls - and so is a plan whose
+# walls would stand in each other: two outlines that touch (the wall two rooms
+# share is drawn once, as a line inside one outline), a closed space touching
+# the room around it, a closed loop inside a closed space.
 
 import math
 import os
@@ -38,7 +48,13 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
+
+# What each thing a plan draws is, as the walls placed along it are named and
+# built (see 'partcad.scene_factory_walls').
+OUTLINE = "outline"
+ENCLOSURE = "enclosure"
+PARTITION = "partition"
 
 # How far, in millimetres, the outline may stray from the XY plane, and how
 # close two ends have to be to join: a thousandth of a millimetre, the
@@ -52,71 +68,144 @@ SAMPLES_PER_EDGE = 16
 
 
 class OutlineError(Exception):
-    """A sketch whose outline is not one walls can follow, in words for whoever drew it."""
+    """A sketch whose plan is not one walls can stand on, in words for whoever drew it."""
 
 
-def _explore(shape, kind):
-    """Every sub-shape of 'shape' of 'kind' ("face", "wire" or "edge"), as that type."""
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_WIRE
+def _explore(shape, kind, avoid=None):
+    """Every sub-shape of 'shape' of 'kind' ("face", "wire" or "edge"), as that type - none inside an 'avoid'."""
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_SHAPE, TopAbs_WIRE
     from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
+    types = {"face": TopAbs_FACE, "wire": TopAbs_WIRE, "edge": TopAbs_EDGE}
     cast = {"face": TopoDS.Face_s, "wire": TopoDS.Wire_s, "edge": TopoDS.Edge_s}[kind]
     found = []
-    explorer = TopExp_Explorer(shape, {"face": TopAbs_FACE, "wire": TopAbs_WIRE, "edge": TopAbs_EDGE}[kind])
+    explorer = TopExp_Explorer(shape, types[kind], types[avoid] if avoid else TopAbs_SHAPE)
     while explorer.More():
         found.append(cast(explorer.Current()))
         explorer.Next()
     return found
 
 
-def the_loop(sketch, where="the sketch"):
-    """The one closed wire 'sketch' is the outline of, or OutlineError saying why there is not one.
+def _wires_of(sketch):
+    """'(faces, wires)': the faces 'sketch' draws, and the wires it draws besides them.
 
-    A face with no holes is its outer wire. A sketch of wires is its one wire,
-    which has to close. A sketch of loose edges - a DXF of lines nobody joined
-    into a polyline - is joined end to end first, and has to come out as one
-    closed wire too.
+    The wires are those no face is bounded by, and the edges no wire holds -
+    a DXF of lines nobody joined into a polyline - joined end to end.
     """
-    from OCP.BRep import BRep_Tool
-    from OCP.BRepTools import BRepTools
     from OCP.ShapeAnalysis import ShapeAnalysis_FreeBounds
     from OCP.TopTools import TopTools_HSequenceOfShape
     from OCP.TopoDS import TopoDS
 
     faces = _explore(sketch, "face")
-    if faces:
-        if len(faces) > 1:
-            raise OutlineError(
-                "%s has %d faces; walls follow a single enclosed outline, one face with no holes in it"
-                % (where, len(faces))
-            )
-        wires = _explore(faces[0], "wire")
-        if len(wires) > 1:
-            holes = len(wires) - 1
-            raise OutlineError(
-                "%s has %s in it; walls follow a single enclosed outline, one face with no holes in it"
-                % (where, "a hole" if holes == 1 else "%d holes" % holes)
-            )
-        return BRepTools.OuterWire_s(faces[0])
-
-    wires = _explore(sketch, "wire")
-    if not wires:
-        edges = _explore(sketch, "edge")
-        if not edges:
-            raise OutlineError("%s draws nothing" % where)
+    wires = _explore(sketch, "wire", avoid="face")
+    edges = _explore(sketch, "edge", avoid="wire")
+    if edges:
         sequence = TopTools_HSequenceOfShape()
         for edge in edges:
             sequence.Append(edge)
         joined = TopTools_HSequenceOfShape()
         ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(sequence, TOLERANCE, False, joined)
-        wires = [TopoDS.Wire_s(joined.Value(index)) for index in range(1, joined.Length() + 1)]
-    if len(wires) > 1:
-        raise OutlineError("%s has %d separate outlines; walls follow a single enclosed one" % (where, len(wires)))
-    wire = wires[0]
-    if not BRep_Tool.IsClosed_s(wire):
-        raise OutlineError("%s is an open outline; walls follow a single enclosed one, which closes" % where)
-    return wire
+        wires += [TopoDS.Wire_s(joined.Value(index)) for index in range(1, joined.Length() + 1)]
+    return faces, wires
+
+
+def _edges(wire):
+    """The edges of 'wire', in the order a walk along it meets them."""
+    from OCP.BRepTools import BRepTools_WireExplorer
+
+    edges = []
+    explorer = BRepTools_WireExplorer(wire)
+    while explorer.More():
+        edges.append(explorer.Current())
+        explorer.Next()
+    return edges
+
+
+def _inside(point, polygon):
+    """Whether 'point' is inside the closed 'polygon' (points, in order): an even-odd crossing count."""
+    x, y = point
+    inside = False
+    for index, (x0, y0) in enumerate(polygon):
+        x1, y1 = polygon[(index + 1) % len(polygon)]
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            inside = not inside
+    return inside
+
+
+def _touch(first, second):
+    """Whether two wires come within the tolerance of each other anywhere."""
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+
+    distance = BRepExtrema_DistShapeShape(first, second)
+    return distance.IsDone() and distance.Value() <= TOLERANCE
+
+
+def parts_of(sketch, where="the sketch"):
+    """'[(kind, wire)]': the outlines, the closed spaces and the standalone walls 'sketch' is the plan of.
+
+    A face is an outline, and each of its holes a closed space. A closed wire is
+    an outline, or a closed space where it is inside an outline; an open one is a
+    standalone wall. In that order: the outlines first, as the faces and then the
+    wires come, then the closed spaces, then the standalone walls.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepTools import BRepTools
+
+    faces, wires = _wires_of(sketch)
+    if not faces and not wires:
+        raise OutlineError("%s draws nothing" % where)
+
+    # Every closed loop, with what it is where that is already said: '(wire, kind, face it bounds)'.
+    rings = []
+    for index, face in enumerate(faces):
+        outer = BRepTools.OuterWire_s(face)
+        rings.append((outer, OUTLINE, index))
+        rings += [(wire, ENCLOSURE, index) for wire in _explore(face, "wire") if not wire.IsSame(outer)]
+    loose = len(rings)
+    rings += [(wire, None, None) for wire in wires if BRep_Tool.IsClosed_s(wire)]
+    standalone = [wire for wire in wires if not BRep_Tool.IsClosed_s(wire)]
+
+    # Nothing of one stands in another: a room's outline and its own holes apart, no two loops meet.
+    for i, (first, _kind, face) in enumerate(rings):
+        for second, _other, other_face in rings[i + 1 :]:
+            if face is not None and face == other_face:
+                continue
+            if _touch(first, second):
+                raise OutlineError(
+                    "%s draws two loops that touch: the walls along them would stand in each other. Two rooms "
+                    "side by side share one wall - draw them as one outline with a line between them - and a "
+                    "closed space touching its room is a notch in the room's outline" % where
+                )
+
+    # What a loose loop is follows from how many others it is inside: none, an
+    # outline; one, a closed space in it; more, something inside a closed space.
+    polygons = [_polygon(wire) for wire, _kind, _face in rings]
+    kinds = []
+    for index, (wire, kind, face) in enumerate(rings):
+        point = polygons[index][0]
+        around = [j for j in range(len(rings)) if j != index and _inside(point, polygons[j])]
+        if index < loose:
+            if kind == OUTLINE and around:
+                raise OutlineError("%s draws a room inside another loop; rooms stand side by side" % where)
+            kinds.append(kind)
+        elif len(around) > 1:
+            raise OutlineError(
+                "%s draws a closed loop inside a closed space; a closed space is walled in, and has nothing in it"
+                % where
+            )
+        else:
+            kinds.append(ENCLOSURE if around else OUTLINE)
+
+    found = [(OUTLINE, wire) for (wire, _k, _f), kind in zip(rings, kinds) if kind == OUTLINE]
+    found += [(ENCLOSURE, wire) for (wire, _k, _f), kind in zip(rings, kinds) if kind == ENCLOSURE]
+    found += [(PARTITION, wire) for wire in standalone]
+    return found
+
+
+def _polygon(wire):
+    """Points along the walk 'wire' makes, in order."""
+    return _samples(_edges(wire))
 
 
 def _bounds(shape):
@@ -220,11 +309,11 @@ def segment(edge, reverse, index, where="the sketch"):
     }
 
 
-def outline(sketch, where="the sketch"):
-    """The walls that follow the outline of 'sketch', clockwise from its first edge."""
-    from OCP.BRepTools import BRepTools_WireExplorer
+def walk(kind, wire, where="the sketch"):
+    """The walls along 'wire', in order: around an outline clockwise, around a closed space anticlockwise.
 
-    wire = the_loop(sketch, where)
+    A standalone wall is walked the way it was drawn, from its first edge.
+    """
     box = _bounds(wire)
     if box is None:
         raise OutlineError("%s draws nothing" % where)
@@ -233,40 +322,63 @@ def outline(sketch, where="the sketch"):
             "%s is not drawn on the XY plane (it spans Z from %.6g to %.6g mm); walls stand on it, so it is drawn "
             "as a plan is, from above" % (where, box[2], box[5])
         )
-
-    edges = []
-    explorer = BRepTools_WireExplorer(wire)
-    while explorer.More():
-        edges.append(explorer.Current())
-        explorer.Next()
+    edges = _edges(wire)
     if not edges:
         raise OutlineError("%s draws nothing" % where)
 
-    area = signed_area(_samples(edges))
-    if abs(area) <= TOLERANCE:
-        raise OutlineError("%s encloses no area, so it has no inside for walls to look into" % where)
-    # Walked the other way round when it was drawn anticlockwise: the last
-    # edge first, and each one from its end to its start.
-    reverse = area > 0.0
+    reverse = False
+    if kind != PARTITION:
+        area = signed_area(_samples(edges))
+        if abs(area) <= TOLERANCE:
+            raise OutlineError("%s encloses no area, so it has no inside for walls to look into" % where)
+        # Walked the other way round when it was drawn the other way: the
+        # last edge first, and each one from its end to its start.
+        reverse = area > 0.0 if kind == OUTLINE else area < 0.0
     if reverse:
         edges = list(reversed(edges))
     return [segment(edge, reverse, index + 1, where) for index, edge in enumerate(edges)]
 
 
+def plan(sketch, where="the sketch"):
+    """'[{"kind", "segments"}]': the walls of every outline, closed space and standalone wall 'sketch' draws."""
+    parts = parts_of(sketch, where)
+    # A plan of one outline names its edges as it always has: 'edge 3 of the sketch'.
+    if len(parts) == 1 and parts[0][0] == OUTLINE:
+        return [{"kind": OUTLINE, "segments": walk(OUTLINE, parts[0][1], where)}]
+    found = []
+    numbers = {}
+    for kind, wire in parts:
+        numbers[kind] = numbers.get(kind, 0) + 1
+        what = {OUTLINE: "outline", ENCLOSURE: "closed space", PARTITION: "standalone wall"}[kind]
+        found.append({"kind": kind, "segments": walk(kind, wire, "%s %d of %s" % (what, numbers[kind], where))})
+    return found
+
+
+def outline(sketch, where="the sketch"):
+    """The walls that follow the one outline 'sketch' is, clockwise from its first edge.
+
+    For a plan that is a room and nothing else; 'plan' reads any other.
+    """
+    found = plan(sketch, where)
+    if len(found) != 1 or found[0]["kind"] != OUTLINE:
+        raise OutlineError("%s is not one outline and nothing else" % where)
+    return found[0]["segments"]
+
+
 def process(request):
-    return outline(request["sketch"], "the sketch '%s'" % request.get("sketchName", ""))
+    return plan(request["sketch"], "the sketch '%s'" % request.get("sketchName", ""))
 
 
 if __name__ == "__main__":
     _, request = wrapper_common.handle_input()
     try:
-        segments = process(request)
+        walls = process(request)
     except OutlineError as e:
         # The drawing's, not this script's: said as it is, with no traceback.
-        model = {"success": False, "exception": str(e), "segments": None}
+        model = {"success": False, "exception": str(e), "walls": None}
     except Exception as e:
         wrapper_common.handle_exception(e)
-        model = {"success": False, "exception": str(e), "segments": None}
+        model = {"success": False, "exception": str(e), "walls": None}
     else:
-        model = {"success": True, "exception": None, "segments": segments}
+        model = {"success": True, "exception": None, "walls": walls}
     wrapper_common.handle_output(model)

@@ -1,0 +1,11 @@
+# Scotty's Castle (Death Valley Ranch, Main House) where it stands: the landscape around it, graded level under the house, and the house a
+# millimetre above it. Written by '../make_estate.py'.
+links:
+  - package: landscape
+    scene: landscape
+    name: landscape
+    fixed: true
+  - scene: house
+    name: house
+    location: [[-14568.822, -6123.687, 11833.1], [0, 0, 1], 4]
+    fixed: true

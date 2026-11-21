@@ -76,6 +76,16 @@ _OPERATIONS = {
     # requirement of an object, written into its declaration or taken out.
     "requirements.add": operations.requirements_add,
     "requirements.remove": operations.requirements_remove,
+    # What the IDE's Operations tabs are drawn from, and 'pc revisions list',
+    # 'diff', 'uses' and 'used-by' and 'pc used-by': the commits that changed a
+    # package, an object compared with one of them (side by side, and as a
+    # unified diff), and what uses what among what the context has loaded (see
+    # 'partcad.revisions' and 'partcad.usage').
+    "revisions.list": operations.revisions_list,
+    "revisions.compare": operations.revisions_compare,
+    "revisions.uses": operations.revisions_uses,
+    "revisions.used_by": operations.revisions_used_by,
+    "usage.used_by": operations.usage_used_by,
     # Not a CLI command: what the IDE's Qualification tabs are drawn from --
     # 'pc qual test <object>', one line per check rather than a log, by the same
     # checks; a tab asks for its own 'subtypes'.
@@ -109,6 +119,10 @@ _OPERATIONS = {
     # other package-mutating command -- a client doing it itself would leave the
     # warm context serving the package as it was before.
     "filter.object": operations.filter_object,
+    # 'pc copy': a second object declared as what the first one is, written out
+    # of the context (see 'partcad.serialize'). A daemon method for the reason
+    # 'filter.object' is one.
+    "copy.object": operations.copy_object,
     "open.tools": operations.open_tools,
     "adhoc.convert": operations.adhoc_convert,
     "adhoc.render": operations.adhoc_render,

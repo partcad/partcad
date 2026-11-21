@@ -20,7 +20,7 @@ cadcraft and solidcraft (`<app>-cli mcp`), and for the same reasons:
   the time -- see what a package holds, read an object's declaration, look at
   it, test it, write it out -- plus **one generic** ``execute`` that reaches
   every daemon method, with ``list_methods`` to find them. The daemon has about
-  seventy methods and only a dozen deserve a schema of their own; the rest stay
+  seventy methods and only a score of them deserve a schema of their own; the rest stay
   reachable without this file having to grow a tool for each.
 * **Errors are results.** A daemon error, an object that failed to build, a test
   that failed, a path outside the workspace: all come back as a tool result

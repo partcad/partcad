@@ -40,6 +40,13 @@ DEFAULT_CONFIG_FILENAME = "partcad.yaml"
 class ProjectLocal(Project):
     def __init__(self, ctx, name, path, include_paths=None, inherited_config=None):
         self.is_local = True
+        # Kept for a revision of this package, which is read with the same ones
+        # (see 'Context._load_revision').
+        self.include_paths = list(include_paths or [])
+        # 'partcad.yaml' as Jinja2 rendered it, before it was parsed: what the
+        # Revisions tab compares two revisions of a package by, so that the text
+        # it shows is the text PartCAD read rather than a second rendering of it.
+        self.rendered_config = None
 
         # The 'path' parameter is either the configuration filename or the
         # directory where 'partcad.yaml' is present. 'self.path' (passed to the
@@ -85,6 +92,7 @@ class ProjectLocal(Project):
         # see 'partcad.config_template', which is also where a package that has
         # to serve two of them is shown how.
         config = template.render(config_template.render_context(name, partcad_version()))
+        self.rendered_config = config
 
         # Parse the config, an int keeping the text it was written as where
         # that is not its decimal text: see 'partcad_utils.config_yaml'.

@@ -72,6 +72,11 @@ link. Generate it with `/pc:gen-assembly` first, or reuse one that exists.
   "In space" has to be **said**, or be the obvious meaning of the
   description (a satellite, a space station, an asteroid field). Anything else
   stands on something.
+
+  Outdoors at a **real place** - an address, coordinates, "this street" - the
+  ground is the place's own: make it with `/pc:gen-landscape`, which writes
+  the terrain, the streets, the buildings and the trees there as a scene, and
+  place this scene's objects in it with its `place` helper.
 - **For a building, whether its outside is part of the scene.** It is when the
   description has the building seen from outside, standing in something modelled
   around it (a garden, a street), or names its facade, its outside walls or
@@ -234,8 +239,8 @@ parts:
 Which of the two §2 found decides how a building's walls are made.
 
 **The inside only: floor plans.** A floor plan is a scene of type `walls`: the
-walls of one room, standing on the outline of a sketch of its plan (see "Rooms:
-the walls standing on a sketch" in `docs/source/config_scenes.rst`). Each wall
+walls standing on a sketch of the plan (see "Rooms: the walls standing on a
+plan" in `docs/source/config_scenes.rst`). Each wall
 is `//builtin/building:wall`, a **solid**: its face on the outline, its
 `thickness` (114.3 mm, 4.5 in: a 2x4 stud between two half-inch drywall
 boards, unless the scene says otherwise) going back from there,
@@ -290,29 +295,39 @@ links:
     fixed: true
 ```
 
-- **The plan is a sketch of one closed outline** of lines and arcs, drawn from
-  above, on XY. It is this scene's own working: declare it `private: true`. A
-  `walls` scene of this package still stands on it; `//builtin/building:room`,
-  which is another package's, could not. A rectangular room is a `basic`
-  `rectangle:`, as above. Anything else (an L, a bay window, a round corner) is
-  drawn with `/pc:gen-sketch` from the plan's dimensions. A `walls` scene refuses two outlines, a hole, an open
-  outline and a spline, with the reason. A column in the room is an object
-  standing in it, not a hole in the plan.
+- **The plan is a sketch of lines and arcs**, drawn from above, on XY. It is this
+  scene's own working: declare it `private: true`. A `walls` scene of this
+  package still stands on it; `//builtin/building:room`, which is another
+  package's, could not. A rectangular room is a `basic` `rectangle:`, as above.
+  Anything else (an L, a bay window, a round corner) is drawn with
+  `/pc:gen-sketch` from the plan's dimensions. What the plan draws decides what
+  is walled, by its geometry:
+  - an **outline** (a face, or a closed loop inside no other) is a room, walled
+    looking in, one-sided: `wall-<n>`;
+  - a **closed space** (a hole in the face, or a closed loop inside the
+    outline) is a closet, a lift shaft, a column: walled looking out, its
+    thickness inside it: `enclosure-<k>-<n>`;
+  - a **line that closes nothing** is a standalone wall - between two rooms of
+    one outline, or two parts of a room - its thickness to the left of the way
+    it is drawn: `partition-<k>-<n>`.
+  What stands in a room - a closed space's walls and the standalone walls - is
+  drawn as the solid walls it is, seen from every side
+  (`//builtin/building:interior-wall`).
+  A build123d plan with lines in it says what it made with one `show_object` per
+  piece - the face, each loop, each line - because a compound of a face and
+  lines keeps only the face. A `walls` scene refuses two loops that touch (two
+  rooms side by side share one wall: one outline with a line between them), a
+  closed space touching its room (a notch in the outline instead), a loop inside
+  a closed space and a spline, with the reason.
 - **The floor is the plan made solid.** A rectangle is a `basic` cuboid at the
   plan's size and position. Any other outline is the plan extruded, which grows
   up from z = 0: `type: extrude`, `sketch: <scene>/plan`, `depth: 20`. The walls
   stand on its top, their thickness outside it: they are fixed, so they need
   nothing under that.
-- **One outline cannot draw a wall inside it.** Where the space is several rooms
-  and the walls between them matter, make one floor plan per room,
-  `<scene>/<room>` on `<scene>/<room>-plan`, all drawn in the one frame of the
-  whole space and so all placed at `[[0, 0, 20], ...]`. Draw each plan as that
-  room's clear inside, **the partition's thickness apart** from its neighbour's,
-  and give both rooms that `thickness`: each room's wall then fills the gap
-  between them, and the two coincide there (an overlap inside the walls, §6).
-  Two plans sharing an edge would put each room's wall *inside* the other room.
-  A shared wall is drawn twice, once facing each room, which is right for walls
-  seen from one side.
+- **A wall between two rooms** is a line in the one plan of both, a standalone
+  wall, seen as a wall from each of them: draw the whole space as one outline
+  and the walls inside it as lines, not a plan per room. A `walls` scene has one
+  `height`, so only rooms of different heights are scenes of their own.
 - **Doors and windows.** A `walls` scene cannot cut them: it asks each wall for
   its `length`, `height`, `radius`, `thickness` and corner extensions, and
   nothing else. Where they

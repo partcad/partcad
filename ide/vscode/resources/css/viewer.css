@@ -1935,14 +1935,16 @@ input.switch:focus-visible {
 
 .pane.build,
 .pane.simulation,
-.pane.cae {
+.pane.cae,
+.pane.revisions {
     display: flex;
     overflow: hidden;
 }
 
 .build-list,
 .simulation-list,
-.cae-list {
+.cae-list,
+.revisions-list {
     display: flex;
     flex: 0 0 18rem;
     flex-direction: column;
@@ -1953,7 +1955,8 @@ input.switch:focus-visible {
 
 .build-tree,
 .simulation-items,
-.cae-items {
+.cae-items,
+.revisions-items {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
@@ -2084,7 +2087,8 @@ input.switch:focus-visible {
    one yet, so the names line up. Coloured on a selected row too: the colour is
    what it says. */
 .simulation-mark,
-.cae-mark {
+.cae-mark,
+.revisions-mark {
     flex: 0 0 1em;
     font-weight: 600;
     text-align: center;
@@ -3003,5 +3007,168 @@ body.busy * {
 
 .cam-stat {
     font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.9em;
+}
+
+/*
+ * Revisions: the commits that changed the package down the left, the selected
+ * one compared with what is on screen on the right, and what the package used
+ * and was used by at it folded away under that - the Simulation tab's page, over
+ * a list of commits (see 'revisions.ts').
+ */
+
+.revisions-list {
+    flex-basis: 10rem;
+}
+
+.revisions-item .build-title {
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+/* The commit checked out: the files on disk, before any edit to them. */
+.revisions-ran {
+    color: var(--vscode-charts-blue, var(--vscode-foreground));
+    box-shadow: none;
+}
+
+.revisions-unrun {
+    box-shadow: none;
+}
+
+.revisions-main {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.revisions-toolbar {
+    justify-content: flex-start;
+}
+
+.revisions-sha {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-weight: 600;
+}
+
+.revisions-summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.revisions-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.revisions-content > .placeholder,
+.revisions-content > .error {
+    padding: 1rem;
+}
+
+.revisions-compare > .placeholder {
+    margin: 0.5rem 1rem;
+}
+
+/* The two sides, a line of each per row, in the colours the editor's own diff
+   draws a removed and an inserted line in. */
+.revisions-diff {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: var(--vscode-editor-font-size, inherit);
+}
+
+.revisions-diff col.diff-number {
+    width: 3.5em;
+}
+
+.revisions-diff th.diff-side {
+    position: sticky;
+    top: 0;
+    padding: 0.3rem 0.5rem;
+    background: var(--vscode-editor-background, var(--vscode-sideBar-background));
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+    font-family: var(--vscode-font-family, sans-serif);
+    text-align: left;
+}
+
+.revisions-diff td {
+    padding: 0 0.5rem;
+    vertical-align: top;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.revisions-diff td.diff-number {
+    color: var(--vscode-editorLineNumber-foreground, var(--vscode-descriptionForeground));
+    text-align: right;
+    user-select: none;
+}
+
+.revisions-diff td.diff-removed {
+    background: var(--vscode-diffEditor-removedLineBackground, rgb(255 0 0 / 15%));
+}
+
+.revisions-diff td.diff-text.diff-removed {
+    background: var(--vscode-diffEditor-removedTextBackground, rgb(255 0 0 / 25%));
+}
+
+.revisions-diff td.diff-added {
+    background: var(--vscode-diffEditor-insertedLineBackground, rgb(0 200 0 / 15%));
+}
+
+.revisions-diff td.diff-text.diff-added {
+    background: var(--vscode-diffEditor-insertedTextBackground, rgb(0 200 0 / 25%));
+}
+
+/* No line on this side: the other side's went or came. */
+.revisions-diff td.diff-empty {
+    background: repeating-linear-gradient(
+        -45deg,
+        transparent 0 4px,
+        var(--vscode-diffEditor-diagonalFill, rgb(128 128 128 / 15%)) 4px 6px
+    );
+}
+
+/* A name in a table that opens what it names: a link's look, a button's keys. */
+.link-button {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--vscode-textLink-foreground);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.link-button:hover {
+    color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+    text-decoration: underline;
+}
+
+.link-button:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+/* Used By: what uses the object, and how many times each. */
+.pane.usedby {
+    overflow: auto;
+    padding: 0.75rem 1rem 1.5rem 1rem;
+}
+
+.usedby-table td.number,
+.usedby-count {
+    text-align: right;
+}
+
+.usedby-note {
+    margin-top: 0.8em;
     font-size: 0.9em;
 }

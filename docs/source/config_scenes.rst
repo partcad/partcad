@@ -139,47 +139,69 @@ either key, and what it does not model, is in :ref:`sim-scenes` and
 
 .. _scenes-walls:
 
-Rooms: the walls standing on a sketch
-=====================================
+Rooms: the walls standing on a plan
+===================================
 For laying out a space rather than making anything -- a floor plan, an apartment
-for sale, the room a machine is going to stand in -- a scene can be the walls of
-a room, worked out from a sketch of its plan:
+for sale, the room a machine is going to stand in -- a scene can be the walls
+standing on a sketch of its plan:
 
 .. code-block:: yaml
 
   sketches:
-    living-room-plan:
-      type: dxf          # or any sketch: one closed outline, drawn from above
+    apartment-plan:
+      type: dxf          # or any sketch, drawn from above
 
   scenes:
-    living-room:
+    apartment:
       type: walls
-      sketch: living-room-plan
+      sketch: apartment-plan
       height: 2700                    # mm
-      thickness: 150                  # (optional) mm, outside the outline
-      wall: //builtin/building:wall   # (optional) the part each wall is
+      thickness: 150                  # (optional) mm, behind each wall's face
+      wall: //builtin/building:wall   # (optional) a room's walls
+      interiorWall: //builtin/building:interior-wall  # (optional) the walls standing in it
 
-The sketch has to be **one enclosed outline** made of **straight lines and arcs of
-circles**, on the XY plane: a face with no holes in it, a closed wire, or loose
-edges that join into one. The scene is one :ref:`wall <walls>` per edge of it,
-named ``wall-1``, ``wall-2``, ... in the order a walk around the outline meets
-them, each standing where its edge starts and turned the way the edge goes. A
-line is a straight wall and an arc an arc wall of the arc's radius and length.
+The plan is made of **straight lines and arcs of circles**, on the XY plane, and
+draws three kinds of thing, told apart by their geometry alone:
 
-Every wall looks into the room, whichever way round the outline was drawn: the
-walk goes clockwise, and a wall is seen from its right. Its face stands on the
-outline, and its thickness goes back from there, outside it: the outline is the
-inside of the room, at the size it was drawn.
+- An **outline** -- a face, or a closed wire inside no other -- is a **room**: its
+  walls look into it, and are named ``wall-1``, ``wall-2``, ... in the order a walk
+  around it meets them, numbered on from one room to the next.
+- A **closed space** -- a hole in a face, or a closed wire inside an outline -- is a
+  closet, a lift shaft, a column: a space walled in rather than looked into. Its
+  walls look out, into the room around it, and are named ``enclosure-<k>-<n>``.
+- A **standalone wall** -- a line, or lines joined end to end, that close
+  nothing -- is a wall standing in a room, ``partition-<k>-<n>``: between two
+  parts of it, or the two rooms of one outline.
 
-Each wall is ``//builtin/building:wall`` unless the scene says otherwise, and that
-is a **solid** -- a physical wall, which ``pc qual test`` checks, a simulation collides
-with and an export writes -- whose :ref:`visual <part-visual>` is the one-sided
-surface of its face. So a picture of the room taken from outside, in the 3D view
-or by ``pc render``, is taken *through* the walls nearest the camera, and shows
-the far walls from the inside, the way a dollhouse or a sales brochure shows a
-flat; from straight above, every wall is seen edge-on, and the drawing is the
-plan. A STEP export of the same room, its simulation and its dimensioned drawing
-have walls with their thickness.
+Loose edges, as a DXF of lines nobody joined into polylines draws them, are joined
+end to end first. The scene is one :ref:`wall <walls>` per edge, each standing
+where its edge starts and turned the way the edge goes. A line is a straight wall
+and an arc an arc wall of the arc's radius and length.
+
+A wall's face is on the plan, and its thickness goes back from there, to the
+left of the walk. Every wall of a room looks into it, whichever way round the
+outline was drawn -- the walk goes clockwise -- and its thickness is outside: the
+outline is the inside of the room, at the size it was drawn. Every wall of a
+closed space looks out -- the walk goes anticlockwise -- and its thickness is
+inside: the outline is the closed space's outside, and the room around it keeps
+its size too. A standalone wall is walked the way it was drawn, and its
+thickness is to the left of that: draw it the other way round to put its
+thickness on the other side of the line.
+
+A room's walls are ``//builtin/building:wall`` unless the scene says otherwise
+(``wall``), and that is a **solid** -- a physical wall, which ``pc qual test``
+checks, a simulation collides with and an export writes -- whose
+:ref:`visual <part-visual>` is the one-sided surface of its face, seen from the
+room. So a picture of the room taken from outside, in the 3D view or by
+``pc render``, is taken *through* the walls nearest the camera, and shows the far
+walls from the inside, the way a dollhouse or a sales brochure shows a flat; from
+straight above, every wall is seen edge-on, and the drawing is the plan. What
+stands in the room -- the walls around its closed spaces, and its standalone
+walls -- is seen from every side, and is ``//builtin/building:interior-wall``
+unless the scene says otherwise (``interiorWall``): the same solid wall with no
+visual, drawn as the solid it is, so that a closet, a shaft or a wall between two
+rooms looks like walls from wherever it is seen. A STEP export of the same plan,
+its simulation and its dimensioned drawing have every wall with its thickness.
 
 Where two walls meet at a **right angle**, they meet the way they are built:
 with nothing missing and nothing in both. Their thickness is outside the
@@ -196,12 +218,16 @@ corner it parts from that square along the curve and leaves a sliver of it open
 outside both walls, where nothing overlaps. The faces, and the surfaces a picture
 draws, stay on the outline: only the solids move. Walls that meet at any other
 angle, and two arcs meeting, are left as they meet -- a gap outside an obtuse or
-acute outside corner, an overlap inside the walls at such an inside one.
+acute outside corner, an overlap inside the walls at such an inside one. The same
+holds around a closed space, whose thickness is on the other side, and at the
+corners of a standalone wall; its two ends are left as they were drawn.
 
-A sketch that is not such an outline is refused, with the reason, rather than
-approximated: two outlines (``has 2 faces``), a hole in one (a column nobody
-said how to draw), an open one, a spline (``edge 3 of ... is a B-spline``), or
-one that is not on the XY plane.
+A plan is refused, with the reason, rather than approximated where its walls
+would stand in each other or could not be built: two outlines that touch (two
+rooms side by side share one wall -- draw them as one outline with a line between
+them), a closed space touching its room (it is a notch in the room's outline), a
+closed wire inside a closed space, a spline (``edge 3 of ... is a B-spline``), or
+anything not on the XY plane.
 
 ``sketch:``, ``height:`` and ``thickness:`` may be ``%...%`` expressions over the
 scene's parameters, and PartCAD ships one such scene, ``//builtin/building:room``,

@@ -76,6 +76,11 @@ Using CAD files:
 - ACIS and ShapeManager (``.sat``, ``.sab``, ``.smt``, ``.smb``)
 - Creo View (``.pvz``)
 - OpenUSD (``.usd``, ``.usda``, ``.usdc``, ``.usdz``), as the meshes a stage shows
+- Height maps (ESRI ASCII grids ``.asc``, gray, floating-point and Terrarium / Terrain-RGB images, 2D NumPy arrays),
+  elevation models in any raster format GDAL reads (GeoTIFF, SRTM ``.hgt``, DTED, ERDAS Imagine), and point clouds
+  (LAS and LAZ, E57, PLY, ``.xyz`` and other text), as height-field solids
+- Voxels (MagicaVoxel ``.vox``, ``.binvox``, 3D NumPy arrays, NRRD and NIfTI volumes), as exact solids in their
+  palette's colours; and point clouds as voxels
 - `KiCad EDA`_ PCBs
 
 Using a part type the package defines itself (``partTypes``), including one that reads a file format of its
@@ -208,6 +213,8 @@ Tooling for AI agents doing mechanical design. See :doc:`/ai_agents/mcp`.
   - Lay out a scene (``/pc:gen-scene``): a room on its floor plan, a building with solid walls, doors and windows, a
     workcell or a world to simulate in, with every object a ``basic`` primitive unless it needs more detail, placed
     by ``location:`` and fixed to the world unless it is mobile
+  - Make a landscape at a real place (``/pc:gen-landscape``): the terrain from a public elevation model, and the
+    roads, buildings, fences, trees and signs from OpenStreetMap, as a scene to test objects in
   - Describe an existing object (``/pc:describe``), search the catalog (``/pc:search``), add interfaces
     (``/pc:add-interfaces``)
   - Validate an object against its ``requirements:`` (``/pc:validate``): ``pc qual test`` for the ports,

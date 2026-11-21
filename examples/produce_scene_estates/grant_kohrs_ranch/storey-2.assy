@@ -1,0 +1,113 @@
+# Second floor, front block (half storey) of Grant-Kohrs Ranch, Ranch House: its floor, its rooms' walls, its furniture. Written by '../make_estate.py'.
+links:
+  - part: floor
+    name: floor
+    params: {storey: 2}
+    fixed: true
+  - scene: room-2-1
+    name: room-2-1
+    description: "Bedroom (19'-2\" x 17'-8\")"
+    location: [[0, 0, 3001], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-2-1-daybed-1
+    location: [[4783.3, 3183.8, 2999.8], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-1-appleseed-endtable-1
+    location: [[5195.6, 4805.3, 3001], [0, 0, 1], 270]
+    fixed: true
+  - part: cabinet-b01
+    name: room-2-1-cabinet-b01-1
+    location: [[463.5, 3277, 3003], [0, 0, 1], 180]
+    fixed: true
+  - part: sappington-chair
+    name: room-2-1-sappington-chair-1
+    location: [[5029.9, 1585, 3001], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-2-2
+    name: room-2-2
+    description: "Bedroom (19'-6\" x 10'-6\")"
+    location: [[0, 0, 3001], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-2-2-daybed-1
+    location: [[8139.3, 3033.8, 2999.8], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-2-appleseed-endtable-1
+    location: [[8551.6, 4655.3, 3001], [0, 0, 1], 270]
+    fixed: true
+  - part: cabinet-b01
+    name: room-2-2-cabinet-b01-1
+    location: [[5897.5, 3153, 3003], [0, 0, 1], 180]
+    fixed: true
+  - part: sappington-chair
+    name: room-2-2-sappington-chair-1
+    location: [[8386, 1435, 3001], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-2-3
+    name: room-2-3
+    description: "Stair (down)"
+    location: [[0, 0, 3001], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-2-4
+    name: room-2-4
+    description: "Trunk Room (12'-3\" x 9'-4\")"
+    location: [[0, 0, 3001], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-2-5
+    name: room-2-5
+    description: "Bedroom (12'-7\" x 10'-7\")"
+    location: [[0, 0, 3001], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-2-5-daybed-1
+    location: [[15658.3, 2133.8, 2999.8], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-5-appleseed-endtable-1
+    location: [[16070.6, 3755.3, 3001], [0, 0, 1], 270]
+    fixed: true
+  - part: cabinet-b01
+    name: room-2-5-cabinet-b01-1
+    location: [[13507.5, 2333, 3003], [0, 0, 1], 180]
+    fixed: true
+  - part: sappington-chair
+    name: room-2-5-sappington-chair-1
+    location: [[13782, 1300, 3001], [0, 0, 1], 90]
+    fixed: true
+  - scene: room-2-6
+    name: room-2-6
+    description: "Bedroom (17'-3\" x 11'-3\")"
+    location: [[0, 0, 3001], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-2-6-daybed-1
+    location: [[19189.3, 3033.8, 2999.8], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-2-6-appleseed-endtable-1
+    location: [[19601.6, 4655.3, 3001], [0, 0, 1], 270]
+    fixed: true
+  - part: cabinet-b01
+    name: room-2-6-cabinet-b01-1
+    location: [[16771.5, 3244, 3003], [0, 0, 1], 180]
+    fixed: true
+  - part: sappington-chair
+    name: room-2-6-sappington-chair-1
+    location: [[19436, 1435, 3001], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-2-7
+    name: room-2-7
+    description: "Front Hall (upper)"
+    location: [[0, 0, 3001], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-2-7-jennings-bench-1
+    location: [[13232.3, 4754.1, 3001], [0, 0, 1], 180]
+    fixed: true
+  - part: aftonconsole
+    name: room-2-7-aftonconsole-1
+    location: [[15027.6, 4746.5, 3001], [0, 0, 1], 180]
+    fixed: true

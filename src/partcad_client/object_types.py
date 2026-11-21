@@ -123,6 +123,13 @@ PART_TYPE_IS_MESH: Dict[str, bool] = {
     # An OpenUSD stage (`//builtin/import`): what a renderer draws, which is
     # polygon meshes, as an OBJ's are.
     "usd": True,
+    # Measured data made solid (`//builtin/import`): a height field's one smooth
+    # face on its base, and voxels' boxes. B-rep solids, not meshes.
+    "heightmap": False,
+    "dem": False,
+    "pointcloud": False,
+    "e57": False,
+    "voxels": False,
     # An assembly description, not a shape: a URDF names the mesh files of its
     # links. It is in the part extension mapping, so it is answered here too.
     "urdf": False,
@@ -167,6 +174,11 @@ BUILTIN_PART_TYPE_EXTENSION: Dict[str, str] = {
     "sat": "sat",
     "pvz": "pvz",
     "usd": "usd",
+    "heightmap": "asc",
+    "dem": "hgt",
+    "pointcloud": "las",
+    "e57": "e57",
+    "voxels": "vox",
 }
 
 # Other spellings of the formats above. PartCAD names one extension per type,
@@ -189,6 +201,16 @@ EXTENSION_ALIASES: Dict[str, str] = {
     "usda": "usd",
     "usdc": "usd",
     "usdz": "usd",
+    "laz": "pointcloud",
+    "xyz": "pointcloud",
+    "pts": "pointcloud",
+    "dt0": "dem",
+    "dt1": "dem",
+    "dt2": "dem",
+    "binvox": "voxels",
+    "nrrd": "voxels",
+    "nhdr": "voxels",
+    "nii": "voxels",
 }
 
 # The extension of an ASSY file. 'assy' is an assembly type rather than a part

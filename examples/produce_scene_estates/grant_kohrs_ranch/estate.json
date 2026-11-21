@@ -1,0 +1,2904 @@
+{
+ "name": "Grant-Kohrs Ranch, Ranch House",
+ "slug": "grant-kohrs-ranch",
+ "location": {
+  "lat": 46.40827,
+  "lon": -112.73868,
+  "how": "centre of the front block: OpenStreetMap node 848249342 'Ranch House' (46.40826, -112.73866) and Esri World Imagery (house outline read off a zoom-19 tile) agree within ~2 m; Wikipedia/Wikidata Q1543158 give the site as a whole (46.40833, -112.73944), ~60 m west",
+  "ground_elevation_m": 1375.87
+ },
+ "facade_azimuth_deg": 105,
+ "facade_azimuth_note": "front (porch, door) faces east-south-east toward the yard and the railway; HABS sheets show north to the right with the front at the bottom. The ~15 deg clockwise rotation from due east is read from imagery (front-yard fence, porch line and wing roof edges, +/-5 deg); OSM has no outline for this house.",
+ "acres": 1618,
+ "acres_source": "Wikipedia (Grant-Kohrs Ranch National Historic Site): 1,618 acres; owned by the National Park Service, open to the public",
+ "frame": {
+  "units": "mm",
+  "origin": "front-left (south-east) outside corner of the front block, at grade",
+  "x_axis": "along the east front, south -> north (bearing 15 deg)",
+  "y_axis": "front -> back, east -> west along the rear wing (bearing 285 deg)",
+  "z": "height above grade at the front"
+ },
+ "sources": [
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:First_Floor_Plan_-_Grant-Kohrs_Ranch,_Ranch_House,_Highway_10,_Deer_Lodge,_Powell_County,_MT_HABS_MONT,39-DELO,1-A-_(sheet_2_of_5).png",
+   "licence": "Public domain (HABS MT-39-A, US government work)",
+   "what": "first floor plan with room sizes (first_floor_plan.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Second_Floor_Plan_-_Grant-Kohrs_Ranch,_Ranch_House,_Highway_10,_Deer_Lodge,_Powell_County,_MT_HABS_MONT,39-DELO,1-A-_(sheet_3_of_5).tif",
+   "licence": "Public domain (HABS)",
+   "what": "second floor plan with 23'-5\"/19'-7\"/23'-3\" and 89'-0\" dimensions (second_floor_plan.jpg, Commons JPEG rendering of the TIFF)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Basement_Plan_-_Grant-Kohrs_Ranch,_Ranch_House,_Highway_10,_Deer_Lodge,_Powell_County,_MT_HABS_MONT,39-DELO,1-A-_(sheet_1_of_5).png",
+   "licence": "Public domain (HABS)",
+   "what": "basement plan (basement_plan.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:East_and_North_Elevations_-_Grant-Kohrs_Ranch,_Ranch_House,_Highway_10,_Deer_Lodge,_Powell_County,_MT_HABS_MONT,39-DELO,1-A-_(sheet_4_of_5).png",
+   "licence": "Public domain (HABS)",
+   "what": "east (front) and north elevations (east_north_elevations.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:South_and_West_Elevations_-_Grant-Kohrs_Ranch,_Ranch_House,_Highway_10,_Deer_Lodge,_Powell_County,_MT_HABS_MONT,39-DELO,1-A-_(sheet_5_of_5).png",
+   "licence": "Public domain (HABS)",
+   "what": "south and west elevations (south_west_elevations.png)"
+  },
+  {
+   "url": "https://www.openstreetmap.org/node/848249342",
+   "licence": "ODbL (OpenStreetMap contributors)",
+   "what": "house location"
+  },
+  {
+   "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
+   "licence": "Esri World Imagery (viewing only; nothing copied into the model)",
+   "what": "location and orientation check"
+  },
+  {
+   "url": "https://en.wikipedia.org/wiki/Grant%E2%80%93Kohrs_Ranch_National_Historic_Site",
+   "licence": "CC BY-SA",
+   "what": "acreage, ownership"
+  },
+  {
+   "url": "https://epqs.nationalmap.gov/v1/json",
+   "licence": "Public domain (USGS 3DEP)",
+   "what": "terrain samples"
+  }
+ ],
+ "footprint": {
+  "main_block": {
+   "name": "Front block (1862 Johnny Grant house, log with clapboard)",
+   "polygon": [
+    [
+     0,
+     0
+    ],
+    [
+     20193,
+     0
+    ],
+    [
+     20193,
+     6330
+    ],
+    [
+     0,
+     6330
+    ]
+   ],
+   "eaves_mm": 4300,
+   "ridge_mm": 6700,
+   "storeys": 1.5
+  },
+  "wings_porches": [
+   {
+    "name": "Rear wing (1890 Kohrs addition, two full storeys, brick veneer)",
+    "polygon": [
+     [
+      5281,
+      6330
+     ],
+     [
+      12366,
+      6330
+     ],
+     [
+      12366,
+      27300
+     ],
+     [
+      5281,
+      27300
+     ]
+    ],
+    "eaves_mm": 6540,
+    "ridge_mm": 8100,
+    "roof": "gable, ridge along Y at X=8824; its east gable rises above the front block's roof"
+   },
+   {
+    "name": "One-storey rear addition, left (bedroom)",
+    "polygon": [
+     [
+      0,
+      6330
+     ],
+     [
+      5281,
+      6330
+     ],
+     [
+      5281,
+      9923
+     ],
+     [
+      0,
+      9923
+     ]
+    ],
+    "height_mm": 3500,
+    "roof": "low-pitch/flat with a railed deck reached from the second floor"
+   },
+   {
+    "name": "One-storey rear addition, right (bath, bedroom)",
+    "polygon": [
+     [
+      12366,
+      6330
+     ],
+     [
+      20193,
+      6330
+     ],
+     [
+      20193,
+      10000
+     ],
+     [
+      12366,
+      10000
+     ]
+    ],
+    "height_mm": 3500,
+    "roof": "low-pitch/flat with a railed deck"
+   },
+   {
+    "name": "NE vestibule",
+    "polygon": [
+     [
+      20151,
+      6164
+     ],
+     [
+      22685,
+      6164
+     ],
+     [
+      22685,
+      9969
+     ],
+     [
+      20151,
+      9969
+     ]
+    ],
+    "height_mm": 3300
+   },
+   {
+    "name": "Flower house (conservatory)",
+    "polygon": [
+     [
+      -1781,
+      9847
+     ],
+     [
+      5220,
+      9847
+     ],
+     [
+      5220,
+      11674
+     ],
+     [
+      -1781,
+      11674
+     ]
+    ],
+    "height_mm": 3000,
+    "roof": "glazed lean-to"
+   },
+   {
+    "name": "Front porch (6'-0\" deep) with balcony over",
+    "polygon": [
+     [
+      7131,
+      -1788
+     ],
+     [
+      13135,
+      -1788
+     ],
+     [
+      13135,
+      0
+     ],
+     [
+      7131,
+      0
+     ]
+    ],
+    "floor_mm": 185,
+    "height_mm": 2570,
+    "columns": [
+     {
+      "x_mm": 7214,
+      "y_mm": -1700,
+      "size_mm": 150,
+      "base_mm": 185,
+      "top_mm": 2570
+     },
+     {
+      "x_mm": 9162,
+      "y_mm": -1700,
+      "size_mm": 150,
+      "base_mm": 185,
+      "top_mm": 2570
+     },
+     {
+      "x_mm": 11103,
+      "y_mm": -1700,
+      "size_mm": 150,
+      "base_mm": 185,
+      "top_mm": 2570
+     },
+     {
+      "x_mm": 13051,
+      "y_mm": -1700,
+      "size_mm": 150,
+      "base_mm": 185,
+      "top_mm": 2570
+     }
+    ],
+    "balcony_railing_top_mm": 3990,
+    "note": "flat roof used as a balcony with an X-pattern railing"
+   },
+   {
+    "name": "Front porch steps",
+    "polygon": [
+     [
+      9581,
+      -2800
+     ],
+     [
+      10852,
+      -2800
+     ],
+     [
+      10852,
+      -1788
+     ],
+     [
+      9581,
+      -1788
+     ]
+    ],
+    "height_mm": 185
+   },
+   {
+    "name": "Ground-level boardwalk / planting strips along the front (approx.)",
+    "polygon": [
+     [
+      61,
+      -1446
+     ],
+     [
+      20402,
+      -1446
+     ],
+     [
+      20402,
+      -350
+     ],
+     [
+      61,
+      -350
+     ]
+    ],
+    "height_mm": 50,
+    "approximate": true
+   },
+   {
+    "name": "SW porch (open, on the wing's south side)",
+    "polygon": [
+     [
+      1233,
+      19953
+     ],
+     [
+      5281,
+      19953
+     ],
+     [
+      5281,
+      27289
+     ],
+     [
+      1233,
+      27289
+     ]
+    ],
+    "floor_mm": 300,
+    "height_mm": 3100
+   },
+   {
+    "name": "Dining-room bay (canted)",
+    "polygon": [
+     [
+      5281,
+      19322
+     ],
+     [
+      4459,
+      19017
+     ],
+     [
+      3934,
+      18371
+     ],
+     [
+      3934,
+      16468
+     ],
+     [
+      4459,
+      15859
+     ],
+     [
+      5281,
+      15524
+     ]
+    ],
+    "height_mm": 3600,
+    "roof": "hipped"
+   },
+   {
+    "name": "North vestibule (rear)",
+    "polygon": [
+     [
+      12366,
+      21757
+     ],
+     [
+      14276,
+      21757
+     ],
+     [
+      14276,
+      24245
+     ],
+     [
+      12366,
+      24245
+     ]
+    ],
+    "height_mm": 3300,
+    "roof": "small gable"
+   },
+   {
+    "name": "North vestibule (front)",
+    "polygon": [
+     [
+      12366,
+      13036
+     ],
+     [
+      14276,
+      13036
+     ],
+     [
+      14276,
+      15387
+     ],
+     [
+      12366,
+      15387
+     ]
+    ],
+    "height_mm": 3300,
+    "roof": "small gable"
+   }
+  ]
+ },
+ "storeys": [
+  {
+   "name": "Basement",
+   "floor_level_mm": -2300,
+   "ceiling_height_mm": 2100,
+   "rooms": [],
+   "note": "under part of the house (HABS sheet 1); not detailed; estimate"
+  },
+  {
+   "name": "First floor",
+   "floor_level_mm": 300,
+   "ceiling_height_mm": 2750,
+   "rooms": [
+    {
+     "name": "Parlor (19'-4\" x 18'-0\")",
+     "polygon": [
+      [
+       183,
+       266
+      ],
+      [
+       5776,
+       266
+      ],
+      [
+       5776,
+       6103
+      ],
+      [
+       183,
+       6103
+      ]
+     ],
+     "area_m2": 32.65,
+     "doors": [
+      {
+       "segment": 2,
+       "offset_mm": 4437,
+       "width_mm": 761,
+       "height_mm": 2100,
+       "center_mm": [
+        959,
+        6103
+       ],
+       "to": "Bedroom (rear left)",
+       "note": "approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1283,
+       "width_mm": 950,
+       "height_mm": 1581,
+       "center_mm": [
+        1941,
+        266
+       ],
+       "sill_mm": 445
+      },
+      {
+       "segment": 0,
+       "offset_mm": 4448,
+       "width_mm": 950,
+       "height_mm": 1581,
+       "center_mm": [
+        5106,
+        266
+       ],
+       "sill_mm": 445
+      },
+      {
+       "segment": 3,
+       "offset_mm": 4103,
+       "width_mm": 715,
+       "height_mm": 1581,
+       "center_mm": [
+        183,
+        1642
+       ],
+       "sill_mm": 445,
+       "note": "south end wall"
+      },
+      {
+       "segment": 3,
+       "offset_mm": 1143,
+       "width_mm": 770,
+       "height_mm": 1581,
+       "center_mm": [
+        183,
+        4575
+       ],
+       "sill_mm": 445,
+       "note": "south end wall"
+      }
+     ],
+     "ceiling_height_mm": 2750,
+     "note": "fireplace centred on the south (left) end wall; wide opening (pocket doors) to the Music Room"
+    },
+    {
+     "name": "Music Room (19'-4\" x 10'-3\")",
+     "polygon": [
+      [
+       5829,
+       266
+      ],
+      [
+       8934,
+       266
+      ],
+      [
+       8934,
+       6103
+      ],
+      [
+       5829,
+       6103
+      ]
+     ],
+     "area_m2": 18.12,
+     "doors": [
+      {
+       "segment": 3,
+       "offset_mm": 1507,
+       "width_mm": 3348,
+       "height_mm": 2300,
+       "center_mm": [
+        5829,
+        2922
+       ],
+       "to": "Parlor",
+       "note": "wide opening"
+      },
+      {
+       "segment": 1,
+       "offset_mm": 830,
+       "width_mm": 609,
+       "height_mm": 2100,
+       "center_mm": [
+        8934,
+        1400
+       ],
+       "to": "Front Hall",
+       "note": "approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 2052,
+       "width_mm": 950,
+       "height_mm": 1581,
+       "center_mm": [
+        8356,
+        266
+       ],
+       "sill_mm": 445
+      }
+     ],
+     "ceiling_height_mm": 2750
+    },
+    {
+     "name": "Front Hall with stair",
+     "polygon": [
+      [
+       9003,
+       266
+      ],
+      [
+       11225,
+       266
+      ],
+      [
+       11225,
+       6103
+      ],
+      [
+       9003,
+       6103
+      ]
+     ],
+     "area_m2": 12.97,
+     "doors": [
+      {
+       "segment": 0,
+       "offset_mm": 517,
+       "width_mm": 989,
+       "height_mm": 2100,
+       "center_mm": [
+        10015,
+        266
+       ],
+       "to": "exterior (front porch)",
+       "note": "front door with transom and sidelights"
+      },
+      {
+       "segment": 2,
+       "offset_mm": 122,
+       "width_mm": 1096,
+       "height_mm": 2100,
+       "center_mm": [
+        10555,
+        6103
+       ],
+       "to": "Sitting Room"
+      }
+     ],
+     "windows": [],
+     "ceiling_height_mm": 2750,
+     "note": "stair along the left wall (X 9.0-9.8 m) rising from the front towards the back",
+     "stair": {
+      "polygon": [
+       [
+        9003,
+        1552
+       ],
+       [
+        9840,
+        1552
+       ],
+       [
+        9840,
+        5738
+       ],
+       [
+        9003,
+        5738
+       ]
+      ],
+      "rises_towards": "+Y (back)",
+      "rise_mm": 2700
+     }
+    },
+    {
+     "name": "Office (13'-6\" x 14'-9\")",
+     "polygon": [
+      [
+       11316,
+       266
+      ],
+      [
+       15760,
+       266
+      ],
+      [
+       15760,
+       4467
+      ],
+      [
+       11316,
+       4467
+      ]
+     ],
+     "area_m2": 18.67,
+     "doors": [
+      {
+       "segment": 3,
+       "offset_mm": 2382,
+       "width_mm": 685,
+       "height_mm": 2100,
+       "center_mm": [
+        11316,
+        1743
+       ],
+       "to": "Front Hall"
+      }
+     ],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 0,
+       "width_mm": 939,
+       "height_mm": 1581,
+       "center_mm": [
+        11786,
+        266
+       ],
+       "sill_mm": 445
+      },
+      {
+       "segment": 0,
+       "offset_mm": 3148,
+       "width_mm": 950,
+       "height_mm": 1581,
+       "center_mm": [
+        14939,
+        266
+       ],
+       "sill_mm": 445
+      }
+     ],
+     "ceiling_height_mm": 2750
+    },
+    {
+     "name": "Store Room",
+     "polygon": [
+      [
+       11316,
+       4558
+      ],
+      [
+       14231,
+       4558
+      ],
+      [
+       14231,
+       6103
+      ],
+      [
+       11316,
+       6103
+      ]
+     ],
+     "area_m2": 4.5,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2750,
+     "approximate": true
+    },
+    {
+     "name": "Master Bedroom (19'-4\" x 13'-6\")",
+     "polygon": [
+      [
+       15852,
+       266
+      ],
+      [
+       19931,
+       266
+      ],
+      [
+       19931,
+       6103
+      ],
+      [
+       15852,
+       6103
+      ]
+     ],
+     "area_m2": 23.81,
+     "doors": [
+      {
+       "segment": 3,
+       "offset_mm": 1887,
+       "width_mm": 685,
+       "height_mm": 2100,
+       "center_mm": [
+        15852,
+        3873
+       ],
+       "to": "Office",
+       "note": "approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1945,
+       "width_mm": 950,
+       "height_mm": 1581,
+       "center_mm": [
+        18272,
+        266
+       ],
+       "sill_mm": 445
+      },
+      {
+       "segment": 1,
+       "offset_mm": 1019,
+       "width_mm": 715,
+       "height_mm": 1581,
+       "center_mm": [
+        19931,
+        1642
+       ],
+       "sill_mm": 445,
+       "note": "north end wall"
+      },
+      {
+       "segment": 1,
+       "offset_mm": 3924,
+       "width_mm": 770,
+       "height_mm": 1581,
+       "center_mm": [
+        19931,
+        4575
+       ],
+       "sill_mm": 445,
+       "note": "north end wall"
+      }
+     ],
+     "ceiling_height_mm": 2750
+    },
+    {
+     "name": "Bedroom, rear left (11'-0\" x 16'-7\")",
+     "polygon": [
+      [
+       198,
+       6332
+      ],
+      [
+       5274,
+       6332
+      ],
+      [
+       5274,
+       9794
+      ],
+      [
+       198,
+       9794
+      ]
+     ],
+     "area_m2": 17.57,
+     "doors": [],
+     "windows": [
+      {
+       "segment": 3,
+       "offset_mm": 1240,
+       "width_mm": 1370,
+       "height_mm": 1500,
+       "center_mm": [
+        198,
+        7869
+       ],
+       "sill_mm": 500,
+       "note": "south wall"
+      }
+     ],
+     "ceiling_height_mm": 2700,
+     "note": "one-storey rear addition"
+    },
+    {
+     "name": "Sitting Room (22'-6\" x 21'-2\")",
+     "polygon": [
+      [
+       5662,
+       6156
+      ],
+      [
+       12054,
+       6156
+      ],
+      [
+       12054,
+       13234
+      ],
+      [
+       5662,
+       13234
+      ]
+     ],
+     "area_m2": 45.24,
+     "doors": [
+      {
+       "segment": 3,
+       "offset_mm": 1789,
+       "width_mm": 989,
+       "height_mm": 2400,
+       "center_mm": [
+        5662,
+        10951
+       ],
+       "to": "Bedroom (rear left) / flower house",
+       "note": "approx."
+      },
+      {
+       "segment": 3,
+       "offset_mm": 4833,
+       "width_mm": 913,
+       "height_mm": 2400,
+       "center_mm": [
+        5662,
+        7945
+       ],
+       "to": "Bedroom (rear left)",
+       "note": "approx."
+      },
+      {
+       "segment": 1,
+       "offset_mm": 2550,
+       "width_mm": 761,
+       "height_mm": 2400,
+       "center_mm": [
+        12054,
+        9086
+       ],
+       "to": "Bath (rear right)",
+       "note": "approx."
+      },
+      {
+       "segment": 2,
+       "offset_mm": 213,
+       "width_mm": 913,
+       "height_mm": 2400,
+       "center_mm": [
+        11385,
+        13234
+       ],
+       "to": "Back Hall"
+      }
+     ],
+     "windows": [
+      {
+       "segment": 1,
+       "offset_mm": 5670,
+       "width_mm": 761,
+       "height_mm": 2100,
+       "center_mm": [
+        12054,
+        12206
+       ],
+       "sill_mm": 760,
+       "note": "pair of windows on the north wall"
+      },
+      {
+       "segment": 1,
+       "offset_mm": 4300,
+       "width_mm": 913,
+       "height_mm": 2100,
+       "center_mm": [
+        12054,
+        10913
+       ],
+       "sill_mm": 760
+      }
+     ],
+     "ceiling_height_mm": 3250,
+     "note": "first room of the 1890 two-storey brick rear wing; fireplace on the west (left) wall"
+    },
+    {
+     "name": "Bath (11'-3\" x 10'-0\")",
+     "polygon": [
+      [
+       12290,
+       6332
+      ],
+      [
+       15334,
+       6332
+      ],
+      [
+       15334,
+       9794
+      ],
+      [
+       12290,
+       9794
+      ]
+     ],
+     "area_m2": 10.54,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2700,
+     "note": "one-storey rear addition"
+    },
+    {
+     "name": "Bedroom, rear right (11'-3\" x 14'-7\")",
+     "polygon": [
+      [
+       15418,
+       6332
+      ],
+      [
+       19984,
+       6332
+      ],
+      [
+       19984,
+       9794
+      ],
+      [
+       15418,
+       9794
+      ]
+     ],
+     "area_m2": 15.81,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2700,
+     "note": "one-storey rear addition"
+    },
+    {
+     "name": "Vestibule (11'-3\" x 7'-9\")",
+     "polygon": [
+      [
+       20151,
+       6164
+      ],
+      [
+       22685,
+       6164
+      ],
+      [
+       22685,
+       9969
+      ],
+      [
+       20151,
+       9969
+      ]
+     ],
+     "area_m2": 9.64,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2700,
+     "note": "projects past the north wall"
+    },
+    {
+     "name": "Flower House (22'-6\" x 8'-0\")",
+     "polygon": [
+      [
+       -1781,
+       9847
+      ],
+      [
+       5220,
+       9847
+      ],
+      [
+       5220,
+       11674
+      ],
+      [
+       -1781,
+       11674
+      ]
+     ],
+     "area_m2": 12.79,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2600,
+     "note": "glazed conservatory behind the rear-left bedroom"
+    },
+    {
+     "name": "Kitchen (13'-6\" x 21'-3\")",
+     "polygon": [
+      [
+       5593,
+       22929
+      ],
+      [
+       12031,
+       22929
+      ],
+      [
+       12031,
+       27084
+      ],
+      [
+       5593,
+       27084
+      ]
+     ],
+     "area_m2": 26.75,
+     "doors": [
+      {
+       "segment": 3,
+       "offset_mm": 2169,
+       "width_mm": 685,
+       "height_mm": 2300,
+       "center_mm": [
+        5593,
+        24573
+       ],
+       "to": "SW porch"
+      },
+      {
+       "segment": 0,
+       "offset_mm": 5335,
+       "width_mm": 761,
+       "height_mm": 2300,
+       "center_mm": [
+        11308,
+        22929
+       ],
+       "to": "Back Hall"
+      }
+     ],
+     "windows": [
+      {
+       "segment": 2,
+       "offset_mm": 4154,
+       "width_mm": 900,
+       "height_mm": 2100,
+       "center_mm": [
+        7427,
+        27084
+       ],
+       "sill_mm": 760,
+       "note": "rear (west) gable wall"
+      },
+      {
+       "segment": 1,
+       "offset_mm": 1301,
+       "width_mm": 913,
+       "height_mm": 2100,
+       "center_mm": [
+        12031,
+        24687
+       ],
+       "sill_mm": 760
+      }
+     ],
+     "ceiling_height_mm": 3250
+    },
+    {
+     "name": "Pantry (6'-11\" x 14'-11\")",
+     "polygon": [
+      [
+       5593,
+       20714
+      ],
+      [
+       10159,
+       20714
+      ],
+      [
+       10159,
+       22860
+      ],
+      [
+       5593,
+       22860
+      ]
+     ],
+     "area_m2": 9.8,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 3250
+    },
+    {
+     "name": "Dining Room (24'-2\" x 19'-3\")",
+     "polygon": [
+      [
+       5593,
+       13241
+      ],
+      [
+       10091,
+       13241
+      ],
+      [
+       10091,
+       20646
+      ],
+      [
+       5593,
+       20646
+      ]
+     ],
+     "area_m2": 33.31,
+     "doors": [
+      {
+       "segment": 2,
+       "offset_mm": 3082,
+       "width_mm": 380,
+       "height_mm": 2300,
+       "center_mm": [
+        6819,
+        20646
+       ],
+       "to": "Pantry"
+      },
+      {
+       "segment": 1,
+       "offset_mm": 2694,
+       "width_mm": 533,
+       "height_mm": 2300,
+       "center_mm": [
+        10091,
+        16202
+       ],
+       "to": "Back Hall"
+      },
+      {
+       "segment": 0,
+       "offset_mm": 1378,
+       "width_mm": 1142,
+       "height_mm": 2300,
+       "center_mm": [
+        7542,
+        13241
+       ],
+       "to": "Sitting Room",
+       "note": "approx."
+      }
+     ],
+     "windows": [],
+     "ceiling_height_mm": 3250,
+     "note": "plus the canted bay on its south (left) wall, see footprint"
+    },
+    {
+     "name": "Back Hall with service stair",
+     "polygon": [
+      [
+       10159,
+       13241
+      ],
+      [
+       12031,
+       13241
+      ],
+      [
+       12031,
+       22860
+      ],
+      [
+       10159,
+       22860
+      ]
+     ],
+     "area_m2": 18.01,
+     "doors": [
+      {
+       "segment": 1,
+       "offset_mm": 9011,
+       "width_mm": 608,
+       "height_mm": 2300,
+       "center_mm": [
+        12031,
+        22556
+       ],
+       "to": "Vestibule (north, rear)"
+      },
+      {
+       "segment": 1,
+       "offset_mm": 183,
+       "width_mm": 685,
+       "height_mm": 2300,
+       "center_mm": [
+        12031,
+        13766
+       ],
+       "to": "Vestibule (north, front)"
+      }
+     ],
+     "windows": [],
+     "ceiling_height_mm": 3250,
+     "note": "stair (X 10.9-12.0 m, Y 18.0-22.9 m) up to the wing's second floor and down to the basement"
+    },
+    {
+     "name": "SW Porch (23'-4\" x 13'-2\", open)",
+     "polygon": [
+      [
+       1233,
+       19953
+      ],
+      [
+       5319,
+       19953
+      ],
+      [
+       5319,
+       27289
+      ],
+      [
+       1233,
+       27289
+      ]
+     ],
+     "area_m2": 29.97,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2700
+    }
+   ],
+   "note": "front block ceiling ~2.75 m, wing ceiling ~3.25 m (estimated from window heads); some rooms carry their own ceiling_height_mm"
+  },
+  {
+   "name": "Second floor, front block (half storey)",
+   "floor_level_mm": 3000,
+   "ceiling_height_mm": 2300,
+   "rooms": [
+    {
+     "name": "Bedroom (19'-2\" x 17'-8\")",
+     "polygon": [
+      [
+       213,
+       365
+      ],
+      [
+       5555,
+       365
+      ],
+      [
+       5555,
+       6164
+      ],
+      [
+       213,
+       6164
+      ]
+     ],
+     "area_m2": 30.98,
+     "doors": [],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1204,
+       "width_mm": 850,
+       "height_mm": 950,
+       "center_mm": [
+        1842,
+        365
+       ],
+       "sill_mm": 420
+      },
+      {
+       "segment": 0,
+       "offset_mm": 4461,
+       "width_mm": 850,
+       "height_mm": 950,
+       "center_mm": [
+        5099,
+        365
+       ],
+       "sill_mm": 420
+      },
+      {
+       "segment": 3,
+       "offset_mm": 4104,
+       "width_mm": 710,
+       "height_mm": 910,
+       "center_mm": [
+        213,
+        1705
+       ],
+       "sill_mm": 249,
+       "note": "gable end"
+      },
+      {
+       "segment": 3,
+       "offset_mm": 1244,
+       "width_mm": 715,
+       "height_mm": 910,
+       "center_mm": [
+        213,
+        4562
+       ],
+       "sill_mm": 249,
+       "note": "gable end"
+      }
+     ],
+     "ceiling_height_mm": 2300,
+     "note": "ceiling slopes with the roof towards the front and back walls (knee wall ~1.4 m)"
+    },
+    {
+     "name": "Bedroom (19'-6\" x 10'-6\")",
+     "polygon": [
+      [
+       5647,
+       365
+      ],
+      [
+       8911,
+       365
+      ],
+      [
+       8911,
+       5890
+      ],
+      [
+       5647,
+       5890
+      ]
+     ],
+     "area_m2": 18.03,
+     "doors": [],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 2368,
+       "width_mm": 850,
+       "height_mm": 950,
+       "center_mm": [
+        8440,
+        365
+       ],
+       "sill_mm": 420
+      }
+     ],
+     "ceiling_height_mm": 2300
+    },
+    {
+     "name": "Stair (down)",
+     "polygon": [
+      [
+       9003,
+       1994
+      ],
+      [
+       10182,
+       1994
+      ],
+      [
+       10182,
+       5259
+      ],
+      [
+       9003,
+       5259
+      ]
+     ],
+     "area_m2": 3.85,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2300
+    },
+    {
+     "name": "Trunk Room (12'-3\" x 9'-4\")",
+     "polygon": [
+      [
+       10182,
+       365
+      ],
+      [
+       13165,
+       365
+      ],
+      [
+       13165,
+       4353
+      ],
+      [
+       10182,
+       4353
+      ]
+     ],
+     "area_m2": 11.9,
+     "doors": [],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1295,
+       "width_mm": 850,
+       "height_mm": 950,
+       "center_mm": [
+        11902,
+        365
+       ],
+       "sill_mm": 420
+      }
+     ],
+     "ceiling_height_mm": 2300
+    },
+    {
+     "name": "Bedroom (12'-7\" x 10'-7\")",
+     "polygon": [
+      [
+       13257,
+       365
+      ],
+      [
+       16430,
+       365
+      ],
+      [
+       16430,
+       4170
+      ],
+      [
+       13257,
+       4170
+      ]
+     ],
+     "area_m2": 12.07,
+     "doors": [],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1348,
+       "width_mm": 850,
+       "height_mm": 950,
+       "center_mm": [
+        15030,
+        365
+       ],
+       "sill_mm": 420
+      }
+     ],
+     "ceiling_height_mm": 2300
+    },
+    {
+     "name": "Bedroom (17'-3\" x 11'-3\")",
+     "polygon": [
+      [
+       16521,
+       365
+      ],
+      [
+       19961,
+       365
+      ],
+      [
+       19961,
+       5981
+      ],
+      [
+       16521,
+       5981
+      ]
+     ],
+     "area_m2": 19.32,
+     "doors": [],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1387,
+       "width_mm": 850,
+       "height_mm": 950,
+       "center_mm": [
+        18333,
+        365
+       ],
+       "sill_mm": 420
+      },
+      {
+       "segment": 1,
+       "offset_mm": 985,
+       "width_mm": 710,
+       "height_mm": 910,
+       "center_mm": [
+        19961,
+        1705
+       ],
+       "sill_mm": 249,
+       "note": "gable end"
+      },
+      {
+       "segment": 1,
+       "offset_mm": 3840,
+       "width_mm": 715,
+       "height_mm": 910,
+       "center_mm": [
+        19961,
+        4562
+       ],
+       "sill_mm": 249,
+       "note": "gable end"
+      }
+     ],
+     "ceiling_height_mm": 2300
+    },
+    {
+     "name": "Front Hall (upper)",
+     "polygon": [
+      [
+       10182,
+       4421
+      ],
+      [
+       16430,
+       4421
+      ],
+      [
+       16430,
+       6164
+      ],
+      [
+       10182,
+       6164
+      ]
+     ],
+     "area_m2": 10.89,
+     "doors": [
+      {
+       "segment": 0,
+       "offset_mm": 845,
+       "width_mm": 685,
+       "height_mm": 2000,
+       "center_mm": [
+        11369,
+        4421
+       ],
+       "to": "Balcony over the front porch",
+       "note": "approx."
+      }
+     ],
+     "windows": [],
+     "ceiling_height_mm": 2300,
+     "approximate": true,
+     "note": "steps UP (~0.65 m) at its back, by the stair head, into the wing's Back Hall"
+    }
+   ],
+   "note": "rooms under the roof: knee walls ~1.4 m, flat ceiling ~2.3 m (estimated)"
+  },
+  {
+   "name": "Second floor, rear wing",
+   "floor_level_mm": 3650,
+   "ceiling_height_mm": 2700,
+   "rooms": [
+    {
+     "name": "Apartment Kitchen (10'-3\" x 11'-9\")",
+     "polygon": [
+      [
+       5319,
+       23743
+      ],
+      [
+       9185,
+       23743
+      ],
+      [
+       9185,
+       27000
+      ],
+      [
+       5319,
+       27000
+      ]
+     ],
+     "area_m2": 12.59,
+     "doors": [
+      {
+       "segment": 1,
+       "offset_mm": 1208,
+       "width_mm": 840,
+       "height_mm": 2100,
+       "center_mm": [
+        9185,
+        25372
+       ],
+       "to": "Back Hall (upper)",
+       "note": "position approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 3,
+       "offset_mm": 1178,
+       "width_mm": 900,
+       "height_mm": 2090,
+       "center_mm": [
+        5319,
+        25372
+       ],
+       "sill_mm": 420,
+       "note": "south wall; position approximate"
+      }
+     ],
+     "ceiling_height_mm": 2700
+    },
+    {
+     "name": "Bath",
+     "polygon": [
+      [
+       9185,
+       25646
+      ],
+      [
+       11993,
+       25646
+      ],
+      [
+       11993,
+       27092
+      ],
+      [
+       9185,
+       27092
+      ]
+     ],
+     "area_m2": 4.06,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2700,
+     "approximate": true
+    },
+    {
+     "name": "Apartment Living Room (11'-6\" x 14'-8\")",
+     "polygon": [
+      [
+       5319,
+       20205
+      ],
+      [
+       10182,
+       20205
+      ],
+      [
+       10182,
+       23652
+      ],
+      [
+       5319,
+       23652
+      ]
+     ],
+     "area_m2": 16.76,
+     "doors": [
+      {
+       "segment": 1,
+       "offset_mm": 1304,
+       "width_mm": 840,
+       "height_mm": 2100,
+       "center_mm": [
+        10182,
+        21928
+       ],
+       "to": "Back Hall (upper)",
+       "note": "position approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 3,
+       "offset_mm": 1274,
+       "width_mm": 900,
+       "height_mm": 2090,
+       "center_mm": [
+        5319,
+        21928
+       ],
+       "sill_mm": 420,
+       "note": "south wall; position approximate"
+      }
+     ],
+     "ceiling_height_mm": 2700
+    },
+    {
+     "name": "Apartment Bedroom (13'-2\" x 14'-8\")",
+     "polygon": [
+      [
+       5319,
+       15045
+      ],
+      [
+       10182,
+       15045
+      ],
+      [
+       10182,
+       19033
+      ],
+      [
+       5319,
+       19033
+      ]
+     ],
+     "area_m2": 19.39,
+     "doors": [
+      {
+       "segment": 1,
+       "offset_mm": 1574,
+       "width_mm": 840,
+       "height_mm": 2100,
+       "center_mm": [
+        10182,
+        17039
+       ],
+       "to": "Back Hall (upper)",
+       "note": "position approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 3,
+       "offset_mm": 1544,
+       "width_mm": 900,
+       "height_mm": 2090,
+       "center_mm": [
+        5319,
+        17039
+       ],
+       "sill_mm": 420,
+       "note": "south wall; position approximate"
+      }
+     ],
+     "ceiling_height_mm": 2700
+    },
+    {
+     "name": "Bedroom (12'-4\" x 14'-8\")",
+     "polygon": [
+      [
+       5319,
+       11149
+      ],
+      [
+       10182,
+       11149
+      ],
+      [
+       10182,
+       14862
+      ],
+      [
+       5319,
+       14862
+      ]
+     ],
+     "area_m2": 18.06,
+     "doors": [
+      {
+       "segment": 1,
+       "offset_mm": 1436,
+       "width_mm": 840,
+       "height_mm": 2100,
+       "center_mm": [
+        10182,
+        13006
+       ],
+       "to": "Back Hall (upper)",
+       "note": "position approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 3,
+       "offset_mm": 1406,
+       "width_mm": 900,
+       "height_mm": 2090,
+       "center_mm": [
+        5319,
+        13006
+       ],
+       "sill_mm": 420,
+       "note": "south wall; position approximate"
+      }
+     ],
+     "ceiling_height_mm": 2700
+    },
+    {
+     "name": "Bedroom (12'-3\" x 14'-8\")",
+     "polygon": [
+      [
+       5319,
+       6347
+      ],
+      [
+       10182,
+       6347
+      ],
+      [
+       10182,
+       10152
+      ],
+      [
+       5319,
+       10152
+      ]
+     ],
+     "area_m2": 18.5,
+     "doors": [
+      {
+       "segment": 1,
+       "offset_mm": 1482,
+       "width_mm": 840,
+       "height_mm": 2100,
+       "center_mm": [
+        10182,
+        8250
+       ],
+       "to": "Back Hall (upper)",
+       "note": "position approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 3,
+       "offset_mm": 1452,
+       "width_mm": 900,
+       "height_mm": 2090,
+       "center_mm": [
+        5319,
+        8250
+       ],
+       "sill_mm": 420,
+       "note": "south wall; position approximate"
+      }
+     ],
+     "ceiling_height_mm": 2700
+    },
+    {
+     "name": "Back Hall (upper) with stair",
+     "polygon": [
+      [
+       10182,
+       6347
+      ],
+      [
+       12001,
+       6347
+      ],
+      [
+       12001,
+       25646
+      ],
+      [
+       10182,
+       25646
+      ]
+     ],
+     "area_m2": 35.1,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2700
+    }
+   ],
+   "note": "about 0.65 m higher than the front block's second floor - the plan shows steps UP between the two halls"
+  }
+ ],
+ "exterior": {
+  "wall_thickness_mm": {
+   "front_block": 230,
+   "rear_wing": 300,
+   "partitions": 130
+  },
+  "materials": "front block: hewn log walls with clapboard siding, painted; rear wing: brick (1890); wood shingle roofs (per HABS drawings)",
+  "eaves_height_mm": {
+   "front_block": 4300,
+   "rear_wing": 6540
+  },
+  "roof": [
+   {
+    "part": "front block",
+    "type": "gable",
+    "ridge_axis": "X",
+    "ridge_y_mm": 3165,
+    "ridge_height_mm": 6700,
+    "eaves_mm": 4300,
+    "overhang_mm": 300
+   },
+   {
+    "part": "rear wing",
+    "type": "gable",
+    "ridge_axis": "Y",
+    "ridge_x_mm": 8824,
+    "ridge_height_mm": 8100,
+    "eaves_mm": 6540,
+    "overhang_mm": 300
+   }
+  ],
+  "chimneys": [
+   {
+    "x_mm": [
+     0,
+     430
+    ],
+    "y_mm": [
+     2712,
+     3533
+    ],
+    "top_mm": 8370,
+    "note": "south gable end"
+   },
+   {
+    "x_mm": [
+     19770,
+     20193
+    ],
+    "y_mm": [
+     2712,
+     3533
+    ],
+    "top_mm": 8370,
+    "note": "north gable end"
+   },
+   {
+    "x_mm": [
+     5005,
+     5831
+    ],
+    "y_mm": [
+     6200,
+     6800
+    ],
+    "top_mm": 8600,
+    "note": "double stack at the junction with the wing (south)"
+   },
+   {
+    "x_mm": [
+     12098,
+     12870
+    ],
+    "y_mm": [
+     6200,
+     6800
+    ],
+    "top_mm": 8600,
+    "note": "double stack at the junction with the wing (north)"
+   },
+   {
+    "x_mm": [
+     8494,
+     9154
+    ],
+    "y_mm": [
+     6900,
+     7500
+    ],
+    "top_mm": 9620,
+    "note": "centre stack rising through the wing's front gable"
+   },
+   {
+    "x_mm": [
+     8524,
+     9124
+    ],
+    "y_mm": [
+     9700,
+     10300
+    ],
+    "top_mm": 8700,
+    "note": "wing chimney on the ridge (approx.)"
+   },
+   {
+    "x_mm": [
+     8524,
+     9124
+    ],
+    "y_mm": [
+     14600,
+     15200
+    ],
+    "top_mm": 8700,
+    "note": "wing chimney on the ridge (approx.)"
+   },
+   {
+    "x_mm": [
+     8524,
+     9124
+    ],
+    "y_mm": [
+     16100,
+     16700
+    ],
+    "top_mm": 8700,
+    "note": "wing chimney on the ridge (approx.)"
+   },
+   {
+    "x_mm": [
+     8524,
+     9124
+    ],
+    "y_mm": [
+     20000,
+     20600
+    ],
+    "top_mm": 8700,
+    "note": "wing chimney on the ridge (approx.)"
+   },
+   {
+    "x_mm": [
+     8524,
+     9124
+    ],
+    "y_mm": [
+     26500,
+     27100
+    ],
+    "top_mm": 8700,
+    "note": "wing chimney on the ridge (approx.)"
+   }
+  ],
+  "porch": "front porch 6.0 x 1.8 m, four square posts (~150 mm) 185-2570, flat roof doubling as a balcony with an X-pattern railing (top 3990)",
+  "openings": {
+   "front_east": [
+    {
+     "kind": "window",
+     "x0_mm": 1466,
+     "x1_mm": 2416,
+     "sill_mm": 745,
+     "head_mm": 2326
+    },
+    {
+     "kind": "window",
+     "x0_mm": 4631,
+     "x1_mm": 5581,
+     "sill_mm": 745,
+     "head_mm": 2326
+    },
+    {
+     "kind": "window",
+     "x0_mm": 7881,
+     "x1_mm": 8831,
+     "sill_mm": 745,
+     "head_mm": 2326
+    },
+    {
+     "kind": "door",
+     "x0_mm": 9520,
+     "x1_mm": 10509,
+     "sill_mm": 300,
+     "head_mm": 2400,
+     "note": "front door, transom and sidelights"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 11305,
+     "x1_mm": 12255,
+     "sill_mm": 745,
+     "head_mm": 2326
+    },
+    {
+     "kind": "window",
+     "x0_mm": 14464,
+     "x1_mm": 15414,
+     "sill_mm": 745,
+     "head_mm": 2326
+    },
+    {
+     "kind": "window",
+     "x0_mm": 17797,
+     "x1_mm": 18747,
+     "sill_mm": 745,
+     "head_mm": 2326
+    },
+    {
+     "kind": "window",
+     "x0_mm": 1417,
+     "x1_mm": 2267,
+     "sill_mm": 3420,
+     "head_mm": 4370,
+     "note": "short upper-storey window under the cornice"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 4674,
+     "x1_mm": 5524,
+     "sill_mm": 3420,
+     "head_mm": 4370,
+     "note": "short upper-storey window under the cornice"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 8015,
+     "x1_mm": 8865,
+     "sill_mm": 3420,
+     "head_mm": 4370,
+     "note": "short upper-storey window under the cornice"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 11477,
+     "x1_mm": 12327,
+     "sill_mm": 3420,
+     "head_mm": 4370,
+     "note": "short upper-storey window under the cornice"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 14605,
+     "x1_mm": 15455,
+     "sill_mm": 3420,
+     "head_mm": 4370,
+     "note": "short upper-storey window under the cornice"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 17908,
+     "x1_mm": 18758,
+     "sill_mm": 3420,
+     "head_mm": 4370,
+     "note": "short upper-storey window under the cornice"
+    }
+   ],
+   "left_south_gable_of_front_block": [
+    {
+     "kind": "window",
+     "y0_mm": 1285,
+     "y1_mm": 2000,
+     "sill_mm": 681,
+     "head_mm": 2160
+    },
+    {
+     "kind": "window",
+     "y0_mm": 4190,
+     "y1_mm": 4960,
+     "sill_mm": 681,
+     "head_mm": 2160
+    },
+    {
+     "kind": "window",
+     "y0_mm": 1350,
+     "y1_mm": 2060,
+     "sill_mm": 3249,
+     "head_mm": 4159
+    },
+    {
+     "kind": "window",
+     "y0_mm": 4205,
+     "y1_mm": 4920,
+     "sill_mm": 3249,
+     "head_mm": 4159
+    }
+   ],
+   "right_north_gable_of_front_block": [
+    {
+     "kind": "window",
+     "y0_mm": 1285,
+     "y1_mm": 2000,
+     "sill_mm": 681,
+     "head_mm": 2160
+    },
+    {
+     "kind": "window",
+     "y0_mm": 4190,
+     "y1_mm": 4960,
+     "sill_mm": 681,
+     "head_mm": 2160
+    },
+    {
+     "kind": "window",
+     "y0_mm": 1350,
+     "y1_mm": 2060,
+     "sill_mm": 3249,
+     "head_mm": 4159
+    },
+    {
+     "kind": "window",
+     "y0_mm": 4205,
+     "y1_mm": 4920,
+     "sill_mm": 3249,
+     "head_mm": 4159
+    }
+   ],
+   "wing_north_side": [
+    {
+     "kind": "window",
+     "y0_mm": 10648,
+     "y1_mm": 12152,
+     "sill_mm": 1058,
+     "head_mm": 3160
+    },
+    {
+     "kind": "window",
+     "y0_mm": 17664,
+     "y1_mm": 18665,
+     "sill_mm": 1058,
+     "head_mm": 3160
+    },
+    {
+     "kind": "window",
+     "y0_mm": 24432,
+     "y1_mm": 25312,
+     "sill_mm": 1058,
+     "head_mm": 3160
+    },
+    {
+     "kind": "window",
+     "y0_mm": 11776,
+     "y1_mm": 12649,
+     "sill_mm": 4070,
+     "head_mm": 6160
+    },
+    {
+     "kind": "window",
+     "y0_mm": 17664,
+     "y1_mm": 18545,
+     "sill_mm": 4070,
+     "head_mm": 6160
+    },
+    {
+     "kind": "window",
+     "y0_mm": 24560,
+     "y1_mm": 25312,
+     "sill_mm": 4070,
+     "head_mm": 6160
+    }
+   ],
+   "convention": "front: X range; sides: Y range; sill/head above grade"
+  }
+ },
+ "landscape": {
+  "setting": "flat floor of the Deer Lodge valley, ~1,370 m elevation; Clark Fork River and the BNSF railway a few hundred metres east; ranch outbuildings (bunkhouse row, barns, ice house) to the north and north-west",
+  "front_yard": {
+   "note": "fenced yard in front (east) of the house, ~45 x 50 m, with a straight path from the porch steps to a gate (imagery)",
+   "approximate": true
+  },
+  "terrain_grid": {
+   "source": "USGS 3DEP via EPQS",
+   "step_m": 50.0,
+   "n": 11,
+   "points": "[x_mm, y_mm, ground elevation m above NAVD88] in the house frame",
+   "points_xyz": [
+    [
+     -239904,
+     -246835,
+     1377.24
+    ],
+    [
+     -189904,
+     -246835,
+     1377.3
+    ],
+    [
+     -139904,
+     -246835,
+     1377.54
+    ],
+    [
+     -89904,
+     -246835,
+     1378.12
+    ],
+    [
+     -39904,
+     -246835,
+     1378.53
+    ],
+    [
+     10096,
+     -246835,
+     1378.83
+    ],
+    [
+     60096,
+     -246835,
+     1379.18
+    ],
+    [
+     110096,
+     -246835,
+     1379.58
+    ],
+    [
+     160096,
+     -246835,
+     1379.9
+    ],
+    [
+     210096,
+     -246835,
+     1380.06
+    ],
+    [
+     260096,
+     -246835,
+     1380.22
+    ],
+    [
+     -239904,
+     -196835,
+     1376.83
+    ],
+    [
+     -189904,
+     -196835,
+     1376.88
+    ],
+    [
+     -139904,
+     -196835,
+     1377.29
+    ],
+    [
+     -89904,
+     -196835,
+     1377.87
+    ],
+    [
+     -39904,
+     -196835,
+     1378.5
+    ],
+    [
+     10096,
+     -196835,
+     1378.92
+    ],
+    [
+     60096,
+     -196835,
+     1379.25
+    ],
+    [
+     110096,
+     -196835,
+     1379.53
+    ],
+    [
+     160096,
+     -196835,
+     1379.74
+    ],
+    [
+     210096,
+     -196835,
+     1379.79
+    ],
+    [
+     260096,
+     -196835,
+     1379.84
+    ],
+    [
+     -239904,
+     -146835,
+     1376.11
+    ],
+    [
+     -189904,
+     -146835,
+     1376.21
+    ],
+    [
+     -139904,
+     -146835,
+     1376.75
+    ],
+    [
+     -89904,
+     -146835,
+     1377.63
+    ],
+    [
+     -39904,
+     -146835,
+     1378.25
+    ],
+    [
+     10096,
+     -146835,
+     1378.9
+    ],
+    [
+     60096,
+     -146835,
+     1379.18
+    ],
+    [
+     110096,
+     -146835,
+     1379.28
+    ],
+    [
+     160096,
+     -146835,
+     1379.3
+    ],
+    [
+     210096,
+     -146835,
+     1379.35
+    ],
+    [
+     260096,
+     -146835,
+     1379.35
+    ],
+    [
+     -239904,
+     -96835,
+     1375.49
+    ],
+    [
+     -189904,
+     -96835,
+     1375.69
+    ],
+    [
+     -139904,
+     -96835,
+     1376.11
+    ],
+    [
+     -89904,
+     -96835,
+     1376.89
+    ],
+    [
+     -39904,
+     -96835,
+     1377.91
+    ],
+    [
+     10096,
+     -96835,
+     1378.55
+    ],
+    [
+     60096,
+     -96835,
+     1378.75
+    ],
+    [
+     110096,
+     -96835,
+     1378.61
+    ],
+    [
+     160096,
+     -96835,
+     1378.67
+    ],
+    [
+     210096,
+     -96835,
+     1378.78
+    ],
+    [
+     260096,
+     -96835,
+     1378.83
+    ],
+    [
+     -239904,
+     -46835,
+     1374.91
+    ],
+    [
+     -189904,
+     -46835,
+     1375.11
+    ],
+    [
+     -139904,
+     -46835,
+     1375.41
+    ],
+    [
+     -89904,
+     -46835,
+     1375.87
+    ],
+    [
+     -39904,
+     -46835,
+     1376.68
+    ],
+    [
+     10096,
+     -46835,
+     1377.45
+    ],
+    [
+     60096,
+     -46835,
+     1377.69
+    ],
+    [
+     110096,
+     -46835,
+     1377.43
+    ],
+    [
+     160096,
+     -46835,
+     1377.43
+    ],
+    [
+     210096,
+     -46835,
+     1377.63
+    ],
+    [
+     260096,
+     -46835,
+     1377.65
+    ],
+    [
+     -239904,
+     3165,
+     1374.43
+    ],
+    [
+     -189904,
+     3165,
+     1374.51
+    ],
+    [
+     -139904,
+     3165,
+     1374.55
+    ],
+    [
+     -89904,
+     3165,
+     1374.81
+    ],
+    [
+     -39904,
+     3165,
+     1375.35
+    ],
+    [
+     10096,
+     3165,
+     1375.87
+    ],
+    [
+     60096,
+     3165,
+     1376.23
+    ],
+    [
+     110096,
+     3165,
+     1376.27
+    ],
+    [
+     160096,
+     3165,
+     1376.13
+    ],
+    [
+     210096,
+     3165,
+     1376.27
+    ],
+    [
+     260096,
+     3165,
+     1376.34
+    ],
+    [
+     -239904,
+     53165,
+     1373.83
+    ],
+    [
+     -189904,
+     53165,
+     1373.86
+    ],
+    [
+     -139904,
+     53165,
+     1373.87
+    ],
+    [
+     -89904,
+     53165,
+     1373.85
+    ],
+    [
+     -39904,
+     53165,
+     1374.29
+    ],
+    [
+     10096,
+     53165,
+     1374.6
+    ],
+    [
+     60096,
+     53165,
+     1374.72
+    ],
+    [
+     110096,
+     53165,
+     1374.75
+    ],
+    [
+     160096,
+     53165,
+     1374.74
+    ],
+    [
+     210096,
+     53165,
+     1374.74
+    ],
+    [
+     260096,
+     53165,
+     1374.91
+    ],
+    [
+     -239904,
+     103165,
+     1373.2
+    ],
+    [
+     -189904,
+     103165,
+     1373.22
+    ],
+    [
+     -139904,
+     103165,
+     1373.24
+    ],
+    [
+     -89904,
+     103165,
+     1373.29
+    ],
+    [
+     -39904,
+     103165,
+     1373.17
+    ],
+    [
+     10096,
+     103165,
+     1373.25
+    ],
+    [
+     60096,
+     103165,
+     1373.44
+    ],
+    [
+     110096,
+     103165,
+     1373.38
+    ],
+    [
+     160096,
+     103165,
+     1373.31
+    ],
+    [
+     210096,
+     103165,
+     1373.35
+    ],
+    [
+     260096,
+     103165,
+     1373.41
+    ],
+    [
+     -239904,
+     153165,
+     1372.56
+    ],
+    [
+     -189904,
+     153165,
+     1372.58
+    ],
+    [
+     -139904,
+     153165,
+     1372.67
+    ],
+    [
+     -89904,
+     153165,
+     1372.85
+    ],
+    [
+     -39904,
+     153165,
+     1372.57
+    ],
+    [
+     10096,
+     153165,
+     1372.13
+    ],
+    [
+     60096,
+     153165,
+     1372.46
+    ],
+    [
+     110096,
+     153165,
+     1372.57
+    ],
+    [
+     160096,
+     153165,
+     1372.07
+    ],
+    [
+     210096,
+     153165,
+     1371.78
+    ],
+    [
+     260096,
+     153165,
+     1371.85
+    ],
+    [
+     -239904,
+     203165,
+     1372.07
+    ],
+    [
+     -189904,
+     203165,
+     1371.93
+    ],
+    [
+     -139904,
+     203165,
+     1372.09
+    ],
+    [
+     -89904,
+     203165,
+     1372.13
+    ],
+    [
+     -39904,
+     203165,
+     1371.94
+    ],
+    [
+     10096,
+     203165,
+     1371.86
+    ],
+    [
+     60096,
+     203165,
+     1372.02
+    ],
+    [
+     110096,
+     203165,
+     1371.99
+    ],
+    [
+     160096,
+     203165,
+     1371.67
+    ],
+    [
+     210096,
+     203165,
+     1372.64
+    ],
+    [
+     260096,
+     203165,
+     1372.5
+    ],
+    [
+     -239904,
+     253165,
+     1372.53
+    ],
+    [
+     -189904,
+     253165,
+     1372.37
+    ],
+    [
+     -139904,
+     253165,
+     1372.54
+    ],
+    [
+     -89904,
+     253165,
+     1372.59
+    ],
+    [
+     -39904,
+     253165,
+     1372.84
+    ],
+    [
+     10096,
+     253165,
+     1372.33
+    ],
+    [
+     60096,
+     253165,
+     1372.17
+    ],
+    [
+     110096,
+     253165,
+     1371.65
+    ],
+    [
+     160096,
+     253165,
+     1372.67
+    ],
+    [
+     210096,
+     253165,
+     1372.2
+    ],
+    [
+     260096,
+     253165,
+     1371.92
+    ]
+   ]
+  }
+ },
+ "notes": [
+  "Scale: 7.61 mm per pixel of the 3840-px thumbnails. The plan scale bar (1/4\"=1'-0\"), the 66'-3\" front and the 89'-0\" overall depth agree; several labelled room sizes read ~3-5% larger than measured, so room polygons follow the drawing, not the labels.",
+  "The elevation sheet's printed scale bar does not match the drawn building; elevation measurements were rescaled by matching the six front-window centres to the plan (7.7 mm/px horizontally, 7.4 mm/px vertically assumed; heights +/-5%).",
+  "Floor levels are not dimensioned on the sheets used: first floor +300, second floors +3000 (front) and +3650 (wing) are estimates from window sills and the stair/steps.",
+  "The second-floor sheet is the Commons JPEG rendering of a TIFF; it was registered to the first floor by the outside faces of the front wall and end walls (offset 17 px in X, 13 px in Y).",
+  "Side windows of the front block were read on the north elevation and assumed the same on the south end (the parlor fireplace sits between them, as the plan shows).",
+  "Wing south-side windows on the second floor are placed one per room at mid-length (not read individually). Chimney positions along the wing are approximate.",
+  "Orientation (105 deg) is from imagery, not a survey; OSM has only a point for the house."
+ ]
+}

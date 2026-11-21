@@ -9,6 +9,7 @@ __all__ = [
     "assembly",
     "scene",
     "filter_object_action",
+    "copy_object_action",
 ]
 
 
@@ -21,4 +22,9 @@ def __getattr__(name):
         from .filter import filter_object_action
 
         return filter_object_action
+    # 'pc copy' is one action over every kind of object, for the same reason.
+    if name == "copy_object_action":
+        from .copy import copy_object_action
+
+        return copy_object_action
     raise AttributeError("module %r has no attribute %r" % (__name__, name))

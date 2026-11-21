@@ -98,6 +98,10 @@ catalog a plugin serves, say. Given one, ``pc`` takes it at its word, and on a `
 the walk to the objects of that kind. ``pc info`` takes three more, ``--color``, ``-m``/``--material`` and
 ``--finish``, which say the name is a CMF declaration's.
 
+A package may be named at a revision of its repository -- ``//pub/std/metric/m@v1.2:m3-screw``, or the package
+you are in as it was at one commit, ``//@3f2a9c1e:widget`` -- which loads that revision beside what is checked out
+and names the object in it (see :ref:`package-revisions`).
+
 .. _recursive-names:
 
 **********************************
@@ -494,7 +498,8 @@ Object commands
   ``obj``, ``gltf`` -- compressed web assets included, see :ref:`gltf-files`), or one of the CAD file formats
   PartCAD ships as declarations (``fcstd``,
   ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- ``iges``, read
-  by OpenCASCADE, and ``usd``, an OpenUSD stage, read by usd-core; see :ref:`cad-files`). The part
+  by OpenCASCADE, and ``usd``, an OpenUSD stage, read by usd-core; see :ref:`cad-files`), or measured data
+  made solid (``heightmap``, ``dem``, ``pointcloud``, ``e57``, ``voxels``; see :ref:`measured-data`). The part
   is named after the file, without its extension. Where the file is ``<name>.<extension>`` with the
   extension spelled as the type declares it -- ``design.FCStd``, ``bracket.SLDPRT``, ``bracket.CATPart`` --
   the declaration names no ``path``; any other spelling of it keeps one: another case (``design.fcstd``), or
@@ -1258,6 +1263,101 @@ Object commands
   every ``connect:`` left pointing at nothing is reported, naming the line, by this command and by ``pc lint``
   afterwards.
 
+``pc copy``
+  Declare a second object as a copy of the first::
+
+    pc copy OBJECT_FROM OBJECT_TO
+
+  The declaration written is ``OBJECT_FROM`` **as PartCAD read it**, not the text of the ``partcad.yaml`` it came
+  from: rendered (an object a Jinja2 loop declared is what the loop made of it), normalized, with the parameter
+  overrides of the user configuration applied, and with every value that is only what PartCAD would assume
+  anyway left out -- the package's own ``manufacturable``, a parameter in the long form it is expanded to, a
+  ``path`` that is the object's name and its type's extension. The keys are in the order they were declared in.
+  A copy refers to what the original referred to and reads the file the original reads: copied into another
+  package, a relative reference is written out in full and ``path`` names the original's file from where the copy
+  is.
+
+  ``OBJECT_FROM`` may be in any package, a revision of one included (see :ref:`package-revisions`), which is how an
+  object is brought back from an earlier revision under a name of its own; ``-p <name>=<value>`` copies that
+  instance, its parameters defaulting to those values. ``OBJECT_TO`` is declared in the package ``-P`` selects, or
+  the one it names. A name the package already uses is refused, and so is a package loaded at a revision, which
+  is never written to; ``--dry-run`` prints the declaration without writing it. An assembly or a scene read from
+  an ASSY file is copied into another package only when that file names every object in full
+  (``//package:name``): the copy reads the original's file, and a link written ``part: bolt`` would there name the
+  other package's bolt. Out of a revision, it is copied only when that file names nothing of the revision's own
+  package, since inside the revision ``//pkg:bolt`` is the revision's bolt and in the copy it would be today's.
+
+  .. code-block:: shell
+
+    pc copy bracket bracket_wide
+    pc copy //pub/std/metric/m:m3-screw m3          # into this package, referring to the original's file
+    pc copy //@v1.2:bracket bracket_v1              # the bracket as tagged v1.2
+
+  The Digital Thread's Revisions tab writes both sides of a comparison the same way, which is why it shows what
+  changed in what an object *means* rather than in how it was written.
+
+``pc revisions list``
+  List the commits that changed a package, newest first, ``*`` marking the one checked out -- what the
+  Digital Thread's Operations > Revisions tab lists down its left::
+
+    pc revisions list [OBJECT]
+
+  Of the package ``OBJECT`` is in, or with no ``OBJECT`` of the package ``-P`` selects (this one by default). A
+  package that shares its repository with others lists the commits that changed its own directory, the one that
+  deleted it included. A package in no git repository, or with nothing of it committed, is *not published yet*.
+  ``--json`` prints the daemon's answer. Like every command that names an object, these take ``-p <name>=<value>``:
+  ``pc revisions diff`` compares that instance at each side.
+
+``pc revisions diff``
+  Show what changed in an object since a revision, as a unified diff -- what the Revisions tab draws side by
+  side::
+
+    pc revisions diff REVISION [OBJECT]
+
+  ``REVISION`` is a commit id (as much of it as is unique), a tag or a branch; the package is loaded at it beside
+  what is checked out (see :ref:`package-revisions`). Both sides are ``OBJECT`` written out as ``pc copy`` writes
+  one -- rendered, normalized, defaults left out -- so what differs is what the object *means*, and a comment or a
+  reformatted line is no difference. With no ``OBJECT``, the package's ``partcad.yaml`` as Jinja2 rendered it at
+  each. Nothing is printed when nothing changed; ``--exit-code`` exits with 1 when something did, as
+  ``git diff --exit-code`` does, ``-U``/``--context`` sets how many unchanged lines surround each change, and
+  ``--json`` prints the comparison side by side as well.
+
+  .. code-block:: shell
+
+    pc revisions diff v1.2 bracket          # the bracket now, against the bracket as tagged v1.2
+    pc revisions diff HEAD~3                # the package's partcad.yaml, three commits ago and now
+    pc revisions diff --exit-code main :bracket || echo "changed since main"
+
+``pc revisions uses``
+  List the dependencies a package declared at a revision, each with the commit it is at and the name that loads
+  it there (``<package>@<sha>``, which any command takes) -- the Revisions tab's *Uses (Dependencies)*::
+
+    pc revisions uses REVISION [OBJECT]
+
+  Loading a dependency may download it.
+
+``pc revisions used-by``
+  List the objects PartCAD has loaded that use a package at a revision -- by its commit, a tag, a branch, or as
+  the dependency checked out there -- each with how many times: the Revisions tab's *Used By*::
+
+    pc revisions used-by REVISION [OBJECT]
+
+``pc used-by``
+  List the objects PartCAD has loaded that use an object -- or, with no ``OBJECT``, anything in the package
+  ``-P`` selects -- each with how many times; an assembly that places a bolt four times uses it four times. The
+  Digital Thread's Operations > Used By tab::
+
+    pc used-by [OBJECT]
+
+  Only what is loaded is looked at, so ``--load`` loads every package of the workspace first: the packages in
+  this checkout, sub-folders and local dependencies, and none it downloads. An assembly that has been built is
+  counted by what it places, one not built yet by what its declaration names.
+
+  .. code-block:: shell
+
+    pc used-by --load bracket
+    pc used-by --json -P //vendor/fasteners
+
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. The object is found by its name whatever its kind (see
   :ref:`object-names`). Choose the format with ``-t``:
@@ -1562,7 +1662,8 @@ instead.
   read: ``--design-3d``, ``--design-2d``, ``--design-draft``, ``--design-cmf``, ``--design-cam``; ``--analysis-fea``,
   ``--analysis-dynamic``, ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``,
   ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``;
-  ``--validation-test``, ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The analysis tabs and the
+  ``--validation-test``, ``--validation-simulation``; ``--operations-revisions``, ``--operations-used-by``. With
+  none, the viewer stays on whichever tab it is on. The analysis tabs and the
   Simulation tab list what the object declares -- its scenarios of that analysis, its simulations -- and select
   the first; ``--scenario <name>`` selects the one of that name instead, and is refused with any other tab. The tab travels with the
   shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA

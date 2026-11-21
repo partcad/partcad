@@ -29,6 +29,15 @@ docs:
     wall asked for an arc, bending towards the side it is seen from, in the grey
     a wall is unless it is painted: a solid 4.5 in (114.3 mm) thick, drawn as its surface.
 
+    `apartment` stands on a whole plan, `apartment-plan`, which draws the three
+    things a plan can. Its outline is a room, walled looking in (`wall-1` ...).
+    A hole in it - the column - and a closed loop inside it - the lift shaft -
+    are closed spaces, walled looking out (`enclosure-1-1`, `enclosure-2-1` ...).
+    A line that closes nothing - between the living room and the bedroom - is a
+    standalone wall (`partition-1-1`). What stands in the room is
+    `//builtin/building:interior-wall`, drawn as the solid it is, so that from
+    wherever it is seen it looks like walls.
+
     A shaded picture, or a video of the room turning, is drawn the same way:
 
     ```shell
@@ -62,6 +71,10 @@ sketches:
   openings:
     type: build123d
     desc: A door and a window, on a wall unrolled flat
+  apartment-plan:
+    type: build123d
+    path: apartment.py
+    desc: An apartment from above - its outline, a column and a lift shaft in it, and a wall standing in it
 
 parts:
   entrance:
@@ -84,6 +97,14 @@ parts:
       radius: 1500
 
 scenes:
+  apartment:
+    type: walls
+    desc: >
+      The walls standing on the apartment's plan: the room's looking in, and
+      the column's, the lift shaft's and the one between the living room and
+      the bedroom drawn as the walls they are, from every side
+    sketch: apartment-plan
+    height: 2700
   living-room:
     type: walls
     desc: The walls standing on the plan, every one looking in, every one painted sage

@@ -1341,6 +1341,30 @@ at all).
   a visual with no key leaves the picture uncached. A visual that cannot be had is reported and the part drawn
   as itself.
 
+- **A package at a revision is a package of its own** (`package_versions.py`, `Context.get_versioned_project`).
+  `[<path>/]<name>@<revision>` -- a commit id, a tag, a branch -- is loaded once per commit, as
+  `<path>/<name>@<full commit id>`, from the commit's tree written out into `~/.partcad/git` (never from the
+  working tree). A shortened commit id it was asked by is an alias in `Context.project_aliases`, kept apart from
+  `Context.projects` so that nothing walking the loaded packages meets one package twice; a tag or a branch is
+  resolved again on every lookup, so that a daemon's warm context follows a branch that moves. A package without `@`
+  is loaded exactly as before. A reference a revision makes to its own package or below is rebased into the
+  revision (`package_versions.rebase`, applied by `Project.relocate`); one out of it is not. A downloaded
+  dependency at the commit it is checked out at is still written out on its own, so that nothing writes into a
+  revision through the copy (`Project.not_written_to` refuses every write into a revision; the export is named
+  apart from the copies, behind `package_versions.EXPORT_PREFIX`). `revision.package_revision` knows a
+  revision's commit from the guard `export` leaves (`exported_sha`), not from a repository, and
+  `repository_of` refuses an export, which a home directory kept in git would otherwise answer for.
+- **An object's declaration can be written back out of the context** (`serialize.py`). What `pc copy` writes and
+  what the IDE's Revisions tab compares: the normalized declaration, minus what PartCAD derives (`name`,
+  `orig_name`, `source_resolved`, the properties making it recorded) and minus every default (the package's
+  `manufacturable`, a scene's `false`, an ASSY file's own manufacturing method, a parameter's long form, a `path`
+  that is `<name>.<extension>`), in the declaration's order. A survey over `examples/` is how the defaults were
+  found; a new key a factory writes into a declaration as it reads one belongs on that list, or every copy
+  carries it. `ProjectLocal.rendered_config` is the Jinja2-rendered text of `partcad.yaml`, kept as it was read,
+  so that the package comparison never renders a second time.
+- **What uses what is read from what is loaded** (`usage.py`). References are resolved as the package that
+  wrote them resolves them (`Project.resolve`, `reference.source_of`), counted once per mention, and a built
+  assembly's children are counted per placement; nothing is loaded or built to answer.
 - **An object may keep itself to its package** (`privacy.py`, `Project.visible_to`). `private: true` on any
   object of the named kinds is checked on a *reference*: every getter of `Project` and `Context` takes a
   `referrer`, the package the name was written in, and refuses a private object of another package with a
@@ -1372,8 +1396,10 @@ at all).
 
   `//builtin/building` declares objects too: `wall`, a `type: wall` part whose `length`, `height`, `radius`,
   `openings` and `thickness` (114.3 mm, 4.5 in -- a 2x4 stud and two half-inch drywall boards -- by default) are `%...%` expressions over parameters of the same names -- a
-  solid, whose `visual:` is `wall-surface`, the same wall with no thickness, `private: true` -- and `room`, a
-  `type: walls` scene over `sketch`, `height` and `thickness`. A `walls` scene passes `thickness` to its walls
+  solid, whose `visual:` is `wall-surface`, the same wall with no thickness, `private: true` --
+  `interior-wall`, the same solid with no `visual:`, so drawn as the solid it is (the walls standing in a room,
+  around its closed spaces and between its parts) -- and
+  `room`, a `type: walls` scene over `sketch`, `height` and `thickness`. A `walls` scene passes `thickness` to its walls
   only when it states one, so a wall part of somebody's own that takes none is asked for with none. At a
   right-angle corner between two straight walls it closes the corner (`scene_factory_walls.corner_extensions`):
   the wall arriving at an outside corner goes on by the thickness (`extendEnd`), and one arriving at an inside
@@ -1392,9 +1418,16 @@ at all).
 
   **A `walls` scene is the one scene that reads geometry to know what its links are.** It is
   `SceneFactoryAssy` with the file replaced: `read_assy` returns the links `_links_async` worked out from the
-  sketch, in a sandbox (`wrappers/wrapper_outline.py`: one closed loop of lines and arcs on XY, walked
-  clockwise so that the inside is on every wall's right, which is its front -- one wall per edge,
-  anything else refused with the reason), and `prepare_async`,
+  sketch, in a sandbox (`wrappers/wrapper_outline.py`'s `plan`: lines and arcs on XY, told apart by geometry
+  alone -- an outline, a face or a closed wire inside no other, is a room, walked clockwise so that the inside
+  is on every wall's right, which is its front (`wall-<n>`, numbered on across rooms, so a one-room scene keeps
+  the names it always had); a hole, or a closed wire inside an outline, is a closed space walked anticlockwise,
+  its walls looking out and its thickness inside (`enclosure-<k>-<n>`); a wire closing nothing is a standalone
+  wall walked as drawn, its thickness to the left (`partition-<k>-<n>`); both of those are built of
+  `interiorWall`, by default `interior-wall`, which is drawn solid, and only a room's walls of `wall`, one-sided;
+  two loops that touch, and a loop inside a closed space, refused
+  with the reason). `corner_extensions` closes the corners of all three, with `closed=False` along a standalone
+  wall, whose ends meet nothing. `prepare_async`,
   `subassemblies_async` and `instantiate_async` each make sure that has happened first -- so preparing such a
   scene costs a sandbox, which no other scene does. Not under an `asyncio.Lock`: the scene is reached from
   more than one event loop (`AssemblyFactoryAssy.instantiate` runs its own). The sketch's key is folded into

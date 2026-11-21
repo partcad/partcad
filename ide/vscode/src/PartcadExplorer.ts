@@ -292,7 +292,60 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
     setRoot(root: string) {
         this.root = root;
+        // The workspace's own: what 'openPackage' leaves for a while.
+        this.home = root;
         this.refresh();
+    }
+
+    /**
+     * The package the workspace loaded, while the tree lists another one in its
+     * place ('openPackage'); undefined while it lists the workspace's own.
+     */
+    private home: string | undefined;
+
+    /**
+     * List 'name' at the top of the tree in place of the workspace's package,
+     * with a row at the top that goes back.
+     *
+     * What the Digital Thread's Revisions tab does with a dependency it lists:
+     * the dependency as the context has it, or at the commit a revision pins it
+     * to ('<package>@<sha>', see 'partcad.package_versions') - which is no child
+     * of anything in the workspace, so it cannot be revealed where it is, only
+     * listed. Its contents are asked for the way any package's are.
+     */
+    openPackage(name: string): void {
+        if (this.home === undefined) {
+            this.home = this.root;
+        }
+        this.root = name;
+        this.refresh();
+        if (!(name in this.packages)) {
+            void vscode.commands.executeCommand('partcad.loadPackageContents', name);
+        }
+    }
+
+    /** Back to the workspace's own package, after 'openPackage'. */
+    goHome(): void {
+        if (this.home !== undefined && this.root !== this.home) {
+            this.root = this.home;
+            this.refresh();
+        }
+    }
+
+    /** The row that goes back to the workspace's package, while another is listed in its place. */
+    private homeRow(): PartcadItem | undefined {
+        if (this.home === undefined || this.root === this.home) {
+            return undefined;
+        }
+        const row = new PartcadItem(undefined, this.home, '', {} as any, undefined, ITEM_TYPE_PACKAGE);
+        row.label = `Back to ${this.home}`;
+        row.description = `showing ${this.root}`;
+        row.tooltip = `The tree lists ${this.root}. Go back to ${this.home}, the package of this workspace.`;
+        row.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        row.iconPath = new vscode.ThemeIcon('arrow-left');
+        row.contextValue = 'explorerHome';
+        row.command = { title: 'Back', command: 'partcad.explorerHome', arguments: [] };
+        return row;
     }
 
     setItems(name: string, items: ItemMetadata) {
@@ -510,11 +563,13 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             }
         }
 
+        const home = this.homeRow();
         if (!(this.root in this.packages)) {
-            return Promise.resolve([]);
+            return Promise.resolve(home === undefined ? [] : [home]);
         }
 
-        return Promise.resolve(this.expandItems(this.packages[this.root].dir, this.packages[this.root]));
+        const items = this.expandItems(this.packages[this.root].dir, this.packages[this.root]);
+        return Promise.resolve(home === undefined ? items : [home, ...items]);
     }
 
     private _onDidChangeTreeData: vscode.EventEmitter<PartcadItem | undefined | null> = new vscode.EventEmitter<

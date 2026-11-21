@@ -1,0 +1,29 @@
+desc: >
+  Three historic estates of more than 20 acres each, their houses as the Historic
+  American Buildings Survey measured them: the outside one solid, the inside its
+  rooms' walls and furniture, on the ground where each stands.
+
+docs:
+  usage: |
+    Each estate is a package of its own, written by `make_estate.py` from what was
+    read off the survey's measured drawings (`estate.json`, beside it), with the
+    landscape around it from the gen-landscape skill:
+
+    ```shell
+    python3 make_estate.py site gunston_hall      # fetch the ground, grade it, write 'landscape'
+    python3 make_estate.py package gunston_hall   # write the house: shell, floors, rooms, furniture
+    ./render_images.sh gunston_hall               # its pictures, one at a time, and its README
+    ```
+
+    Each one's README pictures it whole, where it stands, then its house, then each of its storeys
+    furnished, from the side and from above, and their plans:
+
+    | [Gunston Hall](./gunston_hall/) | [Grant-Kohrs Ranch](./grant_kohrs_ranch/) | [Scotty's Castle](./scottys_castle/) |
+    | --- | --- | --- |
+    | [![Gunston Hall](./gunston_hall/images/house.png)](./gunston_hall/) | [![Grant-Kohrs Ranch](./grant_kohrs_ranch/images/house.png)](./grant_kohrs_ranch/) | [![Scotty's Castle](./scottys_castle/images/house.png)](./scottys_castle/) |
+
+# Nothing here is made.
+manufacturable: false
+
+render:
+  readme:

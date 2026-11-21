@@ -17,7 +17,7 @@ from ...service import run
 # What each tab is called on the command line, where it differs from its id:
 # 'supply' is the tab the viewer labels "Buy", and the flag says what the tab
 # says.
-_FLAG_NAMES = {"supply": "buy"}
+_FLAG_NAMES = {"supply": "buy", "usedby": "used-by"}
 
 _TAB_HELP = {
     "3d": "the 3D view",
@@ -37,6 +37,8 @@ _TAB_HELP = {
     "basic": "the Basic tab: every basic qualification test, run",
     "topology": "the Topology tab: every topology qualification test, run, and where each finding is",
     "other": "the Other tab: the qualification tests plugins supply, and what each tool reported",
+    "revisions": "the Revisions tab: the commits that changed the object's package, each compared with it",
+    "usedby": "the Used By tab: the loaded objects that use this one, and how many times each",
 }
 
 

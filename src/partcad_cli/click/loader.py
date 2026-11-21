@@ -37,9 +37,11 @@ class Loader(click.RichGroup):
                     and not filename.startswith("_")
                     and os.path.isdir(os.path.join(prefix, filename))
                 ):
-                    rv.append(filename)
+                    rv.append(filename.replace("_", "-"))
                 elif filename.endswith(".py") and filename != "__init__.py":
-                    rv.append(filename[:-3])
+                    # A command of two words is a module with an underscore:
+                    # 'used_by.py' is 'pc used-by', which is how it is typed.
+                    rv.append(filename[:-3].replace("_", "-"))
             rv.sort()
             return rv
         except OSError as e:
@@ -50,11 +52,13 @@ class Loader(click.RichGroup):
         if name not in self.list_commands(_ctx):
             raise click.ClickException(f"Unknown command: '{name}'. Try `--help`.")
 
-        if not name.isalnum():
+        if not name.replace("-", "").isalnum():
             raise click.ClickException(f"Invalid command name: {name}")
 
         try:
-            mod = importlib.import_module("." + self.COMMANDS_PACKAGE_NAME + "." + name, package="partcad_cli.click")
+            mod = importlib.import_module(
+                "." + self.COMMANDS_PACKAGE_NAME + "." + name.replace("-", "_"), package="partcad_cli.click"
+            )
             cmd_object = getattr(mod, "cli")
             # 'click.Command', not the deprecated 'click.BaseCommand', which
             # click 9 removes.

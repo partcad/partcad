@@ -534,8 +534,8 @@ def test_a_parametrized_instance_is_not_one_of_the_declarations(tmp_path):
     'orig_name' is what tells them apart: it is the name of the declaration an
     object came from, so it is an object's own name exactly when the object is
     a declaration. Both halves are checked here - the property the filter reads,
-    and the README that reads the filter. (The sections come out empty for a
-    package this bare; what matters is which names reach them.)
+    and the README that reads the filter: the declarations are pictured, so
+    that each has a section to reach, and the instance has none.
     """
     (tmp_path / "partcad.yaml").write_text(
         yaml.safe_dump(
@@ -560,11 +560,13 @@ def test_a_parametrized_instance_is_not_one_of_the_declarations(tmp_path):
 
     out = tmp_path / "out"
     out.mkdir()
-    project.render_readme_async({}, str(out))
-    readme = (out / "README.md").read_text(encoding="utf-8")
-    assert "## Sketches" in readme
-    assert "## Interfaces" in readme
-    assert "include=BEND_UP" not in readme
+    for name in ("panel", "m3"):
+        (out / ("%s.svg" % name)).write_text("<svg/>")
+    project.render_readme_async({"svg": {"prefix": "./"}}, str(out))
+    readme = (out / "README.md").read_text(encoding="utf-8").splitlines()
+    assert "## Sketches" in readme and "### panel" in readme
+    assert "## Interfaces" in readme and "### m3" in readme
+    assert not [line for line in readme if "include=BEND_UP" in line]
 
 
 #

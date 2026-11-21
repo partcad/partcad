@@ -87,6 +87,10 @@ def convert_sketch_action(
     project = project.ctx.get_project(package_name) if project.name != package_name else project
     if not project:
         raise ValueError(f"Project '{package_name}' not found for sketch '{sketch_name}'")
+    # Before anything is converted into it: a revision is never written to.
+    why = project.not_written_to()
+    if why is not None:
+        raise ValueError(f"Not converting {sketch_name!r} in '{project.name}': {why}")
 
     sketch = project.get_sketch(sketch_name)
     if not sketch:

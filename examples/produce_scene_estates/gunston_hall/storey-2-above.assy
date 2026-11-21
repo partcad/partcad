@@ -1,0 +1,5 @@
+# Second floor (half storey in the roof) of Gunston Hall, seen from above: for a picture of it as a plan. Written by '../make_estate.py'.
+links:
+  - scene: storey-2
+    name: storey-2
+    fixed: true

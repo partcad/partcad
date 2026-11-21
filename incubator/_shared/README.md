@@ -1,16 +1,16 @@
 # The shared part of the distributor plugins
 
 `distributor.py` is in every `partcad-svc-commerce-<store>` package, byte for
-byte - the ones incubated in this directory, and the ones that have moved out
-to repositories of their own (DigiKey, Octopart, McMaster-Carr) - and so are
-`conftest.py` and `test_distributor.py`. This copy is the one to edit;
-`copy.sh` puts it into every package here and into every checkout named on its
-command line, and writes the digest each package's own tests hold its copy to
+byte - DigiKey, Octopart, McMaster-Carr and Mouser, each in a repository of its
+own now, and any incubated in this directory - and so are `conftest.py` and
+`test_distributor.py`. This copy is the one to edit; `copy.sh` puts it into
+every package here and into every checkout named on its command line, and
+writes the digest each package's own tests hold its copy to
 (`distributor.sha256`).
 
 ```shell
 ./incubator/_shared/copy.sh ../partcad-svc-commerce-digikey ../partcad-svc-commerce-octopart \
-  ../partcad-svc-commerce-mscmaster-carr
+  ../partcad-svc-commerce-mscmaster-carr ../partcad-svc-commerce-mouser
 ```
 
 It is the distributor counterpart of PartCAD's `plugin_models` (the toolkit for

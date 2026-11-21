@@ -2989,7 +2989,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.10.29"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.10.31"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -4154,8 +4154,20 @@ def requirements_check(session, params):
     if ctx is None:
         return None
     pc = session.partcad
+    if _said_kind(params) == "package":
+        # A package's own 'requirements:': its features, and the yes-or-no
+        # requirements said of every part it declares (see
+        # 'requirements.check_package_async').
+        project = _package_of_request(ctx, pc, {"package": params.get("package")})
+        from partcad import requirements
+
+        with pc.logging.Process("Requirements", project.name):
+            report = asyncio.run(requirements.check_package_async(ctx, project, verify=bool(params.get("verify"))))
+        answer = report.to_dict()
+        answer.update(_package_requirements_sections(project))
+        return answer
     getters = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene, "sketch": ctx.get_sketch}
-    refusal = "Only parts, assemblies, scenes and sketches declare requirements; '%s' is none of them"
+    refusal = "Only packages, parts, assemblies, scenes and sketches declare requirements; '%s' is none of them"
     _refuse_said_kind(params, getters, refusal)
     resolved = _resolve_object(ctx, pc, params)
     if resolved is None:
@@ -4244,6 +4256,78 @@ def _requirements_sections(ctx, package, kind, name, obj) -> dict:
     }
 
 
+# The kinds of requirement a package's own section may hold: the rest are of one
+# object's geometry (see 'requirements.PACKAGE_SECTIONS').
+_PACKAGE_REQUIREMENTS = ("feature", "has")
+
+
+def _package_requirements_sections(project) -> dict:
+    """'_requirements_sections' of a package: its own section, which is the one it is read with."""
+    from partcad import requirements_edit
+
+    own = project.config_obj.get("requirements") if isinstance(project.config_obj, dict) else None
+    section = None if own is None else requirements_edit.section_as_data(requirements_edit.structured(own))
+    return {
+        "section": section,
+        "declared": section,
+        "source": None,
+        "editable": _package_not_editable(project),
+        "physics_fields": {},
+        "has_names": requirements_edit.has_names(),
+        "kinds": list(_PACKAGE_REQUIREMENTS),
+    }
+
+
+def _package_not_editable(project):
+    """Why a package's own requirements cannot be written into its 'partcad.yaml', or None when they can."""
+    written = project.not_written_to()
+    if written is not None:
+        return written
+    config_path = getattr(project, "config_path", None)
+    if not config_path:
+        return "it has no 'partcad.yaml' of its own"
+    try:
+        with open(config_path, encoding="utf-8") as fp:
+            text = fp.read()
+    except OSError as e:
+        return "its 'partcad.yaml' cannot be read: %s" % e
+    if any(opening in text for opening in ("{{", "{%", "{#")):
+        return "its 'partcad.yaml' is a Jinja2 template, which is written by hand"
+    return None
+
+
+def _edit_package_requirements(session, params, edit, what):
+    """'requirements.add' or 'requirements.remove' of a package's own section: (package, what was changed)."""
+    from partcad import requirements_edit
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    project = _package_of_request(ctx, session.partcad, {"package": params.get("package")})
+    requirement = params.get("requirement")
+    if requirement not in _PACKAGE_REQUIREMENTS:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "A package requires features and yes-or-no facts of its parts ('feature', 'has'), not '%s': require that"
+            " of the objects themselves" % requirement,
+        )
+    why = _package_not_editable(project)
+    if why is not None:
+        raise JsonRpcError(USAGE_ERROR, "The requirements of %s cannot be changed: %s" % (project.name, why))
+    try:
+        said = project.edit_package_declaration(
+            edit,
+            what,
+            keys=requirements_edit.TOUCHED,
+            read_back=requirements_edit.read_back(requirement, params.get("name"), params.get("instances") or None),
+        )
+    except (requirements_edit.EditError, ValueError) as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    # Written behind the context's back, as 'copy.object' writes.
+    ctx.reload_packages([project.name])
+    return project, said
+
+
 def _requirements_not_editable(ctx, package, kind, name, obj):
     """Why the requirements of an object cannot be written where it is declared, or None when they can."""
     from partcad import reference
@@ -4262,6 +4346,9 @@ def _requirements_not_editable(ctx, package, kind, name, obj):
     project = ctx.get_project(package)
     if project is None:
         return "the package %s is not loaded" % package
+    written = project.not_written_to()
+    if written is not None:
+        return written
     from partcad.project import OBJECT_KIND_SECTIONS
 
     section = OBJECT_KIND_SECTIONS.get(kind)
@@ -4349,6 +4436,29 @@ def requirements_add(session, params):
 
     from partcad import requirements, requirements_edit
 
+    if _said_kind(params) == "package":
+        # A package's own section: its features, and what every part it declares has.
+        value = params.get("value")
+        if params.get("text"):
+            value = _typed(value)
+        edited = _edit_package_requirements(
+            session,
+            params,
+            lambda declaration: requirements_edit.add(
+                declaration,
+                params.get("requirement"),
+                params.get("name"),
+                value,
+                replace=bool(params.get("replace")),
+            ),
+            "its requirements",
+        )
+        if edited is None:
+            return None
+        project, said = edited
+        session.partcad.logging.info("Required of %s: %s" % (project.name, said))
+        return {"object": project.name, "kind": "package", "changed": said}
+
     found = _requirement_object(session, params)
     if found is None:
         return None
@@ -4404,6 +4514,24 @@ def requirements_remove(session, params):
     """
     from partcad import requirements_edit
 
+    if _said_kind(params) == "package":
+        edited = _edit_package_requirements(
+            session,
+            params,
+            lambda declaration: requirements_edit.remove(
+                declaration,
+                params.get("requirement"),
+                params.get("name"),
+                with_references=bool(params.get("with_references")),
+            ),
+            "its requirements",
+        )
+        if edited is None:
+            return None
+        project, said = edited
+        session.partcad.logging.info("No longer required of %s: %s" % (project.name, said))
+        return {"object": project.name, "kind": "package", "changed": said}
+
     found = _requirement_object(session, params)
     if found is None:
         return None
@@ -4432,6 +4560,194 @@ def requirements_remove(session, params):
     _invalidate_context(session, params)
     session.partcad.logging.info("No longer required of %s: %s" % (_qualified(package, name), said))
     return {"object": _qualified(package, name), "kind": kind, "changed": said}
+
+
+def _package_of_request(ctx, pc, params):
+    """The package a package-level request names: '--package', or the package of the object it names."""
+    package = params.get("package") or "."
+    if params.get("object"):
+        resolved = _resolve_object(ctx, pc, params)
+        if resolved is None:
+            return None
+        package = resolved[0]
+    else:
+        package = ctx.resolve_package_path(package)
+    project = ctx.get_project(package)
+    if project is None:
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+    return project
+
+
+def _revision_of_request(params) -> str:
+    revision = params.get("revision")
+    if not isinstance(revision, str) or not revision:
+        raise JsonRpcError(USAGE_ERROR, "No revision is given")
+    return revision
+
+
+def revisions_list(session, params):
+    """The commits that changed a package, newest first: what the IDE's Revisions tab lists.
+
+    For the package ``--package`` names, or the package of the object named. A
+    package in no git repository, or none of whose files were ever committed,
+    lists none and is ``published: false`` (see ``partcad.revisions.history``).
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    project = _package_of_request(ctx, session.partcad, params)
+    if project is None:
+        return None
+    from partcad import revisions
+
+    return revisions.history(ctx, project)
+
+
+def revisions_compare(session, params):
+    """An object as the context holds it and as it was at a revision, side by side and as a unified diff.
+
+    Each side is the object written out the way ``pc copy`` writes one -- or,
+    for ``kind: package``, the package's ``partcad.yaml`` as Jinja2 rendered it
+    when PartCAD read it -- and the answer is the rows of a side-by-side view
+    (see ``partcad.revisions.compare``), and the same as a unified diff
+    (``unified``, with ``lines`` lines around each change): what the IDE
+    draws, and what ``pc revisions diff`` and an agent read. The revision is
+    loaded as ``<package>@<revision>`` into the same context, where it stays.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    revision = _revision_of_request(params)
+    kind = _said_kind(params) or "part"
+    from partcad import revisions
+
+    if kind == revisions.PACKAGE:
+        project = _package_of_request(ctx, pc, {"package": params.get("package")})
+        name = None
+    else:
+        resolved = _resolve_object(ctx, pc, params)
+        if resolved is None:
+            return None
+        package, name = resolved
+        project = ctx.get_project(package)
+        if project is None:
+            raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+        if _said_kind(params) is None:
+            # Looked up, as every command that takes a name looks it up: an
+            # assembly compared as a part would be "not declared" on both sides.
+            # In the revision, when the package declares it no longer.
+            found = project.object_kind(name.partition(";")[0])
+            if found is None:
+                from partcad import package_versions
+
+                current = revisions.current_project(ctx, project)
+                at_revision = ctx.get_project(package_versions.versioned_name(current.name, revision))
+                found = at_revision.object_kind(name.partition(";")[0]) if at_revision is not None else None
+            kind = found or kind
+    # 'lines', not 'context', which is the context a request is about.
+    lines = params.get("lines")
+    try:
+        lines = revisions.UNIFIED_CONTEXT if lines is None else int(lines)
+    except (TypeError, ValueError) as e:
+        raise JsonRpcError(USAGE_ERROR, "'lines' is a number of lines, not %r" % (lines,)) from e
+    with pc.logging.Process("Compare", project.name, revision):
+        try:
+            return revisions.compare(ctx, project, kind, name, revision, context=lines)
+        except ValueError as e:
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+
+def _revision_project(ctx, pc, params):
+    """(the package without a revision, the package at the revision a request names)."""
+    project = _package_of_request(ctx, pc, {"package": params.get("package"), "object": params.get("object")})
+    from partcad import package_versions, revisions
+
+    current = revisions.current_project(ctx, project)
+    revision = _revision_of_request(params)
+    at_revision = ctx.get_project(package_versions.versioned_name(current.name, revision))
+    if at_revision is None:
+        raise JsonRpcError(USAGE_ERROR, "%s could not be loaded at %s" % (current.name, revision))
+    return current, at_revision
+
+
+def revisions_uses(session, params):
+    """The dependencies a package declares at a revision, each with the commit it is at.
+
+    What the Revisions tab's "Uses (Dependencies)" view lists (see
+    ``partcad.usage.dependencies``). Loading a dependency may download it.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    current, at_revision = _revision_project(ctx, pc, params)
+    from partcad import package_versions
+    from partcad import revision as pc_revision
+    from partcad import usage
+
+    sha = getattr(at_revision, "revision_sha", None) or pc_revision.package_revision(at_revision)
+    with pc.logging.Process("Uses", current.name, package_versions.short(sha) or ""):
+        dependencies = usage.dependencies(ctx, at_revision)
+    return {"package": current.name, "revision": sha, "loaded": at_revision.name, "dependencies": dependencies}
+
+
+def revisions_used_by(session, params):
+    """The objects the context has loaded that refer to a package at a revision, each with how many times.
+
+    What the Revisions tab's "Used By" view lists (see
+    ``partcad.usage.revision_used_by``): nothing is loaded or built to answer.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    current, at_revision = _revision_project(ctx, pc, params)
+    from partcad import revision as pc_revision
+    from partcad import usage
+
+    sha = getattr(at_revision, "revision_sha", None) or pc_revision.package_revision(at_revision)
+    return {
+        "package": current.name,
+        "revision": sha,
+        "objects": usage.revision_used_by(ctx, current.name, sha) if sha else [],
+    }
+
+
+def usage_used_by(session, params):
+    """The objects the context has loaded that refer to an object, or with ``kind: package`` to a package.
+
+    Each with how many times it does: an assembly placing a bolt four times
+    uses it four times. What the IDE's Operations > Used By tab lists, and
+    ``pc used-by`` (see ``partcad.usage``); nothing is loaded or built to
+    answer, unless ``load`` asks for every package of the workspace to be
+    loaded first (``usage.load_workspace``).
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    from partcad import usage
+
+    if params.get("load"):
+        # 'pc used-by --load': the workspace's own packages, all of them, so
+        # that the answer is about the workspace (see 'usage.load_workspace').
+        with pc.logging.Process("Load", ctx.name):
+            usage.load_workspace(ctx)
+    if _said_kind(params) == "package":
+        project = _package_of_request(ctx, pc, {"package": params.get("package")})
+        return {"object": project.name, "objects": usage.package_used_by(ctx, project.name)}
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, name = resolved
+    project = ctx.get_project(package)
+    if project is None:
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+    # What uses an object uses it whatever its parameter values: the users of
+    # 'bracket;length=10' are the users of 'bracket'.
+    name = name.partition(";")[0]
+    return {"object": _qualified(project.name, name), "objects": usage.object_used_by(ctx, project.name, name)}
 
 
 def qual_report(session, params):
@@ -6034,7 +6350,10 @@ def render_inline(session, params):
     ``view``, ``viewport_origin``, ``viewport_up`` and ``turn`` aim the
     projection for this one picture, exactly as they do for ``render.objects``:
     what the panel's viewpoint fields and its orientation gizmo say. The picture
-    and video options of ``render.objects`` (`VIDEO_OPTIONS`) are taken too. ``section`` cuts the object
+    and video options of ``render.objects`` (`VIDEO_OPTIONS`) are taken too. ``single_view`` names the
+    one view a drawing of something flat is laid out with (the Draft tab of a
+    sketch): the viewport, unless one is given, and ``views`` for the drawing
+    implementation. ``section`` cuts the object
     by a box first -- ``{"x": [lo, hi], ...}`` in millimetres in the frame of the
     object's root, an axis left out not cut (see `partcad.shape_section`) --
     which is what the panel's section sliders ask for. ``compound`` writes an
@@ -6104,6 +6423,17 @@ def render_inline(session, params):
     section = _section(params)
     compound = _compound(pc, params)
     render_opts = {**_render_options(pc, params), **_video(params)}
+    single_view = params.get("single_view")
+    if single_view:
+        # A drawing of something flat - a sketch, on the IDE's Draft tab - is one
+        # view of its plane, face on, rather than the three planes and the
+        # perspective a solid is laid out with. Said twice: as the viewport
+        # PartCAD aims every render with, and as the list of views a drawing
+        # implementation lays out ('views'), which one that lays out several
+        # reads and one that draws a single view ignores.
+        if not params.get("view") and not params.get("viewport_origin"):
+            render_opts.update(_viewport({"view": single_view}))
+        render_opts["views"] = [single_view]
     visuals = _visuals(pc, params)
 
     if kind in ("assembly", "scene"):
@@ -6489,6 +6819,82 @@ def filter_object(session, params):
             )
         except ValueError as e:
             raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+
+# What 'pc copy' copies: every kind of object a package declares by name, and the
+# three kinds of CMF declaration, which are named the same way.
+_COPIED_KINDS = ("part", "assembly", "scene", "sketch", "interface", "software", "material", "color", "finish")
+
+
+def copy_object(session, params):
+    """Declare a second object as a copy of the first, written from the context rather than from the file.
+
+    ``pc copy <object-from> <object-to>``: the new object's declaration is the
+    first one's as PartCAD read it -- rendered, normalized, with what is only a
+    default left out, in the order it was declared in (see
+    ``partcad.serialize``). The source may be in any package the context
+    reaches, a revision of one included (``//pkg@v1.2:bracket``); the target is
+    written into the package ``--package`` selects, or the one it names. A
+    daemon method, as every command that writes a declaration is.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    source = params.get("object")
+    target = params.get("target")
+    if not source:
+        raise JsonRpcError(USAGE_ERROR, "No object to copy is given")
+    if not target:
+        raise JsonRpcError(USAGE_ERROR, "No name to copy it to is given")
+    _refuse_recursion(params)
+    _refuse_recursion({"package": params.get("package"), "object": target})
+
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    source_package, source_name = resolved
+    source_project = ctx.get_project(source_package)
+    if source_project is None:
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % source_package)
+    kind = _said_kind(params) or _object_kind(params)
+    # By the name it is declared under: '-p' makes 'source_name' an instance
+    # ('bracket;length=10'), which is what is copied, of the object it is of.
+    declared_source = source_name.partition(";")[0]
+    if kind is None:
+        kind = source_project.object_kind(declared_source)
+    if kind is None:
+        found = _cmf_kinds(source_project, declared_source)
+        kind = found[0] if found else None
+    if kind is None:
+        raise JsonRpcError(USAGE_ERROR, "%s:%s is not found" % (source_project.name, source_name))
+    if kind not in _COPIED_KINDS:
+        raise JsonRpcError(USAGE_ERROR, "A %s cannot be copied" % kind)
+
+    target_package, target_name = _resolve_object(ctx, pc, {"package": params.get("package"), "object": target})
+    target_project = ctx.get_project(target_package)
+    if target_project is None:
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % target_package)
+
+    from partcad.actions import copy_object_action
+
+    with pc.logging.Process("Copy", target_project.name, target_name):
+        try:
+            result = copy_object_action(
+                source_project,
+                kind,
+                source_name,
+                target_project,
+                target_name,
+                dry_run=bool(params.get("dry_run", False)),
+            )
+        except ValueError as e:
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    if result.get("written"):
+        # Written behind the context's back: what it holds of the package is
+        # what it read before, and a stat may not tell (see 'reload_packages').
+        ctx.reload_packages([target_project.name])
+    return result
 
 
 def convert_object(session, params):

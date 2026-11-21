@@ -20,6 +20,9 @@ user your choice, then follow that flow — passing the same description through
 - **Scene** → `/pc:gen-scene`. Objects arranged where they stand rather than
   put together into a product — a room, a building interior, an office floor, a
   workcell, a table laid out, a world to simulate something in.
+- **Landscape** → `/pc:gen-landscape`. A piece of the real world, at an address
+  or coordinates — its terrain, streets, buildings and trees, from public data —
+  to drop objects into and test them there.
 - **Sketch** → `/pc:gen-sketch`. A 2D profile, outline, or blueprint — a gasket
   shape, a plate outline, a cross-section to be extruded later.
 
@@ -35,6 +38,9 @@ Heuristics:
   workcell", "a garden", "on the Moon", "in orbit" — or things "standing",
   "laid out" or "arranged" somewhere → **scene**. A product *in* such a place
   is still an assembly, which the scene then places.
+- A real place — an address, coordinates, two corners, "the terrain at",
+  "this street", "a test ground at" — → **landscape**. What is tested there is
+  placed in a scene of the user's own, as `/pc:gen-landscape` §5 says.
 
 If it is genuinely ambiguous, ask one short question. Otherwise proceed with your
 best judgment and state which you picked — the user can redirect.
@@ -53,6 +59,8 @@ result ready to simulate and checks the claim with `pc qual test --simulation`.
 - Scene → follow **`/pc:gen-scene`** (which models its objects as `basic`
   primitives, and uses `/pc:gen-part` and `/pc:gen-assembly` where more detail
   is called for).
+- Landscape → follow **`/pc:gen-landscape`**, then place what is tested in it
+  the way `/pc:gen-scene` places objects.
 
 All four settle the dimensions before they model: `/pc:gen-sketch` measures
 the targets out of whatever the input is — a description, a drawing, a photo, a

@@ -20,7 +20,7 @@ from partcad_utils import pcignore, process_role
 
 from . import consts
 from . import logging as pc_logging
-from . import output
+from . import output, package_versions
 from . import project_factory_external as rfe
 from . import project_factory_git as rfg
 from . import project_factory_local as rfl
@@ -435,6 +435,13 @@ class Context:
         self.mates = {}
         # self.projects contains all projects known to this context
         self.projects = {}
+        # Other names a package in 'self.projects' answers to: a revision asked
+        # for by a tag or a branch ('//pkg@v1.2') is the package loaded under
+        # its commit ('//pkg@<sha>') (see 'get_versioned_project'). Alias ->
+        # the name in 'self.projects'; kept
+        # apart from it so that nothing walking the loaded packages meets one
+        # package twice.
+        self.project_aliases = {}
         self.project_locks = {}
         self.project_locks_lock = threading.Lock()
         self._projects_being_loaded = {}
@@ -668,6 +675,10 @@ class Context:
             for name in dropped:
                 self.projects.pop(name, None)
                 self._config_checked_at.pop(name, None)
+            # And the other names they answered to.
+            for alias, target in list(self.project_aliases.items()):
+                if target not in self.projects:
+                    self.project_aliases.pop(alias, None)
             # The copies they were read out of are theirs no longer, and may be
             # moved to whatever the packages loaded in their place are pinned to.
             with self.git_checkouts_lock:
@@ -918,6 +929,9 @@ class Context:
         if builtin_project is not None:
             return builtin_project
 
+        if package_versions.is_versioned(project_path):
+            return self.get_versioned_project(project_path)
+
         with self.lock:
             # Check if it's an explicit reference outside of the root project
             if not project_path.startswith(self.name):
@@ -945,6 +959,138 @@ class Context:
                 import_list = project_path.split("/")
 
             return self._get_project_recursive(project, import_list)
+
+    def _registered_project(self, name: str) -> Optional[Project]:
+        """The package loaded as 'name', or that 'name' is another name of; None if neither.
+
+        An alias whose package has since been dropped (see '_drop_packages') is
+        forgotten here, so that the next lookup loads the revision again.
+        """
+        if name in self.projects:
+            return self.projects[name]
+        target = self.project_aliases.get(name)
+        if target is None:
+            return None
+        if target in self.projects:
+            return self.projects[target]
+        self.project_aliases.pop(name, None)
+        return None
+
+    def is_downloaded(self, project) -> bool:
+        """Whether a package was read out of a copy PartCAD downloaded into '~/.partcad/git'."""
+        git_dir = os.path.realpath(os.path.join(self.user_config.internal_state_dir, "git"))
+        config_dir = os.path.realpath(getattr(project, "config_dir", "") or "")
+        return config_dir.startswith(git_dir.rstrip(os.sep) + os.sep)
+
+    def get_versioned_project(self, project_path: str) -> Optional[Project]:
+        """The package '[<path>/]<name>@<revision>[/<sub-package>]' names (see 'partcad.package_versions').
+
+        Loaded once per commit, as '<path>/<name>@<commit id>', and answered
+        under every other name it was asked by. A package inside a revision -
+        one of its sub-packages or of its dependencies - is reached from the
+        revision the way it is reached from any package, and may be asked for at
+        a revision of its own in turn ('//pkg@<sha>/dep@v1').
+        """
+        with self.lock:
+            found = self._registered_project(project_path)
+            if found is not None:
+                return found
+            base, revisions = package_versions.split(project_path)
+            current = self.get_project(base)
+            if current is None:
+                pc_logging.error("%s: there is no package %s" % (project_path, base))
+                return None
+            return self._at_revision(project_path, current, revisions)
+
+    def _at_revision(self, asked: str, project: Project, selector: str) -> Optional[Project]:
+        """'project' at the revision 'selector' starts with, and the packages the rest of 'selector' names below it.
+
+        'selector' is what follows an '@': a revision, which a branch may hold a
+        '/' in, and then the path below it, which may hold an '@' of its own.
+        The longest revision is tried first (see 'package_versions.candidates').
+        """
+        errors = []
+        for revision, rest in package_versions.selector_candidates(selector):
+            try:
+                loaded = self._load_revision(project.name, revision)
+            except ValueError as e:
+                errors.append(str(e))
+                continue
+            if loaded is None:
+                return None
+            return self._below(asked, loaded, rest)
+        pc_logging.error("%s: %s" % (asked, errors[0] if errors else "not a package at a revision"))
+        return None
+
+    def _below(self, asked: str, project: Project, rest: str) -> Optional[Project]:
+        """The package 'rest' names below 'project', which may be at a revision of its own."""
+        if not rest:
+            return project
+        path, separator, selector = rest.partition(package_versions.SEPARATOR)
+        child = self._get_project_recursive(project, path.split("/")) if path else project
+        if child is None or not separator:
+            return child
+        return self._at_revision(asked, child, selector)
+
+    def _load_revision(self, base: str, revision: str) -> Optional[Project]:
+        """The package 'base' at 'revision', loading it if it is not loaded yet.
+
+        Raises ValueError for a revision that names nothing here - which lets
+        'get_versioned_project' try the next way of reading the path - and
+        returns None for a revision that names something that would not load.
+        """
+        package_versions.check_revision(revision)
+        current = self.get_project(base)
+        if current is None:
+            raise ValueError("there is no package %s" % base)
+        repository = package_versions.repository_of(current.config_dir)
+        if repository is None and package_versions.exported_sha(current.config_dir) is not None:
+            # A sub-folder of a revision is part of that commit: another
+            # revision of it would be two commits' files read as one package.
+            raise ValueError(
+                "%s is part of a revision, which has no revisions of its own: name it as %s@%s"
+                % (base, package_versions.unversioned(base), revision)
+            )
+        if repository is None:
+            raise ValueError("%s is not in a git repository, so it has no revisions" % base)
+        downloaded = self.is_downloaded(current)
+        sha = package_versions.resolve(repository, revision, fetch=downloaded, user_config=self.user_config)
+        name = package_versions.versioned_name(base, sha)
+
+        # Written out even where a copy PartCAD downloaded is checked out at
+        # this very commit: that copy is the package without a revision, which
+        # may be written to, and a revision never is (see
+        # 'Project.not_written_to') -- answered with it, '//dep@<sha>' would be
+        # a way to write into '//dep' that nothing refuses.
+        project = self._registered_project(name)
+        if project is None:
+            root = package_versions.export(repository, sha, os.path.join(self.user_config.internal_state_dir, "git"))
+            path = os.path.join(root, *repository.relpath.split("/")) if repository.relpath else root
+            import_config = {"name": name, "type": "local", "path": path}
+            include_paths = getattr(current, "include_paths", None)
+            if include_paths:
+                import_config["includePaths"] = list(include_paths)
+            # What the package inherits from the one it is under, as the
+            # package without a revision does (see 'ImportConfiguration').
+            head = base.rstrip("/").rpartition("/")[0]
+            parent_name = "//" if head == "/" else head
+            parent = self.projects.get(parent_name) if base not in ("//", self.name) and head else None
+            if parent is not None:
+                import_config["inheritedConfig"] = {"manufacturable": parent.is_manufacturable}
+            with pc_logging.Action("Revision", base, package_versions.short(sha)):
+                project = self.import_project(None, import_config)
+            if project is None:
+                return None
+            project.revision_sha = sha
+            project.revision_of = base
+        # Remembered only for what cannot move: a commit id, or the start of
+        # one. A tag or a branch is read again each time it is asked for, so
+        # that a context a daemon keeps warm follows 'main' when it moves on
+        # instead of answering with the commit it was first loaded at; the
+        # commit is still loaded once, under its id.
+        if revision != sha and package_versions.names_a_commit(repository, revision, sha):
+            self.project_aliases[package_versions.versioned_name(base, revision)] = project.name
+        return project
 
     def get_project_from(self, project, rel_project_path: str) -> Optional[Project]:
         """A package by path, resolved from another package that is in hand.
