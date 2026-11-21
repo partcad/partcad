@@ -980,3 +980,12 @@ def test_a_part_type_takes_the_cmf_parameters_every_type_takes():
     accepted = factory.accepted_object_type_parameters("part", "//pub/universe/lego:ldraw")
     assert set(cmf.TYPE_PARAMETERS) <= set(accepted)
     assert "tolerance" not in accepted
+
+
+def test_what_nothing_claims_is_said_once_for_each_designation():
+    from partcad import cmf_conventions
+
+    said = cmf_conventions._unmatched(
+        [("color", "17"), ("material", "17"), ("finish", "17"), ("color", "#123456"), ("color", "3"), ("finish", "3")]
+    )
+    assert said == "color '#123456'; color and finish '3'; color, material and finish '17'"

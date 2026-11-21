@@ -7,8 +7,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import atexit
 import base64
 import os
+import threading
 
 import aiofiles
 
@@ -26,6 +28,11 @@ class FileFactoryPlugin(FileFactory):
     (which has no source tree of its own), so the file has to be fetched from
     the plugin and written there on demand. The plugin returns the content under
     the 'files/<path>' key (base64-encoded bytes).
+
+    A package whose metadata says ``"persist": false`` keeps nothing it serves
+    beyond this process ('ProjectExternalRepository.persists'), and a file is
+    written to disk only because a part type reads a path: so such a file is
+    removed when the process exits ('_forget_at_exit').
     """
 
     def __init__(self, ctx, source_project, target_project, config):
@@ -51,3 +58,35 @@ class FileFactoryPlugin(FileFactory):
             os.makedirs(dirs)
         async with aiofiles.open(path, "wb") as f:
             await f.write(content)
+
+        if not _persists(self.project):
+            _forget_at_exit(path)
+
+
+def _persists(project) -> bool:
+    persists = getattr(project, "persists", None)
+    return persists() if callable(persists) else True
+
+
+_FORGOTTEN: set = set()
+_FORGOTTEN_LOCK = threading.Lock()
+
+
+def _forget_at_exit(path: str) -> None:
+    """Remove 'path' when this process exits: a file its package says not to keep."""
+    with _FORGOTTEN_LOCK:
+        first = not _FORGOTTEN
+        _FORGOTTEN.add(path)
+    if first:
+        atexit.register(_remove_forgotten)
+
+
+def _remove_forgotten() -> None:
+    with _FORGOTTEN_LOCK:
+        paths = sorted(_FORGOTTEN)
+        _FORGOTTEN.clear()
+    for path in paths:
+        try:
+            os.remove(path)
+        except OSError:
+            pass

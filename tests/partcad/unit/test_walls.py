@@ -19,8 +19,11 @@ directly:
     thickness is a solid held to being one;
   * a wall has to say it is not manufacturable, and nothing manufacturable can be
     made with one in it;
-  * a room is one wall per edge of its sketch, placed along it, and a sketch that
-    is not one closed loop of lines and arcs is refused with the reason;
+  * a room is one wall per edge of its sketch, placed along it; a plan's closed
+    spaces are walled around, looking out, and its standalone walls stand where
+    they were drawn, both drawn as the solids they are; and a sketch that is not
+    lines and arcs, or whose walls would stand in each other, is refused with
+    the reason;
   * PartCAD's own wall is a solid whose 'visual:' is its surface, private to
     '//builtin/building': a picture draws the surface, everything else the solid,
     and no other package can build a room of the surface.
@@ -89,6 +92,9 @@ sketches:
   bayed:
     type: build123d
     path: bayed.py
+  apartment-plan:
+    type: build123d
+    path: apartment.py
 
 parts:
   north:
@@ -174,6 +180,15 @@ scenes:
     type: walls
     sketch: bayed
     height: 2500
+  apartment:
+    type: walls
+    sketch: apartment-plan
+    height: 2500
+  apartment-one-sided:
+    type: walls
+    sketch: apartment-plan
+    height: 2500
+    interiorWall: //builtin/building:wall
 """
 
 # An L from above: five outside corners and one inside one.
@@ -210,6 +225,21 @@ if "show_object" in locals():
     show_object(bayed.sketch)
 """
 
+# An 8 x 5 m flat: a closet cut out of it, a lift shaft drawn inside it, and a
+# wall standing in it, from its south wall north and then east.
+APARTMENT = """
+import build123d as bd
+
+room = bd.Pos(4000, 2500) * bd.Rectangle(8000, 5000) - bd.Pos(7000, 4000) * bd.Rectangle(1200, 1000)
+shaft = bd.Polyline((1000, 1000), (2200, 1000), (2200, 2200), (1000, 2200), close=True)
+partition = bd.Polyline((5000, 0), (5000, 2500), (6000, 2500))
+
+if "show_object" in locals():
+    show_object(room, name="room")
+    show_object(shaft, name="shaft")
+    show_object(partition, name="partition")
+"""
+
 # A package that is manufacturable, as a package is unless it says otherwise.
 MADE = """
 parts:
@@ -231,6 +261,7 @@ def package(tmp_path_factory):
     (root / "partcad.yaml").write_text(textwrap.dedent(CONFIG).lstrip())
     (root / "ell.py").write_text(textwrap.dedent(ELL).lstrip())
     (root / "bayed.py").write_text(textwrap.dedent(BAYED).lstrip())
+    (root / "apartment.py").write_text(textwrap.dedent(APARTMENT).lstrip())
     return root
 
 
@@ -413,10 +444,86 @@ def test_a_round_room_is_one_wall_once_around(context):
     assert location[0][:2] == pytest.approx([2000.0, 0.0])
 
 
-def test_a_sketch_with_a_hole_in_it_is_refused_with_the_reason(context):
-    scene = context.get_scene("courtyard")
-    with pytest.raises(Exception, match="has a hole in it; walls follow a single enclosed outline"):
-        asyncio.run(scene.get_wrapped(context))
+def test_a_column_in_a_room_is_a_closed_space_walled_around_it_looking_out(context):
+    """A hole in the plan: one round wall around it, an interior wall bending away from the room it faces."""
+    walls = _walls(context, "courtyard")
+
+    assert [label for label, _n, _l, _p in walls] == ["wall-1", "wall-2", "wall-3", "wall-4", "enclosure-1-1"]
+    _label, name, location, _properties = walls[-1]
+    assert name.startswith("//builtin/building:interior-wall;")
+    # Walked anticlockwise, the column's centre is on its left: it bends away from its face, into the room.
+    assert "radius=-200.0" in name
+    assert float(name.split("length=")[1].split(",")[0]) == pytest.approx(2.0 * math.pi * 200.0, abs=1e-5)
+    assert location[0][:2] == pytest.approx([2200.0, 1500.0])
+    for _label, name, _location, _properties in walls[:4]:
+        assert name.startswith("//builtin/building:wall;")
+
+
+def test_what_stands_in_a_room_is_drawn_as_the_solid_its_walls_are_and_a_room_as_their_surfaces(context):
+    """A picture of a room looks through its near walls; a closed space and a standalone wall look like walls from every side."""
+    from partcad import visual
+
+    scene, envelope = _built(context, "apartment", kind="scene")
+    drawn = asyncio.run(visual.substitute_async(context, scene, envelope))
+    nodes = {node["label"]: node for node in drawn.tree[ocp_serialize.KEY_ASSEMBLY]}
+    for label in ("wall-1", "wall-2", "wall-3", "wall-4"):
+        assert nodes[label]["visual"].startswith("//builtin/building:wall-surface;")
+        assert nodes[label]["properties"]["oneSided"] is True
+    for label in ("enclosure-1-1", "enclosure-2-1", "partition-1-1", "partition-1-2"):
+        assert "visual" not in nodes[label]
+        assert "oneSided" not in nodes[label]["properties"]
+
+
+def test_a_plan_is_the_walls_of_its_rooms_its_closed_spaces_and_its_standalone_walls(context):
+    walls = _walls(context, "apartment")
+
+    labels = [label for label, _n, _l, _p in walls]
+    assert labels == (
+        ["wall-%d" % n for n in range(1, 5)]
+        + ["enclosure-1-%d" % n for n in range(1, 5)]
+        + ["enclosure-2-%d" % n for n in range(1, 5)]
+        + ["partition-1-1", "partition-1-2"]
+    )
+    parts = {label: name.split(";")[0] for label, name, _l, _p in walls}
+    assert {parts[label] for label in labels if not label.startswith("wall-")} == {"//builtin/building:interior-wall"}
+    assert {parts[label] for label in labels if label.startswith("wall-")} == {"//builtin/building:wall"}
+    # The standalone wall stands where it was drawn, from the south wall north, and then east.
+    located = {label: (location[0][:2], location[2]) for label, _n, location, _p in walls}
+    assert located["partition-1-1"] == ([5000.0, 0.0], 90.0)
+    assert located["partition-1-2"] == ([5000.0, 2500.0], 0.0)
+
+    info = context.get_scene("apartment").info()["Walls"]
+    assert (info["count"], info["enclosures"], info["partitions"]) == (14, 2, 1)
+    assert info["interiorWall"] == "//builtin/building:interior-wall"
+
+
+def test_a_scene_names_the_part_what_stands_in_its_rooms_is(context):
+    """'interiorWall' builds the closed spaces and the standalone walls of another part, and is in the scene's key."""
+    walls = _walls(context, "apartment-one-sided")
+    assert {name.split(";")[0] for _label, name, _l, _p in walls} == {"//builtin/building:wall"}
+    assert context.get_scene("apartment-one-sided").info()["Walls"]["interiorWall"] == "//builtin/building:wall"
+    keys = {name: context.get_scene(name).hash.get() for name in ("apartment", "apartment-one-sided")}
+    assert keys["apartment"] != keys["apartment-one-sided"]
+
+
+def test_no_wall_of_a_plan_stands_in_another_and_a_closed_space_is_walled_all_round(context):
+    """Every pair of the apartment's walls shares nothing; each closed space's walls are its outline less its inset."""
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+
+    t, height = 114.3, 2500.0
+    _scene, envelope = _built(context, "apartment", kind="scene")
+    nodes = envelope[ocp_serialize.KEY_ASSEMBLY]
+    solids = [ocp_serialize.decode_shape(node) for node in nodes]
+    for i, first in enumerate(solids):
+        for second in solids[i + 1 :]:
+            assert _volume_of(BRepAlgoAPI_Common(first, second).Shape()) == pytest.approx(0.0, abs=1e-3)
+
+    def ring(prefix):
+        return sum(_volume_of(solid) for node, solid in zip(nodes, solids) if node["label"].startswith(prefix))
+
+    # Thickness inside a closed space: the ring between its outline and the outline shrunk by it.
+    assert ring("enclosure-1-") == pytest.approx((1200.0 * 1000.0 - (1200.0 - 2 * t) * (1000.0 - 2 * t)) * height)
+    assert ring("enclosure-2-") == pytest.approx((1200.0 * 1200.0 - (1200.0 - 2 * t) ** 2) * height)
 
 
 def test_the_builtin_room_says_it_needs_a_sketch(context):

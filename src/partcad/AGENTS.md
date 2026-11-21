@@ -1396,8 +1396,10 @@ at all).
 
   `//builtin/building` declares objects too: `wall`, a `type: wall` part whose `length`, `height`, `radius`,
   `openings` and `thickness` (114.3 mm, 4.5 in -- a 2x4 stud and two half-inch drywall boards -- by default) are `%...%` expressions over parameters of the same names -- a
-  solid, whose `visual:` is `wall-surface`, the same wall with no thickness, `private: true` -- and `room`, a
-  `type: walls` scene over `sketch`, `height` and `thickness`. A `walls` scene passes `thickness` to its walls
+  solid, whose `visual:` is `wall-surface`, the same wall with no thickness, `private: true` --
+  `interior-wall`, the same solid with no `visual:`, so drawn as the solid it is (the walls standing in a room,
+  around its closed spaces and between its parts) -- and
+  `room`, a `type: walls` scene over `sketch`, `height` and `thickness`. A `walls` scene passes `thickness` to its walls
   only when it states one, so a wall part of somebody's own that takes none is asked for with none. At a
   right-angle corner between two straight walls it closes the corner (`scene_factory_walls.corner_extensions`):
   the wall arriving at an outside corner goes on by the thickness (`extendEnd`), and one arriving at an inside
@@ -1416,9 +1418,16 @@ at all).
 
   **A `walls` scene is the one scene that reads geometry to know what its links are.** It is
   `SceneFactoryAssy` with the file replaced: `read_assy` returns the links `_links_async` worked out from the
-  sketch, in a sandbox (`wrappers/wrapper_outline.py`: one closed loop of lines and arcs on XY, walked
-  clockwise so that the inside is on every wall's right, which is its front -- one wall per edge,
-  anything else refused with the reason), and `prepare_async`,
+  sketch, in a sandbox (`wrappers/wrapper_outline.py`'s `plan`: lines and arcs on XY, told apart by geometry
+  alone -- an outline, a face or a closed wire inside no other, is a room, walked clockwise so that the inside
+  is on every wall's right, which is its front (`wall-<n>`, numbered on across rooms, so a one-room scene keeps
+  the names it always had); a hole, or a closed wire inside an outline, is a closed space walked anticlockwise,
+  its walls looking out and its thickness inside (`enclosure-<k>-<n>`); a wire closing nothing is a standalone
+  wall walked as drawn, its thickness to the left (`partition-<k>-<n>`); both of those are built of
+  `interiorWall`, by default `interior-wall`, which is drawn solid, and only a room's walls of `wall`, one-sided;
+  two loops that touch, and a loop inside a closed space, refused
+  with the reason). `corner_extensions` closes the corners of all three, with `closed=False` along a standalone
+  wall, whose ends meet nothing. `prepare_async`,
   `subassemblies_async` and `instantiate_async` each make sure that has happened first -- so preparing such a
   scene costs a sandbox, which no other scene does. Not under an `asyncio.Lock`: the scene is reached from
   more than one event loop (`AssemblyFactoryAssy.instantiate` runs its own). The sketch's key is folded into

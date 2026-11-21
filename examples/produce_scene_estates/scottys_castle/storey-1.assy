@@ -1,0 +1,189 @@
+# First floor of Scotty's Castle (Death Valley Ranch, Main House): its floor, its rooms' walls, its furniture. Written by '../make_estate.py'.
+links:
+  - part: floor
+    name: floor
+    params: {storey: 1}
+    fixed: true
+  - scene: room-1-1
+    name: room-1-1
+    description: "Scotty's Bedroom (14'-10\" x 25'-9\")"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-1-1-daybed-1
+    location: [[4192.8, 5998.7, 1499.8], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-1-1-appleseed-endtable-1
+    location: [[5814.3, 5586.4, 1501], [0, 0, 1], 180]
+    fixed: true
+  - part: cabinet-b01
+    name: room-1-1-cabinet-b01-1
+    location: [[2461, 5477.5, 1503], [0, 0, 1], 270]
+    fixed: true
+  - part: sappington-chair
+    name: room-1-1-sappington-chair-1
+    location: [[6644, 5752.1, 1501], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-1-2
+    name: room-1-2
+    description: "Lower Music Room (15'-2\" x 25'-2\")"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-sofa
+    name: room-1-2-crestwood-sofa-1
+    location: [[4193, 861.6, 1501.2], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-coffeetable
+    name: room-1-2-appleseed-coffeetable-1
+    location: [[4263.5, 2583, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-2-crestwood-chair-1
+    location: [[6095.5, 823.9, 1501.2], [0, 0, 1], 180]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-2-crestwood-chair-2
+    location: [[2195.5, 823.9, 1501.2], [0, 0, 1], 180]
+    fixed: true
+  - part: eurekaconsole
+    name: room-1-2-eurekaconsole-1
+    location: [[4253, 4612.2, 1501], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-3
+    name: room-1-3
+    description: "West passage (north)"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-1-3-jennings-bench-1
+    location: [[9535.4, 8053.8, 1501], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-3-aftonconsole-1
+    location: [[8668, 8006.9, 1501], [0, 0, 1], 90]
+    fixed: true
+  - scene: room-1-4
+    name: room-1-4
+    description: "Scotty's Bath"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-5
+    name: room-1-5
+    description: "West passage (south)"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-1-5-jennings-bench-1
+    location: [[9535.4, 2547.8, 1501], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-5-aftonconsole-1
+    location: [[8668, 2065.9, 1501], [0, 0, 1], 90]
+    fixed: true
+  - scene: room-1-6
+    name: room-1-6
+    description: "Living Hall (31'-1\" x 31'-8\")"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-sofa
+    name: room-1-6-crestwood-sofa-1
+    location: [[17335, 861.6, 1501.2], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-coffeetable
+    name: room-1-6-appleseed-coffeetable-1
+    location: [[15142.5, 5050, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-6-crestwood-chair-1
+    location: [[13387.5, 823.9, 1501.2], [0, 0, 1], 180]
+    fixed: true
+  - part: crestwood-chair
+    name: room-1-6-crestwood-chair-2
+    location: [[12037.5, 823.9, 1501.2], [0, 0, 1], 180]
+    fixed: true
+  - part: eurekaconsole
+    name: room-1-6-eurekaconsole-1
+    location: [[16469, 9546.2, 1501], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-7
+    name: room-1-7
+    description: "Stair hall (main stair, fountain alcove)"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-1-7-jennings-bench-1
+    location: [[21115.4, 6766.8, 1501], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-7-aftonconsole-1
+    location: [[21123, 8562.1, 1501], [0, 0, 1], 270]
+    fixed: true
+  - scene: room-1-8
+    name: room-1-8
+    description: "Service passage / telephone"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-9
+    name: room-1-9
+    description: "Kitchen (15'-3\" x 25'-7\")"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: stove
+    name: room-1-9-stove-1
+    location: [[25628.3, 5604, 1513], [0, 0, 1], 180]
+    fixed: true
+  - part: eastrural-table
+    name: room-1-9-eastrural-table-1
+    location: [[25582, 7502, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: eastrural-chair
+    name: room-1-9-eastrural-chair-1
+    location: [[24630.5, 5516.7, 1505], [0, 0, 1], 180]
+    fixed: true
+  - part: eastrural-chair
+    name: room-1-9-eastrural-chair-2
+    location: [[26580.5, 5516.7, 1505], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-1-10
+    name: room-1-10
+    description: "Dining Room (15'-1\" x 25'-10\")"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: dellwood-diningtable
+    name: room-1-10-dellwood-diningtable-1
+    location: [[25595.3, 2567.5, 1500.7], [0, 0, 1], 0]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-10-dellwood-diningchair-1
+    location: [[25194.3, 1682.8, 1501], [0, 0, 1], 180]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-10-dellwood-diningchair-2
+    location: [[25979.7, 1682.8, 1501], [0, 0, 1], 180]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-10-dellwood-diningchair-3
+    location: [[24324.6, 2570, 1501], [0, 0, 1], 90]
+    fixed: true
+  - part: dellwood-diningchair
+    name: room-1-10-dellwood-diningchair-4
+    location: [[26854.4, 2565, 1501], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-10-aftonconsole-1
+    location: [[25534.1, 573, 1501], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-1-11
+    name: room-1-11
+    description: "Solarium (17'-3\" x 17'-3\", octagonal)"
+    location: [[0, 0, 1501], [0, 0, 1], 0]
+    fixed: true
+  - part: armchair
+    name: room-1-11-armchair-1
+    location: [[-661.6, 156.2, 1504.6], [0, 0, 1], 270]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-1-11-appleseed-endtable-1
+    location: [[-2780.3, 2408.6, 1501], [0, 0, 1], 0]
+    fixed: true

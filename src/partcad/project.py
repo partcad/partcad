@@ -5175,10 +5175,16 @@ class Project(project_config.Configuration):
             lines += [""]
             return lines
 
-        if self.assemblies and "assemblies" not in exclude:
+        # The heading only where the package declares an assembly: a check
+        # registers the ones it leaves behind in the package too (an artifact,
+        # see 'declared'), so 'self.assemblies' is not empty after one has run on
+        # a package that declares none, and the README would come out with a
+        # heading or without one by what ran before it in the process.
+        assembly_names = declared(self.assemblies) if "assemblies" not in exclude else []
+        if assembly_names:
             lines += ["## Assemblies"]
             lines += [""]
-            shape_names = declared(self.assemblies)
+            shape_names = assembly_names
             for name in shape_names:
                 shape = self.assemblies[name]
                 if shape.config["type"] == "alias":
@@ -5229,21 +5235,22 @@ class Project(project_config.Configuration):
                 lines += ["## Parts", ""]
                 lines += part_lines
 
-        if self.interfaces and "interfaces" not in exclude:
-            lines += ["## Interfaces"]
-            lines += [""]
-            shape_names = declared(self.interfaces)
-            for name in shape_names:
-                shape = self.interfaces[name]
-                lines += add_section(name, name, shape, render_cfg)
-
-        if self.sketches and "sketches" not in exclude:
-            lines += ["## Sketches"]
-            lines += [""]
-            shape_names = declared(self.sketches)
-            for name in shape_names:
-                shape = self.sketches[name]
-                lines += add_section(name, name, shape, render_cfg)
+        # Interfaces and sketches as parts are: the heading only over what came of
+        # it. A package that pictures none of its sketches - it keeps them to
+        # build its parts and scenes from - got a "## Sketches" heading with
+        # nothing under it.
+        for kind, heading, objects in (
+            ("interfaces", "## Interfaces", self.interfaces),
+            ("sketches", "## Sketches", self.sketches),
+        ):
+            if not objects or kind in exclude:
+                continue
+            kind_lines = []
+            for name in declared(objects):
+                kind_lines += add_section(name, name, objects[name], render_cfg)
+            if kind_lines:
+                lines += [heading, ""]
+                lines += kind_lines
 
         if self.software and "software" not in exclude:
             # A table rather than the per-object sections above: software has no

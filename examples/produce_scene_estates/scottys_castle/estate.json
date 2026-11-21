@@ -1,0 +1,2433 @@
+{
+ "name": "Scotty's Castle (Death Valley Ranch, Main House)",
+ "slug": "scottys-castle",
+ "location": {
+  "lat": 37.03226,
+  "lon": -117.34146,
+  "how": "centre of the main block derived from the OpenStreetMap building way 123526241 (its southern block, 38.7 x 12.3 m incl. side loggias); Wikipedia/Wikidata Q3107309 give 37.03222, -117.34150, ~6 m away",
+  "ground_elevation_m": 918.99
+ },
+ "facade_azimuth_deg": 176.0,
+ "facade_azimuth_note": "main entrance (arcaded porch with the clock/chimes tower above) faces S, rotated ~4 deg east: OSM long walls run 86/266 deg; HABS sheets have north at the top with the patio and annex behind (north)",
+ "acres": 1778,
+ "acres_source": "Wikipedia infobox for Scotty's Castle: historic district 719.57 ha (= 1,778 acres); article: Johnson had acquired more than 1,500 acres in Grapevine Canyon. Owned by the National Park Service (Death Valley NP). Closed to the public after the 2015 flood; NPS has said it remains closed through at least 2026.",
+ "frame": {
+  "units": "mm",
+  "origin": "front-left (south-west) outside corner of the main block, at front grade (first floor = +1500)",
+  "x_axis": "along the south front, west -> east (bearing 86 deg)",
+  "y_axis": "south -> north, from the front towards the patio (bearing 356 deg)",
+  "z": "height above the forecourt grade at the foot of the front steps; the first floor is at +1500 there (estimate). Ground rises to the west and north, so the house sits lower in the ground on those sides. Room window sills/door heights are above their own floor."
+ },
+ "sources": [
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Main_House,_Death_Valley_Junction,_Inyo_County,_CA_HABS_CAL,14-DVNM,1-A-_(sheet_2_of_17).png",
+   "licence": "Public domain (HABS CA-2257-A, US government work)",
+   "what": "first floor plan with room sizes and 98'-2\"/33'-5\" dimensions (first_floor_plan.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Main_House,_Death_Valley_Junction,_Inyo_County,_CA_HABS_CAL,14-DVNM,1-A-_(sheet_4_of_17).png",
+   "licence": "Public domain (HABS)",
+   "what": "second floor plan, 97'-6\" (second_floor_plan.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Main_House,_Death_Valley_Junction,_Inyo_County,_CA_HABS_CAL,14-DVNM,1-A-_(sheet_1_of_17).png",
+   "licence": "Public domain (HABS)",
+   "what": "basement plan (basement_plan.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Main_House,_Death_Valley_Junction,_Inyo_County,_CA_HABS_CAL,14-DVNM,1-A-_(sheet_6_of_17).png",
+   "licence": "Public domain (HABS)",
+   "what": "south (entrance) elevation (south_elevation.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Main_House,_Death_Valley_Junction,_Inyo_County,_CA_HABS_CAL,14-DVNM,1-A-_(sheet_7_of_17).png",
+   "licence": "Public domain (HABS)",
+   "what": "west elevation (west_elevation.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Main_House,_Death_Valley_Junction,_Inyo_County,_CA_HABS_CAL,14-DVNM,1-A-_(sheet_8_of_17).png",
+   "licence": "Public domain (HABS)",
+   "what": "north (patio) elevation (north_patio_elevation.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Main_House,_Death_Valley_Junction,_Inyo_County,_CA_HABS_CAL,14-DVNM,1-A-_(sheet_9_of_17).png",
+   "licence": "Public domain (HABS)",
+   "what": "east elevation (east_elevation.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Main_House,_Death_Valley_Junction,_Inyo_County,_CA_HABS_CAL,14-DVNM,1-A-_(sheet_10_of_17).png",
+   "licence": "Public domain (HABS)",
+   "what": "section A-A with level datums: basement 0, first floor +10'-3 1/2\", ceiling ridge +11'-3 3/8\", second floor +1'-2 1/2\", ceiling ridge +9'-4 1/8\", roof ridge +5'-9\" (section_aa.png)"
+  },
+  {
+   "url": "https://commons.wikimedia.org/wiki/File:Death_Valley_Ranch,_Death_Valley_Junction,_Inyo_County,_CA_HABS_CAL,14-DVNM,1-_(sheet_3_of_6).png",
+   "licence": "Public domain (HABS)",
+   "what": "site plan, NW quadrant, 1\"=20' (site_plan_nw.png)"
+  },
+  {
+   "url": "https://www.openstreetmap.org/way/123526241",
+   "licence": "ODbL (OpenStreetMap contributors)",
+   "what": "outline used for location, orientation and the annex footprint"
+  },
+  {
+   "url": "https://en.wikipedia.org/wiki/Scotty%27s_Castle",
+   "licence": "CC BY-SA",
+   "what": "coordinates, area, ownership and status"
+  },
+  {
+   "url": "https://epqs.nationalmap.gov/v1/json",
+   "licence": "Public domain (USGS 3DEP)",
+   "what": "terrain samples"
+  }
+ ],
+ "footprint": {
+  "main_block": {
+   "polygon": [
+    [
+     0,
+     0
+    ],
+    [
+     29921,
+     0
+    ],
+    [
+     29921,
+     10185
+    ],
+    [
+     0,
+     10185
+    ]
+   ],
+   "eaves_mm": 8500,
+   "ridge_mm": 9908,
+   "base_mm": -1637,
+   "note": "main block 98'-2\" x 33'-5\", two storeys, stucco; base_mm is the basement floor"
+  },
+  "wings_porches": [
+   {
+    "name": "Front porch (arcaded, 10'-11\" x 30'-10\" inside)",
+    "polygon": [
+     [
+      10100,
+      -3639
+     ],
+     [
+      21002,
+      -3639
+     ],
+     [
+      21002,
+      0
+     ],
+     [
+      10100,
+      0
+     ]
+    ],
+    "floor_mm": 1500,
+    "height_mm": 5307,
+    "note": "three round arches on the front, the centre one the entrance; its roof is the floor of the second-floor veranda"
+   },
+   {
+    "name": "Front entrance steps",
+    "polygon": [
+     [
+      13446,
+      -7648
+     ],
+     [
+      17224,
+      -7648
+     ],
+     [
+      17224,
+      -3639
+     ],
+     [
+      13446,
+      -3639
+     ]
+    ],
+    "floor_mm": 0,
+    "height_mm": 1500,
+    "note": "flight rising +Y to the porch floor; flanking lower terraces with steps DN either side"
+   },
+   {
+    "name": "Front terraces flanking the steps",
+    "polygon": [
+     [
+      10285,
+      -6569
+     ],
+     [
+      20617,
+      -6569
+     ],
+     [
+      20617,
+      -3639
+     ],
+     [
+      10285,
+      -3639
+     ]
+    ],
+    "height_mm": 800,
+    "approximate": true
+   },
+   {
+    "name": "West porch / loggia",
+    "polygon": [
+     [
+      -3662,
+      3300
+     ],
+     [
+      0,
+      3300
+     ],
+     [
+      0,
+      10185
+     ],
+     [
+      -3662,
+      10185
+     ]
+    ],
+    "floor_mm": 1500,
+    "height_mm": 5100
+   },
+   {
+    "name": "East porch / loggia",
+    "polygon": [
+     [
+      29921,
+      3146
+     ],
+     [
+      33431,
+      3146
+     ],
+     [
+      33431,
+      10185
+     ],
+     [
+      29921,
+      10185
+     ]
+    ],
+    "floor_mm": 1500,
+    "height_mm": 5100
+   },
+   {
+    "name": "Solarium (octagon)",
+    "polygon": [
+     [
+      201,
+      -1075
+     ],
+     [
+      201,
+      1352
+     ],
+     [
+      -1516,
+      3069
+     ],
+     [
+      -3943,
+      3069
+     ],
+     [
+      -5659,
+      1352
+     ],
+     [
+      -5659,
+      -1075
+     ],
+     [
+      -3943,
+      -2791
+     ],
+     [
+      -1516,
+      -2791
+     ]
+    ],
+    "floor_mm": 1500,
+    "height_mm": 6700,
+    "eaves_mm": 5500,
+    "roof": "octagonal pyramid, clay tile, apex 5200"
+   },
+   {
+    "name": "Dining-room corner bay (octagonal)",
+    "polygon": [
+     [
+      28280,
+      339
+     ],
+     [
+      28327,
+      -663
+     ],
+     [
+      29684,
+      -756
+     ],
+     [
+      30686,
+      -31
+     ],
+     [
+      30778,
+      1789
+     ],
+     [
+      29961,
+      2606
+     ]
+    ],
+    "floor_mm": 1500,
+    "height_mm": 5100
+   },
+   {
+    "name": "Second-floor veranda roof",
+    "polygon": [
+     [
+      10126,
+      -3030
+     ],
+     [
+      19687,
+      -3030
+     ],
+     [
+      19687,
+      8
+     ],
+     [
+      10126,
+      8
+     ]
+    ],
+    "floor_mm": 5307,
+    "height_mm": 8207,
+    "note": "open loggia with posts; shed roof of clay tile"
+   },
+   {
+    "name": "Patio (24'-6\" x 116'-2\", paved, open)",
+    "polygon": [
+     [
+      -3284,
+      10185
+     ],
+     [
+      32644,
+      10185
+     ],
+     [
+      32644,
+      17703
+     ],
+     [
+      -3284,
+      17703
+     ]
+    ],
+    "height_mm": 1500,
+    "note": "courtyard between the main house and the annex, with stairs up to the second floor at its south side"
+   },
+   {
+    "name": "Annex (separate two-storey building across the patio)",
+    "polygon": [
+     [
+      11335,
+      19792
+     ],
+     [
+      33145,
+      19794
+     ],
+     [
+      33140,
+      30038
+     ],
+     [
+      28717,
+      30035
+     ],
+     [
+      28723,
+      37236
+     ],
+     [
+      22280,
+      37229
+     ],
+     [
+      22280,
+      30106
+     ],
+     [
+      11762,
+      30106
+     ],
+     [
+      11763,
+      24522
+     ],
+     [
+      1201,
+      24525
+     ],
+     [
+      1203,
+      18059
+     ],
+     [
+      7040,
+      18053
+     ],
+     [
+      7040,
+      19792
+     ]
+    ],
+    "height_mm": 11000,
+    "eaves_mm": 8500,
+    "approximate": true,
+    "note": "outline from OpenStreetMap way 123526241 (traced from imagery) transformed into this frame; heights approximate from section A-A"
+   },
+   {
+    "name": "Bridge (second-floor link to the annex across the patio)",
+    "polygon": [
+     [
+      8045,
+      10185
+     ],
+     [
+      8893,
+      10185
+     ],
+     [
+      8893,
+      18053
+     ],
+     [
+      8045,
+      18053
+     ]
+    ],
+    "floor_mm": 5307,
+    "height_mm": 7907,
+    "approximate": true,
+    "note": "HABS second-floor plan; OSM traces a wider covered strip here (X 7040-11338)"
+   }
+  ],
+  "osm_outline_local": [
+   [
+    -4403,
+    12087
+   ],
+   [
+    -4402,
+    -242
+   ],
+   [
+    14854,
+    -250
+   ],
+   [
+    34314,
+    -251
+   ],
+   [
+    34314,
+    11063
+   ],
+   [
+    11338,
+    11064
+   ],
+   [
+    11335,
+    19792
+   ],
+   [
+    33145,
+    19794
+   ],
+   [
+    33140,
+    30038
+   ],
+   [
+    28717,
+    30035
+   ],
+   [
+    28723,
+    37236
+   ],
+   [
+    22280,
+    37229
+   ],
+   [
+    22280,
+    30106
+   ],
+   [
+    11762,
+    30106
+   ],
+   [
+    11763,
+    24522
+   ],
+   [
+    1201,
+    24525
+   ],
+   [
+    1203,
+    18059
+   ],
+   [
+    7040,
+    18053
+   ],
+   [
+    7041,
+    12089
+   ]
+  ]
+ },
+ "storeys": [
+  {
+   "name": "Basement",
+   "floor_level_mm": -1637,
+   "ceiling_height_mm": 2900,
+   "rooms": [],
+   "note": "partial basement (HABS sheet 1), largely below the front; not detailed"
+  },
+  {
+   "name": "First floor",
+   "floor_level_mm": 1500,
+   "ceiling_height_mm": 3440,
+   "rooms": [
+    {
+     "name": "Scotty's Bedroom (14'-10\" x 25'-9\")",
+     "polygon": [
+      [
+       324,
+       5227
+      ],
+      [
+       8173,
+       5227
+      ],
+      [
+       8173,
+       9807
+      ],
+      [
+       324,
+       9807
+      ]
+     ],
+     "area_m2": 35.95,
+     "doors": [
+      {
+       "segment": 3,
+       "offset_mm": 3423,
+       "width_mm": 925,
+       "height_mm": 2300,
+       "center_mm": [
+        324,
+        5921
+       ],
+       "to": "West porch",
+       "note": "approx."
+      },
+      {
+       "segment": 1,
+       "offset_mm": 3192,
+       "width_mm": 817,
+       "height_mm": 2200,
+       "center_mm": [
+        8173,
+        8828
+       ],
+       "to": "West passage (north)"
+      }
+     ],
+     "windows": [
+      {
+       "segment": 2,
+       "offset_mm": 6138,
+       "width_mm": 971,
+       "height_mm": 1750,
+       "center_mm": [
+        1550,
+        9807
+       ],
+       "sill_mm": 650,
+       "note": "to patio"
+      },
+      {
+       "segment": 2,
+       "offset_mm": 617,
+       "width_mm": 1141,
+       "height_mm": 1750,
+       "center_mm": [
+        6985,
+        9807
+       ],
+       "sill_mm": 650,
+       "note": "to patio"
+      },
+      {
+       "segment": 3,
+       "offset_mm": 1388,
+       "width_mm": 1943,
+       "height_mm": 1750,
+       "center_mm": [
+        324,
+        7448
+       ],
+       "sill_mm": 650,
+       "note": "to west porch"
+      }
+     ],
+     "ceiling_height_mm": 3440
+    },
+    {
+     "name": "Lower Music Room (15'-2\" x 25'-2\")",
+     "polygon": [
+      [
+       324,
+       293
+      ],
+      [
+       8203,
+       293
+      ],
+      [
+       8203,
+       4873
+      ],
+      [
+       324,
+       4873
+      ]
+     ],
+     "area_m2": 36.09,
+     "doors": [
+      {
+       "segment": 3,
+       "offset_mm": 2776,
+       "width_mm": 1141,
+       "height_mm": 2400,
+       "center_mm": [
+        324,
+        1527
+       ],
+       "to": "Solarium",
+       "note": "double door"
+      },
+      {
+       "segment": 1,
+       "offset_mm": 2082,
+       "width_mm": 925,
+       "height_mm": 2200,
+       "center_mm": [
+        8203,
+        2837
+       ],
+       "to": "West passage (south)",
+       "note": "approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1789,
+       "width_mm": 3932,
+       "height_mm": 1750,
+       "center_mm": [
+        4079,
+        293
+       ],
+       "sill_mm": 650,
+       "note": "triple casement window, front"
+      }
+     ],
+     "ceiling_height_mm": 3440,
+     "note": "curved stair in the NW corner (x 0.3-1.8 m, y 3.3-4.9 m) rises to the Spanish Sitting Room above"
+    },
+    {
+     "name": "West passage (north)",
+     "polygon": [
+      [
+       8388,
+       6399
+      ],
+      [
+       9823,
+       6399
+      ],
+      [
+       9823,
+       9807
+      ],
+      [
+       8388,
+       9807
+      ]
+     ],
+     "area_m2": 4.89,
+     "doors": [
+      {
+       "segment": 2,
+       "offset_mm": 155,
+       "width_mm": 1156,
+       "height_mm": 2200,
+       "center_mm": [
+        9090,
+        9807
+       ],
+       "to": "Patio",
+       "note": "approx."
+      }
+     ],
+     "windows": [],
+     "ceiling_height_mm": 3440,
+     "approximate": true
+    },
+    {
+     "name": "Scotty's Bath",
+     "polygon": [
+      [
+       8388,
+       3870
+      ],
+      [
+       9745,
+       3870
+      ],
+      [
+       9745,
+       6153
+      ],
+      [
+       8388,
+       6153
+      ]
+     ],
+     "area_m2": 3.1,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2700,
+     "approximate": true
+    },
+    {
+     "name": "West passage (south)",
+     "polygon": [
+      [
+       8388,
+       293
+      ],
+      [
+       9823,
+       293
+      ],
+      [
+       9823,
+       3716
+      ],
+      [
+       8388,
+       3716
+      ]
+     ],
+     "area_m2": 4.91,
+     "doors": [
+      {
+       "segment": 1,
+       "offset_mm": 77,
+       "width_mm": 925,
+       "height_mm": 2200,
+       "center_mm": [
+        9823,
+        833
+       ],
+       "to": "Living Hall",
+       "note": "approx."
+      }
+     ],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 293,
+       "width_mm": 894,
+       "height_mm": 900,
+       "center_mm": [
+        9129,
+        293
+       ],
+       "sill_mm": 1200,
+       "note": "small front window"
+      }
+     ],
+     "ceiling_height_mm": 3440,
+     "approximate": true
+    },
+    {
+     "name": "Living Hall (31'-1\" x 31'-8\")",
+     "polygon": [
+      [
+       10316,
+       293
+      ],
+      [
+       19969,
+       293
+      ],
+      [
+       19969,
+       9807
+      ],
+      [
+       10316,
+       9807
+      ]
+     ],
+     "area_m2": 91.84,
+     "doors": [
+      {
+       "segment": 0,
+       "offset_mm": 4133,
+       "width_mm": 1234,
+       "height_mm": 2850,
+       "center_mm": [
+        15065,
+        293
+       ],
+       "to": "Front porch",
+       "note": "main entrance, round-arched"
+      },
+      {
+       "segment": 2,
+       "offset_mm": 4703,
+       "width_mm": 910,
+       "height_mm": 2600,
+       "center_mm": [
+        14811,
+        9807
+       ],
+       "to": "Patio"
+      }
+     ],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1280,
+       "width_mm": 1311,
+       "height_mm": 2050,
+       "center_mm": [
+        12251,
+        293
+       ],
+       "sill_mm": 650,
+       "note": "behind the porch arcade"
+      },
+      {
+       "segment": 0,
+       "offset_mm": 6137,
+       "width_mm": 1311,
+       "height_mm": 2050,
+       "center_mm": [
+        17108,
+        293
+       ],
+       "sill_mm": 650,
+       "note": "behind the porch arcade"
+      },
+      {
+       "segment": 2,
+       "offset_mm": 7880,
+       "width_mm": 1002,
+       "height_mm": 1750,
+       "center_mm": [
+        11588,
+        9807
+       ],
+       "sill_mm": 650,
+       "note": "window seat, to patio"
+      },
+      {
+       "segment": 2,
+       "offset_mm": 1974,
+       "width_mm": 1280,
+       "height_mm": 1750,
+       "center_mm": [
+        17355,
+        9807
+       ],
+       "sill_mm": 650,
+       "note": "window seat, to patio"
+      }
+     ],
+     "ceiling_height_mm": 6655,
+     "note": "two storeys high in the middle: the second-floor gallery runs round a well of about 8.9 x 6.6 m over it; fireplace centred on the west wall (chimney mass X 9.9-11.1 m); octagonal fountain alcove at the east wall"
+    },
+    {
+     "name": "Stair hall (main stair, fountain alcove)",
+     "polygon": [
+      [
+       20231,
+       3762
+      ],
+      [
+       21403,
+       3762
+      ],
+      [
+       21403,
+       9807
+      ],
+      [
+       20231,
+       9807
+      ]
+     ],
+     "area_m2": 7.08,
+     "doors": [],
+     "windows": [],
+     "approximate": true,
+     "note": "straight stair rising from north to south up to the second-floor east gallery; the tower rises above the front of this zone"
+    },
+    {
+     "name": "Service passage / telephone",
+     "polygon": [
+      [
+       20231,
+       293
+      ],
+      [
+       21403,
+       293
+      ],
+      [
+       21403,
+       3608
+      ],
+      [
+       20231,
+       3608
+      ]
+     ],
+     "area_m2": 3.89,
+     "doors": [],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 108,
+       "width_mm": 740,
+       "height_mm": 900,
+       "center_mm": [
+        20709,
+        293
+       ],
+       "sill_mm": 1200,
+       "note": "small front window"
+      }
+     ],
+     "ceiling_height_mm": 3440,
+     "approximate": true
+    },
+    {
+     "name": "Kitchen (15'-3\" x 25'-7\")",
+     "polygon": [
+      [
+       21619,
+       5181
+      ],
+      [
+       29545,
+       5181
+      ],
+      [
+       29545,
+       9823
+      ],
+      [
+       21619,
+       9823
+      ]
+     ],
+     "area_m2": 36.79,
+     "doors": [
+      {
+       "segment": 2,
+       "offset_mm": 3393,
+       "width_mm": 1187,
+       "height_mm": 2300,
+       "center_mm": [
+        25559,
+        9823
+       ],
+       "to": "Patio",
+       "note": "approx."
+      },
+      {
+       "segment": 1,
+       "offset_mm": 278,
+       "width_mm": 1079,
+       "height_mm": 2300,
+       "center_mm": [
+        29545,
+        5998
+       ],
+       "to": "East porch"
+      }
+     ],
+     "windows": [
+      {
+       "segment": 2,
+       "offset_mm": 5937,
+       "width_mm": 1079,
+       "height_mm": 1400,
+       "center_mm": [
+        23068,
+        9823
+       ],
+       "sill_mm": 900,
+       "note": "to patio"
+      },
+      {
+       "segment": 2,
+       "offset_mm": 494,
+       "width_mm": 1264,
+       "height_mm": 1400,
+       "center_mm": [
+        28419,
+        9823
+       ],
+       "sill_mm": 900,
+       "note": "to patio"
+      },
+      {
+       "segment": 1,
+       "offset_mm": 2406,
+       "width_mm": 910,
+       "height_mm": 1400,
+       "center_mm": [
+        29545,
+        8042
+       ],
+       "sill_mm": 900,
+       "note": "to east porch"
+      }
+     ],
+     "ceiling_height_mm": 3440
+    },
+    {
+     "name": "Dining Room (15'-1\" x 25'-10\")",
+     "polygon": [
+      [
+       21634,
+       293
+      ],
+      [
+       29545,
+       293
+      ],
+      [
+       29545,
+       4842
+      ],
+      [
+       21634,
+       4842
+      ]
+     ],
+     "area_m2": 35.99,
+     "doors": [
+      {
+       "segment": 1,
+       "offset_mm": 3670,
+       "width_mm": 879,
+       "height_mm": 2300,
+       "center_mm": [
+        29545,
+        4402
+       ],
+       "to": "East porch"
+      },
+      {
+       "segment": 3,
+       "offset_mm": 1974,
+       "width_mm": 894,
+       "height_mm": 2300,
+       "center_mm": [
+        21634,
+        2421
+       ],
+       "to": "Service passage"
+      }
+     ],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1974,
+       "width_mm": 1095,
+       "height_mm": 1750,
+       "center_mm": [
+        24155,
+        293
+       ],
+       "sill_mm": 650
+      },
+      {
+       "segment": 0,
+       "offset_mm": 4611,
+       "width_mm": 1002,
+       "height_mm": 1750,
+       "center_mm": [
+        26746,
+        293
+       ],
+       "sill_mm": 650
+      }
+     ],
+     "ceiling_height_mm": 3440,
+     "note": "plus the octagonal corner bay at the SE corner (see footprint 'Dining-room corner bay')"
+    },
+    {
+     "name": "West porch / loggia (9'-11\" x 21'-1\")",
+     "polygon": [
+      [
+       -3439,
+       3300
+      ],
+      [
+       0,
+       3300
+      ],
+      [
+       0,
+       10054
+      ],
+      [
+       -3439,
+       10054
+      ]
+     ],
+     "area_m2": 23.23,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 3300,
+     "note": "open loggia, square piers on the west side"
+    },
+    {
+     "name": "East porch / loggia (9'-8\" x 20'-11\")",
+     "polygon": [
+      [
+       29915,
+       3146
+      ],
+      [
+       33261,
+       3146
+      ],
+      [
+       33261,
+       10054
+      ],
+      [
+       29915,
+       10054
+      ]
+     ],
+     "area_m2": 23.11,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 3300,
+     "note": "open loggia, square piers on the east side"
+    },
+    {
+     "name": "Solarium (17'-3\" x 17'-3\", octagonal)",
+     "polygon": [
+      [
+       -100,
+       -950
+      ],
+      [
+       -100,
+       1228
+      ],
+      [
+       -1640,
+       2768
+      ],
+      [
+       -3818,
+       2768
+      ],
+      [
+       -5358,
+       1228
+      ],
+      [
+       -5358,
+       -950
+      ],
+      [
+       -3818,
+       -2490
+      ],
+      [
+       -1640,
+       -2490
+      ]
+     ],
+     "area_m2": 22.9,
+     "ceiling_height_mm": 3300,
+     "doors": [],
+     "windows": [
+      {
+       "note": "continuous casement windows on the five outer faces (segments 0,5,6,7 and 4), sill 680, head 2400"
+      }
+     ],
+     "note": "octagon centred in front of the west porch; projects ~2.8 m in front of the facade"
+    }
+   ],
+   "note": "ceilings are shallow vaults/beamed; 3440 is the height of the ceiling ridge (section A-A)"
+  },
+  {
+   "name": "Second floor",
+   "floor_level_mm": 5307,
+   "ceiling_height_mm": 2848,
+   "rooms": [
+    {
+     "name": "Spanish Bedroom (15'-2\" x 15'-4\")",
+     "polygon": [
+      [
+       180,
+       5204
+      ],
+      [
+       4961,
+       5204
+      ],
+      [
+       4961,
+       9892
+      ],
+      [
+       180,
+       9892
+      ]
+     ],
+     "area_m2": 22.41,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2848
+    },
+    {
+     "name": "Bath (6'-4\" x 10'-0\")",
+     "polygon": [
+      [
+       5177,
+       8304
+      ],
+      [
+       7412,
+       8304
+      ],
+      [
+       7412,
+       9892
+      ],
+      [
+       5177,
+       9892
+      ]
+     ],
+     "area_m2": 3.55,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2600,
+     "approximate": true
+    },
+    {
+     "name": "Closets",
+     "polygon": [
+      [
+       5177,
+       5204
+      ],
+      [
+       8230,
+       5204
+      ],
+      [
+       8230,
+       8149
+      ],
+      [
+       5177,
+       8149
+      ]
+     ],
+     "area_m2": 8.99,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2600,
+     "approximate": true
+    },
+    {
+     "name": "Spanish Sitting Room (15'-4\" x 25'-0\" per label)",
+     "polygon": [
+      [
+       180,
+       563
+      ],
+      [
+       8230,
+       563
+      ],
+      [
+       8230,
+       5035
+      ],
+      [
+       180,
+       5035
+      ]
+     ],
+     "area_m2": 36.0,
+     "doors": [],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1003,
+       "width_mm": 3269,
+       "height_mm": 1850,
+       "center_mm": [
+        2817,
+        563
+       ],
+       "sill_mm": 280,
+       "note": "French doors to a small balcony"
+      }
+     ],
+     "ceiling_height_mm": 2848,
+     "note": "measured 8.0 x 4.5 m against the label's 25'-0\" x 15'-4\"; fireplace and curved stair head in the NW corner"
+    },
+    {
+     "name": "Gallery, west leg",
+     "polygon": [
+      [
+       8461,
+       563
+      ],
+      [
+       10142,
+       563
+      ],
+      [
+       10142,
+       9892
+      ],
+      [
+       8461,
+       9892
+      ]
+     ],
+     "area_m2": 15.68,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2848
+    },
+    {
+     "name": "Gallery, north",
+     "polygon": [
+      [
+       10142,
+       8427
+      ],
+      [
+       19394,
+       8427
+      ],
+      [
+       19394,
+       9892
+      ],
+      [
+       10142,
+       9892
+      ]
+     ],
+     "area_m2": 13.55,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2848
+    },
+    {
+     "name": "Gallery, south",
+     "polygon": [
+      [
+       10142,
+       563
+      ],
+      [
+       19394,
+       563
+      ],
+      [
+       19394,
+       1874
+      ],
+      [
+       10142,
+       1874
+      ]
+     ],
+     "area_m2": 12.13,
+     "doors": [
+      {
+       "segment": 0,
+       "offset_mm": 3068,
+       "width_mm": 3084,
+       "height_mm": 2300,
+       "center_mm": [
+        14752,
+        563
+       ],
+       "to": "Veranda",
+       "note": "pair of French doors"
+      }
+     ],
+     "windows": [],
+     "ceiling_height_mm": 2848
+    },
+    {
+     "name": "Gallery, east leg with stair",
+     "polygon": [
+      [
+       19394,
+       563
+      ],
+      [
+       21491,
+       563
+      ],
+      [
+       21491,
+       9892
+      ],
+      [
+       19394,
+       9892
+      ]
+     ],
+     "area_m2": 19.56,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2848,
+     "note": "stair DN to the first floor at its south end; stair UP at its north end"
+    },
+    {
+     "name": "Open well over the Living Hall (not a floor)",
+     "polygon": [
+      [
+       10250,
+       1874
+      ],
+      [
+       19147,
+       1874
+      ],
+      [
+       19147,
+       8427
+      ],
+      [
+       10250,
+       8427
+      ]
+     ],
+     "area_m2": 58.3,
+     "doors": [],
+     "windows": [],
+     "note": "railing round the edge",
+     "is_void": true
+    },
+    {
+     "name": "Bath (6'-4\" x 10'-0\")",
+     "polygon": [
+      [
+       21707,
+       8227
+      ],
+      [
+       24775,
+       8227
+      ],
+      [
+       24775,
+       9984
+      ],
+      [
+       21707,
+       9984
+      ]
+     ],
+     "area_m2": 5.39,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2600,
+     "approximate": true
+    },
+    {
+     "name": "Closet (8'-0\" x 10'-0\")",
+     "polygon": [
+      [
+       21707,
+       5143
+      ],
+      [
+       24775,
+       5143
+      ],
+      [
+       24775,
+       8072
+      ],
+      [
+       21707,
+       8072
+      ]
+     ],
+     "area_m2": 8.99,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2600,
+     "approximate": true
+    },
+    {
+     "name": "Mr. Johnson's Room (15'-4\" x 15'-4\")",
+     "polygon": [
+      [
+       24945,
+       5143
+      ],
+      [
+       29602,
+       5143
+      ],
+      [
+       29602,
+       9984
+      ],
+      [
+       24945,
+       9984
+      ]
+     ],
+     "area_m2": 22.54,
+     "doors": [],
+     "windows": [],
+     "ceiling_height_mm": 2848
+    },
+    {
+     "name": "Mrs. Johnson's Room (15'-2\" x 25'-10\")",
+     "polygon": [
+      [
+       21707,
+       517
+      ],
+      [
+       29602,
+       517
+      ],
+      [
+       29602,
+       4958
+      ],
+      [
+       21707,
+       4958
+      ]
+     ],
+     "area_m2": 35.06,
+     "doors": [],
+     "windows": [
+      {
+       "segment": 0,
+       "offset_mm": 1156,
+       "width_mm": 1064,
+       "height_mm": 1500,
+       "center_mm": [
+        23395,
+        517
+       ],
+       "sill_mm": 500
+      },
+      {
+       "segment": 0,
+       "offset_mm": 4148,
+       "width_mm": 2776,
+       "height_mm": 1850,
+       "center_mm": [
+        27243,
+        517
+       ],
+       "sill_mm": 280,
+       "note": "French doors to a balcony"
+      }
+     ],
+     "ceiling_height_mm": 2848
+    },
+    {
+     "name": "Veranda (12'-0\" x 31'-2\", open, over the front porch)",
+     "polygon": [
+      [
+       10126,
+       -3030
+      ],
+      [
+       19687,
+       -3030
+      ],
+      [
+       19687,
+       8
+      ],
+      [
+       10126,
+       8
+      ]
+     ],
+     "area_m2": 29.05,
+     "doors": [],
+     "windows": [],
+     "note": "roofed open loggia; posts along the front"
+    }
+   ],
+   "note": "registered on the first floor by the centres of the 97'-6\" and 98'-2\" dimension strings; Spanish rooms, gallery and Johnson rooms then line up with the rooms below within ~0.2 m"
+  }
+ ],
+ "exterior": {
+  "wall_thickness_mm": {
+   "exterior": 300,
+   "interior_partitions": 350
+  },
+  "materials": "stucco on clay tile/'Insulex'/wood stud (HABS typical wall detail), red clay-tile roofs, wrought-iron grilles",
+  "eaves_height_mm": 8500,
+  "roof": {
+   "type": "gable",
+   "ridge_axis": "X",
+   "ridge_y_mm": 5092,
+   "ridge_height_mm": 9908,
+   "covering": "Spanish clay tile",
+   "note": "section A-A: roof ridge 8408 above the first floor. A raised roof over the Living Hall reads in the south elevation between X 9.2 and 19.6 m"
+  },
+  "tower": {
+   "x_mm": [
+    19583,
+    21588
+   ],
+   "y_mm": [
+    0,
+    2800
+   ],
+   "shaft_top_mm": 12371,
+   "cupola_top_mm": 14684,
+   "weathervane_top_mm": 16380,
+   "note": "square clock/chimes tower with an octagonal cupola and tiled cap; Y position from section A-A (front part of the house) - uncertain"
+  },
+  "chimneys": [
+   {
+    "x_mm": [
+     0,
+     620
+    ],
+    "y_mm": [
+     3600,
+     4200
+    ],
+    "top_mm": 11215,
+    "note": "pinnacle-capped stack at the west end (approx. Y)"
+   },
+   {
+    "x_mm": [
+     9792,
+     10331
+    ],
+    "y_mm": [
+     4700,
+     5600
+    ],
+    "top_mm": 11215,
+    "note": "Living Hall fireplace"
+   },
+   {
+    "x_mm": [
+     24364,
+     25212
+    ],
+    "y_mm": [
+     5600,
+     6400
+    ],
+    "top_mm": 11060,
+    "note": "kitchen range"
+   }
+  ],
+  "porch_columns": "front porch: square stuccoed piers at the corners and between the three arches (4 piers, ~0.7 m square); veranda above: 6 slender posts; west and east loggias: 3 square piers each on the outer side",
+  "openings": {
+   "front_south": [
+    {
+     "kind": "window",
+     "x0_mm": 2113,
+     "x1_mm": 6045,
+     "sill_mm": 2150,
+     "head_mm": 3900,
+     "note": "music room, triple casement"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 8681,
+     "x1_mm": 9576,
+     "sill_mm": 2700,
+     "head_mm": 3600
+    },
+    {
+     "kind": "porch arcade",
+     "x0_mm": 10100,
+     "x1_mm": 21002,
+     "note": "three round arches each ~2.1 m wide, springing ~1.9 m, crown ~2.9 m above the porch floor; centre arch at X 15.1-17.2 m is the entrance"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 20339,
+     "x1_mm": 21079,
+     "sill_mm": 2700,
+     "head_mm": 3600
+    },
+    {
+     "kind": "window",
+     "x0_mm": 23608,
+     "x1_mm": 24703,
+     "sill_mm": 2150,
+     "head_mm": 3900
+    },
+    {
+     "kind": "window",
+     "x0_mm": 26245,
+     "x1_mm": 27247,
+     "sill_mm": 2150,
+     "head_mm": 3900
+    },
+    {
+     "kind": "window",
+     "x0_mm": 1110,
+     "x1_mm": 4287,
+     "sill_mm": 5587,
+     "head_mm": 7437,
+     "note": "Spanish Sitting Room French doors, projecting balcony below"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 6183,
+     "x1_mm": 8096,
+     "sill_mm": 5757,
+     "head_mm": 7307,
+     "note": "shuttered"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 8604,
+     "x1_mm": 9067,
+     "sill_mm": 5957,
+     "head_mm": 6657,
+     "note": "small grilled window"
+    },
+    {
+     "kind": "open loggia",
+     "x0_mm": 10126,
+     "x1_mm": 19687,
+     "sill_mm": 5307,
+     "head_mm": 7807,
+     "note": "second-floor veranda over the porch"
+    },
+    {
+     "kind": "window",
+     "x0_mm": 22863,
+     "x1_mm": 23927,
+     "sill_mm": 5807,
+     "head_mm": 7307
+    },
+    {
+     "kind": "window",
+     "x0_mm": 25855,
+     "x1_mm": 28630,
+     "sill_mm": 5587,
+     "head_mm": 7437,
+     "note": "Mrs. Johnson's French doors with balcony"
+    },
+    {
+     "kind": "basement window (grille)",
+     "x0_mm": 925,
+     "x1_mm": 1850,
+     "sill_mm": 450,
+     "head_mm": 1050,
+     "note": "several along the front below the first floor, approx."
+    }
+   ],
+   "convention": "X range in the house frame; sill/head above the front grade (first floor = +1500)",
+   "other_facades": "north (patio) and side facades: see room windows/doors above; elevations sheets 7-9 downloaded but not transcribed opening by opening"
+  }
+ },
+ "landscape": {
+  "setting": "Grapevine Canyon, northern Death Valley, ~919 m above sea level; canyon floor falls to the south/south-west, steep slopes rise ~70 m within 250 m to the north and east",
+  "swimming_pool": {
+   "note": "unfinished pool directly in front (south) of the house, kidney-ended, about 80 x 20 m with a central fountain island; centre roughly X 14 m, Y -30 m (site plan 1\"=20')",
+   "approximate": true
+  },
+  "other_buildings": "chimes tower (~65 m W), powerhouse (~45 m W), guest house and gas-tank house (E), cookhouse (NE), all from OSM/HABS site plan",
+  "terrain_grid": {
+   "source": "USGS 3DEP via EPQS",
+   "step_m": 50.0,
+   "n": 11,
+   "points": "[x_mm, y_mm, ground elevation m above NAVD88] in the house frame",
+   "points_xyz": [
+    [
+     -235040,
+     -244908,
+     914.54
+    ],
+    [
+     -185040,
+     -244908,
+     904.97
+    ],
+    [
+     -135040,
+     -244908,
+     904.06
+    ],
+    [
+     -85040,
+     -244908,
+     903.44
+    ],
+    [
+     -35040,
+     -244908,
+     915.7
+    ],
+    [
+     14960,
+     -244908,
+     933.78
+    ],
+    [
+     64960,
+     -244908,
+     936.53
+    ],
+    [
+     114960,
+     -244908,
+     949.78
+    ],
+    [
+     164960,
+     -244908,
+     967.52
+    ],
+    [
+     214960,
+     -244908,
+     973.15
+    ],
+    [
+     264960,
+     -244908,
+     955.18
+    ],
+    [
+     -235040,
+     -194908,
+     922.96
+    ],
+    [
+     -185040,
+     -194908,
+     907.61
+    ],
+    [
+     -135040,
+     -194908,
+     907.15
+    ],
+    [
+     -85040,
+     -194908,
+     904.54
+    ],
+    [
+     -35040,
+     -194908,
+     910.88
+    ],
+    [
+     14960,
+     -194908,
+     929.37
+    ],
+    [
+     64960,
+     -194908,
+     925.33
+    ],
+    [
+     114960,
+     -194908,
+     941.59
+    ],
+    [
+     164960,
+     -194908,
+     950.12
+    ],
+    [
+     214960,
+     -194908,
+     946.06
+    ],
+    [
+     264960,
+     -194908,
+     940.77
+    ],
+    [
+     -235040,
+     -144908,
+     923.0
+    ],
+    [
+     -185040,
+     -144908,
+     909.96
+    ],
+    [
+     -135040,
+     -144908,
+     910.98
+    ],
+    [
+     -85040,
+     -144908,
+     910.07
+    ],
+    [
+     -35040,
+     -144908,
+     908.56
+    ],
+    [
+     14960,
+     -144908,
+     913.24
+    ],
+    [
+     64960,
+     -144908,
+     915.47
+    ],
+    [
+     114960,
+     -144908,
+     923.78
+    ],
+    [
+     164960,
+     -144908,
+     924.51
+    ],
+    [
+     214960,
+     -144908,
+     925.75
+    ],
+    [
+     264960,
+     -144908,
+     928.63
+    ],
+    [
+     -235040,
+     -94908,
+     925.2
+    ],
+    [
+     -185040,
+     -94908,
+     912.72
+    ],
+    [
+     -135040,
+     -94908,
+     911.02
+    ],
+    [
+     -85040,
+     -94908,
+     911.44
+    ],
+    [
+     -35040,
+     -94908,
+     912.0
+    ],
+    [
+     14960,
+     -94908,
+     913.32
+    ],
+    [
+     64960,
+     -94908,
+     915.44
+    ],
+    [
+     114960,
+     -94908,
+     916.5
+    ],
+    [
+     164960,
+     -94908,
+     919.56
+    ],
+    [
+     214960,
+     -94908,
+     922.6
+    ],
+    [
+     264960,
+     -94908,
+     926.74
+    ],
+    [
+     -235040,
+     -44908,
+     917.56
+    ],
+    [
+     -185040,
+     -44908,
+     915.39
+    ],
+    [
+     -135040,
+     -44908,
+     914.71
+    ],
+    [
+     -85040,
+     -44908,
+     922.44
+    ],
+    [
+     -35040,
+     -44908,
+     915.02
+    ],
+    [
+     14960,
+     -44908,
+     914.03
+    ],
+    [
+     64960,
+     -44908,
+     916.37
+    ],
+    [
+     114960,
+     -44908,
+     918.28
+    ],
+    [
+     164960,
+     -44908,
+     920.22
+    ],
+    [
+     214960,
+     -44908,
+     925.75
+    ],
+    [
+     264960,
+     -44908,
+     925.68
+    ],
+    [
+     -235040,
+     5092,
+     918.66
+    ],
+    [
+     -185040,
+     5092,
+     918.52
+    ],
+    [
+     -135040,
+     5092,
+     918.88
+    ],
+    [
+     -85040,
+     5092,
+     926.02
+    ],
+    [
+     -35040,
+     5092,
+     925.28
+    ],
+    [
+     14960,
+     5092,
+     918.99
+    ],
+    [
+     64960,
+     5092,
+     919.05
+    ],
+    [
+     114960,
+     5092,
+     920.79
+    ],
+    [
+     164960,
+     5092,
+     922.76
+    ],
+    [
+     214960,
+     5092,
+     926.25
+    ],
+    [
+     264960,
+     5092,
+     927.58
+    ],
+    [
+     -235040,
+     55092,
+     920.88
+    ],
+    [
+     -185040,
+     55092,
+     921.11
+    ],
+    [
+     -135040,
+     55092,
+     925.2
+    ],
+    [
+     -85040,
+     55092,
+     931.49
+    ],
+    [
+     -35040,
+     55092,
+     925.78
+    ],
+    [
+     14960,
+     55092,
+     925.91
+    ],
+    [
+     64960,
+     55092,
+     924.91
+    ],
+    [
+     114960,
+     55092,
+     925.77
+    ],
+    [
+     164960,
+     55092,
+     937.94
+    ],
+    [
+     214960,
+     55092,
+     932.76
+    ],
+    [
+     264960,
+     55092,
+     935.95
+    ],
+    [
+     -235040,
+     105092,
+     925.31
+    ],
+    [
+     -185040,
+     105092,
+     923.68
+    ],
+    [
+     -135040,
+     105092,
+     931.55
+    ],
+    [
+     -85040,
+     105092,
+     941.7
+    ],
+    [
+     -35040,
+     105092,
+     942.72
+    ],
+    [
+     14960,
+     105092,
+     937.01
+    ],
+    [
+     64960,
+     105092,
+     930.2
+    ],
+    [
+     114960,
+     105092,
+     940.05
+    ],
+    [
+     164960,
+     105092,
+     946.28
+    ],
+    [
+     214960,
+     105092,
+     943.32
+    ],
+    [
+     264960,
+     105092,
+     945.13
+    ],
+    [
+     -235040,
+     155092,
+     926.62
+    ],
+    [
+     -185040,
+     155092,
+     926.74
+    ],
+    [
+     -135040,
+     155092,
+     940.71
+    ],
+    [
+     -85040,
+     155092,
+     958.94
+    ],
+    [
+     -35040,
+     155092,
+     957.3
+    ],
+    [
+     14960,
+     155092,
+     942.48
+    ],
+    [
+     64960,
+     155092,
+     940.56
+    ],
+    [
+     114960,
+     155092,
+     956.91
+    ],
+    [
+     164960,
+     155092,
+     955.25
+    ],
+    [
+     214960,
+     155092,
+     955.58
+    ],
+    [
+     264960,
+     155092,
+     959.9
+    ],
+    [
+     -235040,
+     205092,
+     929.49
+    ],
+    [
+     -185040,
+     205092,
+     929.73
+    ],
+    [
+     -135040,
+     205092,
+     941.22
+    ],
+    [
+     -85040,
+     205092,
+     952.08
+    ],
+    [
+     -35040,
+     205092,
+     952.9
+    ],
+    [
+     14960,
+     205092,
+     952.79
+    ],
+    [
+     64960,
+     205092,
+     952.83
+    ],
+    [
+     114960,
+     205092,
+     969.06
+    ],
+    [
+     164960,
+     205092,
+     962.58
+    ],
+    [
+     214960,
+     205092,
+     967.76
+    ],
+    [
+     264960,
+     205092,
+     974.09
+    ],
+    [
+     -235040,
+     255092,
+     934.91
+    ],
+    [
+     -185040,
+     255092,
+     932.56
+    ],
+    [
+     -135040,
+     255092,
+     935.47
+    ],
+    [
+     -85040,
+     255092,
+     941.54
+    ],
+    [
+     -35040,
+     255092,
+     951.51
+    ],
+    [
+     14960,
+     255092,
+     957.83
+    ],
+    [
+     64960,
+     255092,
+     962.07
+    ],
+    [
+     114960,
+     255092,
+     975.73
+    ],
+    [
+     164960,
+     255092,
+     977.48
+    ],
+    [
+     214960,
+     255092,
+     977.79
+    ],
+    [
+     264960,
+     255092,
+     991.93
+    ]
+   ]
+  }
+ },
+ "notes": [
+  "All dimensions from HABS CA-2257-A (Scotty's Castle Recording Project, 1988) at 3/16\"=1'-0\"; 15.42 mm per pixel of the 3840-px thumbnails, confirmed by three dimension strings (98'-2\", 33'-5\", 24'-8\") to <1%.",
+  "Room rectangles are inside faces read off the plan; labelled sizes agree within ~0.3 m except the Spanish Sitting Room (see its note).",
+  "The house's walls are not all rectangular in reality (stepped and battered stucco, rounded corners, octagonal bays). Rooms here are simplified rectangles; the solarium and dining bay are given as octagons.",
+  "First-floor height above grade varies: about 1.5 m at the front steps (used as the datum here, estimated from the south elevation), less to the west and north where the ground is higher.",
+  "Opening heights are scaled from the south elevation; windows on the north and side facades are approximate (sill 650-900, head 2300-2400).",
+  "Interior door positions marked 'approx.' were inferred from door swings that are hard to read at this scale.",
+  "Tower Y position, chimney Y positions and eaves height (7000) are estimates; the ridge (8408) is from the section's dimension string.",
+  "The annex (north, across the patio) is only given as an outline from OSM; HABS has separate sheets for it (CA-2257-B) which were not used."
+ ]
+}

@@ -1,0 +1,5 @@
+# Second floor of Scotty's Castle (Death Valley Ranch, Main House), seen from above: for a picture of it as a plan. Written by '../make_estate.py'.
+links:
+  - scene: storey-2
+    name: storey-2
+    fixed: true

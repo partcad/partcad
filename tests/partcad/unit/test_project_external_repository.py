@@ -205,7 +205,9 @@ def test_on_disk_cache_persists_across_instances():
         first, fake1 = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache), FakeRepository(data)
         first._repository = fake1
         assert first.object_names("part") == ["bolt"]
-        assert fake1.keys == ["objects/part"]  # fetched from the repository
+        # Fetched from the repository, and the metadata with it, before the
+        # answer is written: it is what says whether the answer may be.
+        assert fake1.keys == ["objects/part", "meta"]
 
         # A fresh in-memory instance sharing the on-disk cache; its repository
         # would return nothing, so a correct read must come from disk.
@@ -241,7 +243,7 @@ def test_the_users_overrides_of_the_plugin_are_part_of_the_cache_key(monkeypatch
         overrides["//site:site_repo"] = {"token": "t"}
         signed_in = package({"objects/part": {"original": {"type": "step"}}})
         assert signed_in.object_names("part") == ["original"]
-        assert signed_in._repository.keys == ["objects/part"]
+        assert signed_in._repository.keys == ["objects/part", "meta"]
         # Another plugin's overrides are not this one's business.
         overrides["//other:repo"] = {"token": "u"}
         again = package({})
@@ -250,6 +252,144 @@ def test_the_users_overrides_of_the_plugin_are_part_of_the_cache_key(monkeypatch
         for backend in cache.backends:
             if isinstance(backend, FilesCacheBackend):
                 shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_a_package_that_says_persist_false_keeps_its_answers_for_the_process_only():
+    """Its plugin's answers are not written to disk, nor read from it; its metadata is, since it says so."""
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_persist_false_%s" % uuid.uuid4().hex, ctx.user_config)
+    try:
+        meta = {"objectKinds": ["part"], "persist": False}
+        data = {"meta": meta, "objects/part": {"place": {"type": "heightmap", "cache": False}}}
+
+        def package(data):
+            repo = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+            repo._repository = FakeRepository(data)
+            return repo
+
+        first = package(data)
+        assert asyncio.run(first.get_data_async("meta")) == meta
+        assert first.object_names("part") == ["place"]
+        assert first.persists() is False
+        assert first._repository.keys == ["meta", "objects/part"]
+        # Another process: the metadata comes from disk, and says to ask the plugin again for the rest.
+        second = package(data)
+        assert second.object_names("part") == ["place"]
+        assert second._repository.keys == ["objects/part"]
+        assert second.persists() is False
+    finally:
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_an_object_asked_for_before_the_metadata_is_not_written_where_the_metadata_forbids_it():
+    """A fresh cache, or a forced refresh: the metadata is fetched before the first answer would be written."""
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_persist_first_%s" % uuid.uuid4().hex, ctx.user_config)
+    try:
+        meta = {"objectKinds": ["part"], "persist": False}
+        data = {"meta": meta, "objects/part/place": {"type": "heightmap", "cache": False}}
+
+        def package():
+            repo = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+            repo._repository = FakeRepository(data)
+            return repo
+
+        first = package()
+        assert asyncio.run(first.get_data_async("objects/part/place")) == data["objects/part/place"]
+        assert first._repository.keys == ["objects/part/place", "meta"]
+        assert first.persists() is False
+        # Another process finds the metadata on disk, and not the object.
+        second = package()
+        asyncio.run(second.get_data_async("objects/part/place"))
+        assert second._repository.keys == ["objects/part/place"]
+
+        # A forced refresh reads nothing from disk, and still writes nothing it may not.
+        ctx.user_config.force_update = True
+        try:
+            third = package()
+            asyncio.run(third.get_data_async("objects/part/place"))
+            assert third._repository.keys == ["objects/part/place", "meta"]
+        finally:
+            ctx.user_config.force_update = False
+        fourth = package()
+        asyncio.run(fourth.get_data_async("objects/part/place"))
+        assert fourth._repository.keys == ["objects/part/place"]
+    finally:
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_an_object_is_not_written_when_the_metadata_cannot_be_had():
+    """A failed metadata request is no answer: nothing is written, and the metadata is asked for again."""
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_persist_failed_%s" % uuid.uuid4().hex, ctx.user_config)
+
+    class Flaky(FakeRepository):
+        def __init__(self, data):
+            super().__init__(data)
+            self.down = True
+
+        async def get_data(self, key):
+            if key == "meta" and self.down:
+                self.keys.append(key)
+                raise ConnectionError("the repository did not answer")
+            return await super().get_data(key)
+
+    try:
+        data = {
+            "meta": {"objectKinds": ["part"], "persist": False},
+            "objects/part/place": {"type": "heightmap"},
+            "objects/part": {"place": {"type": "heightmap"}},
+        }
+        first = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+        first._repository = Flaky(data)
+        assert asyncio.run(first.get_data_async("objects/part/place")) == data["objects/part/place"]
+        assert first._repository.keys == ["objects/part/place", "meta"]
+        # The metadata is still unknown here, and asked for again when the next answer is to be written.
+        first._repository.down = False
+        asyncio.run(first.get_data_async("objects/part"))
+        assert first._repository.keys == ["objects/part/place", "meta", "objects/part", "meta"]
+        assert first.persists() is False
+        # Nothing of either answer reached the disk.
+        second = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+        second._repository = FakeRepository(data)
+        asyncio.run(second.get_data_async("objects/part/place"))
+        assert second._repository.keys == ["objects/part/place"]
+    finally:
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_a_file_a_non_persisting_package_serves_is_removed_when_the_process_exits(tmp_path, monkeypatch):
+    import base64
+
+    from partcad import file_factory_plugin
+
+    class Package:
+        def __init__(self, persists):
+            self._persists = persists
+
+        def persists(self):
+            return self._persists
+
+        async def get_data_async(self, key):
+            return base64.b64encode(b"heights").decode()
+
+    registered = []
+    monkeypatch.setattr(file_factory_plugin, "_FORGOTTEN", set())
+    monkeypatch.setattr(file_factory_plugin.atexit, "register", registered.append)
+    for persists, name in ((True, "kept.npy"), (False, "place.npy"), (False, "other.npy")):
+        factory = file_factory_plugin.FileFactoryPlugin(None, Package(persists), None, {"path": name})
+        asyncio.run(factory.download(str(tmp_path / name)))
+        assert (tmp_path / name).read_bytes() == b"heights"
+    # Registered once, however many files.
+    assert registered == [file_factory_plugin._remove_forgotten]
+    registered[0]()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["kept.npy"]
 
 
 def test_file_backed_configs_are_tagged_for_materialization():

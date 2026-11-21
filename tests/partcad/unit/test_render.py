@@ -167,6 +167,69 @@ def test_the_package_readme_lists_its_scenes(tmp_path):
     assert "## Scenes" not in (out / "README.md").read_text().splitlines()
 
 
+def test_sketches_and_interfaces_with_no_picture_have_no_heading(tmp_path):
+    """A package that pictures none of its sketches or interfaces has no heading for them.
+
+    The estates under 'examples/produce_scene_estates' keep a sketch per room to
+    stand its walls on and picture none of them, and their READMEs ended with a
+    "## Sketches" heading and nothing under it. The heading is there over a
+    sketch that has a picture, as a part's and a scene's are.
+    """
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "partcad.yaml").write_text(
+        "sketches:\n"
+        "  plan:\n    type: basic\n    desc: A square\n    square:\n      side: 10.0\n"
+        "  hidden:\n    type: basic\n    square:\n      side: 10.0\n"
+        "interfaces:\n  port:\n    ports:\n      in: {}\n"
+        "render:\n  readme:\n  svg:\n    prefix: ./\n"
+    )
+    out = tmp_path / "out"
+    out.mkdir()
+    prj = pc.Context(str(package)).get_project("//")
+
+    prj.render_readme_async(prj.config_obj.get("render"), str(out))
+    lines = (out / "README.md").read_text().splitlines()
+    assert "## Sketches" not in lines and "## Interfaces" not in lines
+
+    (out / "plan.svg").write_text("<svg/>")
+    (out / "port.svg").write_text("<svg/>")
+    prj.render_readme_async(prj.config_obj.get("render"), str(out))
+    lines = (out / "README.md").read_text().splitlines()
+    assert "## Sketches" in lines and "### plan" in lines and "### hidden" not in lines
+    assert "## Interfaces" in lines and "### port" in lines
+    assert lines.index("## Interfaces") < lines.index("## Sketches")
+
+
+def test_an_assembly_a_check_left_behind_is_no_section_of_the_readme(tmp_path):
+    """A package that declares no assembly has no 'Assemblies' heading, whatever checks ran before.
+
+    A topology check leaves an assembly to look at in the package of what it
+    checked ('partcad.qual.highlight'), registered in memory beside the declared
+    ones. The README was written with an empty 'Assemblies' heading after one
+    had run in the same process and without it otherwise, so the examples' CI,
+    which runs 'pc qual test' before 'pc render', disagreed with a render alone.
+    """
+    from partcad.qual.highlight import in_memory
+
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "partcad.yaml").write_text(
+        "parts:\n  cube:\n    type: basic\n    width: 10\n    length: 10\n    height: 10\n"
+    )
+    out = tmp_path / "out"
+    out.mkdir()
+    prj = pc.Context(str(package)).get_project("//")
+    prj.render_readme_async({"readme": {}}, str(out))
+    before = (out / "README.md").read_text()
+
+    prj.register_object("assembly", "cube/defects", in_memory(prj.name, "cube/defects", "What defects found", []))
+    prj.render_readme_async({"readme": {}}, str(out))
+
+    assert "## Assemblies" not in before.splitlines()
+    assert (out / "README.md").read_text() == before
+
+
 def test_render_assembly_readme_from_config():
     """An assembly asks for a document of its own in the package configuration"""
     ctx = pc.init("examples")

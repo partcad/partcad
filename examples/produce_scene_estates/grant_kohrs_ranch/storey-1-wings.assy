@@ -1,0 +1,79 @@
+# First floor (other wings) of Grant-Kohrs Ranch, Ranch House: its floor, its rooms' walls, its furniture. Written by '../make_estate.py'.
+links:
+  - part: floor
+    name: floor
+    params: {storey: 1, part: wings}
+    fixed: true
+  - scene: room-1-7
+    name: room-1-7
+    description: "Bedroom, rear left (11'-0\" x 16'-7\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-1-7-daybed-1
+    location: [[2582.8, 7183.7, 299.8], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-1-7-appleseed-endtable-1
+    location: [[4204.3, 6771.4, 301], [0, 0, 1], 180]
+    fixed: true
+  - part: cabinet-b01
+    name: room-1-7-cabinet-b01-1
+    location: [[851, 6662.5, 303], [0, 0, 1], 270]
+    fixed: true
+  - part: sappington-chair
+    name: room-1-7-sappington-chair-1
+    location: [[2779, 9253, 301], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-9
+    name: room-1-9
+    description: "Bath (11'-3\" x 10'-0\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - scene: room-1-10
+    name: room-1-10
+    description: "Bedroom, rear right (11'-3\" x 14'-7\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: daybed
+    name: room-1-10-daybed-1
+    location: [[17636.8, 7183.7, 299.8], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-1-10-appleseed-endtable-1
+    location: [[19258.3, 6771.4, 301], [0, 0, 1], 180]
+    fixed: true
+  - part: cabinet-b01
+    name: room-1-10-cabinet-b01-1
+    location: [[17697, 9543.5, 303], [0, 0, 1], 90]
+    fixed: true
+  - part: sappington-chair
+    name: room-1-10-sappington-chair-1
+    location: [[16038, 6937.1, 301], [0, 0, 1], 180]
+    fixed: true
+  - scene: room-1-11
+    name: room-1-11
+    description: "Vestibule (11'-3\" x 7'-9\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: jennings-bench
+    name: room-1-11-jennings-bench-1
+    location: [[22315.4, 8050.8, 301], [0, 0, 1], 270]
+    fixed: true
+  - part: aftonconsole
+    name: room-1-11-aftonconsole-1
+    location: [[20513, 8086.9, 301], [0, 0, 1], 90]
+    fixed: true
+  - scene: room-1-12
+    name: room-1-12
+    description: "Flower House (22'-6\" x 8'-0\")"
+    location: [[0, 0, 301], [0, 0, 1], 0]
+    fixed: true
+  - part: armchair
+    name: room-1-12-armchair-1
+    location: [[1657.2, 10490.6, 304.6], [0, 0, 1], 180]
+    fixed: true
+  - part: appleseed-endtable
+    name: room-1-12-appleseed-endtable-1
+    location: [[2591.3, 10288.4, 301], [0, 0, 1], 180]
+    fixed: true

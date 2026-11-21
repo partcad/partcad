@@ -92,11 +92,16 @@ import zipfile
 # model site is usually the customizable source of the STLs beside it, and may
 # 'use <>' files that do not come with it.
 #
-# IGES is an exact format too, after STEP and BREP. The native documents of
-# CAD applications - SolidWorks, Inventor, CATIA, Fusion, FreeCAD, ACIS, Creo
+# IGES is an exact format too, after STEP and BREP. Measured data comes after
+# the meshes: a voxel model, a point cloud, a height map or an elevation model,
+# each made a solid by a type of its own ('//builtin/import'), which a site
+# that has a mesh of the same thing - a scan's, a voxel model's export - is
+# better read from; only their unambiguous extensions, since a '.ply' on a
+# model site is a mesh and a '.png' a picture. The native documents of CAD
+# applications - SolidWorks, Inventor, CATIA, Fusion, FreeCAD, ACIS, Creo
 # View - PartCAD reads through a converter it downloads on first use
-# ('//builtin/import'); they come after the meshes, so that they are taken
-# only when a model has nothing else, or when they are asked for.
+# ('//builtin/import'); they come after those, so that they are taken only
+# when a model has nothing else, or when they are asked for.
 FORMATS = (
     ("step", "step", ("step", "stp")),
     ("brep", "brep", ("brep", "brp")),
@@ -106,6 +111,11 @@ FORMATS = (
     ("obj", "obj", ("obj",)),
     ("glb", "gltf", ("glb",)),
     ("usd", "usd", ("usdz", "usd", "usdc", "usda")),
+    ("voxels", "voxels", ("vox", "binvox", "nrrd", "nhdr", "nii")),
+    ("pointcloud", "pointcloud", ("las", "laz")),
+    ("e57", "e57", ("e57",)),
+    ("heightmap", "heightmap", ("asc",)),
+    ("dem", "dem", ("hgt", "dt0", "dt1", "dt2")),
     ("sldprt", "sldprt", ("sldprt",)),
     ("ipt", "ipt", ("ipt",)),
     ("catpart", "catpart", ("catpart",)),
