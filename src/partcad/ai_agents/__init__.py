@@ -625,6 +625,18 @@ def _toml_loads(text: str):
     return tomllib.loads(text)
 
 
+def _others(document: dict, key: str) -> dict:
+    """`document` without PartCAD's server: everything an edit of PartCAD's table must leave as it was."""
+    others = dict(document)
+    servers = dict(others.get(key) or {})
+    servers.pop(MCP_SERVER_NAME, None)
+    if servers:
+        others[key] = servers
+    else:
+        others.pop(key, None)
+    return others
+
+
 def _install_toml_server(path: str, key: str, entry: dict) -> bool:
     """Add (or update) `[<key>.partcad]` in the TOML file at `path` -- Codex's `.codex/config.toml`.
 
@@ -677,10 +689,33 @@ def _install_toml_server(path: str, key: str, entry: dict) -> bool:
     if updated == text:
         pc_logging.debug("'%s' already has %s" % (path, what))
         return True
+    # The text edit finds tables by their header lines, and a header-shaped
+    # line can also be text inside a multi-line string. So what the edit did is
+    # checked by what it means: parsed before and after, the file has to be the
+    # same everywhere but PartCAD's own table, or it is left as it was. Without
+    # a parser (Python 3.10 with no `tomli`) that cannot be checked, and a file
+    # holding a multi-line string is left alone rather than edited unchecked.
+    try:
+        before = _toml_loads(text) if text.strip() else {}
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.warning("Not adding %s to '%s', which is not valid TOML: %s" % (what, path, e))
+        return False
     try:
         parsed = _toml_loads(updated)
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.warning("Not adding %s to '%s': the file would not be valid TOML (%s)" % (what, path, e))
+        return False
+    if parsed is None and ('"""' in text or "'''" in text):
+        pc_logging.warning(
+            "Not adding %s to '%s': it holds a multi-line string, and there is no TOML parser here to check the edit"
+            % (what, path)
+        )
+        return False
+    if parsed is not None and _others(before, key) != _others(parsed, key):
+        pc_logging.warning(
+            "Not adding %s to '%s': editing it would change more than PartCAD's own table; add it by hand"
+            % (what, path)
+        )
         return False
     if parsed is not None and parsed.get(key, {}).get(MCP_SERVER_NAME) != entry:
         # A server of that name written some other way -- inline, under

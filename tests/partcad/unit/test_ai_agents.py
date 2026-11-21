@@ -971,3 +971,40 @@ def test_the_plugin_names_its_icon_and_it_is_a_real_png():
     )
     with open(path, "rb") as f:
         assert f.read(8) == b"\x89PNG\r\n\x1a\n"
+
+
+def test_a_header_inside_a_multiline_string_in_codexs_file_is_text_and_is_kept(tmp_path):
+    """TOML allows header-shaped lines in a multi-line string; an edit that took them for tables is refused."""
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    text = (
+        '[mcp_servers.partcad]\ncommand = "old"\n\n[profiles.fast]\nmodel_instructions = """\n'
+        '[mcp_servers.partcad.env]\nKeep this instruction.\n[example]\nremaining text\n"""\n'
+    )
+    (tmp_path / ".codex" / "config.toml").write_text(text, encoding="utf-8")
+
+    assert not ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    assert (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8") == text
+
+
+def test_a_multiline_string_elsewhere_does_not_stop_an_edit_that_keeps_it(tmp_path):
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text(
+        '[profiles.fast]\nmodel_instructions = """\nplain text\n"""\n', encoding="utf-8"
+    )
+
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    config = read_toml(tmp_path / ".codex" / "config.toml")
+    assert config["profiles"]["fast"]["model_instructions"] == "plain text\n"
+    assert config["mcp_servers"]["partcad"]["command"] == "pc"
+
+
+def test_an_invalid_codex_file_is_left_alone(tmp_path):
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text("not = [valid\n", encoding="utf-8")
+
+    assert not ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
