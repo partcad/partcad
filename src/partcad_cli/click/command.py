@@ -152,6 +152,10 @@ command_groups = [
             # at a time: its tests (`pc qual test`), its simulations among them.
             "qual",
             "info",
+            # Beside `info`: what people said about an object, where `info`
+            # says what it is (`pc comment list`), and writing one more
+            # (`pc comment add`) -- what the 3D view's "Comments" shows.
+            "comment",
             # Beside `info`: `info` says what one object is, and `compare`
             # reads one against another -- the 3D counterpart of the gen-sketch
             # skill's `measure.py compare`, which reads two drawings.

@@ -575,6 +575,42 @@ class JsonRpcBackend implements PartcadBackend {
                 a.cancellation,
             ),
         );
+        // The Digital Thread's comments: the threads the objects the 3D view
+        // draws carry, with where each about a face or an edge is ('comment.list',
+        // 'pc comment list'); which face or edge a click on a part landed on
+        // ('comment.locate'); and writing one ('comment.add', 'pc comment add'),
+        // signed with the name the viewer read from git on this machine.
+        reg('partcad.commentList', (a) =>
+            this.send(
+                'comment.list',
+                { package: a.pkg, objects: a.objects, anchors: a.anchors === true },
+                a.cancellation,
+            ),
+        );
+        reg('partcad.commentLocate', (a) =>
+            this.send(
+                'comment.locate',
+                { package: a.pkg, object: a.object, kind: a.kind, point: a.point, tolerance: a.tolerance },
+                a.cancellation,
+            ),
+        );
+        reg('partcad.commentAdd', (a) =>
+            this.send(
+                'comment.add',
+                {
+                    package: a.pkg,
+                    object: a.object,
+                    kind: a.kind ?? undefined,
+                    thread: a.thread,
+                    answering: a.answering,
+                    ref: a.ref,
+                    name: a.name,
+                    text: a.text,
+                    attachments: a.attachments,
+                },
+                a.cancellation,
+            ),
+        );
         // What the Digital Thread's tabs beside the 3D one are filled from. Each
         // is the CLI's own operation -- 'pc bom', the assembly instruction book
         // 'pc render -t html' writes, 'pc supply quote' -- asked for as data

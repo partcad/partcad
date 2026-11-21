@@ -207,6 +207,14 @@ note in the corner of the view says so, and hovering over it says how to have th
 Down the left of the 3D view is a list of **what is on screen**, with a checkbox on every line: unticking one
 hides that line and everything under it, and ticking it again brings back exactly what was showing before.
 
+Under it are the callout boxes, one per kind of thing written on the model. **Comments** writes every thread of
+:ref:`comments <comments>` the objects on screen carry in a callout of its own, pinned to the face or the edge of
+a part it is about, or to the part of an assembly -- scrolled where a thread is long. While it is ticked the
+model can be clicked: a click on a face or an edge of a part, or on a part of an assembly, opens a dialog to
+start a thread about it, and a click on a thread opens one to answer it, with the thread above the box. A comment
+is Markdown, may have files of the package attached, and is signed with ``git config user.name`` on this machine;
+it is written into the ``partcad.yaml`` that declares the object, as ``pc comment add`` would write it.
+
 .. _vscode-view-panel:
 
 Down the right of every tab that shows the object -- 3D, 2D and Draft, each analysis, and Simulation -- is the

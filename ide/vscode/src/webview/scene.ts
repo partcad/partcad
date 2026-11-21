@@ -79,6 +79,7 @@ import {
 } from './appearance';
 import { assemblyRows, calloutsOf, componentName, componentRows, isComponent } from './callouts';
 import { CmfChoice, chosen, setsOf } from './choice';
+import { ThreadPin, renderThread } from './comments';
 import {
     SceneFrame,
     enclosingRadius,
@@ -92,7 +93,7 @@ import {
 } from './cameraView';
 import { el, empty } from './dom';
 import { applyFinish, setFinishShown } from './finish';
-import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
+import { FROM_GLTF, MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
 import { geometryMissing, reportError } from './host';
 import { MaterialCluster, ShowMessage, ShowNode, TopologyFeature } from './messages';
@@ -478,13 +479,14 @@ export function setShowMetadata(enabled: boolean): void {
     invalidate();
 }
 
-/** What the callout boxes say: which of the four kinds of callout are written. */
+/** What the callout boxes say: which of the kinds of callout are written. */
 export function setLabels(choices: LabelChoices): void {
     labelChoices = { ...choices };
     refreshComponentCallouts();
     callouts.ports.forEach((object) => (object.visible = labelChoices.portNames));
     refreshInterfaceCallouts();
     refreshMaterialCallouts();
+    refreshCommentCallouts();
     invalidate();
 }
 
@@ -558,6 +560,358 @@ function refreshMaterialCallouts(): void {
     for (const callout of materialCallouts) {
         callout.object.visible = labelChoices.materials && callout.nodes.some(itemShown);
     }
+}
+
+/*
+ * Comments: a callout per thread, and a click on the model to start one.
+ *
+ * What is pinned where is worked out in 'comments.ts' ('pinThreads'), from the
+ * tree and the daemon's answer; here each pin becomes a callout holding the
+ * whole thread - scrollable, since a thread can be long - under the thing it is
+ * about, so that the tree's box that hides a part hides what was said about it.
+ * A callout is clickable, unlike every other one: clicking it answers the
+ * thread ('setCommentPins''s 'onOpen').
+ *
+ * And while "Comments" is ticked the model is clickable too ('setPicking'): a
+ * click that does not move the camera - a press and a release within a few
+ * pixels - is a ray into what is drawn, and the handler is told which node it
+ * hit and where, in that node's own frame and in millimetres, with how many
+ * millimetres a few pixels are there. Which face or edge that is, the daemon
+ * says; what a click on an assembly is about, the tree does.
+ */
+
+/** The callout of each thread pinned on the show on stage. */
+let commentCallouts: CSS2DObject[] = [];
+
+/**
+ * What holds a thread's callout on a node that draws nothing of its own - an
+ * assembly - made for it and drawn as that node's item is, as the node's name
+ * is ('addAssemblyCallout'): unticking it in the tree takes its threads away too.
+ */
+let commentHolders: THREE.Object3D[] = [];
+
+/** Each thread's Reply button on the stage, by 'threadKey'. */
+let replyButtons = new Map<string, HTMLElement>();
+
+/**
+ * The thread whose Reply had the focus when the callouts were replaced - the
+ * dialog gives it back on closing, and a comment just written replaces them -
+ * given to the new one once it is drawn: three's renderer puts it in the page.
+ */
+let focusReply: string | undefined;
+
+/**
+ * Give the focus to a thread's Reply once it is drawn: the dialog it opened
+ * closed after the callouts were replaced and before the new ones were drawn.
+ * Not if something else has the focus by then.
+ */
+export function focusReplyWhenDrawn(thread: string): void {
+    focusReply = thread;
+    invalidate();
+}
+
+/** A thread, as the Reply that answers it is known across a refresh. */
+function threadKey(pin: ThreadPin): string {
+    return `${pin.object}#${pin.thread.index}`;
+}
+
+/** What a click on a thread's callout does: answer it. */
+let onOpenThread: ((pin: ThreadPin) => void) | undefined;
+
+/** The mark on what was clicked while a comment on it is being written. */
+let pendingMarker: CSS2DObject | undefined;
+
+/** Every node of the show on stage by its path, joined with '.': what a pin and a click find it by. */
+let builtByPath = new Map<string, Loaded['built'][number]>();
+
+/** Which node each piece of drawn geometry is, by its path: what a click walks up to. */
+let pathByDrawn = new Map<THREE.Object3D, number[]>();
+
+/** What a click on the model is told. */
+export interface Picked {
+    /** The node hit, by its path from the root. */
+    path: number[];
+    /** Where, in that node's own frame - PartCAD's - in millimetres. */
+    point: [number, number, number];
+    /** How many millimetres 'PICK_PIXELS' are there: how far from it an edge still counts as clicked. */
+    tolerance: number;
+}
+
+/** How far, in pixels, a press may move and still be a click; and how near an edge a click counts as on it. */
+const PICK_PIXELS = 5;
+
+/** How long, in milliseconds, a press may last and still be a click rather than a look round. */
+const PICK_MS = 700;
+
+/** Who is told of a click on the model, while anybody is. */
+let pickHandler: ((picked: Picked) => void) | undefined;
+
+/** Where the press that may become a click went down. */
+let pressed: { x: number; y: number; time: number } | undefined;
+
+/** Pin a callout on every thread, replacing the ones pinned before; 'onOpen' answers one that is clicked. */
+export function setCommentPins(pins: readonly ThreadPin[], onOpen: (pin: ThreadPin) => void): void {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.classList.contains('comment-thread-reply') && active.dataset.thread) {
+        focusReply = active.dataset.thread;
+    }
+    replyButtons = new Map();
+    for (const object of commentCallouts) {
+        object.removeFromParent();
+    }
+    commentCallouts = [];
+    for (const holder of commentHolders) {
+        holder.removeFromParent();
+        for (const drawn of drawnBy.values()) {
+            const at = drawn.indexOf(holder);
+            if (at >= 0) {
+                drawn.splice(at, 1);
+            }
+        }
+    }
+    commentHolders = [];
+    onOpenThread = onOpen;
+    if (content === undefined) {
+        invalidate();
+        return;
+    }
+    content.updateMatrixWorld(true);
+    // Threads pinned to one place share one callout, each a section of it that
+    // is clicked on its own: written as callouts of their own, they would lie
+    // exactly over one another, and only the last could be read or answered.
+    const places = new Map<string, ThreadPin[]>();
+    for (const pin of pins) {
+        const key = [pin.path.join('.'), pin.at?.join(',') ?? '', pin.target?.join('.') ?? ''].join('|');
+        places.set(key, [...(places.get(key) ?? []), pin]);
+    }
+    for (const together of places.values()) {
+        const pin = together[0];
+        const entry = builtByPath.get(pin.path.join('.'));
+        if (entry === undefined) {
+            continue;
+        }
+        let holder: THREE.Object3D;
+        let world: THREE.Vector3 | undefined;
+        if (pin.at !== undefined) {
+            holder = commentHolder(entry);
+            world = entry.group.localToWorld(new THREE.Vector3(...pin.at).applyMatrix4(TO_GLTF));
+        } else {
+            const target = pin.target !== undefined ? builtByPath.get(pin.target.join('.')) : undefined;
+            holder = commentHolder(target ?? entry);
+            world = cornerOf(target !== undefined ? pin.target! : pin.path);
+        }
+        if (world === undefined) {
+            continue;
+        }
+        const callout = calloutObject('callout-comment', []);
+        for (const one of together) {
+            const section = el('div', 'comment-thread');
+            renderThread(one, section);
+            section.title = 'Click to answer';
+            // What answers it from the keyboard: the section is not something
+            // to tab to, and the links in it are each their own.
+            const reply = el('button', 'comment-thread-reply', 'Reply');
+            reply.title = 'Answer this thread';
+            reply.dataset.thread = threadKey(one);
+            replyButtons.set(threadKey(one), reply);
+            reply.addEventListener('click', (event) => {
+                event.stopPropagation();
+                onOpenThread?.(one);
+            });
+            section.appendChild(reply);
+            section.addEventListener('click', (event) => {
+                event.stopPropagation();
+                // A link in a comment goes where it says, and does nothing else.
+                if (event.target instanceof Element && event.target.closest('a') !== null) {
+                    return;
+                }
+                onOpenThread?.(one);
+            });
+            callout.box.appendChild(section);
+        }
+        // Scrolled where it is, not zoomed: the wheel over a long thread reads it.
+        callout.box.addEventListener('wheel', (event) => event.stopPropagation());
+        callout.object.position.copy(holder.worldToLocal(world));
+        callout.object.visible = labelChoices.comments;
+        holder.add(callout.object);
+        commentCallouts.push(callout.object);
+    }
+    invalidate();
+}
+
+/** What a node's thread callouts hang from: its own geometry, or a holder drawn as its item is. */
+function commentHolder(entry: Loaded['built'][number]): THREE.Object3D {
+    if (entry.drawn !== undefined) {
+        return entry.drawn;
+    }
+    const holder = new THREE.Group();
+    entry.group.add(holder);
+    // Placed before the callout is placed in it ('worldToLocal').
+    holder.updateMatrixWorld(true);
+    drawnByItem(nodeId(entry.path), holder);
+    commentHolders.push(holder);
+    return holder;
+}
+
+/** The box of what a node holds, on the stage: its own geometry and everything under it. */
+function boxOf(path: readonly number[]): THREE.Box3 {
+    const prefix = path.join('.');
+    const box = new THREE.Box3();
+    for (const [key, entry] of builtByPath) {
+        if (entry.drawn !== undefined && (prefix === '' || key === prefix || key.startsWith(`${prefix}.`))) {
+            box.expandByObject(entry.drawn);
+        }
+    }
+    return box;
+}
+
+/** The middle of what a node holds, on the stage. */
+function middleOf(path: readonly number[]): THREE.Vector3 | undefined {
+    const box = boxOf(path);
+    return box.isEmpty() ? undefined : box.getCenter(new THREE.Vector3());
+}
+
+/**
+ * Where a thread about a node as a whole is pinned: the top corner of what it
+ * holds. Not its middle, which is where its name and its price are written and,
+ * for a part, near where the threads about its faces are.
+ */
+function cornerOf(path: readonly number[]): THREE.Vector3 | undefined {
+    const box = boxOf(path);
+    return box.isEmpty() ? undefined : box.max.clone();
+}
+
+/** Show the threads' callouts where the box asks. */
+function refreshCommentCallouts(): void {
+    commentCallouts.forEach((object) => (object.visible = labelChoices.comments));
+    if (pendingMarker !== undefined) {
+        pendingMarker.visible = labelChoices.comments;
+    }
+}
+
+/**
+ * Mark what was clicked while a comment on it is written - at 'point' in the
+ * frame of the node at 'path', or the middle of that node without one - or take
+ * the mark away.
+ */
+export function setPendingMarker(path?: readonly number[], point?: readonly [number, number, number]): void {
+    pendingMarker?.removeFromParent();
+    pendingMarker = undefined;
+    const entry = path !== undefined ? builtByPath.get(path.join('.')) : undefined;
+    if (entry !== undefined && content !== undefined) {
+        content.updateMatrixWorld(true);
+        const world =
+            point !== undefined
+                ? entry.group.localToWorld(new THREE.Vector3(...point).applyMatrix4(TO_GLTF))
+                : middleOf(path!);
+        if (world !== undefined) {
+            const holder = entry.drawn ?? entry.group;
+            const marker = calloutObject('callout-comment-new', ['New comment…']);
+            marker.object.position.copy(holder.worldToLocal(world));
+            marker.object.visible = labelChoices.comments;
+            holder.add(marker.object);
+            pendingMarker = marker.object;
+        }
+    }
+    invalidate();
+}
+
+/** Be told of every click on the model, or - with nothing - of none, which is how the model stops being clickable. */
+export function setPicking(handler: ((picked: Picked) => void) | undefined): void {
+    pickHandler = handler;
+    surface.domElement.classList.toggle('picking', handler !== undefined);
+}
+
+surface.domElement.addEventListener('pointerdown', (event: PointerEvent) => {
+    pressed =
+        event.button === 0 && pickHandler !== undefined
+            ? { x: event.clientX, y: event.clientY, time: event.timeStamp }
+            : undefined;
+});
+
+surface.domElement.addEventListener('pointerup', (event: PointerEvent) => {
+    const down = pressed;
+    pressed = undefined;
+    if (
+        down === undefined ||
+        pickHandler === undefined ||
+        event.button !== 0 ||
+        Math.hypot(event.clientX - down.x, event.clientY - down.y) > PICK_PIXELS ||
+        event.timeStamp - down.time > PICK_MS
+    ) {
+        return;
+    }
+    const picked = pick(event.clientX, event.clientY);
+    if (picked !== undefined) {
+        pickHandler(picked);
+    }
+});
+
+/** Whether 'object' is drawn: it and everything above it visible. */
+function drawnOnStage(object: THREE.Object3D): boolean {
+    for (let node: THREE.Object3D | null = object; node !== null; node = node.parent) {
+        if (!node.visible) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** A point of the stage, in the frame of a node's own geometry - PartCAD's - in millimetres. */
+function inNodeFrame(group: THREE.Object3D, world: THREE.Vector3): THREE.Vector3 {
+    return group.worldToLocal(world.clone()).applyMatrix4(FROM_GLTF);
+}
+
+/** What is under the pointer at ('x', 'y') on the page: the nearest drawn geometry, or nothing. */
+function pick(x: number, y: number): Picked | undefined {
+    if (content === undefined) {
+        return undefined;
+    }
+    const canvas = surface.domElement;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        return undefined;
+    }
+    const camera = drawingCamera();
+    content.updateMatrixWorld(true);
+    const pointer = new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(pointer, camera);
+    // A line - a sketch, an edge drawn on its own - is hit within a few pixels
+    // of it, as measured where the camera looks.
+    raycaster.params.Line = { threshold: pixelsAt(controls.target, camera, rect.width, PICK_PIXELS) };
+    const drawn = [...pathByDrawn.keys()].filter(drawnOnStage);
+    for (const hit of raycaster.intersectObjects(drawn, true)) {
+        if (!drawnOnStage(hit.object)) {
+            continue;
+        }
+        let node: THREE.Object3D | null = hit.object;
+        while (node !== null && !pathByDrawn.has(node)) {
+            node = node.parent;
+        }
+        const path = node !== null ? pathByDrawn.get(node) : undefined;
+        const entry = path !== undefined ? builtByPath.get(path.join('.')) : undefined;
+        if (path === undefined || entry === undefined) {
+            continue;
+        }
+        const at = inNodeFrame(entry.group, hit.point);
+        // How far a few pixels reach at the point that was hit, in the node's
+        // own millimetres: one point beside it on the screen, taken back into
+        // that frame.
+        const beside = hit.point.clone().project(camera);
+        beside.x += (2 * PICK_PIXELS) / rect.width;
+        const tolerance = at.distanceTo(inNodeFrame(entry.group, beside.unproject(camera)));
+        return { path: [...path], point: [at.x, at.y, at.z], tolerance };
+    }
+    return undefined;
+}
+
+/** How long 'pixels' are on the stage at 'point', seen with 'camera' on a canvas 'width' pixels wide. */
+function pixelsAt(point: THREE.Vector3, camera: THREE.Camera, width: number, pixels: number): number {
+    const projected = point.clone().project(camera);
+    const beside = projected.clone();
+    beside.x += (2 * pixels) / width;
+    return projected.unproject(camera).distanceTo(beside.unproject(camera));
 }
 
 /**
@@ -1141,6 +1495,11 @@ export function clearGeometry(): void {
     callouts = noCallouts();
     materialCallouts = [];
     findingCallouts = [];
+    commentCallouts = [];
+    commentHolders = [];
+    pendingMarker = undefined;
+    builtByPath = new Map();
+    pathByDrawn = new Map();
     treeFrame = undefined;
     visibleItems = undefined;
     flickering = undefined;
@@ -2146,6 +2505,14 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     applyChoice();
     // A cluster names the nodes of one tree: this show's are asked again.
     materialCallouts = [];
+    // So does a thread of comments, and what a click hits is this tree's.
+    commentCallouts = [];
+    commentHolders = [];
+    pendingMarker = undefined;
+    builtByPath = new Map(loaded.built.map((entry) => [entry.path.join('.'), entry]));
+    pathByDrawn = new Map(
+        loaded.built.filter((entry) => entry.drawn !== undefined).map((entry) => [entry.drawn!, entry.path]),
+    );
     treeFrame = frameOfTree;
     // A finding's callouts are pinned again, on what has just arrived: the
     // ones on the show it replaces went with it.
@@ -2661,6 +3028,15 @@ function animate(): void {
         const started = performance.now();
         drawStage();
         labelRenderer.render(scene, drawingCamera());
+        if (focusReply !== undefined) {
+            // Unless something else has taken the focus meanwhile.
+            const button = replyButtons.get(focusReply);
+            focusReply = undefined;
+            const idle = document.activeElement === null || document.activeElement === document.body;
+            if (button?.isConnected && idle) {
+                button.focus();
+            }
+        }
         drawTime = performance.now() - started;
     }
     reportFrameRate(now, draws, drawTime);

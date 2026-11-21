@@ -39,7 +39,7 @@
 
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView } from './image';
-import { LabelBoxes, Labels } from './labels';
+import { LabelBoxes, Labels, RENDER_LABEL_BOXES } from './labels';
 import { RenderData } from './messages';
 import { PackagePicker, quickChoices } from './packagePicker';
 
@@ -91,7 +91,7 @@ export class RenderView {
         if (options.labels !== undefined) {
             const host = el('div');
             this.controls.appendChild(host);
-            this.labelBoxes = new LabelBoxes(host, options.labels);
+            this.labelBoxes = new LabelBoxes(host, options.labels, RENDER_LABEL_BOXES);
         }
         // Hidden until there is an object to list, the way the 3D view's is:
         // with nothing shown it would be an empty list beside an empty picture.

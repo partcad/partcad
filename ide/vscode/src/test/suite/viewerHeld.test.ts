@@ -36,6 +36,17 @@ suite('An answer that has to wait for the geometry', () => {
         assert.deepStrictEqual(applied, [['steel'], []]);
     });
 
+    test('it says whether the geometry is on the stage: what the 3D view lets be clicked by', () => {
+        const held = new HeldForShow<string[]>(() => undefined);
+
+        assert.strictEqual(held.isOnStage, false);
+        held.onStage();
+        assert.strictEqual(held.isOnStage, true);
+        // Another show: what is drawn until its geometry arrives is the last one's.
+        held.reset();
+        assert.strictEqual(held.isOnStage, false);
+    });
+
     test("another show forgets the last one's answer", () => {
         const applied: string[][] = [];
         const held = new HeldForShow<string[]>((value) => applied.push(value));

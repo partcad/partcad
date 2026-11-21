@@ -26,7 +26,7 @@ from mcp_types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
 from partcad_client import __version__
-from partcad_utils import framing, garage, parameters
+from partcad_utils import comments, framing, garage, parameters
 
 from .bridge import Bridge, CallFailed, Outcome
 from .sandbox import OutsideScope, PathScope
@@ -41,6 +41,8 @@ _WRITES = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempoten
 # configuration, which it is for; the same ones again change nothing.
 _LOGS_IN = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
 _ANYTHING = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True)
+# Adds to a package and takes nothing away: every call is one more comment.
+_APPENDS = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False)
 
 # Daemon methods `execute` refuses, and why. Each would act on something that
 # is not the agent's: the daemon every other client of this workspace shares,
@@ -73,7 +75,7 @@ _CONTEXT_FREE = {
 
 # The parameters of a daemon request that name a file or a directory on this
 # machine, which `execute` checks against the scope and hands on absolute.
-_PATH_PARAMS = ("path", "output_dir", "source", "input_filename", "output_filename", "url")
+_PATH_PARAMS = ("path", "output_dir", "source", "input_filename", "output_filename", "url", "attachments")
 
 # What an MCP client can show as an image. SVG is text and goes back as such;
 # everything else is bytes an agent should write to a file rather than read.
@@ -94,6 +96,30 @@ _INLINE_LIMIT = 4096
 _SVG_LIMIT = 200_000
 
 ObjectKind = Literal["part", "assembly", "scene", "sketch"]
+# Every kind of declaration a comment may be written on (see 'partcad_utils.comments').
+CommentKind = Literal[
+    "part",
+    "assembly",
+    "scene",
+    "sketch",
+    "interface",
+    "software",
+    "provider",
+    "repository",
+    "partType",
+    "sketchType",
+    "material",
+    "color",
+    "finish",
+]
+_REF = (
+    "What inside the object the comment is about; the object as a whole when left out. For a part or a sketch: "
+    "one face or edge by its number ('face:12', 'edge:3'), or a selection written the way its script selects -- "
+    'CadQuery\'s \'faces(">Z")\', \'edges("|Z and >X")\', \'faces("%PLANE").faces(">Z[-2]")\', or '
+    "build123d's 'faces().sort_by(Axis.Z)[-1]', 'edges().filter_by(GeomType.CIRCLE).group_by(Axis.Z)[0]'. For an "
+    "assembly or a scene: a link name ('base', 'link#2'), or the link names down to something deeper joined "
+    "with ':'. For a plugin: the request it answers or a function of its script. For an interface: a port."
+)
 TestKind = Literal["part", "assembly", "scene", "sketch", "interface"]
 # `pc info` also reports on a colour, a material or a finish (`--color`, `-m`,
 # `--finish`), which are looked for only where no object has the name.
@@ -188,7 +214,8 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
         "is the same as naming it 'name;param=value,...'. "
         "Start with list_objects (kind=packages for the package tree) and info; look at an object with render, "
         "which returns an image; qualify it -- its requirements, its tests, its simulations -- with qual_test, and "
-        "declare a test of it with qual_add; read it against another "
+        "declare a test of it with qual_add; read the discussion of an object -- or of a package -- with comment_list "
+        "and add to it with comment_add, which signs with the user's git name; read it against another "
         "object -- volume, displacement, mass, and how far apart their surfaces are -- with compare; write STEP, "
         "STL, 3MF and "
         "the rest with export. What has become of an object since it was written: its package's revisions with "
@@ -526,6 +553,69 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             **_kind_flag(kind),
         }
         return await run(ctx, "qual.add", request)
+
+    @server.tool(title="Read comments", annotations=_READS)
+    async def comment_list(
+        ctx: Context,
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[CommentKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+    ) -> CallToolResult:
+        """The threads of comments on an object, or on a package: `pc comment list`.
+
+        Each thread comes with the index a reply names it by ('thread' of comment_add), what it is about ('ref',
+        and 'about' in words), and every comment of it, oldest first: who wrote it, when (UTC), what it says
+        (Markdown) and the files attached to it. 'writable' says whether a comment can be added there.
+        """
+        request = {"package": package, **_kind(kind)}
+        if object:
+            request["object"] = object
+        return await run(ctx, "comment.list", request)
+
+    @server.tool(title="Write a comment", annotations=_APPENDS)
+    async def comment_add(
+        ctx: Context,
+        text: Annotated[str, Field(description="What the comment says, in Markdown.")],
+        object: SomeObjectName = None,
+        ref: Annotated[Optional[str], Field(description=_REF)] = None,
+        thread: Annotated[
+            Optional[int],
+            Field(
+                description="The thread it answers, by the index comment_list gives; a thread of its own when "
+                "left out. A reply that names no 'ref' is about what its thread is."
+            ),
+        ] = None,
+        attachments: Annotated[
+            Optional[List[str]],
+            Field(description="Files of the package that go with it, by path; each has to be inside the package."),
+        ] = None,
+        author: Annotated[
+            Optional[str],
+            Field(description="Who wrote it. The user's 'git config user.name' when left out, which is the usual way."),
+        ] = None,
+        kind: Annotated[Optional[CommentKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+    ) -> CallToolResult:
+        """Write a comment on an object -- or on a package -- into its partcad.yaml: `pc comment add`.
+
+        Signed with the user's git name on this machine and dated now, in UTC. A selection in 'ref' is checked
+        before anything is written. The comment shows in the IDE's 3D view, pinned to what it is about.
+        """
+        name = author or comments.author(bridge.root)
+        if not name:
+            return _refusal(
+                "Nobody to sign the comment with: git has no user.name here. Pass 'author', or ask the user to run "
+                '`git config --global user.name "Their Name"`.'
+            )
+        request = {"package": package, "name": name, "text": text, "ref": ref, "thread": thread, **_kind(kind)}
+        if object:
+            request["object"] = object
+        if attachments:
+            try:
+                request["attachments"] = _checked(scope, "attachments", list(attachments))
+            except OutsideScope as e:
+                return _refusal(str(e))
+        return await run(ctx, "comment.add", request)
 
     @server.tool(title="Lint a package", annotations=_READS)
     async def lint(
@@ -955,6 +1045,10 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             return _refusal(
                 "A healthcheck that fixes the host is the user's to run: ask them to run `pc healthcheck --fix`."
             )
+        if method == "comment.add" and not request.get("name"):
+            # Signed here, with the user's git name, as `pc comment add` signs:
+            # the daemon may be on another machine, and refuses an unsigned one.
+            request["name"] = comments.author(bridge.root)
         try:
             for key in _PATH_PARAMS:
                 if key in request:

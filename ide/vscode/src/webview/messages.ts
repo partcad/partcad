@@ -601,11 +601,25 @@ export interface CamSavedMessage {
     error?: string;
 }
 
+/**
+ * Host to renderer: the answer to one of the 3D view's questions about comments
+ * - 'comments' to 'fetchComments', 'commentLocated' to 'locateComment',
+ * 'commentAdded' to 'addComment', 'filesAttached' to 'attachFiles' - with the
+ * token of the question, or 'error', why there is none. See 'comments.ts'.
+ */
+export interface CommentsAnswerMessage {
+    type: 'comments' | 'commentLocated' | 'commentAdded' | 'filesAttached';
+    token: number;
+    data?: unknown;
+    error?: string;
+}
+
 export type HostMessage =
     | StateRequestMessage
     | SectionShownMessage
     | CamSavedMessage
     | RequirementEditedMessage
+    | CommentsAnswerMessage
     | ShowMessage
     | ClearMessage
     | TabDataMessage
@@ -813,6 +827,60 @@ export interface EditRequirementMessage {
      */
     target: { package: string; name: string; kind: string };
     edit: RequirementEdit;
+}
+
+/**
+ * Renderer to host: the comments of these objects, by the names the tree draws
+ * them under ('comment.list'), with where each thread about a face or an edge
+ * is. Answered by a 'comments' message.
+ */
+export interface FetchCommentsMessage {
+    type: 'fetchComments';
+    token: number;
+    objects: string[];
+}
+
+/**
+ * Renderer to host: which face or edge of a part a click landed on
+ * ('comment.locate'). 'point' is in the part's own frame and 'tolerance' how
+ * far from it an edge still counts, both in millimetres. Answered by
+ * 'commentLocated'.
+ */
+export interface LocateCommentMessage {
+    type: 'locateComment';
+    token: number;
+    object: string;
+    kind: string;
+    point: [number, number, number];
+    tolerance: number;
+}
+
+/**
+ * Renderer to host: write a comment ('comment.add') on 'object', of 'kind': a
+ * thread of its own, or a reply to thread 'thread'. The host signs it with this
+ * machine's git identity. Answered by 'commentAdded'.
+ */
+export interface AddCommentMessage {
+    type: 'addComment';
+    token: number;
+    object: string;
+    kind: string | null;
+    thread?: number;
+    /** The first comment of that thread, as it was read: the daemon writes the reply only where it still starts so. */
+    answering?: { name: string; date: string; text: string };
+    ref?: string;
+    text: string;
+    attachments?: string[];
+}
+
+/**
+ * Renderer to host: let the user pick files of the package in 'directory' to
+ * attach to a comment. Answered by 'filesAttached', with them relative to it.
+ */
+export interface AttachFilesMessage {
+    type: 'attachFiles';
+    token: number;
+    directory?: string | null;
 }
 
 /** Renderer to host: write the CAM tab's settings into the part's declaration ('cam.save'). */

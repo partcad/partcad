@@ -279,8 +279,9 @@ as the one-sided surface PartCAD's solid wall is drawn as -- and the 3D view and
 A dimensioned drawing is of the object as it is, whichever package draws it and whatever its file type is called,
 so the Draft tab says so on every request rather than trusting the drawing package's declaration.
 
-**Under the tree of the 3D and 2D tabs are five callout boxes** (`labels.ts`): Component names, Component prices,
-Materials, Port names and Interface names, the last two ticked from the start. A box is named for what it writes,
+**Under the tree of the 3D and 2D tabs are the callout boxes** (`labels.ts`): Component names, Component prices,
+Materials, Port names and Interface names, the last two ticked from the start, and -- on the 3D view alone
+(`RENDER_LABEL_BOXES`) -- Comments. A box is named for what it writes,
 with no "Show" in front of it. They say *what* is written; the tree says *on
 what*, which is why every 3D callout is a child of the thing it is about (a component's of its shape, a port's of
 its triad) and is hidden with it by three's own visibility, and why an interface's name shows only while the tree
@@ -296,6 +297,14 @@ geometry, answered in a sandbox (`cmf.clusters`, by `material_clusters.py` among
 asks for under the 3D tab's own id (`3d`) and pins under the show's root, shown while the tree draws any node of
 the cluster; the 2D tab's picture finds its own. Metadata no longer hides the whole callout layer: each kind of
 callout has its own switch, on the callout.
+
+**Comments is the one box that makes the model clickable** (`comments.ts`, `commentDialog.ts`, `setPicking` in
+`scene.ts`). Ticked, it pins a callout per thread of `comments:` the objects drawn carry (`comment.list`, asked once per
+show under no tab -- `fetchComments` and its three siblings are messages of their own, each answered with its
+token), and a click that does not move the camera starts a thread: on a part shown alone, about the face or edge
+`comment.locate` finds under the click; on an assembly, about the link path down to the part clicked. A thread's
+callout is clicked to answer it. The comment is signed on the host, with git's name there (`src/viewer/comments.ts`),
+never the daemon's, and written by `comment.add`. See "Comments" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 **The three tabs share one answer** (`Selection`). What somebody wants to look at is a property of the object,
 not of the tab it is being looked at on, so the state lives outside the widgets and each of them reads and

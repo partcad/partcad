@@ -739,6 +739,279 @@ body {
 }
 
 /*
+ * A thread of comments ('comments.ts'): the one callout that is clicked rather
+ * than only read - clicking it answers the thread - and that is scrolled, since a
+ * thread can be long; its wheel scrolls it rather than zooming the model. Told
+ * apart from the others by a bar in the editor's own comment-thread amber.
+ */
+.callout-comment .callout-box {
+    max-width: 22rem;
+    max-height: 14rem;
+    overflow-y: auto;
+    border-left: 3px solid var(--vscode-editorCommentsWidget-unresolvedBorder, rgb(232, 160, 32));
+    white-space: normal;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* Threads pinned to one place share a callout, one section each, each answered on its own. */
+.comment-thread + .comment-thread {
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border, transparent));
+}
+
+.comment-thread:hover {
+    background: var(--vscode-list-hoverBackground, transparent);
+}
+
+/* What answers a thread from the keyboard; a click anywhere else on it does too. */
+.comment-thread-reply {
+    margin-top: 0.3rem;
+    padding: 0.1rem 0.6rem;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 2px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, inherit);
+    font: inherit;
+    cursor: pointer;
+}
+
+.comment-thread-reply:hover {
+    background: var(--vscode-button-secondaryHoverBackground, transparent);
+}
+
+/* What was clicked, while a comment on it is being written. */
+.callout-comment-new .callout-box {
+    border: 1px dashed var(--vscode-editorCommentsWidget-unresolvedBorder, rgb(232, 160, 32));
+    font-style: italic;
+}
+
+/* While Comments is ticked, the model is something to click. */
+.surface.picking {
+    cursor: crosshair;
+}
+
+.comment + .comment {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border, transparent));
+}
+
+.comment-head {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+}
+
+.comment-name {
+    font-weight: 600;
+}
+
+.comment-date {
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.9em;
+}
+
+.comment-text p,
+.comment-text ul,
+.comment-text ol,
+.comment-text blockquote,
+.comment-text pre {
+    margin: 0.2rem 0;
+}
+
+.comment-text ul,
+.comment-text ol {
+    padding-left: 1.2rem;
+}
+
+.comment-text blockquote {
+    padding-left: 0.5rem;
+    border-left: 2px solid var(--vscode-textBlockQuote-border, var(--vscode-panel-border, currentColor));
+    color: var(--vscode-descriptionForeground);
+}
+
+.comment-text code,
+.comment-text pre {
+    font-family: var(--vscode-editor-font-family, monospace);
+    background: var(--vscode-textCodeBlock-background, transparent);
+}
+
+.comment-text pre {
+    padding: 0.2rem 0.3rem;
+    white-space: pre-wrap;
+}
+
+.comment-heading {
+    display: block;
+    margin: 0.2rem 0;
+}
+
+.comment-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.2rem;
+}
+
+.comment-attachment {
+    padding: 0 0.3rem;
+    border-radius: 2px;
+    background: var(--vscode-badge-background, transparent);
+    color: var(--vscode-badge-foreground, inherit);
+    font-size: 0.9em;
+}
+
+.comment-attachment::before {
+    content: '\1F4CE\00A0';
+}
+
+/*
+ * The dialog a comment is written in ('commentDialog.ts'), over the whole panel.
+ * 'hidden' has to win over the flex layout, which an author rule otherwise beats.
+ */
+.comment-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.comment-dialog-backdrop[hidden] {
+    display: none;
+}
+
+.comment-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: min(36rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    /* A short pane, or a long list of files: Cancel and Post stay in reach. */
+    overflow-y: auto;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border, transparent));
+    border-radius: 4px;
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.4));
+}
+
+.comment-dialog-title {
+    font-weight: 600;
+    font-size: 1.1em;
+}
+
+.comment-dialog-subject {
+    color: var(--vscode-descriptionForeground);
+}
+
+.comment-dialog-thread {
+    max-height: 14rem;
+    overflow-y: auto;
+    padding: 0.3rem 0.5rem;
+    border-left: 3px solid var(--vscode-editorCommentsWidget-unresolvedBorder, rgb(232, 160, 32));
+}
+
+.comment-dialog-thread[hidden],
+.comment-dialog-files[hidden] {
+    display: none;
+}
+
+.comment-dialog-text {
+    min-height: 6rem;
+    padding: 0.3em 0.4em;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, transparent));
+    border-radius: 2px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.95em;
+    resize: vertical;
+}
+
+.comment-dialog-text:focus-visible,
+.comment-dialog-actions button:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.comment-dialog-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.comment-dialog-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0 0 0 0.4rem;
+    border-radius: 2px;
+    background: var(--vscode-badge-background, transparent);
+    color: var(--vscode-badge-foreground, inherit);
+}
+
+.comment-dialog-file-remove {
+    padding: 0 0.35rem;
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.comment-dialog-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.comment-dialog-status {
+    flex: 1 1 auto;
+    color: var(--vscode-descriptionForeground);
+}
+
+.comment-dialog-status.failure {
+    color: var(--vscode-errorForeground);
+}
+
+.comment-dialog-actions button {
+    padding: 0.25em 0.9em;
+    border: none;
+    border-radius: 2px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.comment-dialog-actions .comment-dialog-cancel,
+.comment-dialog-actions .comment-dialog-attach {
+    background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+}
+
+.comment-dialog-actions button:hover:enabled {
+    background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+
+.comment-dialog-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.comment-dialog-actions button[hidden] {
+    display: none;
+}
+
+/*
  * The panes that are read rather than looked at: the bill of materials and the
  * supply information.
  */

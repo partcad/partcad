@@ -18,7 +18,15 @@
 
 import * as assert from 'assert';
 
-import { LABEL_BOXES, LABEL_DEFAULTS, LabelBoxes, LabelKey, Labels, renderOptions } from '../../webview/labels';
+import {
+    LABEL_BOXES,
+    LABEL_DEFAULTS,
+    LabelBoxes,
+    LabelKey,
+    Labels,
+    RENDER_LABEL_BOXES,
+    renderOptions,
+} from '../../webview/labels';
 
 class FakeElement {
     public readonly children: FakeElement[] = [];
@@ -116,11 +124,12 @@ suite('The callout boxes under the tree', () => {
                 ['Materials', false],
                 ['Port names', true],
                 ['Interface names', true],
+                ['Comments', false],
             ],
         );
         assert.deepStrictEqual(
             LABEL_BOXES.map(({ key }) => LABEL_DEFAULTS[key]),
-            [false, false, false, true, true],
+            [false, false, false, true, true, false],
         );
         // What each box is called is the thing it writes, with nothing in front of it.
         for (const { label } of LABEL_BOXES) {
@@ -130,8 +139,21 @@ suite('The callout boxes under the tree', () => {
         assert.strictEqual(note.hidden, true);
         // Each says what it is on the command line too.
         for (const row of host.children.filter((child) => child.tagName === 'label')) {
-            assert.match(row.title, /pc render --with/);
+            assert.match(row.title, /pc render --with|pc comment list/);
         }
+    });
+
+    test('the 2D tab has every box but Comments, which only the 3D view writes', () => {
+        const labels = new Labels();
+        const host = new FakeElement('div');
+        new LabelBoxes(host as unknown as HTMLElement, labels, RENDER_LABEL_BOXES);
+        const { boxes } = drawn(host);
+        assert.deepStrictEqual(
+            [...boxes.keys()],
+            ['Component names', 'Component prices', 'Materials', 'Port names', 'Interface names'],
+        );
+        // And a render is never asked anything about it.
+        assert.deepStrictEqual(renderOptions({ ...LABEL_DEFAULTS, comments: true }), {});
     });
 
     test('the two tabs show one answer', () => {
@@ -153,6 +175,7 @@ suite('The callout boxes under the tree', () => {
             materials: false,
             portNames: false,
             interfaceNames: true,
+            comments: false,
         });
     });
 
@@ -207,6 +230,7 @@ suite('The callout boxes under the tree', () => {
                 materials: true,
                 portNames: false,
                 interfaceNames: false,
+                comments: true,
             }),
             {
                 withComponentNames: true,
@@ -223,6 +247,7 @@ suite('The callout boxes under the tree', () => {
                 materials: false,
                 portNames: true,
                 interfaceNames: true,
+                comments: false,
             }),
             { withComponentPrices: true },
         );

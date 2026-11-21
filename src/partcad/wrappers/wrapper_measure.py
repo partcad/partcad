@@ -24,6 +24,7 @@ import sys
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
+import element_refs  # noqa: E402
 import ocp_serialize  # noqa: F401,E402
 import shape_measure  # noqa: E402
 import wrapper_common  # noqa: E402
@@ -44,7 +45,7 @@ _displacement = shape_measure.displacement
 
 
 def process(request):
-    """Answer one request: 'bbox', 'measurements' or 'displacement' of the shape it carries."""
+    """Answer one request: 'bbox', 'measurements', 'displacement', 'anchors' or 'locate' of the shape it carries."""
     operation = request.get("operation")
     if operation == "bbox":
         return _bbox(request["shape"])
@@ -55,6 +56,17 @@ def process(request):
         # 'match:' requirement ask of the few shapes they are about, and only
         # when they are asked to compare displacements.
         return _displacement(request["shape"])
+    if operation == "anchors":
+        # Where the faces and edges comments name are -- by number, or by a
+        # CadQuery or build123d selection -- a point on each, which the 3D view
+        # pins a thread's callout to (see 'element_refs').
+        return element_refs.anchors(request["shape"], request.get("refs") or [])
+    if operation == "locate":
+        # Which face or edge a point clicked in the 3D view is on, as a comment
+        # names it.
+        return element_refs.locate(
+            request["shape"], request["point"], request.get("tolerance") or 0.0, style=request.get("style")
+        )
     raise ValueError("Unknown measure operation: %r" % (operation,))
 
 

@@ -2,6 +2,46 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "definitions": {
+    "comments": {
+      "description": "Discussion of the object, or of the package at the top level: a list of threads, each an ordered list of comments, oldest first. What the Digital Thread's 3D view shows in callouts when 'Comments' is ticked, and what it and 'pc comment add' write. Nothing about what the object is: nothing built, cached or qualified reads them.",
+      "type": ["array", "null"],
+      "items": { "$ref": "#/definitions/comment-thread" }
+    },
+    "comment-thread": {
+      "description": "One thread: the comment that started it and every reply to it, in the order they were written. What the thread is about is the 'ref' of its first comment.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/comment" }
+    },
+    "comment": {
+      "description": "One comment of a thread.",
+      "type": "object",
+      "properties": {
+        "ref": {
+          "description": "What inside the object the comment is about, in the terms of the object's kind: 'face:<n>' or 'edge:<n>' for a part or a sketch, numbered as OCCT numbers them, from one (the numbering a topology finding's 'face 3' uses), or a selection written the way a script selects -- CadQuery's 'faces(\">Z\")', 'faces(\"%PLANE\").faces(\">Z[-2]\")', or build123d's 'faces().sort_by(Axis.Z)[-1]'; a link name for an assembly or a scene ('base', 'link#2'), or the link names down to something deeper joined with ':', as a port of something inside is named; for a plugin -- a provider, a repository, a part type, a sketch type -- its entry point: the request it answers ('quote', 'search') or a function of its script; a port for an interface; an object or a dependency for the package itself. Absent: the object as a whole.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "description": "Who wrote it, as their git configuration says ('git config user.name').",
+          "type": "string",
+          "minLength": 1
+        },
+        "date": {
+          "description": "When it was written, in UTC and to the second: '2026-11-19 14:31:01 UTC'.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} UTC$"
+        },
+        "text": { "description": "What it says, in Markdown.", "type": "string", "minLength": 1 },
+        "attachments": {
+          "description": "Files that go with it, by file name, relative to the package.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "required": ["name", "date", "text"],
+      "additionalProperties": false
+    },
     "output-section": {
       "type": ["object", "null"],
       "properties": {
@@ -418,6 +458,7 @@
                 "formal": { "type": "string", "minLength": 1, "description": "The short formal name, e.g. 'PLA'" },
                 "full": { "type": "string", "minLength": 1, "description": "The full name of the substance, e.g. 'Polylactic Acid'" },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "url": { "$ref": "#/definitions/url" },
                 "ids": { "$ref": "#/definitions/cmf-ids" },
                 "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
@@ -484,6 +525,7 @@
               "type": "object",
               "properties": {
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "url": { "$ref": "#/definitions/url" },
                 "ids": { "$ref": "#/definitions/cmf-ids" },
                 "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
@@ -536,6 +578,7 @@
               "type": "object",
               "properties": {
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "url": { "$ref": "#/definitions/url" },
                 "ids": { "$ref": "#/definitions/cmf-ids" },
                 "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
@@ -2180,6 +2223,7 @@
     "requirements": {
       "$ref": "#/definitions/package-requirements"
     },
+    "comments": { "$ref": "#/definitions/comments" },
     "private": {
       "type": "boolean",
       "default": false
@@ -2385,6 +2429,7 @@
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "images": {
                   "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
                   "type": "array",
@@ -2658,6 +2703,7 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "parameters": { "$ref": "#/definitions/shape-parameter" },
                 "fileFrom": { "type": "string", "enum": ["url"] },
@@ -2697,6 +2743,7 @@
                   "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'f3d' an Autodesk Fusion design, 'pvz' a Creo View package, 'gltf' a glTF scene ('.gltf' or '.glb') with a part per mesh, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "images": {
                   "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
@@ -2801,6 +2848,7 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
@@ -2855,6 +2903,7 @@
                   "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. 'walls' is the walls standing on a plan, a sketch of rooms, closed spaces in them and standalone walls ('sketch', 'height', 'wall', 'interiorWall'), with no file at all. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
@@ -2942,6 +2991,7 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
@@ -2990,6 +3040,7 @@
             "properties": {
               "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
               "desc": { "type": "string", "maxLength": 1000 },
+              "comments": { "$ref": "#/definitions/comments" },
               "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
               "qual": { "$ref": "#/definitions/qual" },
               "images": {
@@ -3127,6 +3178,7 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "path": { "type": "string", "minLength": 1, "description": "The file the sketch is read from, for a sketchType that declares an 'extension': relative to this package, '<name>.<extension>' by default" },
                 "fileFrom": { "type": "string", "enum": ["url"] },
@@ -3171,6 +3223,7 @@
           "properties": {
             "abstract": { "type": "boolean", "default": false },
             "desc": { "type": "string", "maxLength": 1000 },
+            "comments": { "$ref": "#/definitions/comments" },
             "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "images": {
               "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
@@ -3236,6 +3289,7 @@
           "properties": {
             "type": { "type": "string", "enum": ["store", "manufacturer", "enrich"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "comments": { "$ref": "#/definitions/comments" },
             "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "path": { "type": "string", "minLength": 1, "description": "The script that implements the provider, relative to the package that declares it. Defaults to '<name>.py'" },
             "source": { "type": "string", "minLength": 1 },
@@ -3265,6 +3319,7 @@
           "properties": {
             "type": { "type": "string", "enum": ["basic", "enrich"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "comments": { "$ref": "#/definitions/comments" },
             "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "path": { "type": "string", "minLength": 1, "description": "The script that serves the repository (a 'basic' one), relative to the package that declares it. Defaults to '<name>.py'" },
             "source": { "type": "string", "minLength": 1 },
@@ -3301,6 +3356,7 @@
                   "description": "'raw' is the file handed over as it is, and is the default."
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "comments": { "$ref": "#/definitions/comments" },
                 "version": { "type": ["string", "number"], "minLength": 1 },
                 "url": { "$ref": "#/definitions/url" },
                 "path": { "type": "string", "minLength": 1 },
@@ -3328,6 +3384,7 @@
           "properties": {
             "kind": { "type": "string", "enum": ["wrapper"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "comments": { "$ref": "#/definitions/comments" },
             "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
@@ -3352,6 +3409,7 @@
           "properties": {
             "kind": { "type": "string", "enum": ["wrapper"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "comments": { "$ref": "#/definitions/comments" },
             "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1, "description": "The script that builds a sketch of this type, relative to the package that declares it. Defaults to '<name>.py'" },
