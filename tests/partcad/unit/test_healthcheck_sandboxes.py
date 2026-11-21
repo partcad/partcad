@@ -122,6 +122,41 @@ def test_turning_containers_off_is_not_a_finding(monkeypatch):
     assert docker_available.DockerAvailableCheck().test().findings == []
 
 
+@pytest.fixture
+def in_the_image(monkeypatch):
+    """What the PartCAD image sets on everything that runs in it."""
+    from partcad_utils import app_image
+
+    monkeypatch.setenv(app_image.MANAGED_BY_ENV, app_image.MANAGED_BY_IMAGE)
+    monkeypatch.setattr(pc.user_config, "use_docker_remote", True)
+
+
+def test_in_the_image_the_advice_is_the_socket_and_not_an_installation(no_docker, in_the_image):
+    """The host has a Docker; what is missing is the container being given it."""
+    findings = docker_available.DockerAvailableCheck().test().findings
+    assert any("-v /var/run/docker.sock:/var/run/docker.sock" in finding for finding in findings)
+    assert not any("Install Docker" in finding for finding in findings)
+
+
+def test_in_the_image_with_the_socket_there_is_nothing_to_say(some_docker, in_the_image):
+    assert docker_available.DockerAvailableCheck().test().findings == []
+
+
+def test_in_the_image_bind_mounts_are_a_finding(some_docker, in_the_image, monkeypatch):
+    """Its PartCAD is in its image layer, which the host's Docker cannot bind into a sandbox."""
+    monkeypatch.setattr(pc.user_config, "use_docker_remote", False)
+    findings = docker_available.DockerAvailableCheck().test().findings
+    assert any("PC_USE_DOCKER_REMOTE=true" in finding for finding in findings)
+
+
+def test_outside_the_image_bind_mounts_are_the_default_and_no_finding(some_docker, monkeypatch):
+    from partcad_utils import app_image
+
+    monkeypatch.delenv(app_image.MANAGED_BY_ENV, raising=False)
+    monkeypatch.setattr(pc.user_config, "use_docker_remote", False)
+    assert docker_available.DockerAvailableCheck().test().findings == []
+
+
 # --------------------------------------------------------------------------- #
 # CondaAvailable: reports, never fails                                         #
 # --------------------------------------------------------------------------- #

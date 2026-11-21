@@ -93,20 +93,33 @@ def find_bundled_executable() -> "str | None":
     return None
 
 
+# What a conda is called on PATH, in the order PartCAD prefers them. mamba before
+# conda is the older preference of the two: it solves the CAD stack in a
+# fraction of the time. micromamba last, because it is the one a machine has
+# *instead of* an installation -- a single executable, which is what the PartCAD
+# image puts on PATH (`tools/containers/partcad/Dockerfile`), and what somebody
+# who wanted no Miniforge has. Run as itself it is the same program the bundle
+# carries, and `CondaPythonRuntime` already drives that one.
+PATH_NAMES = ("mamba", "conda", "micromamba")
+
+
 def find_executable() -> "str | None":
     """Return the conda executable to run, or None if there is none.
 
-    The host's mamba first, the host's conda second, the bundled copy last -- see
-    the note at the top of this module for why the bundle does not go first.
-    mamba before conda is the older preference of the two: it solves the CAD
-    stack in a fraction of the time.
+    The host's mamba, conda or micromamba first (`PATH_NAMES`), the bundled copy
+    last -- see the note at the top of this module for why the bundle does not
+    go first.
 
-    This is deliberately cheap -- two PATH lookups and a stat, no subprocess --
+    A micromamba found on PATH is the host's, like any other: it keeps whatever
+    root prefix its owner gave it (`MAMBA_ROOT_PREFIX`, which the PartCAD image
+    sets to beside its sandboxes), and nothing here moves it.
+
+    This is deliberately cheap -- three PATH lookups and a stat, no subprocess --
     because `user_config` asks it on startup to decide whether `pythonSandbox`
     defaults to conda at all. `CondaPythonRuntime.find_conda_executable()` is the one that
     goes on to interrogate an importable conda module when this finds nothing.
     """
-    for name in ("mamba", "conda"):
+    for name in PATH_NAMES:
         path = shutil.which(name)
         if path:
             return path

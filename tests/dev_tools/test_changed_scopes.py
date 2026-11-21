@@ -59,6 +59,7 @@ SUBJECTS = {
     "browsers",
     "images",
     "ide-e2e",
+    "app-image",
 }
 
 
@@ -664,3 +665,53 @@ def test_an_unclassified_path_rebuilds_them(tmp_path):
 def test_a_deep_run_rebuilds_them(tmp_path):
     subjects, _ = classify(tmp_path, [], all_=True)
     assert subjects["images"]
+
+
+# --------------------------------------------------------------------------- #
+# The PartCAD image                                                            #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "tools/containers/partcad/Dockerfile",
+        "tools/containers/partcad/entrypoint.sh",
+        "dev-tools/ci/build-partcad-image.sh",
+        "dev-tools/ci/test-partcad-image.sh",
+        "dev-tools/ci/mcp_smoke.py",
+    ],
+)
+def test_the_partcad_image_is_its_own_subject_and_not_the_sandbox_images(tmp_path, path):
+    """PartCAD itself, as an image a person pulls: rebuilt and tested, and the eleven sandbox images left alone."""
+    subjects, buckets = classify(tmp_path, [path])
+
+    assert buckets == {"appimage", "code"}
+    assert subjects["app-image"]
+    assert not subjects["images"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "tools/containers/python/Dockerfile",
+        "dev-tools/ci/build-sandbox-image.sh",
+        "poetry.lock",
+        ".github/workflows/x.yml",
+    ],
+)
+def test_what_the_partcad_image_is_built_from_rebuilds_it(tmp_path, path):
+    """The sandbox base it is built on, the dependencies installed into it, and CI."""
+    subjects, _ = classify(tmp_path, [path])
+    assert subjects["app-image"], path
+
+
+def test_a_source_change_alone_does_not_rebuild_the_partcad_image(tmp_path):
+    """Like the bundles: the version bump on "devel" is a deep run, and builds it regardless."""
+    subjects, _ = classify(tmp_path, ["src/partcad/part.py"])
+    assert not subjects["app-image"]
+
+
+def test_a_deep_run_builds_the_partcad_image(tmp_path):
+    subjects, _ = classify(tmp_path, [], all_=True)
+    assert subjects["app-image"]

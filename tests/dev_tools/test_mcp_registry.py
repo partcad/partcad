@@ -14,7 +14,10 @@ installs the wrong thing until the next release:
 * the ownership proof, `mcp-name:` in README.md, which is the wheel's PyPI
   description and the only thing the registry reads to decide the wheel is ours;
 * the command it tells a client to run, `uvx partcad mcp`, and the variable it
-  offers for the package to serve.
+  offers for the package to serve;
+* the image it offers beside the wheel, `ghcr.io/partcad/partcad`, which the
+  registry decides is ours by a label the Dockerfile has to carry, and the
+  `docker run` arguments a client is told to start it with.
 """
 
 import json
@@ -34,19 +37,31 @@ PYPROJECT = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf
 BUMPVERSION = tomllib.loads((REPO_ROOT / "dev-tools" / "bumpversion.toml").read_text(encoding="utf-8"))
 
 
-def _package():
-    (package,) = SERVER["packages"]
+DOCKERFILE = (REPO_ROOT / "tools" / "containers" / "partcad" / "Dockerfile").read_text(encoding="utf-8")
+
+
+def _package(registry_type="pypi"):
+    (package,) = [package for package in SERVER["packages"] if package["registryType"] == registry_type]
     return package
 
 
-def test_the_entry_names_this_release_twice():
+def test_the_entry_offers_the_wheel_and_the_image_and_nothing_else():
+    assert sorted(package["registryType"] for package in SERVER["packages"]) == ["oci", "pypi"]
+
+
+def test_the_entry_names_this_release_three_times():
     release = BUMPVERSION["tool"]["bumpversion"]["current_version"]
     assert SERVER["version"] == release
     assert _package()["version"] == release
+    # An image names its release in its tag, and has no "version" of its own.
+    assert _package("oci")["identifier"] == "ghcr.io/partcad/partcad:%s" % release
+    assert "version" not in _package("oci")
 
 
 def test_bumpversion_moves_the_entry():
-    assert "server.json" in {entry["filename"] for entry in BUMPVERSION["tool"]["bumpversion"]["files"]}
+    files = BUMPVERSION["tool"]["bumpversion"]["files"]
+    searches = {entry["search"] for entry in files if entry["filename"] == "server.json"}
+    assert searches == {'"version": "{current_version}"', "ghcr.io/partcad/partcad:{current_version}"}
 
 
 def test_the_name_is_in_the_namespace_this_repository_can_publish():
@@ -98,3 +113,56 @@ def test_the_variable_it_offers_is_the_one_pc_reads(monkeypatch, tmp_path):
     monkeypatch.setenv(variable["name"], str(tmp_path))
     context = click.Context(cli, **cli.context_settings)
     assert option.resolve_envvar_value(context) == str(tmp_path)
+
+
+# --------------------------------------------------------------------------- #
+# The image                                                                    #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_image_carries_the_ownership_proof():
+    """The registry reads `io.modelcontextprotocol.server.name` off the image, and refuses it without."""
+    assert 'io.modelcontextprotocol.server.name="%s"' % SERVER["name"] in DOCKERFILE
+
+
+def test_the_image_is_started_by_docker_and_speaks_on_stdio():
+    package = _package("oci")
+    assert package["runtimeHint"] == "docker"
+    assert package["transport"] == {"type": "stdio"}
+    assert package["packageArguments"] == [{"type": "positional", "value": "mcp"}]
+
+
+def test_the_image_hands_its_argument_to_pc():
+    """`docker run <image> mcp` is `pc mcp`: the entrypoint passes a command of `pc`'s to `pc`."""
+    from partcad_cli.click.command import cli
+
+    assert cli.get_command(None, _package("oci")["packageArguments"][0]["value"]) is not None
+    entrypoint = (REPO_ROOT / "tools" / "containers" / "partcad" / "entrypoint.sh").read_text(encoding="utf-8")
+    assert "set -- pc" in entrypoint
+
+
+def _runtime_values(name):
+    return [argument["value"] for argument in _package("oci")["runtimeArguments"] if argument["name"] == name]
+
+
+def test_the_workspace_is_mounted_and_worked_in():
+    """One variable, the workspace, mounted where the server then runs: the entrypoint becomes its owner."""
+    (workdir,) = _runtime_values("-w")
+    mounts = _runtime_values("--mount")
+    assert "type=bind,src={workspace},dst=%s" % workdir in mounts
+    (bind,) = [a for a in _package("oci")["runtimeArguments"] if a["value"].startswith("type=bind")]
+    assert bind["variables"]["workspace"]["format"] == "filepath"
+    assert bind["isRequired"] and bind["variables"]["workspace"]["isRequired"]
+
+
+def test_the_state_is_kept_in_the_volume_the_image_expects():
+    """Without it every run builds a CAD sandbox from nothing -- minutes, more than a client waits."""
+    from partcad_utils import app_image
+
+    assert "type=volume,src=%s,dst=%s" % (app_image.STATE_VOLUME, app_image.STATE_DIR) in _runtime_values("--mount")
+    assert "PC_INTERNAL_STATE_DIR=%s" % app_image.STATE_DIR in DOCKERFILE
+
+
+def test_the_hosts_docker_is_not_handed_over_by_the_registry():
+    """The socket gives the container the host's Docker. A client must not add it on a listing's say-so."""
+    assert not any("docker.sock" in json.dumps(argument) for argument in _package("oci")["runtimeArguments"])

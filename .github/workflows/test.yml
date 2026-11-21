@@ -582,6 +582,66 @@ jobs:
 
           pytest tests/partcad/unit/test_docker_sandbox_live.py -v -p no:warnings
 
+  # The PartCAD image, "ghcr.io/partcad/partcad": PartCAD itself for whoever
+  # would rather "docker run" it than install it, built from a wheel of this
+  # tree on the sandbox base this run uses, and then run the way a person runs
+  # it -- "dev-tools/ci/test-partcad-image.sh": a part rendered in conda inside
+  # the container, "pc mcp" answering over "docker run -i", and with the
+  # runner's Docker socket handed in, the KiCad example rendered through
+  # KiCad's container and the "docker" sandbox, in "upload" mode.
+  #
+  # Built here and never pushed, like "sandbox-docker" above: what is published
+  # is "deploy.yml"'s, from the release's own wheel, by the same script. One
+  # architecture, the runner's; the release builds both.
+  #
+  # After "build-containers" because the image is built FROM the GStreamer
+  # flavour of the Python base, and a run that built base images of its own
+  # publishes them there under a tag only this run knows. "cleanup-images"
+  # waits for this job for the same reason. A run that did not build its own
+  # uses the release's, which needs nothing from that job -- hence the
+  # condition that tolerates it being skipped.
+  container-partcad:
+    name: "Container (PartCAD)"
+    needs: [set-matrix, build-containers]
+    if: >-
+      ${{ !cancelled()
+      && needs.set-matrix.outputs.app-image == 'true'
+      && needs.build-containers.result != 'failure' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      # Which base images this run built, if any: the image is built on that
+      # tag, and PartCAD inside it resolves KiCad's image through the same
+      # variable, which the test script forwards into the container.
+      PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+      PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+        with:
+          # The "docker" driver, not a "docker-container" builder: the image
+          # has to end up in this runner's daemon for the test below to run it,
+          # and the "docker" driver is the one that loads into it.
+          driver: docker
+
+      - name: Build the PartCAD image
+        env:
+          PC_IMAGE_REFS: partcad:under-test
+        run: dev-tools/ci/build-partcad-image.sh
+
+      - name: Run it the way a person does
+        env:
+          PC_IMAGE: partcad:under-test
+          PC_SOCKET: "true"
+        run: dev-tools/ci/test-partcad-image.sh
+
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
@@ -627,6 +687,7 @@ jobs:
       behave: ${{ steps.scope.outputs.behave }}
       examples: ${{ steps.scope.outputs.examples }}
       ide-e2e: ${{ steps.scope.outputs.ide-e2e }}
+      app-image: ${{ steps.scope.outputs.app-image }}
       # What tag PartCAD's own container images are built, published and pulled
       # under on this run, and whether this run may publish them. One answer,
       # read by both builders and handed to every job that runs a test, so that
@@ -2392,6 +2453,8 @@ jobs:
       - test-examples-partcad
       - test-examples-all
       - test-pub-repo
+      # Built FROM this run's GStreamer base image, which it pulls by tag.
+      - container-partcad
     if: ${{ always() && needs.set-matrix.outputs.image-override != '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10

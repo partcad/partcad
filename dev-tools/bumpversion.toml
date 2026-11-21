@@ -163,6 +163,15 @@ filename = "server.json"
 search = "\"version\": \"{current_version}\""
 replace = "\"version\": \"{new_version}\""
 
+# The same entry's image, `ghcr.io/partcad/partcad`, which names its release in
+# its tag rather than in a "version" of its own (an "oci" package has none).
+# `deploy.yml` publishes that tag before it publishes this file, and the
+# registry refuses an image it cannot find.
+[[tool.bumpversion.files]]
+filename = "server.json"
+search = "ghcr.io/partcad/partcad:{current_version}"
+replace = "ghcr.io/partcad/partcad:{new_version}"
+
 # The browser extension `pc login` captures a plugin's credentials with, in its
 # two shapes. Both are published to the browser stores by "browsers.yml", and a
 # store refuses a version it has already seen -- so a manifest that stopped

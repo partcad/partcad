@@ -37,6 +37,14 @@ LABEL_CONTAINER = "partcad.container"
 # out of date.
 LABEL_VERSION = "partcad.version"
 
+# Carried by the PartCAD image, `ghcr.io/partcad/partcad`: PartCAD itself, which
+# a person pulled to run, rather than an image PartCAD pulled to run something
+# in. It is built on PartCAD's sandbox base and so inherits `LABEL_IMAGE`, which
+# a derived image cannot take away -- and without this, `pc system prune` run in
+# that very image, with the host's socket, would delete the image it runs from.
+# Removing it is `docker image rm`, like any other image somebody chose to pull.
+LABEL_APP = "partcad.app"
+
 
 def _labels(thing) -> dict:
     """The labels of an image or a container, however the SDK exposes them."""
@@ -79,7 +87,7 @@ def managed_images(client, stale_only: bool = False, version: Optional[str] = No
     found = []
     for image in client.images.list(all=False):
         labels = _labels(image)
-        if LABEL_IMAGE not in labels:
+        if LABEL_IMAGE not in labels or LABEL_APP in labels:
             continue
         if stale_only:
             built_for = labels.get(LABEL_VERSION)
