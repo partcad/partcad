@@ -485,10 +485,10 @@ And what needs a maintainer once, after which the release keeps it current:
   that tracks `plugin-dist`, path `pc`. The directory refuses a plugin without a
   README or a license, which is why `materialize.sh` validates with
   `--profile directory` — what `plugin-dist` carries is what would be
-  submitted. It warns that there is no icon: a square PNG of 512 px or more,
-  which it reads once, at the first submission. Every `.png` here is in LFS and
-  no workflow checks LFS out, so one would need an exemption in
-  `.gitattributes`.
+  submitted. Its listing icon is `claude/.claude-plugin/icon.png`, the
+  PartCAD logo at 512 px, which it reads once, at the first submission. It is
+  one of the `.png`s held out of LFS in `.gitattributes`: no workflow checks LFS
+  out, and a pointer file there would be a plugin listed with no icon.
 - **GitHub's MCP registry** (github.com/mcp, which Visual Studio Code's MCP
   gallery reads) onboards a server by hand; once onboarded, versions follow the
   MCP Registry.
