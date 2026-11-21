@@ -8,8 +8,8 @@
 ;
 ;   ISCC.exe /DVersion=0.7.158 /O<output directory> /F<file name> partcad-ide.iss
 ;
-; It installs per user by default -- into %LOCALAPPDATA%\Programs, without a UAC
-; prompt -- and offers "for all users" in the wizard for someone who has an
+; It installs per user by default -- into %LOCALAPPDATA%\PartCAD IDE, without a
+; UAC prompt -- and offers "for all users" in the wizard for someone who has an
 ; administrator account and wants it in Program Files. That is the same choice
 ; the editors this one is built from offer, and the reason the registry entries
 ; below use HKA: they follow the installation into HKCU or HKLM.
@@ -65,7 +65,19 @@ AppUpdatesURL=https://github.com/partcad/partcad/releases
 VersionInfoVersion={#Version}
 VersionInfoProductName={#AppName}
 
-DefaultDirName={autopf}\{#AppName}
+; Not {autopf}, which for one user is %LOCALAPPDATA%\Programs: Setup cannot
+; install a path longer than MAX_PATH (260), whatever Windows is configured to
+; allow -- Setup.exe is not marked long-path aware, and it refuses the \\?\
+; prefix that would get around it -- and the editor's extensions carry files
+; more than 200 characters deep. "Programs\" is nine of the characters those
+; files have left, so DefaultAppDir below goes without it; the directory for
+; all users is {commonpf}\{#AppName}, as it was. ../tools/check_install_paths.py
+; measures the application against both before this is compiled, with the
+; longest user name Windows allows, and both have to change together.
+;
+; An installation from before this keeps its directory when it is upgraded
+; (UsePreviousAppDir), so it is the new ones that get the shorter path.
+DefaultDirName={code:DefaultAppDir}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 AllowNoIcons=yes
@@ -182,6 +194,17 @@ Root: HKA; Subkey: "Software\Classes\Directory\Background\shell\{#AppName}\comma
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+{ Where the application goes unless the user says otherwise. See DefaultDirName
+  for why the one for one user is not where autopf would put it. A brace comment
+  ends at the first closing brace, so no constant is spelled out in here. }
+function DefaultAppDir(Param: String): String;
+begin
+  if IsAdminInstallMode then
+    Result := ExpandConstant('{commonpf}\{#AppName}')
+  else
+    Result := ExpandConstant('{localappdata}\{#AppName}');
+end;
+
 { The two directories that go on PATH: the editor's command line launcher, and
   the PartCAD command line tools the application carries. }
 

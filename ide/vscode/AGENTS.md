@@ -1200,7 +1200,7 @@ npm run pretest && npx vscode-test --label bundledIde        # xvfb-run -a ... o
 ```powershell
 # Windows. There is no `install.sh` there -- the setup program puts the
 # application here -- and `fromPath` is read by Node, so it wants a native path.
-$env:PARTCAD_IDE_PATH = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE\partcad-ide.exe"
+$env:PARTCAD_IDE_PATH = Join-Path $env:LOCALAPPDATA "PartCAD IDE\partcad-ide.exe"
 npm run pretest; npx vscode-test --label bundledIde
 ```
 

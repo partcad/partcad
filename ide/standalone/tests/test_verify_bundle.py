@@ -142,6 +142,24 @@ def test_a_missing_optional_extension_only_warns(tmp_path, capsys):
     assert "optional extension yzhang.markdown-all-in-one is not installed" in capsys.readouterr().out
 
 
+def test_an_extension_held_at_a_version_must_be_that_version(tmp_path, capsys):
+    # `build.sh` asks the gallery for `<id>@<version>`; a different one installed
+    # means that request was not what ran, and the reason it was held -- a path
+    # too long to install, say -- is back.
+    plan = {**PLAN, "install": [dict(entry) for entry in PLAN["install"]]}
+    plan["install"][1]["version"] = "0.9.0"
+
+    assert run(make_bundle(tmp_path), tmp_path, plan=plan) == 1
+    assert "extension yzhang.markdown-all-in-one is 1.0.0, and the policy holds it at 0.9.0" in capsys.readouterr().out
+
+
+def test_an_extension_held_at_the_version_installed_passes(tmp_path):
+    plan = {**PLAN, "install": [dict(entry) for entry in PLAN["install"]]}
+    plan["install"][1]["version"] = "1.0.0"
+
+    assert run(make_bundle(tmp_path), tmp_path, plan=plan) == 0
+
+
 def test_an_extension_the_policy_skips_must_not_be_there(tmp_path, capsys):
     resources = make_bundle(tmp_path)
     add_extension(resources / "app" / "extensions", "ms-python", "vscode-pylance")
