@@ -186,8 +186,25 @@ class AgentSkillsCheck(HealthCheckTest):
         return ok
 
     def _package_dir(self) -> str:
-        """The directory of the package the `AGENTS.md` section is about: the current one, or the repository's root."""
-        here = os.path.abspath(os.getcwd())
-        if os.path.isfile(os.path.join(here, "partcad.yaml")):
-            return here
+        """The directory of the package the `AGENTS.md` section is about.
+
+        The one its marker names, so that a repair run from anywhere in the
+        repository writes the section for the package `pc init` wrote it for --
+        not for the repository's root, which would drop the `-p` an agent needs.
+        A section whose marker names none was written for the root.
+        """
+        try:
+            with open(self._agents_md(), "r", encoding="utf-8") as f:
+                package = ai_agents.instructions_package(f.read())
+        except (OSError, UnicodeDecodeError):
+            package = None
+        if package:
+            candidate = os.path.normpath(os.path.join(self._root, package))
+            # Only inside the repository: the marker is text anybody can edit.
+            try:
+                inside = os.path.commonpath([candidate, self._root]) == self._root
+            except ValueError:  # another drive, on Windows
+                inside = False
+            if inside:
+                return candidate
         return self._root

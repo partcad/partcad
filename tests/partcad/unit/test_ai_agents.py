@@ -889,3 +889,85 @@ def test_the_opencode_documentation_shows_what_pc_init_writes():
         **dict(config.preamble),
         "mcp": {"servers": {"partcad": ai_agents.mcp_server_entry("opencode", "/r", "/r")}},
     }
+
+
+# --- What review found ---
+
+
+def test_a_description_that_mentions_partcad_is_not_a_stamp():
+    """Only `metadata.partcad` is a stamp; a skill mistaken for PartCAD's is one `pc init` may delete."""
+    text = "---\nname: pc-notes\ndescription: |\n  partcad: notes\n---\n\n# Notes\n"
+    assert ai_agents.stamped_version(text) is None
+
+
+def test_a_users_skill_whose_description_mentions_partcad_is_not_retired(tmp_path):
+    theirs = tmp_path / ".agents" / "skills" / "pc-notes"
+    theirs.mkdir(parents=True)
+    (theirs / "SKILL.md").write_text("---\nname: pc-notes\ndescription: |\n  partcad: notes\n---\n", encoding="utf-8")
+
+    ai_agents.install_agent_skills(str(tmp_path), ["copilot"], mcp=False, instructions=False)
+
+    assert (theirs / "SKILL.md").is_file()
+
+
+def test_an_array_of_tables_after_ours_in_codexs_file_is_kept(tmp_path):
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text(
+        '[mcp_servers.partcad]\ncommand = "old"\n\n[[skills.config]]\nname = "mine"\n', encoding="utf-8"
+    )
+
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    config = read_toml(tmp_path / ".codex" / "config.toml")
+    assert config["skills"]["config"] == [{"name": "mine"}]
+    assert config["mcp_servers"]["partcad"]["command"] == "pc"
+
+
+def test_a_table_between_two_of_ours_in_codexs_file_is_kept(tmp_path):
+    """TOML lets `[mcp_servers.partcad.env]` come after somebody else's table."""
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text(
+        '[mcp_servers.partcad]\ncommand = "old"\n\n[mcp_servers.github]\ncommand = "gh-mcp"\n\n'
+        '[mcp_servers.partcad.env]\nX = "1"\n\n[profiles.fast]\nmodel = "m"\n',
+        encoding="utf-8",
+    )
+
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    config = read_toml(tmp_path / ".codex" / "config.toml")
+    assert config["mcp_servers"]["github"] == {"command": "gh-mcp"}
+    assert config["mcp_servers"]["partcad"] == {"command": "pc", "args": ["-p", ".", "mcp"]}
+    assert config["profiles"]["fast"] == {"model": "m"}
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink") or os.name == "nt", reason="needs symlinks")
+def test_linked_gemini_settings_are_left_alone_by_the_context_too(tmp_path):
+    shared = tmp_path / "shared.json"
+    shared.write_text("{}", encoding="utf-8")
+    (tmp_path / ".gemini").mkdir()
+    os.symlink(shared, tmp_path / ".gemini" / "settings.json")
+
+    assert not ai_agents.install_gemini_context(str(tmp_path))
+
+    assert shared.read_text(encoding="utf-8") == "{}"
+
+
+def test_the_section_marker_names_the_package(repository):
+    package = repository / "models" / "robot"
+    package.mkdir(parents=True)
+
+    ai_agents.install_instructions(str(repository), str(package))
+
+    assert ai_agents.instructions_package((repository / "AGENTS.md").read_text(encoding="utf-8")) == "models/robot"
+
+
+def test_the_plugin_names_its_icon_and_it_is_a_real_png():
+    """The directory reads the icon once; a pointer file there would be listed for good."""
+    manifest = ai_agents.plugin_manifest()
+    path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..", "ai-agents", "claude", manifest["icon"].removeprefix("./")
+    )
+    with open(path, "rb") as f:
+        assert f.read(8) == b"\x89PNG\r\n\x1a\n"

@@ -134,16 +134,13 @@ def stamped_version(text: str) -> Optional[str]:
     retired skill lingering for somebody who has not reinstalled since, and the
     alternative is deleting a file PartCAD may not have written.
     """
-    bounds = front_matter_bounds(text)
-    if bounds is None:
+    # The field itself, parsed: a line reading `partcad: ...` can be anywhere
+    # in front matter -- inside a block-scalar `description:`, for one -- and a
+    # skill mistaken for PartCAD's is one `pc init` may delete.
+    section = front_matter(text).get(STAMP_SECTION)
+    if not isinstance(section, dict) or section.get(STAMP_KEY) is None:
         return None
-    start, end = bounds
-    found = re.search(
-        r"^[ \t]+%s:[ \t]*(?P<version>\S+)[ \t]*$" % re.escape(STAMP_KEY),
-        text[start:end],
-        re.MULTILINE,
-    )
-    return found.group("version") if found else None
+    return str(section[STAMP_KEY])
 
 
 def rename_references(text: str, skills: list[str]) -> str:

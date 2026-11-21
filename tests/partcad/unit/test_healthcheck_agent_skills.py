@@ -213,7 +213,7 @@ def age_the_instructions(workspace, version="0.0.1"):
     path = workspace / "AGENTS.md"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            "BEGIN partcad %s:" % partcad.__version__, "BEGIN partcad %s:" % version
+            "BEGIN partcad %s " % partcad.__version__, "BEGIN partcad %s " % version
         ),
         encoding="utf-8",
     )
@@ -247,3 +247,32 @@ def test_the_fix_writes_no_agents_md_that_was_not_there(workspace):
     assert check.fix()
 
     assert not (workspace / "AGENTS.md").exists()
+
+
+def test_a_repair_run_elsewhere_keeps_the_package_the_section_names(workspace, monkeypatch):
+    """`pc healthcheck --fix` from the root must not rewrite a nested package's section for the root."""
+    package = workspace / "models" / "robot"
+    package.mkdir(parents=True)
+    ai_agents.install_agent_skills(str(package), ["cursor"], mcp=False)
+    age_the_instructions(workspace)
+    monkeypatch.chdir(workspace)
+
+    check = AgentSkillsCheck()
+    check.test()
+    assert check.fix()
+
+    text = (workspace / "AGENTS.md").read_text(encoding="utf-8")
+    assert ai_agents.instructions_package(text) == "models/robot"
+    assert "pc --no-ansi -p models/robot" in text
+
+
+def test_a_marker_naming_a_package_outside_the_repository_is_not_followed(workspace):
+    (workspace / "AGENTS.md").write_text(
+        '<!-- BEGIN partcad 0.0.1 package="../../elsewhere": old -->\nstale\n<!-- END partcad -->\n', encoding="utf-8"
+    )
+
+    check = AgentSkillsCheck()
+    check.test()
+    assert check.fix()
+
+    assert ai_agents.instructions_package((workspace / "AGENTS.md").read_text(encoding="utf-8")) == "."

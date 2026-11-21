@@ -566,6 +566,11 @@ def _merge_json(path: str, change, what: str) -> bool:
     nothing to change, and a reason when it refuses to. True when `what` is in
     place afterwards.
     """
+    # Every caller, not only the MCP entry's: a linked settings file is one
+    # shared with something else (see `_writable_destination`).
+    if os.path.islink(path):
+        pc_logging.warning("Not adding %s: '%s' is a symbolic link" % (what, path))
+        return False
     document = {}
     if os.path.exists(path):
         try:
@@ -598,7 +603,9 @@ def _merge_json(path: str, change, what: str) -> bool:
 
 
 # A table header in a TOML file, with its dotted name.
-_TOML_HEADER = re.compile(r"^[ \t]*\[(?!\[)(?P<name>[^\]]+)\][ \t]*(?:#.*)?$", re.MULTILINE)
+# A table header in a TOML file, `[name]` or an array-of-tables `[[name]]`,
+# with its dotted name: each one ends the table before it.
+_TOML_HEADER = re.compile(r"^[ \t]*\[\[?(?P<name>[^\[\]]+)\]\]?[ \t]*(?:#.*)?$", re.MULTILINE)
 
 
 def _toml_key_path(header: str) -> list[str]:
@@ -645,20 +652,25 @@ def _install_toml_server(path: str, key: str, entry: dict) -> bool:
         ", ".join(json.dumps(arg) for arg in entry["args"]),
     )
 
+    # The file as the spans its headers start, each running to the next
+    # header. PartCAD's are the table and its sub-tables, wherever they are:
+    # TOML lets `[mcp_servers.partcad.env]` come after somebody else's table,
+    # so each span is replaced or dropped on its own and what lies between
+    # them is kept.
     ours = [key, MCP_SERVER_NAME]
     headers = list(_TOML_HEADER.finditer(text))
-    start = end = None
-    for index, header in enumerate(headers):
+    starts = [header.start() for header in headers]
+    spans = list(zip(starts, starts[1:] + [len(text)]))
+    pieces = [text[: starts[0]] if starts else text]
+    replaced = False
+    for header, (start, end) in zip(headers, spans):
         if _toml_key_path(header.group("name"))[:2] != ours:
-            continue
-        if start is None:
-            start = header.start()
-        # To the next table that is not ours, or to the end of the file.
-        following = next((h for h in headers[index + 1 :] if _toml_key_path(h.group("name"))[:2] != ours), None)
-        end = following.start() if following else len(text)
-    if start is not None:
-        tail = text[end:]
-        updated = text[:start] + table + ("\n" + tail if tail else "")
+            pieces.append(text[start:end])
+        elif not replaced:
+            pieces.append(table + ("\n" if end < len(text) else ""))
+            replaced = True
+    if replaced:
+        updated = "".join(pieces)
     else:
         updated = (text.rstrip("\n") + "\n\n" if text.strip() else "") + table
 
@@ -792,8 +804,15 @@ def install_agent_skills(package_dir: str = ".", agents=None, mcp: bool = True, 
 
 CLAUDE_MD = CLAUDE_MD_NAME
 
-_SECTION_BEGIN = "<!-- BEGIN partcad %s: written by 'pc init --skills-only', which replaces this section -->"
-_SECTION_BEGIN_RE = re.compile(r"^<!-- BEGIN partcad (?P<version>\S+?):? .*-->[ \t]*$", re.MULTILINE)
+# The begin marker says which PartCAD wrote the section and which package it is
+# about, relative to the repository root: a repair (`pc healthcheck --fix`) has
+# to write it for the same package, from wherever it is run.
+_SECTION_BEGIN = (
+    "<!-- BEGIN partcad %s package=\"%s\": written by 'pc init --skills-only', which replaces this section -->"
+)
+_SECTION_BEGIN_RE = re.compile(
+    r'^<!-- BEGIN partcad (?P<version>[^\s:]+)(?: package="(?P<package>[^"]*)")?:? .*-->[ \t]*$', re.MULTILINE
+)
 _SECTION_END = "<!-- END partcad -->"
 _SECTION_END_RE = re.compile(r"^<!-- END partcad -->[ \t]*$", re.MULTILINE)
 
@@ -809,6 +828,15 @@ def instructions_version(text: str) -> Optional[str]:
     return found.group("version") if found else None
 
 
+def instructions_package(text: str) -> Optional[str]:
+    """The package the section in this `AGENTS.md` is about, relative to the repository root ('.' for the root).
+
+    None where there is no section, or one whose marker does not say.
+    """
+    found = _SECTION_BEGIN_RE.search(text)
+    return found.group("package") if found else None
+
+
 def instructions_section(root: str, package_dir: str) -> str:
     """PartCAD's section of `AGENTS.md` in `root`, for the package in `package_dir` and the skills installed there."""
     relative = os.path.relpath(os.path.abspath(package_dir), os.path.abspath(root)).replace(os.sep, "/")
@@ -817,7 +845,7 @@ def instructions_section(root: str, package_dir: str) -> str:
     pc = "pc --no-ansi" if at_root else "pc --no-ansi -p %s" % relative
 
     lines = [
-        _SECTION_BEGIN % __version__,
+        _SECTION_BEGIN % (__version__, relative),
         "## PartCAD",
         "",
         "This repository holds a [PartCAD](https://partcad.org) package: %s declares its parts, sketches," % package,

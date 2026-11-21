@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "homepage": "https://partcad.org",
   "repository": "https://github.com/partcad/partcad",
+  "icon": "./.claude-plugin/icon.png",
   "author": {
     "name": "Roman Kuzmenko",
     "email": "rkuz@partcad.org"
