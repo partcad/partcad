@@ -335,13 +335,20 @@ things keep within it:
 
 - The per-user directory is `%LOCALAPPDATA%\PartCAD IDE`, not Inno Setup's default of
   `%LOCALAPPDATA%\Programs\PartCAD IDE`, which is nine characters fewer for every file. (`%LOCALAPPDATA%\PartCAD`
-  without the suffix is taken: it is where `install.sh` puts the command line tools.) An installation made
-  before that keeps its directory when it is upgraded, as Inno Setup does for any directory a user chose.
-- `tools/check_install_paths.py` measures the application against both directories Setup may use, with the
-  longest user name Windows allows, before `build.sh` compiles the installer, and fails the build naming the
-  file and the extension it came from. That leaves 203 characters below the application directory. When it
+  without the suffix is taken: it is where `install.sh` puts the command line tools.)
+- `tools/check_install_paths.py` measures the application against both directories Setup installs into, with
+  the longest user name Windows allows, before `build.sh` compiles the installer, and fails the build naming
+  the file and the extension it came from. That leaves 203 characters below the application directory. When it
   fails, hold the extension at the last version that fit -- `"version"` in `extensions.json` -- rather than
   shortening something else to make room; that is how `ms-python.python` is held at 2026.4.0.
+
+**An installation made before the directory was shortened is upgraded where it is**, in
+`%LOCALAPPDATA%\Programs\PartCAD IDE` -- Inno Setup keeps the directory of a previous installation
+(`UsePreviousAppDir`), and nothing here moves it. That directory is the one constraint the check reports rather
+than enforces: with 2026.4.0 an upgrade there fits a profile directory name of up to 11 characters, which is
+what installing there needed in the first place, and at 20 nothing fits, so enforcing it would fail every build.
+A user with a longer name can have an installation there only from a release whose files were shallower, and
+that one cannot be upgraded in place; uninstalling and installing again puts the IDE in the new directory.
 
 An upgrade installs over the previous one, and the file list only overwrites -- so anything an older build put
 in the application directory that this one does not survives. `[InstallDelete]` clears one place where that

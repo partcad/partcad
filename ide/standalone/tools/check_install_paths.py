@@ -25,6 +25,10 @@ the build and is named, with the extension it came from -- in practice it is
 always a third-party extension's deepest file, and the answer is to hold that
 extension at a version that fits (`"version"` in `extensions.json`).
 
+One more directory is reported rather than enforced: the per-user directory
+Setup used before it was shortened, where an earlier installation stays when it
+is upgraded. See `RETAINED`.
+
     check_install_paths.py --root <the application directory> [--location <directory>]...
 
 `--location` adds a directory to check besides the two Setup uses: `build.sh`
@@ -53,12 +57,26 @@ LONGEST_USER_NAME = 20
 
 APP_NAME = "PartCAD IDE"
 
+# A profile directory, either side of the user name.
+PROFILE = "C:\\Users\\"
+PER_USER = "\\AppData\\Local\\" + APP_NAME
+
 # Where `DefaultAppDir` in the .iss puts the application: `{localappdata}` for
 # one user, `{commonpf}` for everyone. A test holds the two to each other.
 INSTALL_LOCATIONS = {
-    "for one user": "C:\\Users\\" + "u" * LONGEST_USER_NAME + "\\AppData\\Local\\" + APP_NAME,
+    "for one user": PROFILE + "u" * LONGEST_USER_NAME + PER_USER,
     "for all users": "C:\\Program Files\\" + APP_NAME,
 }
+
+# Where the application went for one user before that: `{autopf}`, nine
+# characters longer. An installation there stays there when it is upgraded
+# (`UsePreviousAppDir`), so it is a third place Setup writes to. It is reported
+# rather than enforced: at the longest user name nothing fits there -- that is
+# why it was left -- and an installation can only be there if the release that
+# made it fitted, for that user. What is reported is the longest user name an
+# upgrade there still fits.
+RETAINED = "%LOCALAPPDATA%\\Programs\\" + APP_NAME
+RETAINED_PER_USER = "\\AppData\\Local\\Programs\\" + APP_NAME
 
 # How many offending paths to name before summing up the rest.
 SHOWN = 10
@@ -85,6 +103,14 @@ def origin(relative: str) -> str:
     return ""
 
 
+def longest_user_name(files: list[str], directories: list[str], per_user: str) -> int:
+    """The longest user name for which every entry fits below `PROFILE<name><per_user>`."""
+    fixed = len(PROFILE) + len(per_user) + 1
+    return min(
+        [MAX_FILE - fixed - len(path) for path in files] + [MAX_DIRECTORY - fixed - len(path) for path in directories]
+    )
+
+
 def check(root: pathlib.Path, locations: dict[str, str]) -> tuple[list[str], list[str]]:
     """Problems and notes for the application at `root` installed into each of `locations`."""
     files, directories = entries(root)
@@ -108,6 +134,16 @@ def check(root: pathlib.Path, locations: dict[str, str]) -> tuple[list[str], lis
             notes.append(
                 f"deepest file {label}: {prefix + len(deepest)} of {MAX_FILE} characters, "
                 f"{MAX_FILE - prefix - len(deepest)} to spare: {location}\\{deepest}{origin(deepest)}"
+            )
+
+    if files:
+        fits = longest_user_name(files, directories, RETAINED_PER_USER)
+        if fits >= LONGEST_USER_NAME:
+            notes.append(f"an upgrade of an installation in {RETAINED} fits any user name")
+        else:
+            notes.append(
+                f"warning: an upgrade of an installation in {RETAINED}, which stays there, "
+                f"fits a user name of up to {max(fits, 0)} characters"
             )
 
     return problems, notes

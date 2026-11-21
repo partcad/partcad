@@ -99,6 +99,35 @@ def test_only_the_first_few_are_named(tmp_path, capsys):
     assert "... and 3 more for one user" in capsys.readouterr().out
 
 
+def test_an_upgrade_in_the_old_directory_is_reported_and_not_enforced(tmp_path, capsys):
+    # Nine characters longer than the new one, so a file that just fits there
+    # fits the old one for a user name of 20 - 9 = 11 characters. An upgrade
+    # stays in it, and nothing would pass if it were held to 20.
+    add_file(tmp_path, deep_file(BUDGET))
+
+    assert check_install_paths.main(["--root", str(tmp_path)]) == 0
+    assert (
+        "warning: an upgrade of an installation in %LOCALAPPDATA%\\Programs\\PartCAD IDE, which stays there, "
+        "fits a user name of up to 11 characters" in capsys.readouterr().out
+    )
+
+
+def test_an_application_that_fits_the_old_directory_says_so(tmp_path, capsys):
+    add_file(tmp_path, deep_file(BUDGET - 9))
+
+    assert check_install_paths.main(["--root", str(tmp_path)]) == 0
+    output = capsys.readouterr().out
+    assert "an upgrade of an installation in %LOCALAPPDATA%\\Programs\\PartCAD IDE fits any user name" in output
+    assert "warning" not in output
+
+
+def test_the_old_directory_is_the_one_autopf_gives_one_user():
+    # What `{autopf}` expands to for a per-user installation, which is what
+    # the .iss said before DefaultAppDir.
+    assert check_install_paths.RETAINED_PER_USER == "\\AppData\\Local\\Programs\\PartCAD IDE"
+    assert len(check_install_paths.RETAINED_PER_USER) - len(check_install_paths.PER_USER) == len("Programs\\")
+
+
 def test_a_missing_application_is_an_error(tmp_path):
     assert check_install_paths.main(["--root", str(tmp_path / "missing")]) == 2
 

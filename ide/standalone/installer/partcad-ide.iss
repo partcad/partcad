@@ -76,7 +76,9 @@ VersionInfoProductName={#AppName}
 ; longest user name Windows allows, and both have to change together.
 ;
 ; An installation from before this keeps its directory when it is upgraded
-; (UsePreviousAppDir), so it is the new ones that get the shorter path.
+; (UsePreviousAppDir), so it is the new ones that get the shorter path. The
+; check reports the longest user name an upgrade in the old directory fits
+; rather than failing on it; ../README.md has why.
 DefaultDirName={code:DefaultAppDir}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
