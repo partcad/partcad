@@ -87,10 +87,27 @@ def test_prune_leaves_it_alone():
 
 
 def test_it_is_built_on_the_base_the_gstreamer_flavour_exists_for():
-    """The GStreamer flavour is built for the default Python alone."""
-    assert _arg("BASE_TAG") == "py%s-gstreamer" % sandbox_versions.DEFAULT_PYTHON_VERSION
+    """The GStreamer flavour is built for the default Python alone, and by default this release's."""
+    assert _arg("BASE_TAG") == "${PARTCAD_VERSION}-py%s-gstreamer" % sandbox_versions.DEFAULT_PYTHON_VERSION
     build = (REPO_ROOT / BUILD_SCRIPT).read_text(encoding="utf-8")
     assert "-py%s-gstreamer" % sandbox_versions.DEFAULT_PYTHON_VERSION in build
+
+
+def test_built_from_its_directory_alone_it_is_this_release():
+    """What Docker's MCP Catalog does: `docker build tools/containers/partcad`, at a release's commit.
+
+    So the default version is the release, moved by bump-my-version like every other statement of it;
+    with no `wheels` context the empty stage of that name stands in and PyPI supplies that version; and
+    nothing is copied from outside the directory.
+    """
+    bumpversion = (REPO_ROOT / "dev-tools" / "bumpversion.toml").read_text(encoding="utf-8")
+    (release,) = re.findall(r'^current_version = "([^"]+)"$', bumpversion, re.M)
+    assert _arg("PARTCAD_VERSION") == release
+    assert 'filename = "tools/containers/partcad/Dockerfile"' in bumpversion
+    assert re.search(r"^FROM scratch AS wheels$", DOCKERFILE, re.M)
+    assert "partcad[lint]==${PARTCAD_VERSION}" in DOCKERFILE
+    for source in re.findall(r"^COPY (?:--\S+ )*(\S+)", DOCKERFILE, re.M):
+        assert (IMAGE_DIR / source).is_file(), source
 
 
 def test_the_entrypoint_drops_privileges_for_every_partcad_executable():
@@ -134,3 +151,33 @@ def test_the_test_job_waits_for_the_base_it_is_built_on_and_cleanup_waits_for_it
         "${{ needs.set-matrix.outputs.image-override }}"
     )
     assert "container-partcad" in jobs["cleanup-images"]["needs"]
+
+
+CATALOG = IMAGE_DIR / "docker-mcp-catalog" / "server.yaml"
+
+
+def test_the_docker_catalog_entry_builds_this_directory_into_dockers_namespace():
+    """`mcp/partcad`, Docker's to publish -- never PartCAD's own `partcad` namespace on Docker Hub."""
+    entry = yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
+    assert entry["image"] == "mcp/partcad"
+    assert entry["name"] == "partcad"
+    assert entry["source"]["project"] == "https://github.com/partcad/partcad"
+    assert entry["source"]["directory"] == IMAGE_DIR.relative_to(REPO_ROOT).as_posix()
+    assert "dockerfile" not in entry["source"], "Docker's build takes 'Dockerfile' in the directory"
+
+
+def test_the_docker_catalog_entry_runs_pc_mcp_on_the_mounted_workspace_with_the_state_volume():
+    entry = yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
+    command = entry["run"]["command"]
+    assert command[-1] == "mcp" and command[0] == "-p"
+    volumes = entry["run"]["volumes"]
+    assert any(volume.endswith(":%s" % command[1]) for volume in volumes)
+    assert "%s:%s" % (app_image.STATE_VOLUME, app_image.STATE_DIR) in volumes
+    # The image has the directory, so the server starts -- and lists its tools -- with nothing mounted.
+    assert re.search(r"^RUN mkdir -p .*\s%s\s" % re.escape(command[1]), DOCKERFILE, re.M)
+    assert entry["config"]["parameters"]["required"] == ["workspace"]
+
+
+def test_the_docker_catalog_entry_does_not_hand_over_the_hosts_docker():
+    assert "docker.sock" not in CATALOG.read_text(encoding="utf-8").split("\nname:")[1]
+    assert not yaml.safe_load(CATALOG.read_text(encoding="utf-8"))["run"].get("disableNetwork")

@@ -28,7 +28,8 @@ replaces on its own; this one is pulled by a person, and PartCAD never pulls it.
   an OpenCASCADE wheel needs, the prebuilt `pycairo` wheel, cadmpeg, GStreamer for video, a non-root `pc` user.
   Everything a sandbox needs to render *inside* this container.
 * The `partcad` wheel with its `lint` extra -- the very file the release uploaded to PyPI, from a build context of
-  its own (`wheels`), never a second build of the source.
+  its own (`wheels`), never a second build of the source. Built from this directory alone, with no such context,
+  it installs `PARTCAD_VERSION` from PyPI instead, which is what Docker's MCP Catalog does (below).
 * **micromamba**, the release the standalone bundles carry, on `PATH`. PartCAD finds it there
   (`partcad_utils.conda.PATH_NAMES`) and so chooses the `conda` sandbox, which provisions whatever Python version a
   package asks for. `venv` would build every sandbox from the image's own 3.11.
@@ -99,3 +100,27 @@ already in the registry is never rebuilt, so `latest` cannot move backwards.
 
 The first publish creates the package on GHCR, and GHCR creates a package private. The job checks that the image
 can be pulled without credentials and fails, naming the settings page, until somebody makes it public -- once.
+
+## Docker's MCP Catalog (`mcp/partcad`)
+
+Docker Desktop's MCP Toolkit lists the servers in Docker's MCP Catalog, and Docker builds and publishes those
+images itself, in its own `mcp/` namespace on Docker Hub. That is the one place this image appears on Docker
+Hub: PartCAD publishes nothing there, and nothing under `partcad` there, which is not PartCAD's to publish to.
+
+The entry is `docker-mcp-catalog/server.yaml` beside this file. Docker's tooling builds `source.directory` at
+`source.commit` with a plain `docker buildx build` -- no build arguments, no `wheels` context -- which is what
+the Dockerfile's defaults are for: `PARTCAD_VERSION` is this tree's release (bump-my-version moves it) and the
+empty `wheels` stage makes the build install that release from PyPI, on that release's base image. So:
+
+* **`source.commit` is always a commit on `main`**, the one a release was cut from. A `devel` commit names a
+  version PyPI does not have yet, and its build fails at the install. A release before the image existed fails
+  at `verify.sh` instead, which checks for what that release cannot do.
+* **Submitting**: in a checkout of https://github.com/docker/mcp-registry, run `task create` (or copy the file to
+  `servers/partcad/server.yaml`), fill in the commit, run `task build -- --tools partcad` and
+  `task catalog -- partcad` there to check it, and open a pull request; Docker reviews it. Every field here
+  follows that repository's `pkg/servers/types.go`; the `category` has to be one `task create` offers.
+* **Updating**: Docker's bot opens a pull request in that repository proposing a newer commit; the entry here
+  changes only when what the server needs from the catalog does.
+
+The catalog runs the container isolated and without the host's Docker socket, so it is the conda-in-the-container
+way of running the image: everything but KiCad and containerized plugins.

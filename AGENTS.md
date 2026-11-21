@@ -761,7 +761,10 @@ things change: `pc upgrade` refuses (pull instead), `pc init` writes `docker run
 way it is built -- by the "Container (PartCAD)" job in `test.yml` (gated on its own `app-image` subject, not on
 `images`), which then runs it through `dev-tools/ci/test-partcad-image.sh`, and by `publish-image` in
 `deploy.yml`, which rehearses on a version tag and publishes on `main` after the PyPI approval and before the
-MCP Registry. See `tools/containers/partcad/README.md`.
+MCP Registry. **Docker Hub only ever has it as `mcp/partcad`**, which Docker builds from this directory for its MCP
+Catalog (`tools/containers/partcad/docker-mcp-catalog/server.yaml`, at a release's commit, with no build arguments --
+hence the Dockerfile's self-contained defaults); never publish to the `partcad` namespace there, which is not
+PartCAD's. See `tools/containers/partcad/README.md`.
 
 **The MCP server, `pc mcp`, is in the wheel, every bundle and the image, and is published five more ways**, none of
 them an artifact of its own: `server.json` at the root is the **MCP Registry** entry (`io.github.partcad/partcad`,

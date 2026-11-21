@@ -9,8 +9,8 @@
 #
 #     dev-tools/ci/build-partcad-image.sh                      # this tree, this machine
 #
-#     PC_IMAGE_REFS="ghcr.io/partcad/partcad:0.10.20 ghcr.io/partcad/partcad:latest" \
-#     PC_WHEELS_DIR=dist PC_PARTCAD_VERSION=0.10.20 \
+#     PC_IMAGE_REFS="ghcr.io/partcad/partcad:<version> ghcr.io/partcad/partcad:latest" \
+#     PC_WHEELS_DIR=dist PC_PARTCAD_VERSION=<version> \
 #     PC_PLATFORMS=linux/amd64,linux/arm64 PC_PUSH=true \
 #     dev-tools/ci/build-partcad-image.sh                      # the release
 #
@@ -25,7 +25,8 @@
 #                       release's own file, on the release. Default: build one
 #                       from this tree into a temporary directory.
 #   PC_PARTCAD_VERSION  The version that wheel has to be; the build fails if it
-#                       is not. Default: whatever the wheel is.
+#                       is not. Default: the Dockerfile's, which is this tree's
+#                       release -- and so the version of a wheel built from it.
 #   PC_BASE_TAG         The tag of the Python base image to build on, without
 #                       the architecture: '<tag>-py3.11-gstreamer'. Default:
 #                       this tree's release, or 'PC_CONTAINER_IMAGE_TAG' when a
@@ -43,8 +44,11 @@
 set -eu
 
 here=$(unset CDPATH; cd -- "$(dirname -- "$0")/../.." && pwd)
-context="${here}/tools/containers"
-dockerfile="${context}/partcad/Dockerfile"
+# The image's own directory is the whole of its context: the Dockerfile builds
+# from it alone, which is what lets anybody else build it -- Docker's MCP
+# Catalog among them -- with a plain 'docker build'.
+context="${here}/tools/containers/partcad"
+dockerfile="${context}/Dockerfile"
 
 PC_IMAGE_REFS="${PC_IMAGE_REFS:-partcad:local}"
 PC_PUSH="${PC_PUSH:-false}"
@@ -104,8 +108,10 @@ set -- \
   --build-context "wheels=${wheels}" \
   --build-arg "BASE_IMAGE=${PC_BASE_IMAGE}" \
   --build-arg "BASE_TAG=${PC_BASE_TAG}" \
-  --build-arg "PARTCAD_VERSION=${PC_PARTCAD_VERSION}" \
   --provenance=false
+if [ -n "${PC_PARTCAD_VERSION}" ]; then
+  set -- "$@" --build-arg "PARTCAD_VERSION=${PC_PARTCAD_VERSION}"
+fi
 for ref in ${PC_IMAGE_REFS}; do
   set -- "$@" --tag "${ref}"
 done

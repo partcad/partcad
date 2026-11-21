@@ -172,6 +172,14 @@ filename = "server.json"
 search = "ghcr.io/partcad/partcad:{current_version}"
 replace = "ghcr.io/partcad/partcad:{new_version}"
 
+# The release the PartCAD image installs when it is built from its directory
+# alone -- which is how Docker's MCP Catalog builds `mcp/partcad`, at a release's
+# commit. Behind, and that build would install the release before.
+[[tool.bumpversion.files]]
+filename = "tools/containers/partcad/Dockerfile"
+search = "ARG PARTCAD_VERSION={current_version}"
+replace = "ARG PARTCAD_VERSION={new_version}"
+
 # The browser extension `pc login` captures a plugin's credentials with, in its
 # two shapes. Both are published to the browser stores by "browsers.yml", and a
 # store refuses a version it has already seen -- so a manifest that stopped

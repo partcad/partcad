@@ -8,7 +8,7 @@
 # Not a sandbox image, and not one PartCAD ever pulls by itself: those are the
 # `partcad-container-*` images beside this directory, which PartCAD resolves and
 # replaces on its own. This one is pulled by a person, which is why it is
-# published as a plain multi-architecture tag (`0.10.20`, `0.10`, `latest`)
+# published as plain multi-architecture tags (`<version>`, `<major>.<minor>`, `latest`)
 # rather than with the `-<arch>` suffix `docker_image.candidates` appends, and
 # why `pc system prune` leaves it alone (`partcad.app` below).
 #
@@ -31,23 +31,39 @@
 #
 # See `README.md` beside this file, and "Docker" in
 # `docs/source/installation.rst`, for how it is meant to be run.
+#
+# Self-contained, so that it builds with nothing but this directory as its
+# context: `docker build tools/containers/partcad` installs this release from
+# PyPI on this release's base image. That is how Docker's MCP Catalog builds
+# `mcp/partcad` out of this repository. `dev-tools/ci/build-partcad-image.sh`
+# says more -- the wheel, the base tag, the platforms -- and is how PartCAD's own
+# CI and release build it.
 
-# The Python base image this is built on, and its tag without the architecture.
-# `dev-tools/ci/build-partcad-image.sh` always says which: the release's
-# `<release>-py<version>-gstreamer`, or the tag a CI run built its own images
-# under. The default is the moving tag of the last release, so that a plain
-# `docker build` of this file works too. The architecture is appended from the
-# platform being built, because the base images are published per architecture
-# and not as a manifest list.
+# The release this image carries. Moved by bump-my-version with every other
+# statement of the release (`dev-tools/bumpversion.toml`), so that a build of
+# this file at a release's commit is that release.
+ARG PARTCAD_VERSION=0.10.33
+
+# The Python base image this is built on, and its tag without the architecture:
+# the release's `<release>-py<version>-gstreamer`, or the tag a CI run built its
+# own images under. The architecture is appended from the platform being built,
+# because the base images are published per architecture and not as a manifest
+# list.
 ARG BASE_IMAGE=ghcr.io/partcad/partcad-container-python
-ARG BASE_TAG=py3.11-gstreamer
+ARG BASE_TAG=${PARTCAD_VERSION}-py3.11-gstreamer
 ARG TARGETARCH
+
+# Where the wheel comes from: a build context named `wheels` holding exactly one
+# partcad wheel, which replaces this empty stage of the same name -- the release
+# passes the file it uploaded to PyPI, CI the wheel of the tree under test. With
+# nothing passed, this stage is empty and the release is installed from PyPI.
+FROM scratch AS wheels
 
 FROM ${BASE_IMAGE}:${BASE_TAG}-${TARGETARCH}
 
-# The release this image carries, and the reference it is published as. The
-# second is what `pc init` writes into an agent's MCP configuration when it runs
-# in here, and what `pc upgrade` tells you to pull instead.
+# The reference the image is published as: what `pc init` writes into an
+# agent's MCP configuration when it runs in here, and what `pc upgrade` tells
+# you to pull instead.
 ARG PARTCAD_VERSION
 ARG PARTCAD_IMAGE=ghcr.io/partcad/partcad
 # The conda this image carries: the same micromamba release the standalone
@@ -116,24 +132,25 @@ RUN set -eu; \
     chmod 0755 /usr/local/bin/micromamba; \
     micromamba --version
 
-# The wheel, as the exact file this release uploaded to PyPI (or, in a test
-# build, the wheel of the tree under test): taken from a build context of its
-# own, `wheels`, so that what gets installed is never a second build of the
-# source. The `lint` extra because the bundles carry it too. DL3013 asks for a
-# `==<version>`, which a wheel *file* states in its name, and which is checked
-# against `PARTCAD_VERSION` below.
+# PartCAD, with the `lint` extra because the bundles carry it too: the wheel in
+# the `wheels` stage above when there is one -- the exact file the release
+# uploaded to PyPI, or in a test build the wheel of the tree under test, never a
+# second build of the source -- and otherwise this release from PyPI. Either way
+# it has to turn out to be `PARTCAD_VERSION`, which is what DL3013 asks for and
+# cannot see through the variable.
 # hadolint ignore=DL3013
 RUN --mount=type=bind,from=wheels,target=/tmp/wheels \
     set -eu; \
-    set -- /tmp/wheels/partcad-*-py3-none-any.whl; \
-    if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then \
-      echo "the 'wheels' build context must hold exactly one partcad wheel" >&2; ls -l /tmp/wheels >&2; exit 1; \
-    fi; \
-    PIP_ROOT_USER_ACTION=ignore pip install --no-cache-dir "$1[lint]"; \
-    if [ -n "${PARTCAD_VERSION}" ]; then \
-      installed="$(python3 -c 'import partcad_cli; print(partcad_cli.__version__)')"; \
-      [ "${installed}" = "${PARTCAD_VERSION}" ] || { echo "the wheel is ${installed}, not ${PARTCAD_VERSION}" >&2; exit 1; }; \
-    fi
+    shopt -s nullglob; \
+    wheels=(/tmp/wheels/partcad-*-py3-none-any.whl); \
+    case "${#wheels[@]}" in \
+      0) requirement="partcad[lint]==${PARTCAD_VERSION}" ;; \
+      1) requirement="${wheels[0]}[lint]" ;; \
+      *) echo "the 'wheels' build context holds ${#wheels[@]} partcad wheels; it may hold one" >&2; exit 1 ;; \
+    esac; \
+    PIP_ROOT_USER_ACTION=ignore pip install --no-cache-dir "${requirement}"; \
+    installed="$(python3 -c 'import partcad_cli; print(partcad_cli.__version__)')"; \
+    [ "${installed}" = "${PARTCAD_VERSION}" ] || { echo "installed PartCAD ${installed}, not ${PARTCAD_VERSION}" >&2; exit 1; }
 
 # Where everything PartCAD keeps lives: the base points the state directory at
 # `/dot-partcad`, which is right for a sandbox and wrong here, where it is the
@@ -145,8 +162,8 @@ RUN --mount=type=bind,from=wheels,target=/tmp/wheels \
 # the entrypoint runs PartCAD as the owner of the working directory, which is
 # 1000 on one machine and 1001 on the next. Sticky, so one uid cannot remove
 # another's files. A new named volume is created with this mode.
-RUN mkdir -p /home/pc/.partcad /work /usr/local/share/partcad \
-  && chown pc:pc /home/pc/.partcad /work \
+RUN mkdir -p /home/pc/.partcad /work /workspace /usr/local/share/partcad \
+  && chown pc:pc /home/pc/.partcad /work /workspace \
   && chmod 1777 /home/pc /home/pc/.partcad
 
 ENV HOME=/home/pc \
@@ -166,10 +183,10 @@ print('\n'.join(cli.list_commands(click.Context(cli))))" > /usr/local/share/part
   && rm -rf /root/.partcad /home/pc/.partcad/* \
   && chmod 1777 /home/pc/.partcad
 
-COPY partcad/entrypoint.sh /usr/local/bin/partcad-entrypoint
+COPY entrypoint.sh /usr/local/bin/partcad-entrypoint
 RUN chmod 0755 /usr/local/bin/partcad-entrypoint
 
-COPY partcad/verify.sh /usr/local/share/partcad/verify.sh
+COPY verify.sh /usr/local/share/partcad/verify.sh
 RUN sh /usr/local/share/partcad/verify.sh
 
 WORKDIR /work
