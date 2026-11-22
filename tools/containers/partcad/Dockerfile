@@ -42,7 +42,7 @@
 # The release this image carries. Moved by bump-my-version with every other
 # statement of the release (`dev-tools/bumpversion.toml`), so that a build of
 # this file at a release's commit is that release.
-ARG PARTCAD_VERSION=0.10.33
+ARG PARTCAD_VERSION=0.10.34
 
 # The Python base image this is built on, and its tag without the architecture:
 # the release's `<release>-py<version>-gstreamer`, or the tag a CI run built its
