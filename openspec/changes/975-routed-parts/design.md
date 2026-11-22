@@ -181,8 +181,11 @@ Errors list the names available at the level that failed.
 the hand-written plumbing the issue wants removed.
 
 ### D4. Path = cubic Hermite spline in a new `route_path.py`
-The knots, in order, are: each end's and `through` entry's origin, its lead
-point (origin + lead·Z), and the `via` points. The tangent at an end is its Z
+The knots, in the order the path passes them, are: the first end's origin, then
+its lead point (origin + lead·Z); for each `through` entry, its `via` points, then
+the lead point before it, its origin and the lead point after it; then the second
+end's `via` points, its lead point, and last its origin. The path therefore always
+finishes on the second end's face, with or without a lead. The tangent at an end is its Z
 axis (reversed at the second end, so the path arrives along it). At a `via` point
 it is the Catmull-Rom tangent. At a `through` entry it is whichever sign of Z
 points on along the route. Both tangents of a segment get the chord length times 1/cos²(a/2), where
@@ -249,8 +252,8 @@ Revisit if `sweep` wants paths that pass through their points.
 the closest approach from D4. It survives a cache hit, and the instruction book
 can say "route <link> from usb-plug:cable-exit to
 reactor/core:thermistor-well". `qual/basic/route.py` compares the record with the
-part's `length` and `minBendRadius`. Unresolved ends and D9 refusals reach it
-through `report_joint_problem`.
+part's `length` and `minBendRadius`. Unresolved ends and D9 refusals leave the
+link out of the assembly, so they cannot be kept on its child (see D9).
 
 ### D8. One connection resolver, used by links and by route ends
 The part of `handle_node` that turns a `connect*` section, a child item and a
@@ -283,9 +286,16 @@ part the `validity` check only reports these. For a route, though, an invalid
 solid always means the path could not carry the profile.
 
 Any refusal leaves the link out of the assembly. The log message names the link,
-the reason, the path position (as a point in the list frame) and the values. The
-same text goes into `joint_problems`, so `pc qual test` fails the assembly with
-it. Stage 1 and the bend check also suggest the remedy: moving the `via` point
+the reason, the path position (as a point in the list frame) and the values.
+
+The same text has to outlive the child it was about. `get_connect_problems()`
+reads `joint_problems` from the children that are still there
+(`connected_children()`), so a refusal kept on the dropped child would vanish
+with it, and `pc qual test` would pass an assembly whose cable is missing. The
+assembly the link was in therefore keeps it, as `(link name, problem)` in a list
+of problems from links left out, and `get_connect_problems()` reads that list
+too, for that assembly and the sub-assemblies it embeds. `pc qual test` then fails
+the assembly for every refused route, under the link's name. Stage 1 and the bend check also suggest the remedy: moving the `via` point
 named, or giving the path room near the end named. A `lead` is not suggested,
 because it moves where the bend starts and not how tight it is: with a `via`
 point 1 mm from an end, a lead makes the path double back to it.

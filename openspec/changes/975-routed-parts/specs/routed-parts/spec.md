@@ -92,7 +92,7 @@ A connection end that omits the routed part's side (`with`) SHALL be connected a
 - **THEN** the build reports that the part has no such port and lists the ports it has (or says it has none), and the link is left out
 
 ### Requirement: An end sits where a connected part would
-Each end's frame SHALL be the placement the routed part would get if that end's connection alone placed it. The cable SHALL leave the first end, and arrive at the last, along the +Z axis of that end's frame. A connection that would keep a degree of freedom SHALL be taken at its default position, and a route end SHALL make no joint.
+Each end's frame SHALL be the placement the routed part would get if that end's connection alone placed it. The cable SHALL leave the first end travelling along +Z of that end's frame, and arrive at the second end travelling along −Z of its frame, whose +Z points back into the cable. A connection that would keep a degree of freedom SHALL be taken at its default position, and a route end SHALL make no joint.
 
 #### Scenario: Same as a part placed there
 - **WHEN** a route end is `{connectPorts: {with: tip, name: board, to: socket}}`, and a separate part with the same `tip` port is placed by `connectPorts: {with: tip, name: board, to: socket}`
@@ -233,6 +233,10 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 #### Scenario: Coincident knots
 - **WHEN** a `via` point coincides with an end's origin, or two ends are at the same point
 - **THEN** the routed link is left out, and the build names the two knots
+
+#### Scenario: A route left out still fails the assembly
+- **WHEN** a route is refused and its link is left out of the assembly
+- **THEN** `pc qual test` fails the assembly with the refusal, under the link's name
 
 #### Scenario: Sweep yields an invalid solid
 - **WHEN** a sketch profile's sweep along an otherwise acceptable path produces a shape that OCCT rejects as invalid, or that is not one solid
