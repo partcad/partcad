@@ -15,7 +15,16 @@ import math
 import pytest
 
 from partcad.geom import Location
-from partcad.route_path import EndFrame, RoutePath, build_knots, canonical_json, describe_source
+from partcad.route_path import (
+    AmbiguousDirection,
+    EndFrame,
+    RoutePath,
+    build_knots,
+    canonical_json,
+    canonical_stops,
+    check_route,
+    describe_source,
+)
 
 
 def _quarter_circle(radius, vias):
@@ -274,3 +283,66 @@ def test_a_route_finishes_on_the_second_end_face_with_a_lead():
     assert path.arc[-1] - path.arc[lead_start] == pytest.approx(10.0, abs=1e-9)
     for point in path.points[lead_start:]:
         assert _on_axis(point, second.origin, second.z)[0] < 1e-9
+
+
+def _numbers(value):
+    if isinstance(value, dict):
+        for item in value.values():
+            yield from _numbers(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _numbers(item)
+    elif isinstance(value, float):
+        yield value
+
+
+def test_every_number_in_the_canonical_form_is_rounded():
+    """An end axis of (1, 1, 0) is written as 0.707107, not 0.7071067811865475."""
+    stops = [EndFrame((0, 0, 0), (1, 1, 0)), (30, 10, 5), EndFrame((50, 0, 0), (0, 0, 1), (1, 1, 0))]
+    document = json.loads(canonical_json(stops))
+    assert document["ends"][0]["z"] == [0.707107, 0.707107, 0]
+    for value in _numbers(document):
+        assert round(value, 6) == value
+
+
+def test_the_checked_path_is_the_built_path():
+    """check_route rounds the stops as canonical_json does, and its path can be handed on."""
+    stops = [EndFrame((1e-8, 0, 0), (0, 0, 1), lead=10), (40.25, 10, 60), EndFrame((80, 0, 0), (0, 0, 1), lead=10)]
+    path, refusals = check_route(stops, 3.0)
+    assert refusals == []
+    assert path.points == RoutePath(canonical_stops(stops)).points
+    assert canonical_json(stops, path=path) == canonical_json(stops)
+
+
+def _grommet_route(reverse=False):
+    first = EndFrame((0, 0, 0), (1, 0, 0), lead=100)
+    grommet = EndFrame((50, 20, 0), (1, 0, 0))
+    second = EndFrame((0, 40, 0), (1, 0, 0))
+    return [second, grommet, first] if reverse else [first, grommet, second]
+
+
+def test_a_through_entry_is_passed_the_way_the_neighbouring_knots_say():
+    """The path comes back from the first end's lead point at x=100, so it passes the grommet along -X."""
+    path = RoutePath(_grommet_route())
+    grommet = next(k for k, knot in enumerate(path.knots) if knot.source == ("through", 0))
+    assert path.tangents[path.knot_samples[grommet]] == pytest.approx((-1, 0, 0), abs=1e-12)
+
+
+def test_a_reversed_route_passes_a_through_entry_the_other_way_along_the_same_curve():
+    forward, backward = RoutePath(_grommet_route()), RoutePath(_grommet_route(reverse=True))
+    grommet = next(k for k, knot in enumerate(backward.knots) if knot.source == ("through", 0))
+    assert backward.tangents[backward.knot_samples[grommet]] == pytest.approx((1, 0, 0), abs=1e-12)
+    assert backward.length == pytest.approx(forward.length, rel=1e-9)
+    assert backward.min_radius == pytest.approx(forward.min_radius, rel=1e-6)
+
+
+def test_a_through_entry_reached_at_right_angles_is_refused():
+    stops = [EndFrame((0, 0, 0), (1, 0, 0)), EndFrame((50, 0, 0), (0, 1, 0)), EndFrame((100, 0, 0), (1, 0, 0))]
+    with pytest.raises(AmbiguousDirection):
+        build_knots(stops)
+    path, refusals = check_route(stops, 3.0)
+    assert path is None
+    (refusal,) = refusals
+    assert refusal.reason == "through-direction-ambiguous"
+    assert refusal.point == pytest.approx((50, 0, 0))
+    assert "through 1" in refusal.message

@@ -11,6 +11,7 @@ tube: radius 3 mm.
 """
 
 import math
+import sys
 import time
 
 import pytest
@@ -18,6 +19,14 @@ import pytest
 from partcad.route_path import EndFrame, check_route
 
 RADIUS = 3.0
+
+
+def _time_budget(seconds):
+    """The budget, or five times it while coverage is measuring: tracing every line
+    slows pure Python several times, and a timing test must not fail for that."""
+    coverage = sys.modules.get("coverage")
+    measuring = coverage is not None and coverage.Coverage.current() is not None
+    return seconds * 5 if measuring or sys.gettrace() is not None else seconds
 
 
 def _reasons(refusals):
@@ -120,4 +129,4 @@ def test_a_two_metre_route_is_checked_in_under_a_second():
     assert refusals == []
     assert len(path.points) >= 5000
     assert path.length > 2000
-    assert elapsed < 1.0
+    assert elapsed < _time_budget(1.0)

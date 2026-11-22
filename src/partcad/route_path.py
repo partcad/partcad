@@ -111,11 +111,10 @@ class EndFrame:
     @classmethod
     def from_location(cls, location, lead: float = 0.0) -> "EndFrame":
         """The end frame of a 'geom.Location' (a port's, or a free end's)."""
-        rotation = _rotation_matrix(location._q)
         return cls(
             location.translation,
-            (rotation[0][2], rotation[1][2], rotation[2][2]),
-            (rotation[0][0], rotation[1][0], rotation[2][0]),
+            location.rotate_vector((0.0, 0.0, 1.0)),
+            location.rotate_vector((1.0, 0.0, 0.0)),
             lead,
         )
 
@@ -123,16 +122,17 @@ class EndFrame:
         return {"origin": list(self.origin), "z": list(self.z), "x": list(self.x), "lead": self.lead}
 
 
-def _rotation_matrix(q):
-    w, x, y, z = q
-    return (
-        (1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)),
-        (2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)),
-        (2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)),
-    )
-
-
 Stop = Union[EndFrame, Sequence[float]]
+
+
+class AmbiguousDirection(ValueError):
+    """The path reaches a 'through' entry at right angles to its axis, so which
+    way along the axis it passes is not decided by anything."""
+
+    def __init__(self, source, point):
+        super().__init__("route_path: %s is reached at right angles to its axis" % describe_source(source))
+        self.source = source
+        self.point = point
 
 
 class Knot:
@@ -183,8 +183,6 @@ def build_knots(stops: Sequence[Stop]) -> List[Knot]:
         raise ValueError("route_path: a route starts and finishes at an end, not at a 'via' point")
 
     sources = _entry_sources(stops)
-    # The bare points, to decide the direction of travel at 'through' entries.
-    points = [stop.origin if isinstance(stop, EndFrame) else stop for stop in stops]
     knots: List[Knot] = []
     last = len(stops) - 1
     pending_via = []
@@ -208,14 +206,30 @@ def build_knots(stops: Sequence[Stop]) -> List[Knot]:
                 knots.append(Knot(_add(stop.origin, lead), arrive, source + ("lead",)))
             knots.append(Knot(stop.origin, arrive, source))
         else:
-            onwards = _sub(points[i + 1], points[i - 1])
-            direction = stop.z if _dot(stop.z, onwards) >= 0 else _mul(stop.z, -1.0)
+            # Which way along its axis the path passes: from the knot it really
+            # comes from (the last one placed: a 'via' point, or the entry
+            # before, or that entry's lead point) towards the knot it goes to.
+            onwards = _sub(_arrival_point(stops[i + 1], i + 1 == last), knots[-1].point)
+            along = _dot(stop.z, onwards)
+            if abs(along) <= 1e-9 * max(_norm(onwards), 1.0):
+                raise AmbiguousDirection(source, stop.origin)
+            direction = stop.z if along > 0 else _mul(stop.z, -1.0)
             if stop.lead > 0:
                 knots.append(Knot(_sub(stop.origin, _mul(direction, stop.lead)), direction, source + ("lead",)))
             knots.append(Knot(stop.origin, direction, source))
             if stop.lead > 0:
                 knots.append(Knot(_add(stop.origin, _mul(direction, stop.lead)), direction, source + ("lead",)))
     return knots
+
+
+def _arrival_point(stop, is_last: bool) -> Vector:
+    """The first knot of 'stop' the path reaches: a 'via' point itself, the
+    second end's lead point if it gives a lead, or else a frame's origin."""
+    if not isinstance(stop, EndFrame):
+        return stop
+    if is_last and stop.lead > 0:
+        return _add(stop.origin, _mul(stop.z, stop.lead))
+    return stop.origin
 
 
 def _knot_tangents(knots: List[Knot]) -> List[Vector]:
@@ -514,7 +528,7 @@ def canonical_stops(stops: Sequence[Stop]) -> List[Stop]:
     return result
 
 
-def canonical_json(stops: Sequence[Stop], step: float = DEFAULT_STEP) -> str:
+def canonical_json(stops: Sequence[Stop], step: float = DEFAULT_STEP, path: Optional["RoutePath"] = None) -> str:
     """The route as the JSON a routed part is given (D5), every number rounded to
     1e-6 mm and every key sorted, so that equal routes are byte-identical and an
     unchanged route keeps its cache key.
@@ -523,14 +537,25 @@ def canonical_json(stops: Sequence[Stop], step: float = DEFAULT_STEP) -> str:
     lead, and the 'via' points passed on the way to it. 'path' is the sampled centreline: 'points',
     the tangent 'z' and the profile's 'x' axis at each, the sample index of each
     knot in 'knots', and the 'length'.
+
+    'path' is the route already sampled from these stops, as 'check_route'
+    returns it, so that a route is sampled once; without it, it is sampled here.
     """
     stops = canonical_stops(stops)
-    path = RoutePath(stops, step)
+    if path is None:
+        path = RoutePath(stops, step)
     entries = []
     via = []
     for stop in stops:
         if isinstance(stop, EndFrame):
-            entry = stop.as_dict()
+            # Rounded as written: an EndFrame normalizes its axes, which undoes
+            # the rounding of 'canonical_stops'.
+            entry = {
+                "origin": _round_vec(stop.origin),
+                "z": _round_vec(stop.z),
+                "x": _round_vec(stop.x),
+                "lead": _round(stop.lead),
+            }
             entry["via"] = via
             entries.append(entry)
             via = []
@@ -579,8 +604,12 @@ class Refusal:
 def check_route(stops: Sequence[Stop], outer_radius: float, step: float = DEFAULT_STEP):
     """The D9 checks of a route whose profile reaches 'outer_radius' from its
     centre, before anything is swept: (path, refusals). The path is None when
-    the knots alone already make it impossible."""
-    stops = [stop if isinstance(stop, EndFrame) else _vec(stop) for stop in stops]
+    the knots alone already make it impossible.
+
+    The stops are rounded first, as 'canonical_json' rounds them, so that the path
+    checked is the path the part is built from; pass the path returned here on
+    to 'canonical_json' so that it is not sampled twice."""
+    stops = canonical_stops(stops)
     refusals: List[Refusal] = []
 
     sources = _entry_sources(stops)
@@ -599,7 +628,20 @@ def check_route(stops: Sequence[Stop], outer_radius: float, step: float = DEFAUL
                     )
                 )
 
-    knots = build_knots(stops)
+    try:
+        knots = build_knots(stops)
+    except AmbiguousDirection as problem:
+        refusals.append(
+            Refusal(
+                "through-direction-ambiguous",
+                problem.point,
+                {},
+                "move a 'via' point so that the path comes to it along its axis",
+                "the path reaches %s at right angles to its axis, so which way it passes is not decided"
+                % describe_source(problem.source),
+            )
+        )
+        return None, refusals
     for k in range(len(knots) - 1):
         a, b = knots[k], knots[k + 1]
         distance = _dist(a.point, b.point)

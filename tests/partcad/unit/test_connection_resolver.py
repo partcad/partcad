@@ -98,6 +98,37 @@ assemblies:
 SHIFTED = Location((7, -4, 12), (0, 1, 1), 40)
 
 
+# What the code before the extraction placed each of the four links at
+# (commit 4cd60751), recorded once and compared exactly: the extracted resolver
+# has to reproduce it bit for bit. Comparing the resolver with itself, which the
+# rest of each test does, could not catch a change the extraction made.
+PRE_REFACTOR = {
+    "beam": (
+        (-0.6036822533546014, 7.606086266752905, 12.999999999999998),
+        (-0.6087614290087207, 8.000390764101651e-17, 8.000390764101652e-17, 0.7933533402912352),
+    ),
+    "key": (
+        (4.440892098500626e-16, 2.0000000000000004, 10.0),
+        (-0.7071067811865476, 1.0453014276914232e-16, 4.329780281177467e-17, 0.7071067811865476),
+    ),
+    "pin": (
+        (15.000000000000004, -3.3306690738754696e-15, 9.999999999999998),
+        (-0.7071067811865476, 1.0453014276914232e-16, 4.329780281177467e-17, 0.7071067811865476),
+    ),
+    "blank": (
+        (0.0, 0.0, 0.0),
+        (6.123233995736766e-17, 0.7071067811865476, 0.7071067811865476, 0.0),
+    ),
+}
+
+
+def _as_before(child):
+    """The child is placed exactly where the code before the extraction placed it."""
+    translation, rotation = PRE_REFACTOR[child.name]
+    assert tuple(child.location._t) == translation
+    assert tuple(child.location._q) == rotation
+
+
 def _same(a, b):
     """Exact equality of two locations: the same numbers, not nearly them."""
     return a._t == b._t and a._q == b._q
@@ -159,6 +190,7 @@ def test_a_link_placed_by_ports(tmp_path, monkeypatch):
     """
     assembly, calls = _resolve(tmp_path, monkeypatch, links)
     beam, placed = _check(assembly, calls, "beam")
+    _as_before(beam)
     assert beam.joint_problems == []
     assert placed.source_port.name.endswith("q1")
     assert placed.target_port.name.endswith("p1")
@@ -173,6 +205,7 @@ def test_a_link_placed_by_interfaces(tmp_path, monkeypatch):
     """
     assembly, calls = _resolve(tmp_path, monkeypatch, links)
     key, placed = _check(assembly, calls, "key")
+    _as_before(key)
     assert key.joint_problems == []
     assert placed.source_iface_obj is not None and placed.target_iface_obj is not None
     assert key.connection["to_interface"].endswith(":slab;length=40")
@@ -192,6 +225,7 @@ def test_a_link_placed_with_target_parameters(tmp_path, monkeypatch):
     """
     assembly, calls = _resolve(tmp_path, monkeypatch, links)
     pin, _ = _check(assembly, calls, "pin")
+    _as_before(pin)
     assert pin.joint_problems == []
     # 15 mm along the port's X, which the contact frame holds as Y.
     assert pin.connection["contact"] == pytest.approx([15, 0, 10], abs=1e-9)
@@ -213,7 +247,8 @@ def test_a_port_less_child_still_warns_of_auto_detection(tmp_path, monkeypatch):
         connectPorts: {name: pin, to: tip}
     """
     assembly, calls = _resolve(tmp_path, monkeypatch, links)
-    _, placed = _check(assembly, calls, "blank")
+    blank, placed = _check(assembly, calls, "blank")
+    _as_before(blank)
     assert placed.source_port is None
     # Placing the link, and each of the two direct calls.
     assert warnings.count("Peer port auto-detection has failed: blank") == 3
