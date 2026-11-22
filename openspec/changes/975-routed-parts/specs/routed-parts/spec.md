@@ -220,7 +220,7 @@ A part of a script type (`cadquery`, `build123d`) that declares a parameter name
 - **THEN** its script receives `route` as JSON with two ends, each with `origin`, `z` and `x` as three numbers, and `lead`, and the part, which declares no ports, is connected at both ends by the end frame's origin
 
 #### Scenario: Checks on a script part
-- **WHEN** a script part that declares `route` is placed with a route whose `via` point coincides with an end, or whose script builds more than one solid
+- **WHEN** a script part that declares `route` is placed with a route whose `via` point coincides with an end or `through` entry anywhere along it, or whose script builds more than one solid
 - **THEN** the link is left out with the reason, as for a routed part; the bend and self-crossing checks, which need a profile radius known before the build, are not applied to it
 
 #### Scenario: Part that cannot be routed
@@ -239,7 +239,7 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 - **THEN** the routed link is left out, and the build reports the two path positions that come closer than the profile's diameter
 
 #### Scenario: Coincident knots
-- **WHEN** a `via` point coincides with an end's origin, or two ends are at the same point
+- **WHEN** a `via` point coincides with an end's or a `through` entry's origin, two `via` points coincide, or two ends are at the same point, whether or not the two are next to each other along the route
 - **THEN** the routed link is left out, and the build names the two knots
 
 #### Scenario: A route left out still fails the assembly
@@ -262,8 +262,8 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 - **THEN** no interference is reported
 
 #### Scenario: Tube pushed over a barb
-- **WHEN** a tube's end overlaps the barb it is pushed onto, and the barb port declares `snapIn`
-- **THEN** no interference is reported for that end
+- **WHEN** a tube's end overlaps the barb it is pushed onto, inside the tube on the cable side of its end face, and the barb port declares `snapIn`
+- **THEN** no interference is reported for that end, as far as the joint's depth from the end face
 
 #### Scenario: Cable resting against a part
 - **WHEN** a cable's path touches a part's surface without entering it

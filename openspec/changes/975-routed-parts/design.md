@@ -281,8 +281,11 @@ existing connection tests prove it.
 ### D9. A route that cannot be built is refused, in two stages
 Before any sweep, the core checks the D4 metrics. The build is refused when:
 
-1. **Degenerate knots:** two consecutive knots are within 1e-3 mm, or two ends
-   coincide.
+1. **Degenerate knots:** two knots of the route are within 1e-3 mm of each other,
+   consecutive or not: two frames (ends or `through` entries) at one point, a
+   `via` point on a frame, or two `via` points at one point. Consecutive ones leave
+   no direction between them; others send the path back through a point it has
+   already passed, which for a script part (below) nothing else would catch.
 2. **Bend tighter than the profile:** the minimum radius of curvature is below the
    profile's outer radius: `diameter`/2, or for a sketch the largest distance of
    its outline from its origin, measured from the sketch's bounding box.
@@ -299,9 +302,14 @@ applies to it before it is built, and the post-build checks below after. Checks 
 and 3 need the profile's radius in advance, and do not apply to it; its
 `length` and `minBendRadius`, if declared, are still checked (D7). Where a radius
 is needed after the build, as for the interference region (D13), it is measured
-from the built solid: the largest distance from the end's axis of the solid's
-section in the plane of that end face, the same way a sketch's radius is measured
-from its outline. The depth there is the push distance, or else twice that radius.
+from the built solid, at the joint it is needed for, the same way a sketch's
+radius is measured from its outline: the largest distance from the joint's axis
+of the solid's section in the plane through the joint's origin, square to that
+axis. At an end that plane is the end face; at a `through` entry it is the plane
+through the entry's origin, so a cable thicker in the middle than at its ends gets
+the radius it has there. The depth is the push distance, or else twice the radius
+measured at that joint, on each side of a `through` entry and on the cable side
+of an end.
 
 After the sweep, `wrapper_route.py` refuses anything that is not exactly one
 solid, has non-positive volume, or fails `BRepCheck_Analyzer`. For a generic
@@ -508,9 +516,10 @@ part: a hose pushed onto a manifold's barb can also run back through the same
 manifold. The expected region of a route joint is therefore a cylinder on the
 axis of that end's or `through` entry's frame, with the profile's outer radius
 plus a margin:
-- at an end, the cable stops at the port, so the cylinder runs one way, from the
-  frame's origin into the joined part (along −Z of the end frame, whose +Z points
-  into the cable), as deep as the joint goes;
+- at an end, the cable stops at its end face, so it has material on one side
+  of the frame's origin only: along +Z, into the cable. That is where it can
+  overlap the joined part, as a barb inside a tube does, so the cylinder runs from
+  the origin along +Z, as deep as the joint goes;
 - at a `through` entry, the cable runs on through the joined part (a grommet
   gripping it mid-panel), so the cylinder runs that depth on both sides of the
   origin.

@@ -21,6 +21,7 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
 - [ ] 2.2 Add canonical route JSON (rounded to 1e-6 mm, sorted keys). Verify in the same file that equal routes are byte-identical, that a 1 µm move of an end changes the JSON, and that a sub-1e-7 mm jitter does not (the path is built from the rounded stops).
 - [ ] 2.3 Add the D9 pre-sweep checks, returning structured refusals (reason, point, values, remedy). Verify with `tests/partcad/unit/test_route_feasibility.py`, one test per case, each asserting the reason and point:
   - a `via` point coinciding with an end;
+  - a `via` point back on the first end with a `through` entry in between (knots A, T, A, B), refused although no two consecutive knots coincide;
   - two ends at the same point;
   - a `via` point 1 mm from an end of a 6 mm tube (bend radius below 3 mm);
   - the same `via` point moved 20 mm from the end, which passes (a `lead` does not fix it: the path doubles back to the point);
@@ -88,7 +89,8 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a cable resting against a surface without entering it passes;
   - a hose pushed onto a manifold barb (`snapIn`) that also runs back through the same manifold fails, naming the hose, the manifold and the point away from the barb: the allowance covers the joint's region, not the pair.
   - a cable through a grommet that grips it on both sides of the port passes when the joint declares the overlap, and an overlap beyond the joint's depth on either side fails;
-  - a script part's region uses the radius measured from its built end section: a script cable pushed onto a barb passes within it, and fails beyond it.
+  - a script part's region uses the radius measured from its built section at each joint: a script cable pushed onto a barb passes within it, and fails beyond it; a script cable thicker at a `through` entry than at its ends gets the radius measured there;
+  - a tube pushed onto a barb overlaps it on the cable side of its end face (+Z), and passes within the joint's depth.
 - [ ] 5.2 Make the instruction book (`assembly_guide.py`) state each route step, from end to end with tree paths, and "leave the other end at (x, y, z)" for a free end. Verify with cases in `test_assembly_guide.py` for a two-ended route and a one-ended one.
 
 ## 6. Example and integration
