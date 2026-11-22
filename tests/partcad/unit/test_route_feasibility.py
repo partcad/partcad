@@ -130,3 +130,34 @@ def test_a_two_metre_route_is_checked_in_under_a_second():
     assert len(path.points) >= 5000
     assert path.length > 2000
     assert elapsed < _time_budget(1.0)
+
+
+def test_a_via_point_back_on_an_earlier_end_is_refused():
+    """Knots A, T, A, B: no two consecutive knots coincide, but the path would go back through A."""
+    stops = [
+        EndFrame((0, 0, 0), (1, 0, 0)),
+        EndFrame((50, 0, 0), (1, 0, 0)),
+        (0, 0, 0.0004),
+        EndFrame((100, 50, 0), (1, 0, 0)),
+    ]
+    path, refusals = check_route(stops, RADIUS)
+    assert path is None
+    (refusal,) = refusals
+    assert refusal.reason == "knots-coincide"
+    assert refusal.point == pytest.approx((0, 0, 0))
+    assert "end 1 and via point 1 of end 2" in refusal.message
+    assert refusal.remedy == "remove or move via point 1 of end 2"
+
+
+def test_a_via_point_back_on_an_earlier_end_past_its_lead_is_refused():
+    """The same, with a lead on the first end: the knots are A, A's lead point, T, A, B."""
+    stops = [
+        EndFrame((0, 0, 0), (1, 0, 0), lead=10),
+        EndFrame((50, 0, 0), (1, 0, 0)),
+        (0, 0, 0.0004),
+        EndFrame((100, 50, 0), (1, 0, 0)),
+    ]
+    path, refusals = check_route(stops, RADIUS)
+    assert path is None
+    assert [refusal.reason for refusal in refusals] == ["knots-coincide"]
+    assert "end 1 and via point 1 of end 2" in refusals[0].message

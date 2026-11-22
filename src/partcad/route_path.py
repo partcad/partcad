@@ -222,6 +222,23 @@ def build_knots(stops: Sequence[Stop]) -> List[Knot]:
     return knots
 
 
+def _bare_knots(stops) -> List[Knot]:
+    """Each stop's own point as a knot, with its source, and no direction: enough
+    to look for coincidences when the knots proper cannot be built."""
+    sources = _entry_sources(stops)
+    knots: List[Knot] = []
+    pending = []
+    for i, stop in enumerate(stops):
+        if not isinstance(stop, EndFrame):
+            pending.append(stop)
+            continue
+        for n, point in enumerate(pending):
+            knots.append(Knot(point, None, ("via", sources[i], n)))
+        pending = []
+        knots.append(Knot(stop.origin, None, sources[i]))
+    return knots
+
+
 def _arrival_point(stop, is_last: bool) -> Vector:
     """The first knot of 'stop' the path reaches: a 'via' point itself, the
     second end's lead point if it gives a lead, or else a frame's origin."""
@@ -631,6 +648,11 @@ def check_route(stops: Sequence[Stop], outer_radius: float, step: float = DEFAUL
     try:
         knots = build_knots(stops)
     except AmbiguousDirection as problem:
+        # A 'via' point on the knot before a 'through' entry leaves no direction
+        # there either: name the coincidence, which is the cause, if there is one.
+        coincident = _coincident_knots(_bare_knots(stops))
+        if coincident:
+            return None, refusals + coincident
         refusals.append(
             Refusal(
                 "through-direction-ambiguous",
@@ -642,11 +664,24 @@ def check_route(stops: Sequence[Stop], outer_radius: float, step: float = DEFAUL
             )
         )
         return None, refusals
-    for k in range(len(knots) - 1):
-        a, b = knots[k], knots[k + 1]
-        distance = _dist(a.point, b.point)
-        # Two frames at one point are reported once, above.
-        if distance < KNOT_TOLERANCE and not (_is_frame(a.source) and _is_frame(b.source)):
+    refusals.extend(_coincident_knots(knots))
+    if refusals:
+        return None, refusals
+    return _check_path(stops, outer_radius, step)
+
+
+def _coincident_knots(knots) -> List[Refusal]:
+    """Any two knots at one point, not only consecutive ones: a 'via' point back
+    on a frame the path already passed sends it back through that point, which the
+    self-crossing check would catch only where a profile radius is known."""
+    refusals = []
+    for k in range(len(knots)):
+        for m in range(k + 1, len(knots)):
+            a, b = knots[k], knots[m]
+            distance = _dist(a.point, b.point)
+            # Two frames at one point are reported once, above.
+            if distance >= KNOT_TOLERANCE or (_is_frame(a.source) and _is_frame(b.source)):
+                continue
             refusals.append(
                 Refusal(
                     "knots-coincide",
@@ -656,8 +691,12 @@ def check_route(stops: Sequence[Stop], outer_radius: float, step: float = DEFAUL
                     "%s and %s are at the same point" % (describe_source(a.source), describe_source(b.source)),
                 )
             )
-    if refusals:
-        return None, refusals
+    return refusals
+
+
+def _check_path(stops, outer_radius, step):
+    """The checks that need the sampled path: bend and self-crossing."""
+    refusals: List[Refusal] = []
 
     path = RoutePath(stops, step)
     if path.min_radius < outer_radius:
