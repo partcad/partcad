@@ -145,6 +145,40 @@ def test_the_package_document_asked_for_is_what_was_written(tmp_path, rendered, 
     assert (out / "README.md").exists()
 
 
+def test_the_package_document_asked_for_of_an_interface_is_what_was_written(tmp_path, rendered, caplog):
+    """'pc render -t readme -i mount' asks for the package README, which is written: nothing is missing."""
+    out = tmp_path / "out"
+    out.mkdir()
+
+    errors = _render(_context(tmp_path), caplog, interfaces=["mount"], format="readme", output_dir=str(out))
+
+    assert rendered == []
+    assert errors == []
+    assert (out / "README.md").exists()
+
+
+def test_with_no_file_type_named_a_package_document_does_not_stand_in_for_the_part(tmp_path, rendered, caplog):
+    """A run naming no file type writes the README the package configures, and the part is still reported.
+
+    The README lists a part only under a picture of it, and a part with no file type to be written as has
+    none -- so it is not in the README, and nothing was written of it. Unlike '-t readme', nobody asked for
+    the README: it is what the package writes whatever is named.
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    ctx = _context(tmp_path, PACKAGE.replace("render:\n  svg:\n", "render:\n  readme:\n"))
+
+    errors = _render(ctx, caplog, parts=["cube"], output_dir=str(out))
+
+    assert rendered == []
+    assert (out / "README.md").exists()
+    assert "cube" not in (out / "README.md").read_text()
+    assert errors == [
+        "Nothing is written for the part '//:cube': no file type it can be written as is declared for it "
+        "under 'render:' or 'export:'. Name one with '-t'"
+    ]
+
+
 def test_a_named_interface_is_an_error(tmp_path, rendered, caplog):
     errors = _render(_context(tmp_path), caplog, interfaces=["mount"], format="svg")
 

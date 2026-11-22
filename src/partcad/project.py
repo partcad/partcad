@@ -4428,9 +4428,14 @@ class Project(project_config.Configuration):
             if (format == "readme" and not assemblies and not scenes) or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
                 if format == "readme":
-                    # The document asked for, and the one a part or a sketch
-                    # has: it is what lists them.
+                    # The document asked for, and the one a part, a sketch or
+                    # an interface has: it is what lists them. Only when it was
+                    # asked for: a run naming no file type writes it because the
+                    # package says to, and it lists an object only under a
+                    # picture of it -- which an object written as no file type
+                    # has not got -- so there it stands in for nothing.
                     documented.update((shape.kind, shape.name) for shape, _ in unwritten)
+                    documented.update(("interface", name) for name in interfaces or [])
 
             for shape, shape_cfg in unwritten:
                 if (shape.kind, shape.name) not in documented:
@@ -4439,8 +4444,11 @@ class Project(project_config.Configuration):
                         % (shape.kind, self.name, shape.name, self._why_unwritten(shape, shape_cfg, format))
                     )
             # Not enumerated above at all (see '_enumerate_shapes_async'), so
-            # a request for one used to write nothing and say nothing.
+            # a request for one used to write nothing and say nothing -- unless
+            # what was asked for is the package document, which was written.
             for name in interfaces or []:
+                if ("interface", name) in documented:
+                    continue
                 pc_logging.error(
                     "Nothing is written for the interface '%s:%s': an interface is a set of ports, "
                     "with no geometry of its own to write" % (self.name, name)
