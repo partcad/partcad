@@ -5,14 +5,15 @@
 #
 """The centreline of a routed part (issue #975), in pure Python.
 
-A route is an ordered list of *stops*: end frames ('EndFrame', from a connected
+A route is an ordered list of *stops*: frames ('EndFrame', from a connected
 port or a free end's 'location:') and 'via' points. The first and the last stop
-are ends. The path is a cubic Hermite spline through knots made of them: each
+are the route's two ends; frames between them are its 'through' entries, ports
+the cable passes through (a grommet, a clip). The path is a cubic Hermite spline through knots made of them: each
 end's origin, and its lead point (origin + lead * Z) when it gives a lead, and
 each 'via' point.
 
 * The tangent at an end is its Z axis. At the last end it is reversed, so the
-  path arrives along it. At an intermediate end it is whichever sign of Z points
+  path arrives along it. At a 'through' entry it is whichever sign of Z points
   on along the route.
 * The tangent at a 'via' point is the Catmull-Rom one: the direction from the
   knot before it to the knot after it.
@@ -20,8 +21,10 @@ each 'via' point.
   it from looping. A segment whose two tangents lie along its chord is straight:
   that is what a lead is.
 
-What comes out is a dense sample with frames transported along it (rotation-
-minimizing, from the first end's X axis), the arc length, the tightest bend, and
+What comes out is a dense sample with frames carried along it (rotation-
+minimizing from the first end's X axis, then rolled to meet the X axis of every
+'through' entry and of the second end, the roll spread evenly along each
+stretch), the arc length, the tightest bend, and
 the closest approach of the path to itself: everything the feasibility checks
 ('check_route') and 'pc qual test' measure. Nothing here needs OCCT, so it is
 the same on a cache hit and testable in the core. The geometry is built from it
@@ -134,8 +137,9 @@ Stop = Union[EndFrame, Sequence[float]]
 class Knot:
     """A point the path passes through, with the direction it passes in (None
     for a 'via' point, whose direction is worked out from its neighbours), and
-    what it came from: ('end', index of the end) or ('via', index of the point),
-    and for an end whether it is the end's origin or its lead point."""
+    what it came from: ('end', 0 or 1), ('through', index), or ('via', the
+    source of the entry it leads to, index among that entry's points); an end's
+    or a 'through' entry's lead point adds 'lead'."""
 
     def __init__(self, point: Vector, direction: Optional[Vector], source: tuple):
         self.point = point
@@ -144,35 +148,54 @@ class Knot:
 
 
 def describe_source(source: tuple) -> str:
-    kind, index = source[0], source[1]
+    """A knot's source in the words of the YAML: 'end 2', 'through 1', 'via
+    point 2 of end 2', 'end 1's lead point'."""
+    kind = source[0]
     if kind == "via":
-        return "via point %d" % (index + 1)
-    what = "end %d" % (index + 1)
+        return "via point %d of %s" % (source[2] + 1, describe_source(source[1]))
+    what = "%s %d" % (kind, source[1] + 1)
     return what + "'s lead point" if len(source) > 2 and source[2] == "lead" else what
+
+
+def _entry_sources(stops) -> list:
+    """The source of each frame among 'stops': ('end', 0), ('through', k) ...,
+    ('end', 1)."""
+    frames = [i for i, stop in enumerate(stops) if isinstance(stop, EndFrame)]
+    sources = {}
+    for k, i in enumerate(frames):
+        if k == 0:
+            sources[i] = ("end", 0)
+        elif k == len(frames) - 1:
+            sources[i] = ("end", 1)
+        else:
+            sources[i] = ("through", k - 1)
+    return sources
 
 
 def build_knots(stops: Sequence[Stop]) -> List[Knot]:
     """The knots of a route through 'stops', in order. Raises ValueError unless
-    there are two or more ends and the first and the last stop are ends."""
+    the first and the last stop are frames: the route's two ends."""
     stops = [stop if isinstance(stop, EndFrame) else _vec(stop) for stop in stops]
-    ends = [stop for stop in stops if isinstance(stop, EndFrame)]
-    if len(ends) < 2:
-        raise ValueError("route_path: a route needs two or more ends, it has %d" % len(ends))
+    if len(_ends_of(stops)) < 2:
+        raise ValueError("route_path: a route needs two ends, it has %d" % len(_ends_of(stops)))
     if not isinstance(stops[0], EndFrame) or not isinstance(stops[-1], EndFrame):
         raise ValueError("route_path: a route starts and finishes at an end, not at a 'via' point")
 
-    # The bare points, to decide the direction of travel at intermediate ends.
+    sources = _entry_sources(stops)
+    # The bare points, to decide the direction of travel at 'through' entries.
     points = [stop.origin if isinstance(stop, EndFrame) else stop for stop in stops]
     knots: List[Knot] = []
-    end_index = 0
-    via_index = 0
     last = len(stops) - 1
+    pending_via = []
     for i, stop in enumerate(stops):
         if not isinstance(stop, EndFrame):
-            knots.append(Knot(stop, None, ("via", via_index)))
-            via_index += 1
+            pending_via.append((i, stop))
             continue
-        source = ("end", end_index)
+        source = sources[i]
+        # The 'via' points just passed belong to this entry: the one they lead to.
+        for n, (_, point) in enumerate(pending_via):
+            knots.append(Knot(point, None, ("via", source, n)))
+        pending_via = []
         lead = _mul(stop.z, stop.lead)
         if i == 0:
             knots.append(Knot(stop.origin, stop.z, source))
@@ -191,7 +214,6 @@ def build_knots(stops: Sequence[Stop]) -> List[Knot]:
             knots.append(Knot(stop.origin, direction, source))
             if stop.lead > 0:
                 knots.append(Knot(_add(stop.origin, _mul(direction, stop.lead)), direction, source + ("lead",)))
-        end_index += 1
     return knots
 
 
@@ -337,7 +359,7 @@ class RoutePath:
         peak = max(range(len(curvatures)), key=lambda i: curvatures[i])
         self.min_radius_index = peak
         self.min_radius = math.inf if curvatures[peak] <= 1e-12 else 1.0 / curvatures[peak]
-        self.frames = self._transport(_ends_of(stops)[0].x)
+        self.frames = self._roll(self._transport(_ends_of(stops)[0].x), _ends_of(stops))
 
     @property
     def min_radius_point(self) -> Vector:
@@ -363,6 +385,36 @@ class RoutePath:
             r = _unit(_sub(r, _mul(t, _dot(r, t))))
             frames.append((r, _cross(t, r), t))
         return frames
+
+    def _roll(self, frames, entries):
+        """The carried frames, rolled about the path so that the profile's X meets
+        the X axis of each 'through' entry and of the second end.
+
+        Carrying a frame along is a rotation-minimizing transport, and rolling the
+        starting frame about the tangent rolls every carried frame by the same
+        angle, so the roll each entry asks for can be worked out from the frames
+        as carried and spread evenly by arc length over the stretch before it.
+        Each step is the smallest one, within half a turn either way.
+        """
+        anchors = [self.knot_samples[k] for k, knot in enumerate(self.knots) if _is_frame(knot.source)]
+        wanted = [0.0]
+        for sample, entry in zip(anchors[1:], entries[1:]):
+            x, y, t = frames[sample]
+            target = _sub(entry.x, _mul(t, _dot(entry.x, t)))
+            angle = math.atan2(_dot(target, y), _dot(target, x))
+            # Unwrapped against the roll already reached, so a stretch turns the
+            # short way round.
+            previous = wanted[-1]
+            angle += 2 * math.pi * round((previous - angle) / (2 * math.pi))
+            wanted.append(angle)
+        self.rolls = wanted
+        rolled = list(frames)
+        for (a, b), (ra, rb) in zip(zip(anchors, anchors[1:]), zip(wanted, wanted[1:])):
+            span = self.arc[b] - self.arc[a]
+            for i in range(a + 1, b + 1):
+                share = 1.0 if span <= 0 else (self.arc[i] - self.arc[a]) / span
+                rolled[i] = _rolled(frames[i], ra + (rb - ra) * share)
+        return rolled
 
     def closest_approach(self, within: float):
         """Where the path comes closest to another stretch of itself, as
@@ -417,6 +469,21 @@ class RoutePath:
         return best
 
 
+def _rolled(frame, angle):
+    """'frame' rolled by 'angle' about its own z."""
+    if angle == 0.0:
+        return frame
+    x, y, z = frame
+    c, s = math.cos(angle), math.sin(angle)
+    x2 = _add(_mul(x, c), _mul(y, s))
+    return (x2, _cross(z, x2), z)
+
+
+def _is_frame(source) -> bool:
+    """Whether a knot is an end's or a 'through' entry's origin."""
+    return source[0] != "via" and len(source) == 2
+
+
 def _ends_of(stops):
     return [stop for stop in stops if isinstance(stop, EndFrame)]
 
@@ -451,25 +518,27 @@ def canonical_json(stops: Sequence[Stop], step: float = DEFAULT_STEP) -> str:
     1e-6 mm and every key sorted, so that equal routes are byte-identical and an
     unchanged route keeps its cache key.
 
-    'ends' mirrors the YAML (D12): each end's frame and lead, and the 'via'
-    points passed on the way to it. 'path' is the sampled centreline: 'points',
+    'ends' and 'through' mirror the YAML (D12, D14): each entry's frame and
+    lead, and the 'via' points passed on the way to it. 'path' is the sampled centreline: 'points',
     the tangent 'z' and the profile's 'x' axis at each, the sample index of each
     knot in 'knots', and the 'length'.
     """
     stops = canonical_stops(stops)
     path = RoutePath(stops, step)
-    ends = []
+    entries = []
     via = []
     for stop in stops:
         if isinstance(stop, EndFrame):
-            end = stop.as_dict()
-            end["via"] = via
-            ends.append(end)
+            entry = stop.as_dict()
+            entry["via"] = via
+            entries.append(entry)
             via = []
         else:
             via.append(list(stop))
+    del entries[0]["via"]  # nothing comes before the first end
     document = {
-        "ends": ends,
+        "ends": [entries[0], entries[-1]],
+        "through": entries[1:-1],
         "path": {
             "points": [_round_vec(p) for p in path.points],
             "z": [_round_vec(frame[2]) for frame in path.frames],
@@ -513,7 +582,8 @@ def check_route(stops: Sequence[Stop], outer_radius: float, step: float = DEFAUL
     stops = [stop if isinstance(stop, EndFrame) else _vec(stop) for stop in stops]
     refusals: List[Refusal] = []
 
-    ends = [(i, stop) for i, stop in enumerate(_ends_of(stops))]
+    sources = _entry_sources(stops)
+    ends = [(i, stop) for i, stop in enumerate(stops) if isinstance(stop, EndFrame)]
     for a in range(len(ends)):
         for b in range(a + 1, len(ends)):
             if _dist(ends[a][1].origin, ends[b][1].origin) < KNOT_TOLERANCE:
@@ -523,7 +593,8 @@ def check_route(stops: Sequence[Stop], outer_radius: float, step: float = DEFAUL
                         ends[a][1].origin,
                         {"distance": _dist(ends[a][1].origin, ends[b][1].origin)},
                         "move one of them, or place the part another way",
-                        "end %d and end %d are at the same point" % (a + 1, b + 1),
+                        "%s and %s are at the same point"
+                        % (describe_source(sources[ends[a][0]]), describe_source(sources[ends[b][0]])),
                     )
                 )
 
@@ -531,7 +602,8 @@ def check_route(stops: Sequence[Stop], outer_radius: float, step: float = DEFAUL
     for k in range(len(knots) - 1):
         a, b = knots[k], knots[k + 1]
         distance = _dist(a.point, b.point)
-        if distance < KNOT_TOLERANCE and not (a.source[0] == b.source[0] == "end" and a.source[1] != b.source[1]):
+        # Two frames at one point are reported once, above.
+        if distance < KNOT_TOLERANCE and not (_is_frame(a.source) and _is_frame(b.source)):
             refusals.append(
                 Refusal(
                     "knots-coincide",
@@ -585,4 +657,4 @@ def _bend_remedy(path: RoutePath) -> str:
     if vias:
         return "move %s further from its neighbours" % describe_source(nearest.source)
     end = nearest.source
-    return "give the path room to turn near end %d: add or move a 'via' point, or move the parts" % (end[1] + 1)
+    return "give the path room to turn near %s: add or move a 'via' point, or move the parts" % describe_source(end[:2])

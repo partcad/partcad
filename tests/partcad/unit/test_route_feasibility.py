@@ -32,8 +32,8 @@ def test_a_via_point_at_an_end_is_refused():
     (refusal,) = refusals
     assert refusal.reason == "knots-coincide"
     assert refusal.point == pytest.approx((0, 0, 0))
-    assert "end 1 and via point 1" in refusal.message
-    assert "via point 1" in refusal.remedy
+    assert "end 1 and via point 1 of end 2" in refusal.message
+    assert refusal.remedy == "remove or move via point 1 of end 2"
 
 
 def test_two_ends_at_one_point_are_refused():
@@ -42,6 +42,16 @@ def test_two_ends_at_one_point_are_refused():
     (refusal,) = refusals
     assert refusal.reason == "ends-coincide"
     assert refusal.point == pytest.approx((5, 5, 5))
+    assert "end 1 and end 2 are at the same point" in refusal.message
+
+
+def test_a_through_entry_on_an_end_is_refused_by_name():
+    stops = [EndFrame((0, 0, 0), (0, 0, 1)), EndFrame((0, 0, 0), (1, 0, 0)), EndFrame((50, 0, 0), (0, 0, 1))]
+    path, refusals = check_route(stops, RADIUS)
+    assert path is None
+    (refusal,) = refusals
+    assert refusal.reason == "ends-coincide"
+    assert "end 1 and through 1 are at the same point" in refusal.message
 
 
 def test_a_via_point_one_millimetre_from_an_end_bends_tighter_than_the_tube():
@@ -54,7 +64,7 @@ def test_a_via_point_one_millimetre_from_an_end_bends_tighter_than_the_tube():
     assert refusal.values["profileRadius"] == RADIUS
     # Where the bend is: next to the end and the via point.
     assert math.dist(refusal.point, (0, 0, 0)) < 2
-    assert refusal.remedy == "move via point 1 further from its neighbours"
+    assert refusal.remedy == "move via point 1 of end 2 further from its neighbours"
     assert "%.3f mm" % refusal.values["radius"] in refusal.message
 
 

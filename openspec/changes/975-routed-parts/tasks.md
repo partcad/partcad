@@ -6,21 +6,21 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
 
 ## 1. Extract the connection resolver (refactor, no behaviour change)
 
-- [ ] 1.1 Extract from `handle_node` the step that turns a `connect*` section, a child item and a target child with its location into the ports, interfaces and params passed to `compose_connection`. The target location becomes an explicit argument (D8). Verify that `test_assembly_also.py`, `test_assembly_connect_how.py`, `test_connect_motion_declared.py`, `test_connect_self_screw.py`, `test_assembly_guide.py`, `test_import_assy.py` and `tests/partcad_utils/test_assy_lint.py` all pass with no test edited.
-- [ ] 1.2 Add `tests/partcad/unit/test_connection_resolver.py`: for a `connectPorts` link, a `connect` link by interface, one with `toParams`, and a port-less child (which keeps today's "auto-detection" warning), the extracted method called directly returns the placement `handle_node` gives the same link, and both equal, bit for bit, the placements recorded from the code before the extraction (commit 4cd60751), so that the test is not the new code compared with itself. Verify that it passes.
-- [ ] 1.3 Fix the source-side `withPort` and `withInstance` patterns, which matched `Port` objects and instance port maps instead of names and raised `TypeError` (a bug older than this change, found while extracting the resolver). Verify with tests in `test_connection_resolver.py` that a `with: r2*` pattern and a `withInstance: lef*` pattern each pick the right one, and that both fail on the code before the fix.
+- [x] 1.1 Extract from `handle_node` the step that turns a `connect*` section, a child item and a target child with its location into the ports, interfaces and params passed to `compose_connection`. The target location becomes an explicit argument (D8). Verify that `test_assembly_also.py`, `test_assembly_connect_how.py`, `test_connect_motion_declared.py`, `test_connect_self_screw.py`, `test_assembly_guide.py`, `test_import_assy.py` and `tests/partcad_utils/test_assy_lint.py` all pass with no test edited.
+- [x] 1.2 Add `tests/partcad/unit/test_connection_resolver.py`: for a `connectPorts` link, a `connect` link by interface, one with `toParams`, and a port-less child (which keeps today's "auto-detection" warning), the extracted method called directly returns the placement `handle_node` gives the same link, and both equal, bit for bit, the placements recorded from the code before the extraction (commit 4cd60751), so that the test is not the new code compared with itself. Verify that it passes.
+- [x] 1.3 Fix the source-side `withPort` and `withInstance` patterns, which matched `Port` objects and instance port maps instead of names and raised `TypeError` (a bug older than this change, found while extracting the resolver). Verify with tests in `test_connection_resolver.py` that a `with: r2*` pattern and a `withInstance: lef*` pattern each pick the right one, and that both fail on the code before the fix.
 
 ## 2. Route path math and feasibility (pure Python)
 
-- [ ] 2.1 Add `src/partcad/route_path.py` (D4). Verify with `tests/partcad/unit/test_route_path.py`:
+- [x] 2.1 Add `src/partcad/route_path.py` (D4). Verify with `tests/partcad/unit/test_route_path.py`:
   - a straight two-end route has length equal to the distance (to 1e-9) and an infinite minimum radius;
   - a lead's samples lie on the end axis, within 1e-9 mm of the axis;
   - every `via` point and `through` entry is a sample point;
   - a route shaped like a quarter circle is within 2 % of the analytic length and radius;
   - transported frames stay orthonormal (to 1e-9), and the first frame's X equals the first end's X;
   - the closest approach of a straight route is infinite, and that of a hairpin is the hairpin's gap.
-- [ ] 2.2 Add canonical route JSON (rounded to 1e-6 mm, sorted keys). Verify in the same file that equal routes are byte-identical, that a 1 µm move of an end changes the JSON, and that a sub-1e-7 mm jitter does not (the path is built from the rounded stops).
-- [ ] 2.3 Add the D9 pre-sweep checks, returning structured refusals (reason, point, values, remedy). Verify with `tests/partcad/unit/test_route_feasibility.py`, one test per case, each asserting the reason and point:
+- [x] 2.2 Add canonical route JSON (rounded to 1e-6 mm, sorted keys). Verify in the same file that equal routes are byte-identical, that a 1 µm move of an end changes the JSON, and that a sub-1e-7 mm jitter does not (the path is built from the rounded stops).
+- [x] 2.3 Add the D9 pre-sweep checks, returning structured refusals (reason, point, values, remedy). Verify with `tests/partcad/unit/test_route_feasibility.py`, one test per case, each asserting the reason and point:
   - a `via` point coinciding with an end;
   - a `via` point back on the first end with a `through` entry in between (knots A, T, A, B), refused although no two consecutive knots coincide;
   - two ends at the same point;
@@ -31,7 +31,7 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a 2 m route with 5 000 samples, checked in under 1 s, or 5 s while coverage is measuring (tracing slows pure Python several times);
   - a `through` entry whose knots before and after lie level along its axis is refused, naming the entry (previous (100, 0, 100), next (-100, 0, 100), axis Z), while one reached square to its axis whose next knot lies further along it (previous (100, 0, 0), next (0, 0, 100)) is passed; with two `through` entries in a row, the first's direction is decided from the second's origin, not its lead point, and the second's lead points lie either side of its origin along its own decided direction; where a `via` point on the knot before it is the cause, the coincidence is reported instead;
   - the path `check_route` checks is the path built from the rounded stops, and handing it to `canonical_json` gives the same JSON as sampling again.
-- [ ] 2.4 Roll the carried frames to meet the X axis of each `through` entry and of the second end, spread evenly by arc length, the short way round (D4); name knots as the YAML does (`end 2`, `through 1`, `via point 1 of end 2`); give the JSON `ends`, `through` and per-entry `via` (D14). Verify in `test_route_path.py` that a straight route to a second end turned 90° rolls linearly to it, that one turned 270° rolls 90° the other way, that on a curved route through two entries the frame's X equals each entry's X (to 1e-9) with the frames still orthonormal, and that knot names match the YAML.
+- [x] 2.4 Roll the carried frames to meet the X axis of each `through` entry and of the second end, spread evenly by arc length, the short way round (D4); name knots as the YAML does (`end 2`, `through 1`, `via point 1 of end 2`); give the JSON `ends`, `through` and per-entry `via` (D14). Verify in `test_route_path.py` that a straight route to a second end turned 90° rolls linearly to it, that one turned 270° rolls 90° the other way, that on a curved route through two entries the frame's X equals each entry's X (to 1e-9) with the frames still orthonormal, and that knot names match the YAML.
 
 ## 3. Routed part type and its ends
 

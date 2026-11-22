@@ -15,7 +15,7 @@ import math
 import pytest
 
 from partcad.geom import Location
-from partcad.route_path import EndFrame, RoutePath, build_knots, canonical_json
+from partcad.route_path import EndFrame, RoutePath, build_knots, canonical_json, describe_source
 
 
 def _quarter_circle(radius, vias):
@@ -55,7 +55,7 @@ def test_a_lead_runs_along_the_end_axis():
     assert path.points[lead_end + 5][0] > 1e-6
 
 
-def test_every_via_point_and_intermediate_end_is_a_sample():
+def test_every_via_point_and_through_entry_is_a_sample():
     grommet = EndFrame((50, 0, 50), (1, 0, 0))
     stops = [
         EndFrame((0, 0, 0), (0, 0, 1)),
@@ -73,7 +73,7 @@ def test_every_via_point_and_intermediate_end_is_a_sample():
         assert (stop.origin if isinstance(stop, EndFrame) else tuple(float(v) for v in stop)) in sampled
 
 
-def test_an_intermediate_end_is_passed_along_its_axis_in_the_direction_of_travel():
+def test_a_through_entry_is_passed_along_its_axis_in_the_direction_of_travel():
     # The grommet's Z points back the way the route comes from: it is passed along -Z.
     grommet = EndFrame((50, 0, 50), (-1, 0, 0))
     path = RoutePath([EndFrame((0, 0, 0), (0, 0, 1)), grommet, EndFrame((100, 0, 0), (0, 0, 1))])
@@ -130,7 +130,7 @@ def test_an_end_frame_is_read_off_a_location():
 
 
 def test_a_route_needs_ends_at_both_extremes():
-    with pytest.raises(ValueError, match="two or more ends"):
+    with pytest.raises(ValueError, match="needs two ends"):
         build_knots([EndFrame((0, 0, 0), (0, 0, 1)), (1, 2, 3)])
     with pytest.raises(ValueError, match="starts and finishes at an end"):
         build_knots([(5, 5, 5), EndFrame((0, 0, 0), (0, 0, 1)), EndFrame((9, 0, 0), (0, 0, 1))])
@@ -169,8 +169,9 @@ def test_the_canonical_form_is_sorted_and_rounded():
             assert round(value, 6) == value
 
 
-def test_each_end_carries_the_via_points_on_the_way_to_it():
-    """The JSON mirrors the YAML (D12): 'via' is listed on the end it leads to."""
+def test_each_entry_carries_the_via_points_on_the_way_to_it():
+    """The JSON mirrors the YAML (D12, D14): two 'ends', the 'through' entries
+    between them, and 'via' listed on the entry it leads to."""
     grommet = EndFrame((50, 0, 50), (1, 0, 0))
     stops = [
         EndFrame((0, 0, 0), (0, 0, 1)),
@@ -181,8 +182,82 @@ def test_each_end_carries_the_via_points_on_the_way_to_it():
         EndFrame((100, 0, 0), (0, 0, 1)),
     ]
     document = json.loads(canonical_json(stops))
-    assert [end["via"] for end in document["ends"]] == [[], [[10, 5, 30]], [[70, -5, 40], [90, 0, 20]]]
-    assert document["ends"][1]["origin"] == [50, 0, 50]
+    first, second = document["ends"]
+    (grommet,) = document["through"]
+    assert "via" not in first
+    assert grommet["via"] == [[10, 5, 30]]
+    assert second["via"] == [[70, -5, 40], [90, 0, 20]]
+    assert grommet["origin"] == [50, 0, 50]
     path = document["path"]
     assert len(path["points"]) == len(path["z"]) == len(path["x"])
     assert [path["points"][k] for k in path["knots"]][2] == [50, 0, 50]
+
+
+# -- Roll (D4): the profile's X meets every entry's X --------------------------
+
+
+def _angle_between(a, b):
+    return math.degrees(math.acos(max(-1.0, min(1.0, sum(a[i] * b[i] for i in range(3))))))
+
+
+def test_the_profile_meets_the_second_end_turned_as_it_is():
+    """A straight route whose second end is turned 90 degrees: the roll grows evenly to meet it."""
+    path = RoutePath([EndFrame((0, 0, 0), (0, 0, 1), (1, 0, 0)), EndFrame((0, 0, 100), (0, 0, -1), (0, 1, 0))])
+    assert path.frames[0][0] == pytest.approx((1, 0, 0), abs=1e-12)
+    assert path.frames[-1][0] == pytest.approx((0, 1, 0), abs=1e-9)
+    for frame, arc in zip(path.frames, path.arc):
+        assert _angle_between(frame[0], (1, 0, 0)) == pytest.approx(90 * arc / path.length, abs=1e-6)
+
+
+def test_the_roll_takes_the_short_way_round():
+    """Turned 270 degrees one way is 90 the other: the profile rolls 90."""
+    path = RoutePath([EndFrame((0, 0, 0), (0, 0, 1), (1, 0, 0)), EndFrame((0, 0, 100), (0, 0, -1), (0, -1, 0))])
+    middle = path.frames[len(path.frames) // 2][0]
+    assert _angle_between(middle, (1, 0, 0)) == pytest.approx(45, abs=1)
+    assert path.frames[-1][0] == pytest.approx((0, -1, 0), abs=1e-9)
+    assert abs(path.rolls[-1]) == pytest.approx(math.pi / 2, abs=1e-9)
+
+
+def test_the_profile_meets_every_through_entry_and_end_on_a_curved_route():
+    entries = [
+        EndFrame((0, 0, 0), (0, 0, 1), (1, 0, 0)),
+        EndFrame((40, 30, 60), (1, 0, 0), (0, 0.6, 0.8)),
+        EndFrame((90, -20, 40), (0, 1, 0), (0, 0, 1)),
+        EndFrame((120, 0, 0), (0, 0, 1), (0.6, 0.8, 0)),
+    ]
+    stops = [entries[0], (10, 20, 40), entries[1], entries[2], (110, -10, 30), entries[3]]
+    path = RoutePath(stops)
+    frames_at = [path.knot_samples[k] for k, knot in enumerate(path.knots) if knot.source[0] != "via"]
+    assert len(frames_at) == 4
+    for sample, entry in zip(frames_at, entries):
+        assert path.frames[sample][0] == pytest.approx(entry.x, abs=1e-9)
+    # And still orthonormal, with z the tangent, all the way.
+    for (x, y, z), tangent in zip(path.frames, path.tangents):
+        for a, b in ((x, y), (y, z), (z, x)):
+            assert abs(sum(a[i] * b[i] for i in range(3))) < 1e-9
+        assert z == pytest.approx(tangent, abs=1e-12)
+
+
+def test_knots_are_named_as_the_yaml_names_them():
+    grommet = EndFrame((50, 0, 50), (1, 0, 0), lead=5)
+    path = RoutePath(
+        [
+            EndFrame((0, 0, 0), (0, 0, 1)),
+            (10, 5, 30),
+            grommet,
+            (70, -5, 40),
+            (90, 0, 20),
+            EndFrame((100, 0, 0), (0, 0, 1)),
+        ]
+    )
+    names = [describe_source(knot.source) for knot in path.knots]
+    assert names == [
+        "end 1",
+        "via point 1 of through 1",
+        "through 1's lead point",
+        "through 1",
+        "through 1's lead point",
+        "via point 1 of end 2",
+        "via point 2 of end 2",
+        "end 2",
+    ]
