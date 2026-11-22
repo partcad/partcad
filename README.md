@@ -28,15 +28,16 @@ Pick one. Every option ends up with the same `pc` command line tool and the same
 | Python             | `pip install -U partcad`                                                                                                                                                                                                             |
 | Visual Studio Code | `code --install-extension PartCAD.partcad-official` ([marketplace](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official))                                                                                     |
 | Claude Code        | `/plugin marketplace add partcad/partcad@plugin-dist`, then `/plugin install pc@partcad`, then `/pc:setup`                                                                                                                            |
+| Gemini CLI         | `gemini extensions install https://github.com/partcad/partcad`; its `pc-setup` skill installs `pc`                                                                                                                                    |
 
 The standalone command line tools without Python, the snap, the FreeCAD add-on, the MCP server for other AI
-agents, and the per-OS notes are all in
+agents (with one-click installs for Cursor and Visual Studio Code), and the per-OS notes are all in
 [Installation](https://partcad.readthedocs.io/en/latest/installation.html).
 
 ## Try it
 
 ```shell
-pc init                      # a package in the current directory, with agent skills for Claude Code and Cursor
+pc init                      # a package in the current directory, with an AGENTS.md and skills for your agents
 pc ide view my_part          # show it in the Digital Thread of the IDE or the extension
 pc render my_part            # SVG, PNG, DXF... from any angle
 pc qual test                 # qualify: basic, topology (overlaps, untoleranced faces), simulation, plugins
@@ -65,8 +66,9 @@ The [tutorial](https://partcad.readthedocs.io/en/latest/tutorial.html) walks thr
   materials.
 - **Supply chain**: a Build vs Buy decision per line item, stock-based procurement for made parts, and
   automated purchasing from the command line.
-- **AI agents**: Agent Skills for Claude Code and Cursor, an MCP server (`pc mcp`), and plain-text
-  `--no-ansi` output on every command.
+- **AI agents**: Agent Skills for Claude Code, Cursor, GitHub Copilot, Codex, Gemini CLI, Zed, OpenCode, Devin
+  and Kiro, an `AGENTS.md` section, an MCP server (`pc mcp`) that serves the same skills as prompts, and
+  plain-text `--no-ansi` output on every command.
 - **Caching** in memory, on disk, in memcached and in S3, so a team or a CI fleet renders each model once.
 
 The full list of what is supported, and what is still in progress, is in

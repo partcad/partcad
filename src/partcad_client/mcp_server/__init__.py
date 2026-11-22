@@ -28,6 +28,10 @@ cadcraft and solidcraft (`<app>-cli mcp`), and for the same reasons:
   read and act on. Only a malformed call is a protocol error.
 * **Files stay inside the workspace** unless the user widens that with
   ``--allow-path`` (see :mod:`.sandbox`).
+* **PartCAD's agent skills come with it**, as prompts, a ``skill`` tool and
+  resources, read out of the PartCAD that is running (see ``serve_skills`` in
+  :mod:`.server`) -- so an agent that reads no ``SKILL.md`` folders still has
+  them, and none ever has an older copy than the CLI they describe.
 
 What is different is that most of PartCAD's methods return nothing and *log*
 their answer -- `pc list` prints a table -- so every tool collects the log

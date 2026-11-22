@@ -22,6 +22,11 @@ those whenever the logo changes, from the repository root:
     cp /tmp/icons/partcad-ide.ico /tmp/icons/partcad-ide-wizard*.bmp \
         ide/standalone/resources/
 
+The Claude Code plugin's icon is this script's `partcad-ide.png` too, kept in git
+for the same reason (the plugin directory reads it from what is published):
+
+    cp /tmp/icons/partcad-ide.png ai-agents/claude/.claude-plugin/icon.png
+
 Outputs (into `--output-dir`):
   partcad-ide.png                512x512, the Linux window and launcher icon
   partcad-ide.ico                16-256, the Windows executable and window icon

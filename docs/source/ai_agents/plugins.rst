@@ -2,7 +2,7 @@
 Plugins
 #######
 
-A plugin is the other way to get the :doc:`/ai_agents/skills` into an agent: installed into the agent itself, rather
+A plugin (or an extension) is the other way to get the :doc:`/ai_agents/skills` into an agent: installed into the agent itself, rather
 than into the repository you are working in. Which one you want depends on who the skills are for -- a plugin
 is yours, on this machine, for every package you open; the copies ``pc init`` writes belong to the
 repository, so everybody who clones it gets them.
@@ -41,6 +41,30 @@ Two other ways to install the same plugin:
 The plugin is versioned with everything else in the release that publishes it, so the plugin and the ``pc``
 command line tool state the same version when they came from the same release.
 
+==========
+Gemini CLI
+==========
+
+PartCAD is a Gemini CLI extension too. Every release carries it, so installing it from the repository installs it
+from the latest release, and updating it follows the releases:
+
+.. code-block:: shell
+
+  gemini extensions install https://github.com/partcad/partcad
+  gemini extensions update partcad        # after a release
+
+It carries every skill, as ``pc-<name>``; the MCP server, ``pc mcp``, for the workspace Gemini CLI is working
+in; and a short ``GEMINI.md`` that tells the model what PartCAD is and that the skills exist. The extension is
+versioned with the release, like the Claude plugin. It needs ``pc`` on ``PATH`` for its server -- the
+``pc-setup`` skill installs it.
+
+The ``plugin-dist`` branch holds the same extension at its root, beside the Claude Code marketplace, and
+``--ref plugin-dist`` installs it from there instead. Gemini CLI looks for a *release* of that name first, and
+asks whether to clone the branch when it finds none; answer yes.
+
+``pc init --agents gemini`` is the per-repository alternative: the skills in ``.agents/skills``, the server in
+``.gemini/settings.json``, and ``AGENTS.md`` added to the files Gemini CLI reads.
+
 ======
 Cursor
 ======
@@ -58,8 +82,11 @@ See :doc:`/ai_agents/skills` for what gets written, and for how re-running it re
 Other agents
 ============
 
-The skills are plain ``SKILL.md`` directories, so any agent that reads them can use the library directly from
-``ai-agents/common/skills`` in the PartCAD repository, or from the copies ``pc init`` installs.
+GitHub Copilot, Codex, Zed, OpenCode and Devin Desktop (Windsurf) read skills from ``.agents/skills`` in the
+repository, and Kiro from ``.kiro/skills``; ``pc init`` writes both (see :doc:`/ai_agents/skills` for which by
+default, and ``--agents`` for the rest). None of them has a plugin to install.
 
-For an agent that speaks the Model Context Protocol instead of reading skills, PartCAD serves MCP on stdio --
-see :doc:`/ai_agents/mcp`.
+Beyond those, the skills are plain ``SKILL.md`` directories, so any agent that reads them can use the library
+directly from ``ai-agents/common/skills`` in the PartCAD repository. And an agent that reads no skills at all
+but speaks the Model Context Protocol gets every one of them from ``pc mcp``, as a prompt and through its
+``skill`` tool -- see :doc:`/ai_agents/mcp`.

@@ -486,6 +486,19 @@ jobs:
           else
             echo "${plugin} $(stat -c%s "${plugin}") bytes"
           fi
+          # And the Gemini CLI extension, once per platform prefix: Gemini CLI
+          # picks a release asset by that prefix, and without one for the
+          # platform it is on it installs the source tarball, which has no
+          # extension at its root.
+          for platform in linux darwin win32; do
+            archive="$(find release/plugin -type f -name "${platform}.partcad-gemini-extension-${RELEASE_VERSION}.tar.gz" | head -n 1)"
+            if [ -z "${archive}" ]; then
+              echo "::error::no Gemini CLI extension archive for ${platform}"
+              missing=1
+            else
+              echo "${archive} $(stat -c%s "${archive}") bytes"
+            fi
+          done
           exit "${missing}"
 
       # What the release carries, written down for the clients that download
@@ -742,6 +755,12 @@ jobs:
           # plugin without it still installs -- with every skill and no server.
           if [ ! -f marketplace/pc/.mcp.json ]; then
             echo "::error::no pc/.mcp.json in the artifact"
+            missing=1
+          fi
+          # The Gemini CLI extension rides on the same branch, at its root,
+          # which is the only place Gemini CLI looks for its manifest.
+          if [ ! -f marketplace/gemini-extension.json ]; then
+            echo "::error::no gemini-extension.json in the artifact"
             missing=1
           fi
           if find marketplace -type l | grep -q .; then
