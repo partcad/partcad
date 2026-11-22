@@ -187,8 +187,11 @@ the lead point before it, its origin and the lead point after it; then the secon
 end's `via` points, its lead point, and last its origin. The path therefore always
 finishes on the second end's face, with or without a lead. The tangent at an end is its Z
 axis (reversed at the second end, so the path arrives along it). At a `via` point
-it is the Catmull-Rom tangent. At a `through` entry it is whichever sign of Z
-points on along the route. Both tangents of a segment get the chord length times 1/cos²(a/2), where
+it is the Catmull-Rom tangent. At a `through` entry it is the sign of Z that
+points from the knot the path comes from (a `via` point, or the entry before, or
+that entry's lead point) towards the knot it goes to next. If the path reaches the
+entry at right angles to its axis, nothing decides the sign, and the route is
+refused (D9) rather than given one. Both tangents of a segment get the chord length times 1/cos²(a/2), where
 a is the mean angle between the tangents and the chord, capped at 2×. That is the
 length a cubic needs to follow a circular arc, so points on a circle give that
 circle's radius (to under 1 %). A segment whose tangents lie along its chord, a
@@ -233,6 +236,8 @@ The canonical JSON holds the end frames, leads, `via` points and the sampled
 path, with coordinates rounded to 1e-6 mm and keys sorted. The path is built
 from the rounded stops, not rounded after: rounding thousands of samples would
 let a sub-micrometre jitter of an end flip some of them and change the cache key.
+The D9 checks run on that same rounded route, and the path they sample is the one
+handed to the part, so what is checked is exactly what is built, sampled once.
 It is passed as
 `{"route": json}` to `_get_part_async`. This gives a per-link instance and a
 cache key that is unchanged when the route is. `routed` declares the parameter
@@ -295,6 +300,9 @@ Before any sweep, the core checks the D4 metrics. The build is refused when:
    the first, come closer than the diameter in space. No margin is added: the
    nearest-neighbour rule already keeps one stretch bending from counting as two
    stretches meeting.
+4. **Direction at a `through` entry undecided:** the path reaches the entry at
+   right angles to its axis (D4). Where that comes from a `via` point on the knot
+   just before it, the coincidence is reported instead, being the cause.
 
 A script part that declares `route` has no `diameter` or `sketch`: its profile
 is whatever its script builds, and is not known before it runs. Only check 1
@@ -302,14 +310,17 @@ applies to it before it is built, and the post-build checks below after. Checks 
 and 3 need the profile's radius in advance, and do not apply to it; its
 `length` and `minBendRadius`, if declared, are still checked (D7). Where a radius
 is needed after the build, as for the interference region (D13), it is measured
-from the built solid, at the joint it is needed for, the same way a sketch's
-radius is measured from its outline: the largest distance from the joint's axis
-of the solid's section in the plane through the joint's origin, square to that
-axis. At an end that plane is the end face; at a `through` entry it is the plane
-through the entry's origin, so a cable thicker in the middle than at its ends gets
-the radius it has there. The depth is the push distance, or else twice the radius
-measured at that joint, on each side of a `through` entry and on the cable side
-of an end.
+from the built solid, at the joint it is needed for, in two steps:
+1. *Depth.* The push distance; without one, twice the solid's radius in the
+   joint's plane (the plane through the joint's origin, square to its axis: the
+   end face at an end, the plane through the origin at a `through` entry). It runs
+   on the cable side of an end, and on both sides of a `through` entry.
+2. *Radius.* The largest distance from the joint's axis of any part of the solid
+   within that depth, not only in the joint's plane. A script cable that widens
+   inside the joint (a bulge a grommet grips) is covered over the whole depth.
+
+The radius is measured like a sketch's, from the solid rather than declared. Beyond
+the depth, or outside the cylinder, an overlap is still reported.
 
 After the sweep, `wrapper_route.py` refuses anything that is not exactly one
 solid, has non-positive volume, or fails `BRepCheck_Analyzer`. For a generic
@@ -515,7 +526,8 @@ between them, wherever it is. A long cable meets that case more than any rigid
 part: a hose pushed onto a manifold's barb can also run back through the same
 manifold. The expected region of a route joint is therefore a cylinder on the
 axis of that end's or `through` entry's frame, with the profile's outer radius
-plus a margin:
+plus a margin (for a script part, the radius measured over the joint's depth,
+D9):
 - at an end, the cable stops at its end face, so it has material on one side
   of the frame's origin only: along +Z, into the cable. That is where it can
   overlap the joined part, as a barb inside a tube does, so the cylinder runs from

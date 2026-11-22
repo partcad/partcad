@@ -238,6 +238,10 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 - **WHEN** `via` points make the path loop back through itself
 - **THEN** the routed link is left out, and the build reports the two path positions that come closer than the profile's diameter
 
+#### Scenario: A port passed through at right angles
+- **WHEN** the path reaches a `through` entry at right angles to its axis, so that nothing decides which way along the axis it passes
+- **THEN** the routed link is left out, and the build names the entry and suggests moving a `via` point so that the path comes to it along its axis
+
 #### Scenario: Coincident knots
 - **WHEN** a `via` point coincides with an end's or a `through` entry's origin, two `via` points coincide, or two ends are at the same point, whether or not the two are next to each other along the route
 - **THEN** the routed link is left out, and the build names the two knots

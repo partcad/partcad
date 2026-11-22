@@ -7,7 +7,8 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
 ## 1. Extract the connection resolver (refactor, no behaviour change)
 
 - [ ] 1.1 Extract from `handle_node` the step that turns a `connect*` section, a child item and a target child with its location into the ports, interfaces and params passed to `compose_connection`. The target location becomes an explicit argument (D8). Verify that `test_assembly_also.py`, `test_assembly_connect_how.py`, `test_connect_motion_declared.py`, `test_connect_self_screw.py`, `test_assembly_guide.py`, `test_import_assy.py` and `tests/partcad_utils/test_assy_lint.py` all pass with no test edited.
-- [ ] 1.2 Add `tests/partcad/unit/test_connection_resolver.py`: for a `connectPorts` link, a `connect` link by interface, one with `toParams`, and a port-less child (which keeps today's "auto-detection" warning), the extracted method called directly returns the placement `handle_node` gives the same link (exact equality of the composed `Location`). Verify that it passes.
+- [ ] 1.2 Add `tests/partcad/unit/test_connection_resolver.py`: for a `connectPorts` link, a `connect` link by interface, one with `toParams`, and a port-less child (which keeps today's "auto-detection" warning), the extracted method called directly returns the placement `handle_node` gives the same link, and both equal, bit for bit, the placements recorded from the code before the extraction (commit 4cd60751), so that the test is not the new code compared with itself. Verify that it passes.
+- [ ] 1.3 Fix the source-side `withPort` and `withInstance` patterns, which matched `Port` objects and instance port maps instead of names and raised `TypeError` (a bug older than this change, found while extracting the resolver). Verify with tests in `test_connection_resolver.py` that a `with: r2*` pattern and a `withInstance: lef*` pattern each pick the right one, and that both fail on the code before the fix.
 
 ## 2. Route path math and feasibility (pure Python)
 
@@ -27,7 +28,9 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - the same `via` point moved 20 mm from the end, which passes (a `lead` does not fix it: the path doubles back to the point);
   - a figure-eight of `via` points that crosses itself;
   - a hairpin whose gap is below the diameter, refused, and the same hairpin with the gap above it, which passes;
-  - a 2 m route with 5 000 samples, checked in under 1 s on a CI runner.
+  - a 2 m route with 5 000 samples, checked in under 1 s, or 5 s while coverage is measuring (tracing slows pure Python several times);
+  - a `through` entry reached at right angles to its axis is refused, naming the entry; where a `via` point on the knot before it is the cause, the coincidence is reported instead;
+  - the path `check_route` checks is the path built from the rounded stops, and handing it to `canonical_json` gives the same JSON as sampling again.
 - [ ] 2.4 Roll the carried frames to meet the X axis of each `through` entry and of the second end, spread evenly by arc length, the short way round (D4); name knots as the YAML does (`end 2`, `through 1`, `via point 1 of end 2`); give the JSON `ends`, `through` and per-entry `via` (D14). Verify in `test_route_path.py` that a straight route to a second end turned 90° rolls linearly to it, that one turned 270° rolls 90° the other way, that on a curved route through two entries the frame's X equals each entry's X (to 1e-9) with the frames still orthonormal, and that knot names match the YAML.
 
 ## 3. Routed part type and its ends
@@ -52,7 +55,7 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a `map:` port by its single-segment name;
   - a wrong segment and a wrong port, each with the list of available names;
   - a path through an alias, with the "places no links" message.
-- [ ] 4.3 Add the second pass in `handle_node_list` (D2), using the D8 resolver for each end, with the routed part fetched without `route`. Verify with `tests/partcad/unit/test_assembly_route.py`:
+- [ ] 4.3 Give the D8 resolver an optional source port that skips every source-side detection step (single port, single interface, patterns, mating), and have it prepare the moving item's ports itself; a route end without `with` passes the identity port. Add the second pass in `handle_node_list` (D2), using the D8 resolver for each end, with the routed part fetched without `route`. Verify with `tests/partcad/unit/test_assembly_route.py`:
   - **equivalence:** each end frame equals the placement of a plain part with the same port placed by the same `connectPorts` or `connect`, to 1e-9;
   - **equivalence without `with`:** an end without `with` equals the placement of a plain part whose only port is at its origin, unturned, placed by `connectPorts` naming that port, and no "auto-detection" warning is logged;
   - `with` naming a port the routed part does not declare is reported with the list of its ports, or "none", and the link is left out;
@@ -89,6 +92,7 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a cable resting against a surface without entering it passes;
   - a hose pushed onto a manifold barb (`snapIn`) that also runs back through the same manifold fails, naming the hose, the manifold and the point away from the barb: the allowance covers the joint's region, not the pair.
   - a cable through a grommet that grips it on both sides of the port passes when the joint declares the overlap, and an overlap beyond the joint's depth on either side fails;
+  - a script cable that bulges within a grommet's depth passes where the joint declares the overlap, the radius being measured over the whole depth; an overlap beyond the depth still fails;
   - a script part's region uses the radius measured from its built section at each joint: a script cable pushed onto a barb passes within it, and fails beyond it; a script cable thicker at a `through` entry than at its ends gets the radius measured there;
   - a tube pushed onto a barb overlaps it on the cable side of its end face (+Z), and passes within the joint's depth.
 - [ ] 5.2 Make the instruction book (`assembly_guide.py`) state each route step, from end to end with tree paths, and "leave the other end at (x, y, z)" for a free end. Verify with cases in `test_assembly_guide.py` for a two-ended route and a one-ended one.
