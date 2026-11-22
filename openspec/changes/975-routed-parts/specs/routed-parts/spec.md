@@ -17,7 +17,11 @@ A part declared with `type: routed` SHALL be a profile swept along the path of t
 
 #### Scenario: Sketch profile
 - **WHEN** a part declares `type: routed` and `sketch: flat-cable-section`
-- **THEN** the sketch is swept along the route, in the plane normal to the path, with its X axis along the first end's X axis there, and along the X axis of each `through` entry and of the second end where the path reaches them, the roll between them spread evenly along the path
+- **THEN** the sketch is swept along the route, in the plane normal to the path, drawn in the first end's frame, with its X axis along the X axis of each `through` entry and of the second end where the path reaches them, the roll between them spread evenly along the path
+
+#### Scenario: Profile not symmetric about its X axis
+- **WHEN** a routed part's sketch is a D shape with its flat on +Y, and its route's ends are listed one way and then the other
+- **THEN** the flat lies on +Y of whichever end is listed first, and on −Y of the other end's frame, so the two solids differ; for a sketch symmetric about its X axis they are the same
 
 #### Scenario: Both or neither profile
 - **WHEN** a part declares `type: routed` with both `diameter` and `sketch`, or with neither

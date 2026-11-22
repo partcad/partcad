@@ -212,9 +212,18 @@ asks for is spread evenly by arc length over the stretch before it, the short wa
 round (within half a turn). Rolling the starting frame about the tangent rolls
 every carried frame by the same angle, so this is exact rather than iterative. A
 round tube shows none of it. A flat or keyed profile arrives at each port turned
-the way the port is, rather than the way the path happened to carry it, and a
-route reads the same whichever end is listed first. A first version carried the
-roll from the first end only, which left the second end's turn to chance.
+the way the port is, rather than the way the path happened to carry it. A first
+version carried the roll from the first end only, which left the second end's
+turn to chance.
+
+Only X can be matched at the ports after the first. The sketch is drawn in the
+frame of the first end listed, and a sweep cannot mirror it: at the second end the
+cable is seen from the other side, so the profile's +Y lies on that port's −Y. A
+profile symmetric about its X axis (any round tube, a flat ribbon) gives the same
+solid whichever end is listed first. One that is not (a D-shaped tube) does not,
+so for it the first end listed is the one it matches exactly, and the docs say to
+list that end first. *Alternative:* an optional `profileAt: true` on one end.
+Not added: it is syntax for a rare case that the order of `ends` already states.
 
 *Alternative:* let OCCT interpolate and measure in the sandbox. Rejected, because
 the metrics would be lost on a cache hit and could not be tested in the core.
@@ -484,7 +493,11 @@ exception for the middle ones.
 
 A route has no direction: the path through the same knots is the same curve
 either way round, the checks are symmetric, and with the roll matched at every
-port (D4) the solid is too. Flow direction (a pump's outlet to a reservoir) is not
+port (D4) the solid is too, for any profile symmetric about its X axis. The one
+thing the order of `ends` decides is where a sketch is drawn: in the first end's
+frame, which matters only for a profile that is not symmetric about X (D4). That
+is a fact about the profile, not a direction of the cable, so the keys stay
+`ends`, and the rule is stated as "the first end listed". Flow direction (a pump's outlet to a reservoir) is not
 modelled; if it is ever needed, it is a field of its own rather than something
 read from which end is listed first.
 

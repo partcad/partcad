@@ -380,7 +380,9 @@ so they never give `with` and are never free:
 A route has no direction: listing the ends the other way round gives the same
 cable, provided the rest is turned round too. Reverse `through`, and move each
 stretch's `via` points to the entry at its other end, in reverse order, since
-the first end never gives `via`.
+the first end never gives `via`. The one thing the order decides is the end a
+sketch profile is drawn at, which matters only for a profile that is not
+symmetric about its X axis (see :ref:`routed`).
 
 **Waypoints.** A `via` point is a point in this list's frame that the path passes
 through. It places nothing and follows nothing: it only steers the cable, around

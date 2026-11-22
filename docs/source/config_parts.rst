@@ -1104,6 +1104,12 @@ path, the short way round, so a flat cable arrives at each connector turned the
 way the connector is. Declare the ports' X axes accordingly. A round tube shows
 none of this.
 
+The sketch is drawn in the frame of the first end listed. Only its X axis can be
+matched at the other ports: at the second end the cable is seen from the other
+side, so the sketch's +Y lies on that port's −Y. A sketch symmetric about its X
+axis, such as a flat ribbon, is the same either way. One that is not, such as a
+D-shaped tube, is not: list first the end it must match exactly.
+
 **Limits.** ``length`` and ``minBendRadius`` describe the real cable, and
 :doc:`pc qual test </digital_thread/lifecycle/qualification_tests>` fails an assembly whose route needs more
 cable, or bends it tighter, than they allow. ``length`` is measured along the
