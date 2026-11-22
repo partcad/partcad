@@ -284,6 +284,16 @@ Before any sweep, the core checks the D4 metrics. The build is refused when:
    nearest-neighbour rule already keeps one stretch bending from counting as two
    stretches meeting.
 
+A script part that declares `route` has no `diameter` or `sketch`: its profile
+is whatever its script builds, and is not known before it runs. Only check 1
+applies to it before it is built, and the post-build checks below after. Checks 2
+and 3 need the profile's radius in advance, and do not apply to it; its
+`length` and `minBendRadius`, if declared, are still checked (D7). Where a radius
+is needed after the build, as for the interference region (D13), it is measured
+from the built solid: the largest distance from the end's axis of the solid's
+section in the plane of that end face, the same way a sketch's radius is measured
+from its outline. The depth there is the push distance, or else twice that radius.
+
 After the sweep, `wrapper_route.py` refuses anything that is not exactly one
 solid, has non-positive volume, or fails `BRepCheck_Analyzer`. For a generic
 part the `validity` check only reports these. For a route, though, an invalid
@@ -438,11 +448,18 @@ The allowance covers the joint, not the pair. Today the check keeps expected
 overlaps as pairs of parts, so a joint between two parts excuses every overlap
 between them, wherever it is. A long cable meets that case more than any rigid
 part: a hose pushed onto a manifold's barb can also run back through the same
-manifold. For a route end or `through` entry, the expected region is therefore a
-cylinder on that entry's axis, from its frame's origin into the joined part as
-far as the joint goes (the connection's push distance, or else the profile's
-diameter), with the profile's outer radius plus a margin. Only the part of the
-overlap inside that region is excused; whatever is left is reported, naming the
+manifold. The expected region of a route joint is therefore a cylinder on the
+axis of that end's or `through` entry's frame, with the profile's outer radius
+plus a margin:
+- at an end, the cable stops at the port, so the cylinder runs one way, from the
+  frame's origin into the joined part (along −Z of the end frame, whose +Z points
+  into the cable), as deep as the joint goes;
+- at a `through` entry, the cable runs on through the joined part (a grommet
+  gripping it mid-panel), so the cylinder runs that depth on both sides of the
+  origin.
+
+The depth is the connection's push distance, or else the profile's diameter.
+Only the part of the overlap inside that region is excused; whatever is left is reported, naming the
 cable, the part and where. Overlaps of ordinary connected parts keep the pair
 rule; tightening that too would be a separate change to the check.
 

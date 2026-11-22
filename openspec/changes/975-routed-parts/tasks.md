@@ -69,7 +69,7 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - **connectors (D11):** a route ending at the `cable-exit` port of a separately placed plug part starts exactly there, with the plug listed before and after the route; the routed solid adds no geometry for an offset port (its end face lies at the end origin); a route straight to a barb port with no fitting part builds with no warning;
   - `AssemblyChild.route` holds the ends, length, minimum radius and closest approach.
 - [ ] 4.4 Wire the D9 refusals into the build, kept on the assembly in a list of problems from links left out, which `get_connect_problems()` reads together with its children's (D9). Verify with the same test file that each pre-sweep refusal case from 2.3 leaves the link out of `assembly.children`, logs the reason, and appears in `get_connect_problems()` under the link's name; that the same holds for a route refused inside an embedded `links:` list; and that `pc qual test`'s `connect` check fails the assembly for it.
-- [ ] 4.5 Add the script hook (a part that declares `route: {type: string}`). Verify with a *(sandbox)* test whose build123d script sweeps a circle along the received frames, and asserts that the JSON has `origin`, `z`, `x` and `lead` per end, and that the solid's endpoints are on the end origins. A `step` part placed with `route:` is reported and left out.
+- [ ] 4.5 Add the script hook (a part that declares `route: {type: string}`). Verify with a *(sandbox)* test whose build123d script sweeps a circle along the received frames, and asserts that the JSON has `origin`, `z`, `x` and `lead` per end, and that the solid's endpoints are on the end origins. A `step` part placed with `route:` is reported and left out. A script route whose `via` point coincides with an end is refused before the script runs; one whose script returns two solids is refused after; a tight bend is not refused for a script part (D9).
 - [x] 4.6 Document `route:` in `docs/source/assy.rst`: ends as connections, the end frame, tree paths, `lead`, `via`, the script hook, the second pass, refusals and their remedies, and the restrictions. Verify that the docs build has no warnings.
 
 ## 5. Checks and instructions
@@ -87,6 +87,8 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a tube end overlapping a barb whose port declares `snapIn` passes, and fails without it;
   - a cable resting against a surface without entering it passes;
   - a hose pushed onto a manifold barb (`snapIn`) that also runs back through the same manifold fails, naming the hose, the manifold and the point away from the barb: the allowance covers the joint's region, not the pair.
+  - a cable through a grommet that grips it on both sides of the port passes when the joint declares the overlap, and an overlap beyond the joint's depth on either side fails;
+  - a script part's region uses the radius measured from its built end section: a script cable pushed onto a barb passes within it, and fails beyond it.
 - [ ] 5.2 Make the instruction book (`assembly_guide.py`) state each route step, from end to end with tree paths, and "leave the other end at (x, y, z)" for a free end. Verify with cases in `test_assembly_guide.py` for a two-ended route and a one-ended one.
 
 ## 6. Example and integration

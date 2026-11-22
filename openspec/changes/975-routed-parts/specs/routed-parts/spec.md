@@ -215,6 +215,10 @@ A part of a script type (`cadquery`, `build123d`) that declares a parameter name
 - **WHEN** a build123d part declares `parameters: {route: {type: string}}` and is placed with a two-ended `route:`
 - **THEN** its script receives `route` as JSON with two ends, each with `origin`, `z` and `x` as three numbers, and `lead`, and the part, which declares no ports, is connected at both ends by the end frame's origin
 
+#### Scenario: Checks on a script part
+- **WHEN** a script part that declares `route` is placed with a route whose `via` point coincides with an end, or whose script builds more than one solid
+- **THEN** the link is left out with the reason, as for a routed part; the bend and self-crossing checks, which need a profile radius known before the build, are not applied to it
+
 #### Scenario: Part that cannot be routed
 - **WHEN** a `step` part is placed with `route:`
 - **THEN** the build reports that the part type is not routed and does not declare a `route` parameter, and the link is left out
@@ -260,6 +264,10 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 #### Scenario: Cable resting against a part
 - **WHEN** a cable's path touches a part's surface without entering it
 - **THEN** no interference is reported
+
+#### Scenario: Grommet gripping the cable on both sides
+- **WHEN** a `through` entry joins a cable to a grommet in the middle of a panel, the joint declares the overlap, and the grommet grips the cable on both sides of its port
+- **THEN** no interference is reported for the grommet on either side, within the joint's depth from the port
 
 #### Scenario: Joined at one place, colliding at another
 - **WHEN** a hose is pushed onto a manifold's barb, whose port declares `snapIn`, and its path also runs back through the same manifold elsewhere
