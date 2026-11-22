@@ -1289,7 +1289,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 # If the instance is known and the port pattern is configured
             elif connect_with_port_pattern is not None:
                 matched = []
-                for port in item.with_ports.get_ports().values():
+                for port in item.with_ports.get_ports().keys():
                     if fnmatch.fnmatch(port, connect_with_port_pattern):
                         matched.append(port)
 
@@ -1415,7 +1415,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             # If there is an instance pattern configured
             if source_iface is not None and source_iface_instance is None and connect_with_instance_pattern is not None:
                 matched = []
-                for instance in source_iface.values():
+                for instance in source_iface.keys():
                     if fnmatch.fnmatch(instance, connect_with_instance_pattern):
                         matched.append(instance)
 

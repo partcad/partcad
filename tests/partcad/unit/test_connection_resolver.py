@@ -60,6 +60,19 @@ parts:
   blank:
     type: stl
     path: cube.stl
+  rail:
+    type: stl
+    path: cube.stl
+    ports:
+      r1: [[0, 0, 0], [0, 0, 1], 0]
+      r2: [[30, 0, 0], [0, 0, 1], 0]
+  twin-key:
+    type: stl
+    path: cube.stl
+    implements:
+      tab:
+        left: [[-15, 0, 0], [0, 0, 1], 0]
+        right: [[15, 0, 0], [0, 0, 1], 0]
 interfaces:
   slab:
     parameters:
@@ -204,3 +217,43 @@ def test_a_port_less_child_still_warns_of_auto_detection(tmp_path, monkeypatch):
     assert placed.source_port is None
     # Placing the link, and each of the two direct calls.
     assert warnings.count("Peer port auto-detection has failed: blank") == 3
+
+
+# -- Patterns on the source side (they used to raise TypeError) -----------------
+
+
+def test_a_source_port_found_by_pattern(tmp_path, monkeypatch):
+    """'with: r2*' picks r2 among the rail's two ports; it used to match Port objects and raise."""
+    links = """
+    links:
+      - part: base
+      - part: rail
+        connectPorts: {with: "r2*", name: base, to: p1}
+    """
+    assembly, calls = _resolve(tmp_path, monkeypatch, links)
+    rail, placed = _check(assembly, calls, "rail")
+    assert rail.joint_problems == []
+    assert placed.source_port.name.endswith("r2")
+    # r2 sits 30 mm along the rail's X, so the rail is placed 30 mm back from p1.
+    assert rail.connection["point"] == pytest.approx([0, 0, 10], abs=1e-9)
+
+
+def test_a_source_instance_found_by_pattern(tmp_path, monkeypatch):
+    """'withInstance: lef*' picks the left instance; it used to match the instances' port maps and raise."""
+    links = """
+    links:
+      - part: board
+      - part: twin-key
+        name: by-left
+        connect: {with: tab, withInstance: "lef*", name: board, to: slab}
+      - part: twin-key
+        name: by-right
+        connect: {with: tab, withInstance: right, name: board, to: slab}
+    """
+    assembly, calls = _resolve(tmp_path, monkeypatch, links)
+    left, _ = _check(assembly, calls, "by-left")
+    right, _ = _check(assembly, calls, "by-right")
+    assert left.joint_problems == [] and right.joint_problems == []
+    # The two instances are 30 mm apart along the key's X, so the two placements are too.
+    shift = [a - b for a, b in zip(left.location.translation, right.location.translation)]
+    assert sum(v * v for v in shift) ** 0.5 == pytest.approx(30.0, abs=1e-9)
