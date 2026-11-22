@@ -413,7 +413,55 @@ ordinary connections tree paths would be a separate change.
 - An interface on a routed part means the tube end itself mates, as with a
   push-fit tube.
 - A moulded cable assembly appears in the BOM as two items, plug and cable.
-  Option 2 is the follow-up if that matters.
+  Option 2 is the follow-up if that matters (below).
+
+**Follow-up: ready-made cables (option 2, noted 2026-11-23).** Two cases look
+alike and are not:
+- *A cable made in-house* (a plug soldered onto a wire): option 1 is right. Both
+  are bought, both are listed, and the instruction book shows both steps.
+- *A cable bought ready-made* (a moulded USB cable, a sensor pigtail): it is one
+  item, with one part number, plugged in as one action. Option 1 lists two items
+  and needs two links.
+
+A sub-assembly holding the plug and the cable does not fit the second case. A
+sub-assembly is built and cached on its own (D2), while the cable's shape depends
+on where the parent puts the port at its far end; the cable would have to reach
+up out of its sub-assembly, which is a Non-Goal.
+
+The planned answer is option 2, as a change of its own after this one:
+
+```yaml
+parts:
+  usb-cable-1m:
+    type: routed
+    diameter: 4
+    length: 1000
+    fittings:
+      a: { part: usb-a-plug, at: cable-exit }   # the plug's cable-exit on end a's end face
+      b: { part: usb-c-plug, at: cable-exit }
+
+# ASSY
+- part: usb-cable-1m
+  route:
+    ends:
+      - connect: { with: "a:mating-face", name: control, to: usb-a }
+      - connect: { with: "b:mating-face", name: board, to: usb-c }
+```
+
+- Each fitting's ports become ports of the cable, named `<fitting>:<port>`, as
+  `map:` makes a sub-assembly's ports its own. An end connected by the plug's
+  mating face puts the plug where a separately placed plug would sit, and the
+  cable starts at its cable-exit, with no gap.
+- The fitting is drawn as a child of the routed link at the end frame; nothing new
+  is swept. Its interfaces and matings are checked as for any part.
+- One BOM item and one instruction step. A pigtail declares a fitting at one end
+  only.
+- New surface it needs: `fittings` in the part schema, the fittings in the cache
+  key, `length` measured from cable-exit to cable-exit (the plugs do not count),
+  and fittings in the interference region of their end (D13).
+
+It builds on this change without altering anything decided here, which is why it
+is not part of it.
 
 ### D12. `via` points are listed on the entry they lead to (decided 2026-11-22: option a)
 A `via` point is a waypoint: a point in the list's frame that the path passes
