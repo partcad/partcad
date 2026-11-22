@@ -85,7 +85,8 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a `via` point listed on the second end instead of the grommet sends the cable back through the panel, and the check fails naming the cable and the panel;
   - the same point listed on the grommet passes;
   - a tube end overlapping a barb whose port declares `snapIn` passes, and fails without it;
-  - a cable resting against a surface without entering it passes.
+  - a cable resting against a surface without entering it passes;
+  - a hose pushed onto a manifold barb (`snapIn`) that also runs back through the same manifold fails, naming the hose, the manifold and the point away from the barb: the allowance covers the joint's region, not the pair.
 - [ ] 5.2 Make the instruction book (`assembly_guide.py`) state each route step, from end to end with tree paths, and "leave the other end at (x, y, z)" for a free end. Verify with cases in `test_assembly_guide.py` for a two-ended route and a one-ended one.
 
 ## 6. Example and integration

@@ -377,8 +377,10 @@ so they never give `with` and are never free:
         - connectPorts: { name: panel, to: grommet }
         - connectPorts: { name: frame, to: clip-2 }
 
-A route has no direction: listing the ends the other way round, with `through`
-reversed, gives the same cable.
+A route has no direction: listing the ends the other way round gives the same
+cable, provided the rest is turned round too. Reverse `through`, and move each
+stretch's `via` points to the entry at its other end, in reverse order, since
+the first end never gives `via`.
 
 **Waypoints.** A `via` point is a point in this list's frame that the path passes
 through. It places nothing and follows nothing: it only steers the cable, around

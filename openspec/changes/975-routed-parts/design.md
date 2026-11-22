@@ -430,6 +430,18 @@ is accepted where the barb port declares `snapIn`, the same as for any part push
 onto it. Everywhere else, a cable that shares space with a part fails, naming
 both. A cable that merely rests against a surface bounds no volume, and passes.
 
+The allowance covers the joint, not the pair. Today the check keeps expected
+overlaps as pairs of parts, so a joint between two parts excuses every overlap
+between them, wherever it is. A long cable meets that case more than any rigid
+part: a hose pushed onto a manifold's barb can also run back through the same
+manifold. For a route end or `through` entry, the expected region is therefore a
+cylinder on that entry's axis, from its frame's origin into the joined part as
+far as the joint goes (the connection's push distance, or else the profile's
+diameter), with the profile's outer radius plus a margin. Only the part of the
+overlap inside that region is excused; whatever is left is reported, naming the
+cable, the part and where. Overlaps of ordinary connected parts keep the pair
+rule; tightening that too would be a separate change to the check.
+
 A detour through free air that touches nothing is still not caught. It shows in
 the render, and as a `length` failure where the cable declares one.
 

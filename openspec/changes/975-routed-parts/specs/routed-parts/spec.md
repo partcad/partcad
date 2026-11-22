@@ -261,6 +261,10 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 - **WHEN** a cable's path touches a part's surface without entering it
 - **THEN** no interference is reported
 
+#### Scenario: Joined at one place, colliding at another
+- **WHEN** a hose is pushed onto a manifold's barb, whose port declares `snapIn`, and its path also runs back through the same manifold elsewhere
+- **THEN** `pc qual test` fails the assembly with an interference naming the hose and the manifold at that other place: the allowance covers the joint's region, not every overlap between the two parts
+
 ### Requirement: Length and bend radius are checked
 When a routed part declares `length`, `pc qual test` SHALL fail the assembly if the route's centreline is longer than that length. The centreline runs from the first end face to the last, so it includes leads but not port offsets. When it declares `minBendRadius`, `pc qual test` SHALL fail the assembly if the tightest bend of the centreline has a smaller radius. Either failure SHALL state the measured and the declared value. The route SHALL NOT be reshaped to meet either limit.
 
