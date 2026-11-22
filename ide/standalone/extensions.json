@@ -26,7 +26,16 @@
   "extra": {
     "ms-python.python": {
       "required": true,
-      "reason": "An `extensionDependency` of the PartCAD extension, and what runs CadQuery and build123d scripts from the editor."
+      // Held because Setup cannot install a path longer than Windows' MAX_PATH
+      // (259 characters). This extension's deepest file, a `.pyi` in the copy
+      // of typeshed inside its bundled jedi, is 203 characters below the install
+      // directory in `ms-python.python-2026.4.0-universal` -- exactly what
+      // `tools/check_install_paths.py` allows -- and 204 in
+      // `ms-python.python-2026.10.0-win32-x64`, one more for the extra digit in
+      // the version. Lift the hold once a newer release passes that check
+      // (`build.sh` runs it on Windows), not before.
+      "version": "2026.4.0",
+      "reason": "An `extensionDependency` of the PartCAD extension, and what runs CadQuery and build123d scripts from the editor. Held at 2026.4.0: 2026.10.0 ships a file too deep for the Windows installer (see the comment above)."
     },
     "detachhead.basedpyright": {
       "reason": "Open-source type checking and IntelliSense for Python, in place of Pylance. Not required: the IDE is usable without it, only less helpful while editing a CAD script."

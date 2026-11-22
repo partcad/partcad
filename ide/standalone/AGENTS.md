@@ -116,6 +116,12 @@ its own result, and the `install` job in that workflow, which installs the archi
 
 - **An extension**: add it to `../.vscode/extensions.json`. Only touch `extensions.json` here when it cannot be
   installed from Open VSX or cannot be redistributed, and say which in the `reason`.
+- **An extension's version**: the newest on Open VSX unless `extensions.json` holds it with `"version"` (and a
+  `reason`). `ms-python.python` is held because a newer release carries a file too deep for the Windows
+  installer, which cannot install a path over `MAX_PATH` -- Inno Setup has no long-path support to turn on.
+  `tools/check_install_paths.py` is what decides that, before the installer is compiled; do not lift the hold,
+  or move the install directory in `installer/partcad-ide.iss`, without it passing (it has a test holding it to
+  the `.iss`).
 - **Branding, or a default setting**: `product.overlay.json`. A `null` removes a key; `${VERSION}` is the
   PartCAD version.
 - **The icon, anywhere it appears**: `../vscode/resources/logo.svg`, and nothing else. `tools/make_icons.py`

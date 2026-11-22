@@ -18,7 +18,8 @@ Inputs:
     for *what* ships. It is the same list contributors are prompted with, so an
     extension added there reaches the IDE without anything else being edited.
   - `<component>/extensions.json` - what to do about the entries that cannot be
-    installed from the gallery, plus the extras an end user needs.
+    installed from the gallery, plus the extras an end user needs, and the
+    version a gallery entry is held at when the newest one cannot ship.
   - `--local <id>=<path>` - extensions built from this repository (the PartCAD
     extension and the IDE bootstrap), installed from their `.vsix` files.
 """
@@ -63,6 +64,16 @@ def _entry(identifier: str, origin: str, override: dict[str, Any] | None) -> dic
     if source != SOURCE_VSIX and url:
         raise PolicyError(f'{identifier}: "url" only applies to source {SOURCE_VSIX!r}')
 
+    # The version a gallery extension is held at, instead of whatever is newest
+    # when the IDE is built. Only the gallery resolves a version: a .vsix is the
+    # version it is.
+    version = override.pop("version", None)
+    if version is not None:
+        if source != SOURCE_GALLERY:
+            raise PolicyError(f'{identifier}: "version" only applies to source {SOURCE_GALLERY!r}')
+        if not isinstance(version, str) or not version.strip() or "@" in version:
+            raise PolicyError(f'{identifier}: "version" is a version such as "1.2.3", not {version!r}')
+
     required = bool(override.pop("required", False))
     reason = override.pop("reason", None)
 
@@ -70,6 +81,10 @@ def _entry(identifier: str, origin: str, override: dict[str, Any] | None) -> dic
     # recommendation, so the reason is not optional.
     if action == "skip" and not reason:
         raise PolicyError(f'{identifier}: "skip" needs a "reason" saying why it cannot ship')
+    # Nor is it for a held version: one with no reason is one nobody knows when
+    # to let go of, and the IDE stays on it for good.
+    if version is not None and not reason:
+        raise PolicyError(f'{identifier}: "version" needs a "reason" saying why the newest one cannot ship')
 
     if override:
         raise PolicyError(f"{identifier}: unknown key(s) {', '.join(sorted(override))}")
@@ -80,6 +95,7 @@ def _entry(identifier: str, origin: str, override: dict[str, Any] | None) -> dic
         "action": action,
         "source": source,
         "url": url,
+        "version": version,
         "required": required,
         "reason": reason,
     }
@@ -155,6 +171,8 @@ def explain(plan: dict[str, Any]) -> str:
         source = entry["source"]
         if source == SOURCE_VSIX:
             source = f"vsix {entry['url']}"
+        elif entry.get("version"):
+            source = f"{source} @{entry['version']}"
         elif source == SOURCE_LOCAL:
             source = f"local {entry['path']}"
         flag = "required" if entry["required"] else "optional"

@@ -22,6 +22,7 @@ def test_a_recommendation_is_installed_from_the_gallery_by_default():
         "action": "install",
         "source": "gallery",
         "url": None,
+        "version": None,
         "required": False,
         "reason": None,
     }
@@ -53,6 +54,33 @@ def test_an_extra_that_is_already_recommended_is_an_error():
 def test_a_vsix_source_needs_a_url():
     with pytest.raises(PolicyError, match="needs a"):
         build_plan(["a.b"], {"extensions": {"a.b": {"source": "vsix"}}})
+
+
+def test_a_gallery_extension_can_be_held_at_a_version():
+    plan = build_plan(["a.b"], {"extensions": {"a.b": {"version": "2026.4.0", "reason": "the newest is too deep"}}})
+    (entry,) = plan["install"]
+    assert (entry["source"], entry["version"]) == ("gallery", "2026.4.0")
+    assert "gallery @2026.4.0" in resolve_extensions.explain(plan)
+
+
+def test_a_held_version_needs_a_reason():
+    # Otherwise nobody knows when it can go, and the IDE stays on it for good.
+    with pytest.raises(PolicyError, match="why the newest one cannot ship"):
+        build_plan(["a.b"], {"extensions": {"a.b": {"version": "1.0.0"}}})
+
+
+@pytest.mark.parametrize(
+    "override, match",
+    [
+        ({"version": "1.0.0", "source": "vsix", "url": "https://x/a.vsix", "reason": "r"}, "only applies to source"),
+        ({"version": "", "reason": "r"}, "a version such as"),
+        ({"version": "a.b@1.0.0", "reason": "r"}, "a version such as"),
+        ({"version": 2026, "reason": "r"}, "a version such as"),
+    ],
+)
+def test_a_version_is_one_the_gallery_can_resolve(override, match):
+    with pytest.raises(PolicyError, match=match):
+        build_plan(["a.b"], {"extensions": {"a.b": override}})
 
 
 def test_an_unknown_key_is_an_error():

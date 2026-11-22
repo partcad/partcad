@@ -1339,14 +1339,24 @@ jobs:
           if (-not $setup) { throw "no installer in the artifact" }
           # The switches a user never sees: no wizard, no dialogs, and no
           # launching the editor at the end (the [Run] entry is skipifsilent).
-          Start-Process -FilePath $setup.FullName -Wait `
+          $process = Start-Process -FilePath $setup.FullName -Wait -PassThru `
             -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/LOG=install.log"
           Get-Content install.log -Tail 20
+          # A failed installation is rolled back, and the tail of its log is the
+          # rollback deleting what it had written: the reason is further up, so
+          # the lines that say what went wrong are shown before failing here --
+          # not in the next step, as "nothing installed".
+          if ($process.ExitCode -ne 0) {
+            Write-Host "--- what went wrong (install.log) ---"
+            Select-String -Path install.log -Pattern "Exception|Error|failed|Rolling back|Message box" |
+              ForEach-Object { $_.Line }
+            throw "Setup exited with $($process.ExitCode)"
+          }
 
       - name: Use what it installed
         shell: pwsh
         run: |
-          $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          $app = Join-Path $env:LOCALAPPDATA "PartCAD IDE"
           if (-not (Test-Path $app)) { throw "nothing installed at $app" }
           & (Join-Path $app "bin\partcad-ide.cmd") --version
           & (Join-Path $app "resources\partcad-cli\pc.exe") version
@@ -1390,7 +1400,7 @@ jobs:
       - name: Upgrade over a stale extension directory
         shell: pwsh
         run: |
-          $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          $app = Join-Path $env:LOCALAPPDATA "PartCAD IDE"
           $extensions = Join-Path $app "resources\app\extensions"
           $stale = Join-Path $extensions "partcad.partcad-0.8.0"
           New-Item -ItemType Directory -Path $stale -Force | Out-Null
@@ -1417,7 +1427,7 @@ jobs:
       - name: Start it once
         shell: pwsh
         run: |
-          $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          $app = Join-Path $env:LOCALAPPDATA "PartCAD IDE"
           $userData = Join-Path $env:RUNNER_TEMP "ide-user-data"
           $starter = Join-Path $env:USERPROFILE ".partcad/projects/start"
           $log = Join-Path $env:RUNNER_TEMP "ide.log"
@@ -1464,7 +1474,7 @@ jobs:
       - name: Uninstall
         shell: pwsh
         run: |
-          $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          $app = Join-Path $env:LOCALAPPDATA "PartCAD IDE"
           # What is running out of the application right now. The uninstaller is
           # what has to stop a PartCAD daemon ("StopPartcad" in partcad-ide.iss):
           # Windows will not delete an executable that is running, and a user's

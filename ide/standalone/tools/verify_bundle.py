@@ -357,7 +357,14 @@ def main(argv: list[str] | None = None) -> int:
     for entry in plan["install"]:
         identifier = entry["id"].lower()
         if identifier in present:
-            notes.append(f"extension: {entry['id']} {present[identifier].get('version', '?')}")
+            installed = present[identifier].get("version", "?")
+            notes.append(f"extension: {entry['id']} {installed}")
+            # A held version is held for a reason (see extensions.json): another
+            # one in the IDE is that reason shipping anyway.
+            if entry.get("version") and installed != entry["version"]:
+                problems.append(
+                    f"extension {entry['id']} is {installed}, and the policy holds it at {entry['version']}"
+                )
         elif entry["required"]:
             problems.append(f"required extension {entry['id']} is not installed")
         else:

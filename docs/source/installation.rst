@@ -78,7 +78,7 @@ Windows
 
 Download ``partcad-ide-<version>-windows-x86_64-setup.exe`` from the
 `GitHub release <https://github.com/partcad/partcad/releases>`_ and run it. It installs for the current
-user without asking for administrator rights, into ``%LOCALAPPDATA%\Programs\PartCAD IDE``, and offers
+user without asking for administrator rights, into ``%LOCALAPPDATA%\PartCAD IDE``, and offers
 "for all users" as a choice. It adds a Start menu entry, and -- unless you turn the option off -- puts
 ``partcad-ide`` and ``pc`` on your ``PATH``. Uninstall it from "Apps & features" like any other
 application.
