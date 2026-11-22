@@ -182,3 +182,97 @@ def test_the_version_is_the_running_one_rather_than_a_literal(workspace):
     age_the_plugin(workspace, monkeyed)
 
     assert any(monkeyed in finding for finding in AgentSkillsCheck().test().findings)
+
+
+def age_a_skill(workspace, directory, name="pc-init", version="0.0.1"):
+    """`age_the_cursor_skill` for any agent's directory."""
+    path = workspace.joinpath(*directory.split("/")) / name / "SKILL.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("  partcad: %s" % partcad.__version__, "  partcad: %s" % version),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("agent, directory", [("copilot", ".agents/skills"), ("kiro", ".kiro/skills")])
+def test_it_reports_older_skills_in_every_agents_directory(workspace, agent, directory):
+    ai_agents.install_agent_skills(str(workspace), [agent], mcp=False, instructions=False)
+    age_a_skill(workspace, directory)
+
+    check = AgentSkillsCheck()
+    assert check.is_applicable()
+    findings = check.test().findings
+    assert any("pc-init" in finding and directory.split("/")[0] in finding for finding in findings)
+
+    assert check.fix()
+    assert check.test().findings == []
+    # Repairing one directory creates no other.
+    assert not (workspace / ".cursor").exists()
+
+
+def age_the_instructions(workspace, version="0.0.1"):
+    path = workspace / "AGENTS.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "BEGIN partcad %s " % partcad.__version__, "BEGIN partcad %s " % version
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_it_reports_and_rewrites_an_older_agents_md_section(workspace):
+    ai_agents.install_agent_skills(str(workspace), ["cursor"], mcp=False)
+    age_the_instructions(workspace)
+
+    check = AgentSkillsCheck()
+    findings = check.test().findings
+    assert any("AGENTS.md" in finding and "0.0.1" in finding for finding in findings)
+
+    assert check.fix()
+    assert check.test().findings == []
+    assert ai_agents.instructions_version((workspace / "AGENTS.md").read_text(encoding="utf-8")) == partcad.__version__
+
+
+def test_an_agents_md_section_alone_makes_it_apply(workspace):
+    ai_agents.install_instructions(str(workspace), str(workspace))
+
+    assert AgentSkillsCheck().is_applicable()
+
+
+def test_the_fix_writes_no_agents_md_that_was_not_there(workspace):
+    ai_agents.install_agent_skills(str(workspace), ["cursor"], mcp=False, instructions=False)
+    age_the_cursor_skill(workspace)
+
+    check = AgentSkillsCheck()
+    check.test()
+    assert check.fix()
+
+    assert not (workspace / "AGENTS.md").exists()
+
+
+def test_a_repair_run_elsewhere_keeps_the_package_the_section_names(workspace, monkeypatch):
+    """`pc healthcheck --fix` from the root must not rewrite a nested package's section for the root."""
+    package = workspace / "models" / "robot"
+    package.mkdir(parents=True)
+    ai_agents.install_agent_skills(str(package), ["cursor"], mcp=False)
+    age_the_instructions(workspace)
+    monkeypatch.chdir(workspace)
+
+    check = AgentSkillsCheck()
+    check.test()
+    assert check.fix()
+
+    text = (workspace / "AGENTS.md").read_text(encoding="utf-8")
+    assert ai_agents.instructions_package(text) == "models/robot"
+    assert "pc --no-ansi -p models/robot" in text
+
+
+def test_a_marker_naming_a_package_outside_the_repository_is_not_followed(workspace):
+    (workspace / "AGENTS.md").write_text(
+        '<!-- BEGIN partcad 0.0.1 package="../../elsewhere": old -->\nstale\n<!-- END partcad -->\n', encoding="utf-8"
+    )
+
+    check = AgentSkillsCheck()
+    check.test()
+    assert check.fix()
+
+    assert ai_agents.instructions_package((workspace / "AGENTS.md").read_text(encoding="utf-8")) == "."

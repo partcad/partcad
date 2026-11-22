@@ -185,9 +185,10 @@ def test_an_installation_carrying_no_skills_installs_nothing(tmp_path, monkeypat
     assert ai_agents.available_skills() == []
     assert not ai_agents.install_claude_plugin(str(tmp_path))
     assert not ai_agents.install_cursor_skills(str(tmp_path))
-    # The MCP server is not package data -- its entry is written by code -- so
-    # it is left out here, where the question is what the missing data costs.
-    assert not ai_agents.install_agent_skills(str(tmp_path), mcp=False)
+    # The MCP server and the AGENTS.md section are not package data -- both are
+    # written by code -- so they are left out here, where the question is what
+    # the missing data costs.
+    assert not ai_agents.install_agent_skills(str(tmp_path), mcp=False, instructions=False)
     assert not (tmp_path / ".claude").exists()
 
 
@@ -384,12 +385,73 @@ def test_an_unknown_agent_is_an_error_rather_than_a_quiet_no_op(tmp_path):
     assert not (tmp_path / ".cursor").exists()
 
 
-def test_every_agent_is_installed_for_by_default(tmp_path):
+def test_the_default_is_the_three_agents_with_an_install_base_and_whatever_the_repository_uses(tmp_path):
+    """A `.kiro`, a `.zed` and a `.codex` in every new repository would be litter for agents nobody here uses."""
     ai_agents.install_agent_skills(str(tmp_path))
 
-    assert sorted(ai_agents.AGENTS) == ["claude", "cursor"]
     assert (tmp_path / ".claude" / "skills" / "pc").is_dir()
     assert (tmp_path / ".cursor" / "skills" / "pc-init").is_dir()
+    assert (tmp_path / ".agents" / "skills" / "pc-init").is_dir()
+    for absent in (".kiro", ".codex", ".gemini", ".zed", ".devin"):
+        assert not (tmp_path / absent).exists(), absent
+
+
+@pytest.mark.parametrize(
+    "marker, agent",
+    [(".kiro", "kiro"), (".codex", "codex"), ("GEMINI.md", "gemini"), (".zed", "zed"), (".windsurf", "devin")],
+)
+def test_an_agent_the_repository_already_uses_is_installed_for_by_default(tmp_path, marker, agent):
+    (tmp_path / marker).mkdir() if marker.startswith(".") else (tmp_path / marker).write_text("", encoding="utf-8")
+
+    assert agent in ai_agents.default_agents(str(tmp_path))
+
+
+def test_all_means_every_agent(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+
+    from partcad_cli.click.command import cli
+
+    # `init` writes beside the `partcad.yaml` of the current directory.
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(cli, ["--no-ansi", "init", "--skills-only", "--agents", "all"])
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".kiro" / "skills" / "pc-init").is_dir()
+    assert (tmp_path / ".codex" / "config.toml").is_file()
+
+
+def test_every_agent_reading_the_shared_directory_shares_one_copy(tmp_path):
+    shared = [name for name, spec in ai_agents.AGENT_SPECS.items() if spec.skills == "shared"]
+    assert sorted(shared) == ["codex", "copilot", "devin", "gemini", "opencode", "zed"]
+
+    assert ai_agents.install_agent_skills(str(tmp_path), shared, mcp=False, instructions=False)
+
+    installed = sorted(os.listdir(tmp_path / ".agents" / "skills"))
+    assert installed == ["pc-" + skill for skill in ai_agents.available_skills()]
+    # Stamped and renamed like Cursor's: no plugin namespace there either.
+    assert read_front_matter(tmp_path / ".agents" / "skills" / "pc-gen" / "SKILL.md")["name"] == "pc-gen"
+
+
+def test_kiro_has_a_directory_of_its_own(tmp_path):
+    assert ai_agents.install_agent_skills(str(tmp_path), ["kiro"], mcp=False, instructions=False)
+
+    assert (tmp_path / ".kiro" / "skills" / "pc-init" / "SKILL.md").is_file()
+    assert not (tmp_path / ".agents").exists()
+
+
+def test_windsurf_is_devin(tmp_path):
+    assert ai_agents.install_agent_skills(str(tmp_path), ["windsurf"], instructions=False)
+
+    assert (tmp_path / ".devin" / "mcp_config.json").is_file()
+
+
+def test_every_skill_name_is_one_every_agent_accepts():
+    """Copilot, Zed and Kiro take lowercase letters, digits and single hyphens, at most 64; a bad name fails silently."""
+    import re
+
+    for skill in ai_agents.available_skills():
+        name = "pc-" + skill
+        assert re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name) and len(name) <= 64, name
 
 
 # --- The MCP server ---
@@ -494,5 +556,455 @@ def test_only_the_named_agents_are_given_the_server(tmp_path):
 
 
 def test_every_agent_has_somewhere_to_put_the_server():
-    """An agent added to AGENTS without one would get the skills and silently no server."""
-    assert sorted(ai_agents.MCP_CONFIGS) == sorted(ai_agents.AGENTS)
+    """An agent added to AGENT_SPECS without one would get the skills and silently no server -- unless it says why."""
+    assert sorted([*ai_agents.MCP_CONFIGS, *ai_agents.MCP_NOT_WRITTEN]) == sorted(ai_agents.AGENT_SPECS)
+    assert not set(ai_agents.MCP_CONFIGS) & set(ai_agents.MCP_NOT_WRITTEN)
+
+
+@pytest.mark.parametrize(
+    "agent, path, key",
+    [
+        ("gemini", (".gemini", "settings.json"), "mcpServers"),
+        ("zed", (".zed", "settings.json"), "context_servers"),
+        ("kiro", (".kiro", "settings", "mcp.json"), "mcpServers"),
+        ("devin", (".devin", "mcp_config.json"), "mcpServers"),
+    ],
+)
+def test_an_agent_with_no_project_variable_is_given_a_relative_package(repository, agent, path, key):
+    """None of these document a variable for the project; they start its servers in it."""
+    package = repository / "packages" / "widget"
+    package.mkdir(parents=True)
+
+    assert ai_agents.install_mcp_config(agent, str(repository), str(package))
+
+    assert read_json(repository.joinpath(*path))[key]["partcad"] == {
+        "command": "pc",
+        "args": ["-p", "packages/widget", "mcp"],
+    }
+
+
+def test_a_json_file_with_comments_is_left_alone(tmp_path):
+    """Zed's settings are usually commented; a parse and re-dump would drop every comment."""
+    (tmp_path / ".zed").mkdir()
+    text = '{\n  // mine\n  "theme": "One Dark"\n}\n'
+    (tmp_path / ".zed" / "settings.json").write_text(text, encoding="utf-8")
+
+    assert not ai_agents.install_mcp_config("zed", str(tmp_path), str(tmp_path))
+
+    assert (tmp_path / ".zed" / "settings.json").read_text(encoding="utf-8") == text
+
+
+# --- Codex's TOML ---
+
+
+def read_toml(path):
+    tomllib = pytest.importorskip("tomllib")
+    return tomllib.loads(path.read_text(encoding="utf-8"))
+
+
+def test_codex_is_given_a_table_of_its_own(tmp_path):
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    assert read_toml(tmp_path / ".codex" / "config.toml")["mcp_servers"]["partcad"] == {
+        "command": "pc",
+        "args": ["-p", ".", "mcp"],
+    }
+
+
+def test_the_rest_of_codexs_file_is_kept_byte_for_byte(tmp_path):
+    (tmp_path / ".codex").mkdir()
+    before = (
+        '# my settings\nmodel = "o5"\n\n[mcp_servers.github]\ncommand = "gh-mcp" # theirs\n\n'
+        '[mcp_servers.partcad]\ncommand = "/old/pc"\nargs = ["mcp"]\n\n[mcp_servers.partcad.env]\nX = "1"\n\n'
+        '[profiles.fast]\nmodel = "o5-mini"\n'
+    )
+    (tmp_path / ".codex" / "config.toml").write_text(before, encoding="utf-8")
+
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    after = (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8")
+    assert after.startswith('# my settings\nmodel = "o5"\n\n[mcp_servers.github]\ncommand = "gh-mcp" # theirs\n')
+    assert after.endswith('[profiles.fast]\nmodel = "o5-mini"\n')
+    config = read_toml(tmp_path / ".codex" / "config.toml")
+    # PartCAD's table, sub-tables and all, is replaced whole.
+    assert config["mcp_servers"]["partcad"] == {"command": "pc", "args": ["-p", ".", "mcp"]}
+    assert config["mcp_servers"]["github"] == {"command": "gh-mcp"}
+
+    # And a second run changes nothing.
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+    assert (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8") == after
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["not = [valid", '[mcp_servers]\npartcad = { command = "other" }\n'],
+)
+def test_a_toml_file_this_cannot_edit_is_left_alone(tmp_path, content):
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text(content, encoding="utf-8")
+
+    assert not ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    assert (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8") == content
+
+
+# --- Gemini reads AGENTS.md only when told to ---
+
+
+def test_gemini_is_told_to_read_agents_md_beside_gemini_md(tmp_path):
+    assert ai_agents.install_agent_skills(str(tmp_path), ["gemini"])
+
+    assert read_json(tmp_path / ".gemini" / "settings.json")["context"]["fileName"] == ["AGENTS.md", "GEMINI.md"]
+
+
+@pytest.mark.parametrize(
+    "before, after",
+    [
+        ("NOTES.md", ["AGENTS.md", "NOTES.md"]),
+        (["NOTES.md", "GEMINI.md"], ["AGENTS.md", "NOTES.md", "GEMINI.md"]),
+        (["AGENTS.md"], ["AGENTS.md"]),
+    ],
+)
+def test_the_context_files_gemini_had_are_kept(tmp_path, before, after):
+    (tmp_path / ".gemini").mkdir()
+    settings = {"context": {"fileName": before, "other": 1}, "theme": "x"}
+    (tmp_path / ".gemini" / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+
+    assert ai_agents.install_gemini_context(str(tmp_path))
+
+    written = read_json(tmp_path / ".gemini" / "settings.json")
+    assert written["context"] == {"fileName": after, "other": 1}
+    assert written["theme"] == "x"
+
+
+def test_no_instructions_means_gemini_is_not_reconfigured(tmp_path):
+    assert ai_agents.install_agent_skills(str(tmp_path), ["gemini"], mcp=False, instructions=False)
+
+    assert not (tmp_path / ".gemini" / "settings.json").exists()
+
+
+# --- AGENTS.md ---
+
+
+def test_agents_md_gets_a_partcad_section(tmp_path):
+    assert ai_agents.install_agent_skills(str(tmp_path), ["cursor"])
+
+    text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert ai_agents.instructions_version(text) == partcad.__version__
+    assert "pc --no-ansi" in text
+    for skill in ai_agents.available_skills():
+        assert "`pc-%s`" % skill in text
+    assert "`.cursor/skills/`" in text
+    # No `/pc:<skill>` left pointing into a namespace most agents have not got,
+    # beyond the one sentence saying the two spellings are the same skill.
+    assert text.count("pc:") == 1
+
+
+def test_the_section_names_the_package_where_it_is(repository):
+    package = repository / "packages" / "widget"
+    package.mkdir(parents=True)
+
+    ai_agents.install_agent_skills(str(package), ["cursor"])
+
+    text = (repository / "AGENTS.md").read_text(encoding="utf-8")
+    assert "`packages/widget/partcad.yaml`" in text
+    assert "pc --no-ansi -p packages/widget" in text
+    assert not (package / "AGENTS.md").exists()
+
+
+def test_the_rest_of_agents_md_is_the_users_and_is_kept(tmp_path):
+    (tmp_path / "AGENTS.md").write_text("# Mine\n\nKeep this.\n", encoding="utf-8")
+    ai_agents.install_agent_skills(str(tmp_path), ["cursor"])
+    with open(tmp_path / "AGENTS.md", "a", encoding="utf-8") as f:
+        f.write("\n## Also mine\n\nAnd this.\n")
+
+    ai_agents.install_agent_skills(str(tmp_path), ["cursor"])
+
+    text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert text.startswith("# Mine\n\nKeep this.\n\n<!-- BEGIN partcad ")
+    assert text.endswith("<!-- END partcad -->\n\n## Also mine\n\nAnd this.\n")
+    assert text.count("<!-- BEGIN partcad ") == 1
+
+
+def test_an_older_section_is_replaced(tmp_path):
+    (tmp_path / "AGENTS.md").write_text(
+        "<!-- BEGIN partcad 0.0.1: old -->\nstale\n<!-- END partcad -->\n", encoding="utf-8"
+    )
+
+    ai_agents.install_instructions(str(tmp_path), str(tmp_path))
+
+    text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert "stale" not in text
+    assert ai_agents.instructions_version(text) == partcad.__version__
+
+
+def test_the_section_lists_every_place_skills_are_installed_not_only_this_runs(tmp_path):
+    ai_agents.install_agent_skills(str(tmp_path), ["kiro"])
+    ai_agents.install_agent_skills(str(tmp_path), ["cursor"])
+
+    text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert "`.kiro/skills/`" in text and "`.cursor/skills/`" in text
+
+
+def test_a_claude_md_is_pointed_at_agents_md(tmp_path):
+    """Claude Code reads AGENTS.md itself only where there is no CLAUDE.md."""
+    (tmp_path / "CLAUDE.md").write_text("# Mine\n", encoding="utf-8")
+
+    ai_agents.install_agent_skills(str(tmp_path), ["cursor"])
+    ai_agents.install_agent_skills(str(tmp_path), ["cursor"])
+
+    assert (tmp_path / "CLAUDE.md").read_text(encoding="utf-8") == "# Mine\n\n@AGENTS.md\n"
+
+
+def test_no_claude_md_is_created(tmp_path):
+    ai_agents.install_agent_skills(str(tmp_path), ["claude"])
+
+    assert not (tmp_path / "CLAUDE.md").exists()
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink") or os.name == "nt", reason="needs symlinks")
+def test_linked_instruction_files_are_left_alone(tmp_path):
+    (tmp_path / "shared.md").write_text("theirs\n", encoding="utf-8")
+    os.symlink(tmp_path / "shared.md", tmp_path / "AGENTS.md")
+    os.symlink(tmp_path / "shared.md", tmp_path / "CLAUDE.md")
+
+    assert not ai_agents.install_instructions(str(tmp_path), str(tmp_path))
+
+    assert (tmp_path / "shared.md").read_text(encoding="utf-8") == "theirs\n"
+
+
+def test_no_instructions_means_no_agents_md(tmp_path):
+    assert ai_agents.install_agent_skills(str(tmp_path), ["cursor"], instructions=False)
+
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
+# --- The install links in the documentation ---
+
+
+def _documented_link(prefix):
+    import re
+
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "docs", "source", "ai_agents", "mcp.rst")
+    with open(path, encoding="utf-8") as f:
+        found = re.search(re.escape(prefix) + r"[^\s>`]+", f.read())
+    assert found, prefix
+    return found.group(0)
+
+
+def test_the_cursor_install_link_is_the_entry_pc_init_writes():
+    """A one-click install that starts something else than `pc init` configures is two servers that disagree."""
+    import base64
+    import urllib.parse
+
+    link = _documented_link("cursor://anysphere.cursor-deeplink/mcp/install?")
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)
+    assert query["name"] == ["partcad"]
+    assert json.loads(base64.b64decode(query["config"][0])) == ai_agents.mcp_server_entry("cursor", "/r", "/r")
+
+
+def test_the_vscode_install_link_is_the_server_the_documentation_shows():
+    import urllib.parse
+
+    link = _documented_link("https://vscode.dev/redirect?url=")
+    inner = urllib.parse.unquote(urllib.parse.urlparse(link).query[len("url=") :])
+    assert inner.startswith("vscode:mcp/install?")
+    config = json.loads(urllib.parse.unquote(inner[len("vscode:mcp/install?") :]))
+    assert config == {"name": "partcad", "type": "stdio", "command": "pc", "args": ["-p", "${workspaceFolder}", "mcp"]}
+
+
+# --- OpenCode's V2 configuration ---
+
+
+def test_opencode_is_given_a_server_in_its_current_shape(repository):
+    """`mcp.servers.<name>`, a `type` and the command as one array (`Mcp.LocalConfigEncoded`)."""
+    package = repository / "packages" / "widget"
+    package.mkdir(parents=True)
+
+    assert ai_agents.install_mcp_config("opencode", str(repository), str(package))
+
+    config = read_json(repository / "opencode.json")
+    assert config["$schema"] == "https://opencode.ai/config.json"
+    assert config["mcp"]["servers"]["partcad"] == {"type": "local", "command": ["pc", "-p", "packages/widget", "mcp"]}
+
+
+def test_opencodes_deprecated_entry_of_ours_is_moved_and_the_rest_kept(tmp_path):
+    """OpenCode 2 migrates a server kept directly under `mcp`; two of ours, in both places, would be one too many."""
+    before = {
+        "$schema": "https://opencode.ai/config.json",
+        "model": "theirs",
+        "mcp": {
+            "partcad": {"type": "local", "command": ["old-pc", "mcp"]},
+            "github": {"type": "local", "command": ["gh"]},
+        },
+    }
+    (tmp_path / "opencode.json").write_text(json.dumps(before), encoding="utf-8")
+
+    assert ai_agents.install_mcp_config("opencode", str(tmp_path), str(tmp_path))
+
+    config = read_json(tmp_path / "opencode.json")
+    assert config["model"] == "theirs"
+    assert "partcad" not in config["mcp"]
+    assert config["mcp"]["github"] == {"type": "local", "command": ["gh"]}
+    assert config["mcp"]["servers"]["partcad"]["command"] == ["pc", "-p", ".", "mcp"]
+
+
+@pytest.mark.parametrize("existing", ["opencode.jsonc", ".opencode/opencode.json"])
+def test_the_opencode_file_a_repository_already_has_is_the_one_written(tmp_path, existing):
+    """OpenCode merges every file it finds; a second one beside the first would be one more place to look."""
+    path = tmp_path.joinpath(*existing.split("/"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"model": "theirs"}', encoding="utf-8")
+
+    assert ai_agents.install_mcp_config("opencode", str(tmp_path), str(tmp_path))
+
+    assert read_json(path)["mcp"]["servers"]["partcad"]["type"] == "local"
+    assert not (tmp_path / "opencode.json").exists() or existing == "opencode.json"
+
+
+def test_an_opencode_file_with_comments_is_left_alone(tmp_path):
+    text = '{\n  // mine\n  "model": "theirs"\n}\n'
+    (tmp_path / "opencode.jsonc").write_text(text, encoding="utf-8")
+
+    assert not ai_agents.install_mcp_config("opencode", str(tmp_path), str(tmp_path))
+
+    assert (tmp_path / "opencode.jsonc").read_text(encoding="utf-8") == text
+
+
+def test_the_opencode_documentation_shows_what_pc_init_writes():
+    """One snippet, and it is the configuration `pc init` produces -- so the two cannot come to differ."""
+    import re
+
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "docs", "source", "ai_agents", "mcp.rst")
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    section = text[text.index("OpenCode\n========\n") : text.index("Claude Desktop\n==============")]
+    blocks = re.findall(r"\.\. code-block:: json\n\n((?:  .*\n|\n)+)", section)
+    assert len(blocks) == 1
+    documented = json.loads(blocks[0])
+
+    config = ai_agents.MCP_CONFIGS["opencode"]
+    assert documented == {
+        **dict(config.preamble),
+        "mcp": {"servers": {"partcad": ai_agents.mcp_server_entry("opencode", "/r", "/r")}},
+    }
+
+
+# --- What review found ---
+
+
+def test_a_description_that_mentions_partcad_is_not_a_stamp():
+    """Only `metadata.partcad` is a stamp; a skill mistaken for PartCAD's is one `pc init` may delete."""
+    text = "---\nname: pc-notes\ndescription: |\n  partcad: notes\n---\n\n# Notes\n"
+    assert ai_agents.stamped_version(text) is None
+
+
+def test_a_users_skill_whose_description_mentions_partcad_is_not_retired(tmp_path):
+    theirs = tmp_path / ".agents" / "skills" / "pc-notes"
+    theirs.mkdir(parents=True)
+    (theirs / "SKILL.md").write_text("---\nname: pc-notes\ndescription: |\n  partcad: notes\n---\n", encoding="utf-8")
+
+    ai_agents.install_agent_skills(str(tmp_path), ["copilot"], mcp=False, instructions=False)
+
+    assert (theirs / "SKILL.md").is_file()
+
+
+def test_an_array_of_tables_after_ours_in_codexs_file_is_kept(tmp_path):
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text(
+        '[mcp_servers.partcad]\ncommand = "old"\n\n[[skills.config]]\nname = "mine"\n', encoding="utf-8"
+    )
+
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    config = read_toml(tmp_path / ".codex" / "config.toml")
+    assert config["skills"]["config"] == [{"name": "mine"}]
+    assert config["mcp_servers"]["partcad"]["command"] == "pc"
+
+
+def test_a_table_between_two_of_ours_in_codexs_file_is_kept(tmp_path):
+    """TOML lets `[mcp_servers.partcad.env]` come after somebody else's table."""
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text(
+        '[mcp_servers.partcad]\ncommand = "old"\n\n[mcp_servers.github]\ncommand = "gh-mcp"\n\n'
+        '[mcp_servers.partcad.env]\nX = "1"\n\n[profiles.fast]\nmodel = "m"\n',
+        encoding="utf-8",
+    )
+
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    config = read_toml(tmp_path / ".codex" / "config.toml")
+    assert config["mcp_servers"]["github"] == {"command": "gh-mcp"}
+    assert config["mcp_servers"]["partcad"] == {"command": "pc", "args": ["-p", ".", "mcp"]}
+    assert config["profiles"]["fast"] == {"model": "m"}
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink") or os.name == "nt", reason="needs symlinks")
+def test_linked_gemini_settings_are_left_alone_by_the_context_too(tmp_path):
+    shared = tmp_path / "shared.json"
+    shared.write_text("{}", encoding="utf-8")
+    (tmp_path / ".gemini").mkdir()
+    os.symlink(shared, tmp_path / ".gemini" / "settings.json")
+
+    assert not ai_agents.install_gemini_context(str(tmp_path))
+
+    assert shared.read_text(encoding="utf-8") == "{}"
+
+
+def test_the_section_marker_names_the_package(repository):
+    package = repository / "models" / "robot"
+    package.mkdir(parents=True)
+
+    ai_agents.install_instructions(str(repository), str(package))
+
+    assert ai_agents.instructions_package((repository / "AGENTS.md").read_text(encoding="utf-8")) == "models/robot"
+
+
+def test_the_plugin_names_its_icon_and_it_is_a_real_png():
+    """The directory reads the icon once; a pointer file there would be listed for good."""
+    manifest = ai_agents.plugin_manifest()
+    path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..", "ai-agents", "claude", manifest["icon"].removeprefix("./")
+    )
+    with open(path, "rb") as f:
+        assert f.read(8) == b"\x89PNG\r\n\x1a\n"
+
+
+def test_a_header_inside_a_multiline_string_in_codexs_file_is_text_and_is_kept(tmp_path):
+    """TOML allows header-shaped lines in a multi-line string; an edit that took them for tables is refused."""
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    text = (
+        '[mcp_servers.partcad]\ncommand = "old"\n\n[profiles.fast]\nmodel_instructions = """\n'
+        '[mcp_servers.partcad.env]\nKeep this instruction.\n[example]\nremaining text\n"""\n'
+    )
+    (tmp_path / ".codex" / "config.toml").write_text(text, encoding="utf-8")
+
+    assert not ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    assert (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8") == text
+
+
+def test_a_multiline_string_elsewhere_does_not_stop_an_edit_that_keeps_it(tmp_path):
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text(
+        '[profiles.fast]\nmodel_instructions = """\nplain text\n"""\n', encoding="utf-8"
+    )
+
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))
+
+    config = read_toml(tmp_path / ".codex" / "config.toml")
+    assert config["profiles"]["fast"]["model_instructions"] == "plain text\n"
+    assert config["mcp_servers"]["partcad"]["command"] == "pc"
+
+
+def test_an_invalid_codex_file_is_left_alone(tmp_path):
+    pytest.importorskip("tomllib")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text("not = [valid\n", encoding="utf-8")
+
+    assert not ai_agents.install_mcp_config("codex", str(tmp_path), str(tmp_path))

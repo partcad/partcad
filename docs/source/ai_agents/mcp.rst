@@ -4,9 +4,10 @@ MCP server
 
 ``pc mcp`` serves the `Model Context Protocol <https://modelcontextprotocol.io>`_ (MCP) on stdio. It is how an
 AI agent drives PartCAD without a shell: any MCP client -- Claude Code, Claude Desktop, Cursor, Visual Studio
-Code and the rest -- starts it as a subprocess and calls its tools to see what a package holds, read an
-object's declaration, look at it, qualify it and write it out, and to reach everything else PartCAD's daemon can
-do.
+Code, Codex, Gemini CLI, Zed, Kiro, OpenCode, Devin Desktop and the rest -- starts it as a subprocess and calls
+its tools to see what a package holds, read an object's declaration, look at it, qualify it and write it out,
+and to reach everything else PartCAD's daemon can do. It also serves PartCAD's :doc:`/ai_agents/skills`, so an
+agent that reads no ``SKILL.md`` files still has them (see :ref:`mcp-skills`).
 
 The server is a client of the workspace's daemon, exactly like the other ``pc`` commands: it starts the daemon
 if none is running, and the daemon loads the packages, runs the CAD scripts in their sandboxes and renders. So
@@ -50,7 +51,14 @@ The ``pc`` plugin (see :ref:`claude-plugin`) brings the server along with the sk
 Cursor
 ======
 
-``pc init`` adds it to ``.cursor/mcp.json``. By hand:
+``pc init`` adds it to ``.cursor/mcp.json``. To add it for every project instead, open this link with Cursor
+installed:
+
+.. code-block:: text
+
+  cursor://anysphere.cursor-deeplink/mcp/install?name=partcad&config=eyJjb21tYW5kIjoicGMiLCJhcmdzIjpbIi1wIiwiJHt3b3Jrc3BhY2VGb2xkZXJ9IiwibWNwIl19
+
+By hand:
 
 .. code-block:: json
 
@@ -64,7 +72,10 @@ Visual Studio Code
 ==================
 
 The PartCAD extension registers one server for every workspace folder that holds a ``partcad.yaml``, using the
-``pc`` it found or downloaded -- there is nothing to configure. Without the extension, in ``.vscode/mcp.json``:
+``pc`` it found or downloaded -- there is nothing to configure, and ``pc init`` writes no ``.vscode/mcp.json``,
+which would be a second server under the same name. Without the extension, `install it with one click
+<https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522partcad%2522%252C%2522type%2522%253A%2522stdio%2522%252C%2522command%2522%253A%2522pc%2522%252C%2522args%2522%253A%255B%2522-p%2522%252C%2522%2524%257BworkspaceFolder%257D%2522%252C%2522mcp%2522%255D%257D>`_,
+or put it in ``.vscode/mcp.json``:
 
 .. code-block:: json
 
@@ -73,6 +84,102 @@ The PartCAD extension registers one server for every workspace folder that holds
       "partcad": { "type": "stdio", "command": "pc", "args": ["-p", "${workspaceFolder}", "mcp"] }
     }
   }
+
+The GitHub Copilot coding agent, which works on GitHub rather than in an editor, reads its servers from the
+repository's settings on GitHub (*Copilot* > *Coding agent* > *MCP configuration*), not from a file:
+
+.. code-block:: json
+
+  {
+    "mcpServers": {
+      "partcad": { "type": "local", "command": "pc", "args": ["mcp"], "tools": ["*"] }
+    }
+  }
+
+That needs ``pc`` in the agent's environment -- a ``copilot-setup-steps.yml`` that installs PartCAD.
+
+Codex
+=====
+
+``pc init --agents codex`` (or ``pc init`` in a repository that has a ``.codex``) adds a table to
+``.codex/config.toml``, which Codex reads in a project you have marked trusted, and keeps every other line of
+the file as it was. Codex has no variable for the project's directory and starts servers in it, so the package
+is named relative to it:
+
+.. code-block:: toml
+
+  [mcp_servers.partcad]
+  command = "pc"
+  args = ["-p", ".", "mcp"]
+
+The same table in ``~/.codex/config.toml`` serves whichever directory Codex is started in, with ``args =
+["mcp"]``.
+
+Gemini CLI
+==========
+
+The PartCAD extension brings the server with the skills (see :doc:`/ai_agents/plugins`). Per repository,
+``pc init --agents gemini`` adds it to ``.gemini/settings.json``, and tells Gemini CLI to read ``AGENTS.md``
+as well as ``GEMINI.md``:
+
+.. code-block:: json
+
+  {
+    "mcpServers": {
+      "partcad": { "command": "pc", "args": ["-p", ".", "mcp"] }
+    },
+    "context": { "fileName": ["AGENTS.md", "GEMINI.md"] }
+  }
+
+Its server prompts become slash commands, so ``/pc-gen-part a bracket with two M4 holes`` runs the skill.
+
+Zed
+===
+
+``pc init --agents zed`` adds it to ``.zed/settings.json``, which Zed reads in a trusted worktree. Zed's
+settings are often commented, and a file with comments in it is left alone with a warning rather than
+rewritten without them; add it by hand there:
+
+.. code-block:: json
+
+  {
+    "context_servers": {
+      "partcad": { "command": "pc", "args": ["-p", ".", "mcp"] }
+    }
+  }
+
+Kiro
+====
+
+``pc init --agents kiro`` adds it to ``.kiro/settings/mcp.json``, in the same shape as Cursor's but with a
+relative package, since Kiro has no variable for the project's directory.
+
+Devin Desktop (Windsurf)
+========================
+
+``pc init --agents devin`` (``windsurf`` works too) adds it to ``.devin/mcp_config.json``, the configuration
+Devin Desktop reads for a project and the one to commit, in the same shape as Kiro's.
+
+OpenCode
+========
+
+``pc init --agents opencode`` (or ``pc init`` in a repository with an ``opencode.json`` or an ``.opencode``) adds
+it to ``opencode.json`` -- or to the ``opencode.jsonc`` or ``.opencode/opencode.json`` the repository already
+has -- in the shape OpenCode 2 reads, with the package relative to the workspace, where OpenCode starts it:
+
+.. code-block:: json
+
+  {
+    "$schema": "https://opencode.ai/config.json",
+    "mcp": {
+      "servers": {
+        "partcad": { "type": "local", "command": ["pc", "-p", ".", "mcp"] }
+      }
+    }
+  }
+
+A ``partcad`` entry directly under ``mcp``, the shape OpenCode 1 used and OpenCode 2 still migrates, is moved
+under ``servers`` rather than left beside it.
 
 Claude Desktop
 ==============
@@ -199,6 +306,9 @@ its compound, rather than as the tree of what it places (see :ref:`part-compound
    * - ``list_methods``
      -
      - Every daemon method, with a one-line summary.
+   * - ``skill``
+     -
+     - One of PartCAD's skills, or the list of them (see :ref:`mcp-skills`).
    * - ``execute``
      -
      - Runs any daemon method: CAE, CAM, simulations, ``add``, ``import``, ``convert``, ``install`` and the rest.
@@ -216,6 +326,43 @@ user: where to sign in, what to copy, and the ``names`` to hand it back under (s
 
 Two resources are served as well: ``partcad://workspace`` (where the workspace is, which files the agent may
 use, and its package tree) and ``partcad://methods`` (what ``list_methods`` returns).
+
+.. _mcp-skills:
+
+******
+Skills
+******
+
+Every one of PartCAD's :doc:`/ai_agents/skills` is served three ways, because MCP clients differ in which of
+the three they show:
+
+* **a prompt**, ``pc-<name>``, with one optional argument, ``request``, which takes the place of the
+  ``$ARGUMENTS`` the skill is written around. This is what a client offers as a slash command --
+  ``/pc-gen-part`` in Gemini CLI, ``/partcad:pc-gen-part`` in OpenCode, ``/mcp__partcad__pc-gen-part`` in Claude
+  Code and Devin Desktop.
+
+  Claude Code splits what is typed after the command on spaces and hands the words to the prompt's arguments
+  one each, in order, dropping whatever is left over -- quotes do not hold words together -- so a prompt with
+  one argument would be sent the first word of the request. So when the client is Claude Code (as it says
+  when it connects), each skill's prompt is listed with an argument per word, thirty-two of them (``request``,
+  ``2``, ``3``, ...), and the words are put back together before the skill sees them. Claude Code also shows
+  the model the whole of what was typed, as the command's arguments, and the prompt says that text wins should
+  a request ever be longer.
+
+  Gemini CLI gets the opposite treatment: it hands what is typed after a command only to arguments a prompt
+  *requires*, all of it when one is, so it is told the request is required. Every other client is told of one
+  optional argument: Visual Studio Code, for one, asks for each argument in a box of its own and would not
+  run ``/pc-setup`` until something was typed into it.
+* **the** ``skill`` **tool**, which every client has: ``skill`` with a ``name`` returns that skill, and
+  without one lists them all. The server's instructions tell the agent to read the skill for a kind of work
+  before doing it, and this is also how it follows a skill that names another (``/pc-gen-sketch`` from
+  ``/pc-gen-part``).
+* **a resource**, ``partcad://skills/<name>``, for a client that attaches resources as context.
+
+All three are the same text: the ``SKILL.md`` with its references renamed as everywhere outside the Claude
+plugin, preceded by a note saying which directory the skill's own files are in -- two of the skills run a
+script that lives beside them -- and how to reach the others. They are read from the PartCAD that is
+running, so unlike a copy in a repository they cannot fall behind it.
 
 *******************
 Results and errors

@@ -45,7 +45,8 @@ ai-agents/
 │   ├── .mcp.json                   # the MCP server, `pc mcp`, for the project the session is in
 │   └── skills -> ../common/skills  # symlink: no duplication
 └── scripts/
-    └── materialize.sh              # publish-time: deref the symlink into real files
+    ├── materialize.sh              # publish-time: deref the symlink into real files
+    └── gemini_extension.py         #   ...and write the Gemini CLI extension beside the plugin
 ```
 
 And, so that the same files reach a user through the wheel:
@@ -86,7 +87,7 @@ what an editor opens as its workspace. `pc init --no-skills` skips it, and
 `pc init --skills-only` does this and nothing else, which is how a repository
 that already has a package gets them (or gets a newer PartCAD's).
 `src/partcad/ai_agents/__init__.py` is the whole of it, and it reads the files
-out of the *installed* PartCAD, not out of a checkout. The two agents do **not**
+out of the *installed* PartCAD, not out of a checkout. The agents do **not** all
 get the same thing:
 
 - **Claude Code** gets the *plugin*: `.claude/skills/pc/`, a manifest plus every
@@ -106,12 +107,40 @@ get the same thing:
   rewritten, so the `pc render` and `pc adhoc convert` command lines these files
   are full of are left alone.
 
-`--agents` chooses which of them to install for — `all` (the default), or a
-comma-separated list. An agent PartCAD does not know is an error rather than a
-quiet no-op: a typo that installs nothing looks exactly like an agent that is
-not supported yet. Adding a third agent is a line in `AGENTS` in
-`src/partcad/ai_agents/__init__.py` and a function saying where its directory is
-— the skills themselves are vendor-neutral and are not copied per agent.
+- **Every other agent** gets the Cursor treatment — `pc-` prefixed, renamed,
+  stamped — in the directory it reads. Most of them have converged on one:
+  GitHub Copilot, Codex, Gemini CLI, Zed, OpenCode and Devin Desktop (Windsurf)
+  all read `.agents/skills/`, so one copy there serves all six, and it is
+  written once however many of them are asked for. Kiro reads `.kiro/skills/`.
+  The rule for the renaming is `partcad_utils.agent_skills`, which `pc mcp`
+  reads too (below).
+
+`--agents` chooses which of them to install for — `default`, `all`, or a
+comma-separated list (`windsurf` is accepted for `devin`). `default` is Claude
+Code, Cursor and `.agents/skills`, plus every other agent the repository already
+has a marker of (`.kiro`, `.codex`, `.gemini` or `GEMINI.md`, `.zed`, `.devin`
+or `.windsurf`, `opencode.json`): a `pc init` that wrote a directory for every
+agent there is into every new repository would be littering it. An agent
+PartCAD does not know is an error rather than a quiet no-op: a typo that
+installs nothing looks exactly like an agent that is not supported yet. Adding
+an agent is an entry in `AGENT_SPECS` in `src/partcad/ai_agents/__init__.py`
+saying which directory it reads (a new one is an entry in `SKILL_TARGETS`), and
+one in `MCP_CONFIGS` or `MCP_NOT_WRITTEN` — the skills themselves are
+vendor-neutral and are not copied per agent.
+
+### AGENTS.md
+
+`pc init` also writes a PartCAD section into the repository's `AGENTS.md`, which
+nearly every agent reads before anything else (`--no-instructions` skips it):
+what the package is and where, how to run `pc` so its output can be read, how to
+check a change, and which skills there are and where they were installed. Only
+the text between `<!-- BEGIN partcad <version>: ... -->` and `<!-- END partcad
+-->` is PartCAD's; a re-run replaces it and keeps the rest of the file byte for
+byte, and `pc healthcheck` reads the version in the marker. Two agents need a
+nudge to read it: Claude Code reads `AGENTS.md` only where there is no
+`CLAUDE.md`, so an existing `CLAUDE.md` gets the one line `@AGENTS.md`; and
+Gemini CLI reads `GEMINI.md` unless told otherwise, so `AGENTS.md` is added to
+`context.fileName` in its `.gemini/settings.json`.
 
 Neither destination is written through a symlink, and this repository is why:
 `.claude/skills/pc` here points at `ai-agents/claude`, so following it would
@@ -120,17 +149,28 @@ have `pc init` overwrite the working tree with a copy of the installed PartCAD.
 ### The MCP server
 
 The skills say how to drive PartCAD; `pc mcp` is what an agent drives it
-through without a shell (see `docs/source/mcp.rst`). The marketplace plugin
+through without a shell (see `docs/source/ai_agents/mcp.rst`). It serves the
+skills too — each as a prompt, `pc-<skill>`, through a `skill` tool, and as a
+`partcad://skills/<name>` resource — read out of the running PartCAD with
+`partcad_utils.agent_skills`, so an agent that reads no `SKILL.md` files still
+has them, and never an older copy. The marketplace plugin
 declares it in `claude/.mcp.json`, run as `pc -p ${CLAUDE_PROJECT_DIR} mcp`, so
 `/plugin install pc@partcad` brings it with the skills, and the plugin workflow's
 smoke install fails if the installed plugin does not report it.
 
 `pc init` does not copy that file into `.claude/skills/pc/`. It writes a
-`partcad` entry into the repository's own `.mcp.json` for Claude Code and
-`.cursor/mcp.json` for Cursor instead, pointed at the package with `-p` -- which
-is the one thing a plugin cannot know, in a repository whose package is in a
-subdirectory -- and leaves every other server in those files alone. Re-running
-it rewrites the `partcad` entry; `--no-mcp` leaves both files untouched.
+`partcad` entry into each agent's own project configuration instead — `.mcp.json`
+for Claude Code, `.cursor/mcp.json`, `.codex/config.toml` (TOML, edited as text
+so its comments survive), `.gemini/settings.json`, `.zed/settings.json`,
+`.kiro/settings/mcp.json`, `.devin/mcp_config.json` and `opencode.json` (in
+OpenCode 2's `mcp.servers` shape, moving an entry of ours out of the deprecated
+flat one) — pointed at the package with `-p`, which is the one thing a plugin
+cannot know in a repository whose package is in a subdirectory, and leaves every
+other server in those files alone. A file it cannot merge into without losing
+something (JSON with comments, a server of that name written inline) is left as
+it is, with a warning. GitHub Copilot gets none, because the VS Code extension
+registers the server already; see `MCP_NOT_WRITTEN`. Re-running it rewrites the `partcad` entry; `--no-mcp` leaves
+every file untouched.
 
 ### What a re-run does
 
@@ -366,6 +406,33 @@ The plugin folder is named `claude`, but the command namespace comes from
   (`-P //...`) widens to every imported package (the public registry and
   dependencies).
 
+## Gemini CLI
+
+PartCAD is a Gemini CLI extension as well as a Claude Code plugin, published two
+ways by the same build. `materialize.sh` ends by running
+`scripts/gemini_extension.py`, which writes `gemini-extension.json`, `GEMINI.md`
+and `skills/pc-<skill>/` at the root of the marketplace tree — the root, because
+Gemini CLI reads an extension's manifest nowhere else — and then the same three
+as release archives:
+
+- **On every release**, as `linux.`, `darwin.` and `win32.partcad-gemini-extension-<version>.tar.gz`.
+  `gemini extensions install https://github.com/partcad/partcad` installs from
+  the latest release, and takes the asset whose name starts with its platform;
+  an unprefixed one it would take only if it were the release's only asset, and
+  a PartCAD release has dozens. So the one extension is three identical
+  archives. Without one for its platform it would unpack the source tarball,
+  which has no extension at its root. `gemini extensions update` follows the
+  releases from then on.
+- **On `plugin-dist`**, where `--ref plugin-dist` finds it (after Gemini CLI has
+  looked for a release of that name and asked to clone the branch instead).
+
+The version is read from `plugin.json`, so there is nothing more to bump.
+`plugin.yml` installs the extension with a pinned Gemini CLI, checks that it
+loaded every skill and the MCP server, and validates each archive;
+`deploy.yml` refuses to publish a release without the three archives or a
+`plugin-dist` without the manifest; and `tests/dev_tools/test_gemini_extension.py`
+runs the script on every commit.
+
 ## Local use (Claude)
 
 Open the repo root as the workspace and accept the trust prompt. Claude loads
@@ -411,6 +478,37 @@ Installs on macOS and Linux dereference the `skills` symlink by themselves, but
 **Windows git checkouts may not preserve symlinks**, which would ship an empty
 plugin. That is what the materialized artifact is for, and why both published
 forms are symlink-free.
+
+### Where people find it
+
+What the release does by itself:
+
+- **The MCP Registry** gets `io.github.partcad/partcad` (`server.json`) after
+  every PyPI upload. The registry is meant to be read by downstream catalogues,
+  which poll it; PulseMCP, for one, says it picks servers up from there.
+- **Gemini CLI's extension gallery** crawls GitHub daily for public
+  repositories with the topic `gemini-cli-extension` and an extension at the
+  root of the repository *or of a release archive*, which every release now
+  carries. The topic is a repository setting; it is not set from here.
+- **skills.sh** lists what people install with `npx skills add <owner>/<repo>`,
+  ranked by installs, with no publishing step. Which of this repository's
+  directories it scans for skills has not been checked from here.
+
+And what needs a maintainer once, after which the release keeps it current:
+
+- **Anthropic's plugin directory**: a submission at claude.ai/directory/manage
+  that tracks `plugin-dist`, path `pc`. The directory refuses a plugin without a
+  README or a license, which is why `materialize.sh` validates with
+  `--profile directory` — what `plugin-dist` carries is what would be
+  submitted. Its listing icon is `claude/.claude-plugin/icon.png`, the
+  PartCAD logo at 512 px, which it reads once, at the first submission. It is
+  one of the `.png`s held out of LFS in `.gitattributes`: no workflow checks LFS
+  out, and a pointer file there would be a plugin listed with no icon.
+- **GitHub's MCP registry** (github.com/mcp, which Visual Studio Code's MCP
+  gallery reads) onboards a server by hand; once onboarded, versions follow the
+  MCP Registry.
+- **Docker's MCP catalog** takes a pull request with a `server.yaml`, and an
+  image to run.
 
 To rebuild the artifacts without cutting a release, run the `Plugin` workflow
 from the Actions tab. To republish `plugin-dist` alone, re-run the `Deployment`

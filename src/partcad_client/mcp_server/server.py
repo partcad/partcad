@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The tools, resources and instructions `pc mcp` serves.
+"""The tools, resources, prompts and instructions `pc mcp` serves.
 
 Every tool is a thin wrapper over one daemon method, named beside it, with the
 parameters `pc` sends for the same command -- so a tool and the command it
@@ -16,17 +16,21 @@ wrote meanwhile, and an image instead of base64 wherever there is one.
 import base64
 import json
 import logging
+import os
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
 import anyio
 import anyio.from_thread
 import anyio.to_thread
 from mcp.server.mcpserver import Context, MCPServer
-from mcp_types import CallToolResult, ImageContent, TextContent, ToolAnnotations
+from mcp.server.mcpserver.prompts.base import Prompt
+from mcp_types import CallToolResult, ImageContent
+from mcp_types import PromptArgument as MCPPromptArgument
+from mcp_types import TextContent, ToolAnnotations
 from pydantic import Field
 
 from partcad_client import __version__
-from partcad_utils import comments, framing, garage, parameters
+from partcad_utils import agent_skills, comments, framing, garage, parameters
 
 from .bridge import Bridge, CallFailed, Outcome
 from .sandbox import OutsideScope, PathScope
@@ -227,6 +231,9 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
         "(bom, instructions, cae, cam, simulations, add, import, convert, install) is a daemon method: "
         "list_methods names them and execute runs one. Results carry the daemon's log; when ok is false, the "
         "errors say why. "
+        "PartCAD's skills -- its procedures for generating a part, an assembly, a scene or a sketch, and for "
+        "validating, rendering, exporting and converting one -- are this server's prompts, named 'pc-<skill>': "
+        "before doing that kind of work, read the skill for it with the skill tool, and follow it. "
         "Workspace: %s. Files reachable: %s." % (bridge.root, scope.describe())
     )
 
@@ -241,7 +248,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     # root logger is put back the way `pc` left it.
     root = logging.getLogger()
     handlers, level = list(root.handlers), root.level
-    server = MCPServer(
+    server = PartcadServer(
         name="partcad",
         title="PartCAD",
         description="Inspect, render, qualify and export the parts and assemblies of a PartCAD workspace",
@@ -1093,7 +1100,242 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             return json.dumps({"error": str(e)}, indent=2)
         return json.dumps(outcome.result, indent=2)
 
+    serve_skills(server)
     return server
+
+
+# --- The skills ----------------------------------------------------------------
+#
+# PartCAD's agent skills are `SKILL.md` folders, which an agent that reads such
+# folders gets from `pc init` (`partcad.ai_agents`). Every MCP client gets them
+# here, three ways, because clients differ in which of the three they show:
+#
+#   * a **prompt** per skill, `pc-<skill>`, with the request as its one argument
+#     -- what a person picks from a menu or types as a slash command (but see
+#     `PartcadServer` for the client that splits that request into words);
+#   * the **`skill` tool**, which every client has, and which is how an agent
+#     follows a skill that names another (`/pc-gen-sketch` from `/pc-gen-part`)
+#     or reads one before it starts, as the instructions tell it to;
+#   * a **resource**, `partcad://skills/<name>`, for a client that attaches
+#     resources as context.
+#
+# All three are the same text, read from the PartCAD that is running -- so what
+# is served is never older than the CLI it describes, which is the one thing a
+# copy in a repository cannot promise (see `AgentSkillsCheck`). It is the text
+# a prefixed install writes (`agent_skills.rename_skill`): `pc:<skill>` is the
+# Claude plugin's namespace, and here a skill is `pc-<skill>`.
+
+# The one argument a skill's prompt takes: what the skill's text calls
+# `$ARGUMENTS`, the text typed after its command.
+REQUEST = "request"
+_REQUEST_DESCRIPTION = "What to do: the request, and any object, file or package it is about."
+_SKILL_ARGUMENTS = Annotated[str, Field(description=_REQUEST_DESCRIPTION)]
+
+# Clients that split the text typed after a prompt's command on whitespace and
+# hand the words to the prompt's declared arguments one each, in order, dropping
+# any words left over -- so a prompt declaring one argument is sent the first
+# word of the request and nothing else. Claude Code does: it zips
+# `text.split(" ")` onto the argument names, quotes and all (seen in 2.1.330,
+# `clientInfo.name` "claude-code"). Its documentation says only that "each
+# argument is a single token".
+WORD_SPLITTING_CLIENTS = {"claude-code"}
+
+# Clients that put the text typed after a prompt's command only into arguments
+# the prompt *requires* -- the whole of it, when one is required -- and drop it
+# when every argument is optional. Gemini CLI does (`McpPromptLoader`, seen in
+# 0.70.0, `clientInfo.name` "gemini-cli-mcp-client"): `/pc-gen-part a bracket`
+# would reach an optional `request` as nothing at all. So such a client is told
+# the request is required -- which nobody else is, because Visual Studio Code
+# then refuses to run `/pc-setup` until something is typed into its box.
+REQUIRED_REQUEST_CLIENTS = {"gemini-cli-mcp-client"}
+
+# How many words of a request such a client can send: the request argument and
+# this many after it. A word beyond them is lost on the way here, so the prompt
+# says where the whole of it is (Claude Code also shows the model the text that
+# was typed, as the command's arguments).
+REQUEST_WORDS = 32
+
+
+def _continuation(index: int) -> str:
+    """The name of the argument holding the `index`-th word of a request (from 2), as a word-splitting client is
+    told to send it. Short, because Claude Code lists every argument name beside the command it completes."""
+    return str(index)
+
+
+class PartcadServer(MCPServer):
+    """`MCPServer`, with each skill prompt's arguments shaped for the client asking.
+
+    One `pc mcp` serves one client -- it is a subprocess on stdio -- so the shape
+    is the client's from `initialize` on. A client that passes the request whole
+    is told of one argument, `request`; Gemini CLI that it is required (see
+    `REQUIRED_REQUEST_CLIENTS`). A word-splitting client (see
+    `WORD_SPLITTING_CLIENTS`) is told of `request` and `REQUEST_WORDS - 1` more,
+    one per word, and whatever it sends back is joined into the request again
+    before the prompt sees it -- by any client, since the extra names mean
+    nothing else.
+
+    Every other client keeps one argument because declaring more has a cost
+    there: Visual Studio Code, for one, asks for each argument in a box of its
+    own.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The prompts `serve_skills` registered, which are the ones reshaped.
+        self.skill_prompts: set = set()
+
+    @staticmethod
+    def _client(ctx) -> Optional[str]:
+        params = getattr(getattr(ctx, "session", None), "client_params", None)
+        return getattr(getattr(params, "client_info", None), "name", None)
+
+    def _skill_arguments(self, client: Optional[str], arguments: list) -> list:
+        """A skill prompt's arguments as `client` is to be told of them."""
+        if client in REQUIRED_REQUEST_CLIENTS:
+            return [argument.model_copy(update={"required": True}) for argument in arguments]
+        if client in WORD_SPLITTING_CLIENTS:
+            return [
+                *arguments,
+                *(
+                    MCPPromptArgument(name=_continuation(index), description="Word %d of the request." % index)
+                    for index in range(2, REQUEST_WORDS + 1)
+                ),
+            ]
+        return arguments
+
+    async def _handle_list_prompts(self, ctx, params):
+        listed = await super()._handle_list_prompts(ctx, params)
+        client = self._client(ctx)
+        if client not in WORD_SPLITTING_CLIENTS | REQUIRED_REQUEST_CLIENTS:
+            return listed
+        prompts = [
+            (
+                prompt.model_copy(update={"arguments": self._skill_arguments(client, prompt.arguments or [])})
+                if prompt.name in self.skill_prompts
+                else prompt
+            )
+            for prompt in listed.prompts
+        ]
+        return listed.model_copy(update={"prompts": prompts})
+
+    async def _handle_get_prompt(self, ctx, params):
+        if params.name in self.skill_prompts and params.arguments:
+            params = params.model_copy(update={"arguments": {REQUEST: join_request(params.arguments)}})
+        return await super()._handle_get_prompt(ctx, params)
+
+
+def join_request(arguments: dict) -> str:
+    """The request a skill prompt was sent, put back together from the words a word-splitting client sent it as."""
+    words = [arguments.get(REQUEST) or ""]
+    words += [arguments.get(_continuation(index)) or "" for index in range(2, REQUEST_WORDS + 1)]
+    request = " ".join(word for word in words if word)
+    if arguments.get(_continuation(REQUEST_WORDS)):
+        # Every slot was filled, so there may have been more.
+        request += " ..."
+    return request
+
+
+def _skill_name(name: str, skills: List[str]) -> Optional[str]:
+    """The skill `name` means, spelled any way an agent or a person might: `gen-part`, `pc-gen-part`, `/pc:gen-part`."""
+    bare = name.strip().lstrip("/")
+    for prefix in ("pc:", agent_skills.PREFIX):
+        if bare.startswith(prefix) and bare[len(prefix) :] in skills:
+            return bare[len(prefix) :]
+    return bare if bare in skills else None
+
+
+def skill_text(skill: str, request: Optional[str] = None, skills_dir: str = agent_skills.SKILLS_DIR) -> str:
+    """The skill `skill` as an agent is to follow it from here, with `request` in place of its `$ARGUMENTS`.
+
+    What a `SKILL.md` assumes of the agent reading it and a prompt cannot give it
+    is said first: which directory "this skill's directory" is (two of them run a
+    script that lives there), and how another skill it names is reached.
+    """
+    skills = agent_skills.available_skills(skills_dir)
+    text = agent_skills.read_skill(skill, skills_dir)
+    name = agent_skills.PREFIX + skill
+    instructions = agent_skills.rename_references(agent_skills.body(text), skills)
+    if request is not None:
+        instructions = instructions.replace("$ARGUMENTS", request.strip() or "(nothing was given)")
+    preface = (
+        "Follow the PartCAD skill '%s' below, served by PartCAD %s. Its files are in '%s': that is what it means by "
+        "this skill's directory. Where it names another skill as /pc-<name>, read that one with the skill tool "
+        "(name 'pc-<name>'), whose result says where its directory is."
+        % (name, __version__, os.path.join(skills_dir, skill))
+    )
+    if request is not None:
+        preface += (
+            "\n\nThe request: %s\n\nWhere the conversation shows the text typed after this skill's command (Claude "
+            "Code shows it as the command's arguments) and it says more than this, that text is the request."
+            % (request.strip() or "(nothing was given)")
+        )
+    return preface + "\n\n---\n\n" + instructions
+
+
+def serve_skills(server: MCPServer, skills_dir: str = agent_skills.SKILLS_DIR) -> None:
+    """Serve every skill PartCAD ships as a prompt, through the `skill` tool, and as a resource."""
+    skills = agent_skills.available_skills(skills_dir)
+
+    def prompt_for(skill: str) -> Prompt:
+        def render(request: _SKILL_ARGUMENTS = "") -> str:
+            return skill_text(skill, request, skills_dir)
+
+        meta = agent_skills.front_matter(agent_skills.read_skill(skill, skills_dir))
+        return Prompt.from_function(
+            render,
+            name=agent_skills.PREFIX + skill,
+            title="PartCAD: %s" % skill,
+            description=agent_skills.rename_references(str(meta.get("description") or ""), skills),
+        )
+
+    for skill in skills:
+        server.add_prompt(prompt_for(skill))
+        if isinstance(server, PartcadServer):
+            server.skill_prompts.add(agent_skills.PREFIX + skill)
+
+    @server.tool(name="skill", title="Read a PartCAD skill", annotations=_LOCAL)
+    async def read_skill(
+        name: Annotated[
+            Optional[str],
+            Field(description="The skill, as 'pc-<skill>' (or '<skill>'). Lists every skill when left out."),
+        ] = None,
+    ) -> CallToolResult:
+        """Read one of PartCAD's skills -- a procedure for generating, validating, rendering, exporting or
+        converting a part, an assembly, a scene or a sketch -- or list them all. Follow a skill as written; where it
+        names another as /pc-<name>, read that one here too."""
+        if name is None or not name.strip():
+            listed = []
+            for skill in skills:
+                meta = agent_skills.front_matter(agent_skills.read_skill(skill, skills_dir))
+                listed.append(
+                    {
+                        "name": agent_skills.PREFIX + skill,
+                        "summary": agent_skills.rename_references(
+                            agent_skills.summary(meta.get("description")), skills
+                        ),
+                    }
+                )
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps({"skills": listed}, indent=2))])
+        found = _skill_name(name, skills)
+        if found is None:
+            return _refusal(
+                "There is no PartCAD skill '%s'. The skills are: %s"
+                % (name, ", ".join(agent_skills.PREFIX + skill for skill in skills))
+            )
+        return CallToolResult(content=[TextContent(type="text", text=skill_text(found, None, skills_dir))])
+
+    @server.resource(
+        "partcad://skills/{name}",
+        name="skill",
+        title="A PartCAD skill",
+        description="One of PartCAD's skills, by its name ('pc-gen-part'), as the skill tool returns it.",
+        mime_type="text/markdown",
+    )
+    async def skill_resource(name: str) -> str:
+        found = _skill_name(name, skills)
+        if found is None:
+            raise ValueError("There is no PartCAD skill '%s'" % name)
+        return skill_text(found, None, skills_dir)
 
 
 def report(outcome: Outcome, failure: Optional[CallFailed] = None, content=()) -> CallToolResult:
