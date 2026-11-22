@@ -89,7 +89,8 @@ def _vec(value) -> Vector:
 
 class EndFrame:
     """An end of a route: where the end face is ('origin'), the axis the route
-    leaves along ('z', which points into the part at a connected end), the X
+    leaves along ('z', which points into the cable: the path leaves the first end
+    along it and arrives at the second end against it), the X
     axis its profile is turned by ('x'), and the straight 'lead' in millimetres
     the path runs along 'z' before it bends. 'z' and 'x' are normalized, and 'x'
     is made perpendicular to 'z'."""

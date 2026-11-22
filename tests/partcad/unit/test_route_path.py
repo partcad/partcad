@@ -22,7 +22,7 @@ def _quarter_circle(radius, vias):
     """From (R, 0, 0) heading +Y to (0, R, 0) heading -X, through 'vias' points on the circle."""
     angles = [math.pi / 2 * (k + 1) / (vias + 1) for k in range(vias)]
     points = [(radius * math.cos(a), radius * math.sin(a), 0.0) for a in angles]
-    # The last end's Z points into the part it is connected to, back up the route.
+    # The second end's Z points into the cable, back up the route: it is arrived at against it.
     return [EndFrame((radius, 0, 0), (0, 1, 0), (0, 0, 1))] + points + [EndFrame((0, radius, 0), (1, 0, 0), (0, 0, 1))]
 
 
@@ -261,3 +261,16 @@ def test_knots_are_named_as_the_yaml_names_them():
         "via point 2 of end 2",
         "end 2",
     ]
+
+
+def test_a_route_finishes_on_the_second_end_face_with_a_lead():
+    """The second end's lead point comes before its origin: the path ends on the face, not 10 mm short."""
+    second = EndFrame((0, 0, 100), (0, 0, 1), lead=10)
+    path = RoutePath([EndFrame((50, 0, 0), (0, 0, 1)), second])
+    assert path.points[-1] == second.origin
+    assert path.tangents[-1] == pytest.approx((0, 0, -1), abs=1e-12)
+    lead_start = path.knot_samples[-2]
+    assert path.points[lead_start] == pytest.approx((0, 0, 110), abs=1e-12)
+    assert path.arc[-1] - path.arc[lead_start] == pytest.approx(10.0, abs=1e-9)
+    for point in path.points[lead_start:]:
+        assert _on_axis(point, second.origin, second.z)[0] < 1e-9
