@@ -21,6 +21,7 @@
 //
 
 import * as cp from 'child_process';
+import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -34,7 +35,7 @@ import { identity, INSTANTIATE_METHOD, pendingSubassemblies, requestParams } fro
 import { cliBeside, ensureServiceExecutable, locateCommand, resolveServicePath, ServiceResolution } from './provision';
 import { writeTerminal } from '../terminal';
 import { refreshToolsPath } from './terminalPath';
-import { workspaceFolderOf } from './workspaceFolderEnv';
+import { initInvocation } from './workspaceFolderEnv';
 import { getDevelIndexFromSetting, getServiceChannelFromSetting } from './settings';
 import { checkoutService, debugCheckout, DEBUG_STATUS_METHOD, DebugStatus, needsReplacing } from './debug';
 
@@ -381,6 +382,38 @@ class JsonRpcBackend implements PartcadBackend {
                 }
             }
         }
+    }
+
+    /**
+     * Create a package with `pc init`, in a process of its own, then have the daemon load it.
+     *
+     * Not the daemon's `init` method. Creating a package is the client's work:
+     * it writes files on this machine -- beside the package, and into the folder
+     * this window has open -- and a daemon can be on somebody else's. And `pc
+     * init` is what a terminal runs, so the editor gets what a terminal gets: the
+     * package, the "Render" command, and the agents' skills, MCP servers and
+     * `AGENTS.md` section, in the folder `PARTCAD_WORKSPACE_FOLDER` names. A
+     * refusal -- a `partcad.yaml` that is there already -- is reported the way the
+     * daemon reports one, so the Explorer leaves its loading state.
+     */
+    private async initPackage(packagePath: string): Promise<void> {
+        const init = initInvocation(packagePath, this.cwd);
+        let failure: string | undefined;
+        try {
+            await runCli(this.cliPath, init.args, init.directory, this.outputChannel, { ...process.env, ...init.env });
+        } catch (e) {
+            failure = `${e}`;
+        }
+        if (failure === undefined && !fs.existsSync(path.join(init.directory, 'partcad.yaml'))) {
+            failure = `'pc init' created no partcad.yaml in ${init.directory}`;
+        }
+        if (failure !== undefined) {
+            traceError(`PartCAD: ${failure}`);
+            this.fire('error', `Failed to create a package in ${init.directory}: ${failure}`);
+            this.fire('packageLoadFailed', undefined);
+            return;
+        }
+        await this.send('package.load', { path: packagePath || init.directory });
     }
 
     /**
@@ -946,12 +979,9 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.testReal', (a) => this.send('test', { package: a.packageName, object: a.objectName }));
         reg('partcad.getStats', () => this.send('info', {}));
         reg('partcad.activate', () => this.send('activate', {}));
-        // With the workspace folder the package is in, which the daemon -- shared,
-        // and perhaps remote -- cannot know: the "Render" command goes there.
-        reg('partcad.initPackage', (p) => {
-            const packagePath = typeof p === 'string' ? p : '';
-            return this.send('init', { path: packagePath, editorFolder: workspaceFolderOf(packagePath) ?? '' });
-        });
+        // `pc init`, run here like `pc lint --file`; the daemon only loads what
+        // it created (see `initPackage`).
+        reg('partcad.initPackage', (p) => this.initPackage(typeof p === 'string' ? p : ''));
         reg('partcad.loadPackage', (p) => this.send('package.load', { path: typeof p === 'string' ? p : '' }));
         reg('partcad.refresh', () => this.send('package.refresh', {}));
         // The package's own dependencies, not the PartCAD tool: the operation

@@ -3014,13 +3014,7 @@ def activate(session, params):
 
 
 def init(session, params):
-    """Create a new package and load it.
-
-    `editorFolder` is the workspace folder the editor has open, which the
-    extension knows and a daemon -- shared by every client of the workspace, and
-    perhaps on another machine -- does not: the "Render" command goes there when
-    the package is inside it (`partcad.launch_config.choose_editor_folder`).
-    """
+    """Create a new package and load it."""
     if session.partcad is None:
         session.emitter.signal(events.PACKAGE_LOAD_FAILED)
         session.emitter.error("Create a package while PartCAD is not loaded")
@@ -3033,11 +3027,7 @@ def init(session, params):
         if session.partcad.create_package(path):
             # The same "Render" command `pc init` adds, for the same reason: the
             # IDE shows it in "Run and Debug" as soon as the package exists.
-            package_dir = os.path.dirname(os.path.abspath(path))
-            folder = session.partcad.launch_config.choose_editor_folder(
-                package_dir, advertised=params.get("editorFolder") or None
-            )
-            session.partcad.add_render_configuration(package_dir, folder)
+            session.partcad.add_render_configuration(os.path.dirname(os.path.abspath(path)))
             session.partcad_ctx = session.partcad.init(path)
             session.emitter.emit(
                 events.PACKAGE_LOADED,

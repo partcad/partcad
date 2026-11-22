@@ -97,3 +97,22 @@ def test_without_root_nothing_changes(repository, served, monkeypatch):
     assert invoke("mcp").exit_code == 0
     assert invoke("-p", str(repository / "hw"), "mcp").exit_code == 0
     assert served == [str(repository / "hw"), str(repository / "hw")]
+
+
+def test_from_names_the_file_to_look_in(repository, served, monkeypatch):
+    monkeypatch.chdir(repository / "hw" / "motor")
+    assert invoke("mcp", "--root", "hw", "--from", ".mcp.json").exit_code == 0
+    assert served == [str(repository / "hw")]
+
+    # A file that does not name it is no answer, even with one that does beside it.
+    result = invoke("mcp", "--root", "hw", "--from", ".codex/config.toml")
+    assert result.exit_code != 0
+    assert served == [str(repository / "hw")]
+
+
+def test_from_without_root_is_refused(repository, served, monkeypatch):
+    monkeypatch.chdir(repository)
+    result = invoke("mcp", "--from", ".mcp.json")
+    assert result.exit_code != 0
+    assert "give it with" in message(result)
+    assert served == []

@@ -19,8 +19,11 @@
 //   folder's terminals get their own. A terminal keeps the value wherever it
 //   `cd`s to, which is why `pc init` uses it only for a package inside it
 //   (`partcad.launch_config.choose_editor_folder`);
-// * to the daemon's `init` method, which "Init package" calls, as
-//   `editorFolder`: the folder the new package is in.
+// * to the `pc init` that "Init package" runs (`initInvocation`): the folder the
+//   new package is in. Creating a package is the client's work -- it writes
+//   files on this machine, beside the package and into the folder this window
+//   has open -- so it is `pc init`, run here like `pc lint --file`, and the
+//   daemon is only asked to load what was created.
 //
 // Unlike the PATH in `terminalPath.ts` this does not depend on
 // `partcad.addToolsToTerminalPath`: it states a fact about the window, and
@@ -28,6 +31,7 @@
 // -- is told it.
 //
 
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 /**
@@ -45,9 +49,10 @@ export function workspaceFolderValue(folder: { uri: { scheme: string; fsPath: st
  * Set the variable on the terminals of each folder in `added`, and take it off
  * those of each folder in `removed`.
  *
- * `getScoped` returns a collection of its own for each folder, which neither
- * the global collection's `clear()` (`refreshToolsPath` calls it) nor another
- * folder's touches.
+ * `getScoped` returns a collection of its own for each folder, which another
+ * folder's does not touch. The window-wide collection's `clear()` would: with no
+ * scope it empties every scope, which is why `refreshToolsPath` deletes the
+ * variables it owns instead.
  */
 export function advertiseWorkspaceFolders(
     collection: vscode.GlobalEnvironmentVariableCollection,
@@ -80,11 +85,44 @@ export function registerWorkspaceFolderVariable(context: vscode.ExtensionContext
     );
 }
 
-/** The workspace folder holding `fsPath`, as the daemon's `init` is told it; undefined when none does. */
+/** The workspace folder holding `fsPath`, as "Init package" tells `pc init`; undefined when none does. */
 export function workspaceFolderOf(fsPath: string): string | undefined {
     if (!fsPath) {
         return undefined;
     }
     const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(fsPath));
     return folder ? workspaceFolderValue(folder) : undefined;
+}
+
+/** What "Init package" runs: `pc -p <directory> init`, with the folder the package is in. */
+export interface InitInvocation {
+    /** The directory the package is created in, and `pc init` is run in. */
+    directory: string;
+    /** The arguments after `pc --no-ansi`. */
+    args: string[];
+    /** What to add to the environment: `PARTCAD_WORKSPACE_FOLDER`, where the directory is in a workspace folder. */
+    env: Record<string, string>;
+}
+
+/**
+ * How to create a package at `packagePath` -- a directory, or the `partcad.yaml`
+ * to create in one -- with `pc init`.
+ *
+ * `-p` names the directory rather than the file, because `pc` takes `-p` to be a
+ * path that exists. `folderOf` is `workspaceFolderOf`, a parameter so that a
+ * test need not have the folder open.
+ */
+export function initInvocation(
+    packagePath: string,
+    fallback: string,
+    folderOf: (fsPath: string) => string | undefined = workspaceFolderOf,
+): InitInvocation {
+    const target = packagePath || fallback;
+    const directory = /\.ya?ml$/i.test(target) ? path.dirname(target) : target;
+    const folder = folderOf(directory);
+    return {
+        directory,
+        args: ['-p', directory, 'init'],
+        env: folder ? { [WORKSPACE_FOLDER_ENV]: folder } : {},
+    };
 }

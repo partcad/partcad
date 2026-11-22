@@ -1911,11 +1911,11 @@ Interacting with AI agents
   The agent may name files only inside the workspace unless ``--allow-path DIR`` (repeatable) or
   ``--allow-any-path`` says otherwise. :doc:`/ai_agents/mcp` lists the tools and how each MCP client is set up.
 
-  ``--root PATH`` is what ``pc init`` writes into an agent's configuration: the PartCAD root to serve, relative to
-  the folder holding the configuration that names it (``.mcp.json``, ``.codex/config.toml``, ...), which ``pc mcp``
-  finds by looking from the current directory upwards. Claude Code reads the ``.mcp.json`` of every folder above
-  the one it was started in, and starts the server in that one, so a path relative to the current directory would
-  be a different path in each.
+  ``--root PATH --from FILE`` is what ``pc init`` writes into an agent's configuration: the PartCAD root to serve,
+  relative to the folder holding the configuration that names it, and that configuration (``.mcp.json``,
+  ``.codex/config.toml``, ...), which ``pc mcp`` looks for from the current directory upwards. Claude Code reads the
+  ``.mcp.json`` of every folder above the one it was started in, and starts the server in that one, so a path
+  relative to the current directory would be a different path in each.
 
 *****************
 Workflow commands

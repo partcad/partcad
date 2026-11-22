@@ -91,7 +91,9 @@ def test_it_says_nothing_about_skills_it_did_not_write(workspace):
     (theirs / "SKILL.md").write_text("---\nname: pc-mine\ndescription: mine\n---\n", encoding="utf-8")
 
     check = AgentSkillsCheck()
-    assert check.is_applicable()
+    # Not PartCAD's installation at all: only a stamped skill is one (review
+    # found an unstamped `pc-` skill hiding a stale installation further up).
+    assert not check.is_applicable()
     assert check.test().findings == []
 
 
@@ -324,3 +326,35 @@ def test_with_nothing_installed_on_the_way_up_it_is_the_default_folder(workspace
     (workspace / "hw").mkdir()
     monkeypatch.chdir(workspace / "hw")
     assert AgentSkillsCheck()._root == str(workspace)
+
+
+def test_a_users_own_pc_skill_does_not_hide_an_installation_above_it(workspace, monkeypatch):
+    """Only a stamped skill is PartCAD's; an unstamped `pc-` one nearer the current directory is somebody else's."""
+    ai_agents.install_agent_skills(str(workspace), ["cursor"], mcp=False)
+    age_the_cursor_skill(workspace)
+    theirs = workspace / "hw" / ".cursor" / "skills" / "pc-custom"
+    theirs.mkdir(parents=True)
+    (theirs / "SKILL.md").write_text("---\nname: pc-custom\ndescription: mine\n---\n", encoding="utf-8")
+    monkeypatch.chdir(workspace / "hw")
+
+    check = AgentSkillsCheck()
+    assert check._root == str(workspace)
+    assert check.test().findings
+
+
+def test_skills_in_an_editor_folder_above_the_repository_are_found(tmp_path, monkeypatch):
+    """`pc init --editor-folder` on a folder holding several repositories put them there."""
+    projects = tmp_path / "projects"
+    repository = projects / "robot"
+    (repository / ".git").mkdir(parents=True)
+    (repository / "hw").mkdir()
+    ai_agents.install_agent_skills(str(repository / "hw"), ["cursor"], mcp=False, editor_folder=str(projects))
+    age_the_cursor_skill(projects)
+    monkeypatch.chdir(repository / "hw")
+
+    check = AgentSkillsCheck()
+    assert check._root == str(projects)
+    assert check.test().findings
+    assert check.fix()
+    assert check.test().findings == []
+    assert not (repository / ".cursor").exists()

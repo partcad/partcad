@@ -157,3 +157,46 @@ def test_the_editor_and_the_ide_name_the_variable_pc_init_reads():
     assert "export const WORKSPACE_FOLDER_ENV = '%s';" % agent_config.WORKSPACE_FOLDER_ENV in extension
     bootstrap = (repository / "ide" / "standalone" / "bootstrap" / "extension.js").read_text(encoding="utf-8")
     assert re.search(r"\b%s: directory\b" % agent_config.WORKSPACE_FOLDER_ENV, bootstrap)
+
+
+# --- What review found ---
+
+
+def test_a_commented_configuration_is_read(tmp_path):
+    """Zed's settings are commented, and the documentation tells a Zed user to add the entry there by hand."""
+    (tmp_path / ".zed").mkdir()
+    (tmp_path / ".zed" / "settings.json").write_text(
+        '{\n  // mine\n  "context_servers": {\n    "partcad": {"command": "pc", "args": ["mcp", "--root", "."],},\n  },\n}\n',
+        encoding="utf-8",
+    )
+    assert agent_config.resolve_root(str(tmp_path), ".", ".zed/settings.json") == str(tmp_path)
+    assert agent_config.resolve_root(str(tmp_path), ".") == str(tmp_path)
+
+
+def test_the_file_an_entry_is_in_is_the_only_one_looked_in(tmp_path):
+    """Another agent's file between the two, naming the same path, is not the entry that started the server.
+
+    `/repo/.mcp.json` names `hw`, and so does `/repo/docs/.codex/config.toml`,
+    and both `hw`s exist: Claude Code started in `/repo/docs` reads the outer
+    entry, which has to mean `/repo/hw`.
+    """
+    docs = tmp_path / "docs"
+    (tmp_path / "hw").mkdir()
+    (docs / "hw").mkdir(parents=True)
+    claude = {"mcpServers": {"partcad": {"command": "pc", "args": ["mcp", "--root", "hw", "--from", ".mcp.json"]}}}
+    (tmp_path / ".mcp.json").write_text(json.dumps(claude), encoding="utf-8")
+    (docs / ".codex").mkdir()
+    (docs / ".codex" / "config.toml").write_text(
+        '[mcp_servers.partcad]\ncommand = "pc"\nargs = ["mcp", "--root", "hw", "--from", ".codex/config.toml"]\n',
+        encoding="utf-8",
+    )
+
+    assert agent_config.resolve_root(str(docs), "hw", ".mcp.json") == str(tmp_path / "hw")
+    assert agent_config.resolve_root(str(docs), "hw", ".codex/config.toml") == str(docs / "hw")
+    # Without `--from` (an entry written by hand), the nearest one is all there is to go by.
+    assert agent_config.resolve_root(str(docs), "hw") == str(docs / "hw")
+
+
+def test_the_file_is_read_out_of_an_entry():
+    assert agent_config.source_argument(["mcp", "--root", "hw", "--from", ".mcp.json"]) == ".mcp.json"
+    assert agent_config.source_argument(["mcp", "--root", "hw"]) is None

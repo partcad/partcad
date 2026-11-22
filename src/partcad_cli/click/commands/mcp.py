@@ -44,8 +44,16 @@ import rich_click as click
     ".codex/config.toml, ...), which is looked for from the current directory upwards: what 'pc init' writes there. "
     "By hand, name a directory with '-p' instead",
 )
+@click.option(
+    "--from",
+    "source",
+    type=str,
+    default=None,
+    help="With --root: the agent configuration naming it, relative to its folder (.mcp.json, .codex/config.toml, "
+    "...), which is then the only file looked in. 'pc init' writes it",
+)
 @click.pass_obj
-def cli(cli_ctx, allow_paths, allow_any_path, root) -> None:
+def cli(cli_ctx, allow_paths, allow_any_path, root, source) -> None:
     # Imported here: the SDK and pydantic cost a noticeable fraction of a second,
     # and `pc --help` imports every command module to print its short help.
     from partcad_client import mcp_server
@@ -58,7 +66,7 @@ def cli(cli_ctx, allow_paths, allow_any_path, root) -> None:
 
         if workspace:
             raise click.UsageError("'-p' and '--root' both say what to serve; give one of them")
-        workspace = agent_config.resolve_root(os.getcwd(), root)
+        workspace = agent_config.resolve_root(os.getcwd(), root, source)
         if workspace is None:
             raise click.UsageError(
                 "'--root %s' is relative to the folder of the agent configuration naming it (.mcp.json, "
@@ -68,4 +76,6 @@ def cli(cli_ctx, allow_paths, allow_any_path, root) -> None:
             )
         if not os.path.isdir(workspace):
             raise click.UsageError("'--root %s' is '%s', which does not exist" % (root, workspace))
+    elif source is not None:
+        raise click.UsageError("'--from' says which configuration names '--root'; give it with '--root'")
     mcp_server.serve(workspace or os.getcwd(), allow_paths=allow_paths, allow_any_path=allow_any_path)

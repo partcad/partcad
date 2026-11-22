@@ -575,7 +575,10 @@ def mcp_server_entry(agent: str, folder: str, root: str, via: str = MCP_VIA_PC) 
     config = MCP_CONFIGS[agent]
     relative = relative_to(root, folder)
     if config.project is None:
-        server = ["mcp", agent_config.ROOT_OPTION, relative]
+        # And which file the entry is in, so that the server reads that one:
+        # another agent's file between it and the folder could name the same path.
+        source = relative_to(config.file(folder), folder)
+        server = ["mcp", agent_config.ROOT_OPTION, relative, agent_config.SOURCE_OPTION, source]
     else:
         server = ["-p", _join(config.project, relative), "mcp"]
     if via == MCP_VIA_DOCKER:
@@ -672,13 +675,19 @@ def served_directory(entry, folder: str) -> Optional[str]:
         value = arguments[mcp - 1]
         for spelling in PROJECT_SPELLINGS:
             if value == spelling or value.startswith(spelling + "/"):
-                return os.path.normpath(os.path.join(folder, value[len(spelling) :].lstrip("/")))
+                return _package_directory(os.path.join(folder, value[len(spelling) :].lstrip("/")))
         if "${" in value:
             return None
-        return os.path.normpath(os.path.join(folder, value))
+        return _package_directory(os.path.join(folder, value))
     if any(arg in PATH_OPTIONS for arg in arguments[:mcp]):
         return None
     return os.path.normpath(folder)
+
+
+def _package_directory(path: str) -> str:
+    """The directory `pc -p <path>` loads: `-p` names a package's directory or its `partcad.yaml`."""
+    path = os.path.normpath(path)
+    return os.path.dirname(path) if os.path.basename(path).lower().endswith((".yaml", ".yml")) else path
 
 
 def is_partcad_name(name) -> bool:
@@ -730,17 +739,24 @@ def _claimed(servers: dict, folder: str, root: str) -> tuple:
     return mine, gone
 
 
-def _plan(servers: dict, folder: str, root: str) -> tuple:
+def _plan(servers: dict, folder: str, root: str, keep: Optional[str] = None) -> tuple:
     """The name for the entry serving `root` among `servers`, and the names of PartCAD's entries to remove.
 
-    The entry already serving the root keeps its name. Another one serving it
-    is a duplicate, and one serving a directory that is gone can only fail to
-    start; both go.
+    The entry already serving the root keeps its name; where there is none,
+    `keep` -- the name it had in an older form of the file -- if it is free.
+    Another entry serving the root is a duplicate, and one serving a directory
+    that is gone can only fail to start; both go. The name chosen is never one
+    of them: an entry under it is replaced, not removed.
     """
     mine, gone = _claimed(servers, folder, root)
     removed = mine[1:] + gone
-    name = mine[0] if mine else server_name(root, folder, set(servers) - set(removed))
-    return name, removed
+    if mine:
+        name = mine[0]
+    elif keep and keep not in set(servers) - set(gone):
+        name = keep
+    else:
+        name = server_name(root, folder, set(servers) - set(removed))
+    return name, [old for old in removed if old != name]
 
 
 # Directories never looked into for PartCAD roots: hidden ones (`.git`, a
@@ -824,21 +840,21 @@ def install_mcp_config(agent: str, folder: str, served: str, via: str = MCP_VIA_
             if not isinstance(servers.get(key, {}), dict):
                 return "its '%s' is not an object to add to" % ".".join(config.keys())
             servers = servers.setdefault(key, {})
-        name, removed = _plan(servers, folder, root)
-        for old in removed:
-            del servers[old]
         # Where an older form of the configuration kept them (OpenCode 1's
         # `mcp`): PartCAD's entries there for this root, or for a folder that
-        # is gone, are what this one replaces.
+        # is gone, are what this one replaces -- under the name it had there.
         legacy = document
         for key in config.legacy_key:
             legacy = legacy.get(key) if isinstance(legacy, dict) else None
-        moved = []
+        moved, before = [], None
         if config.legacy_key and isinstance(legacy, dict) and legacy is not servers:
             mine, gone = _claimed(legacy, folder, root)
-            moved = mine + gone
-            for old in moved:
-                del legacy[old]
+            moved, before = mine + gone, (mine[0] if mine else None)
+        name, removed = _plan(servers, folder, root, keep=before)
+        for old in removed:
+            del servers[old]
+        for old in moved:
+            del legacy[old]
         if servers.get(name) == entry and not removed and not moved:
             return ""
         servers[name] = entry

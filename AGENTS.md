@@ -94,9 +94,10 @@ a CAD addon, documentation, or a PartCAD package incubated here until it has a r
   a shape's cache key leaves out (`partcad.shape._NON_GEOMETRIC_CONFIG_KEYS`), so writing one rebuilds nothing.
 
   `agent_config` is the rule for the MCP entry `pc init` writes and `pc mcp` reads back: in every agent's
-  configuration that has no spelling of its own folder (all but Cursor's), `pc mcp --root <path>` is relative to
-  the folder holding the configuration that names it, which the server finds by looking upwards from where it was
-  started. Claude Code reads the `.mcp.json` of every folder above the one it was started in and starts the server
+  configuration that has no spelling of its own folder (all but Cursor's), `pc mcp --root <path> --from <file>` is
+  relative to the folder holding `<file>`, the configuration that names it, which the server finds by looking
+  upwards from where it was started -- reading it as JSON with comments (`jsonc`, which `launch_config` reads
+  `launch.json` with too: a person may comment the file they added the entry to by hand). Claude Code reads the `.mcp.json` of every folder above the one it was started in and starts the server
   in that one, so neither the server's directory nor any variable is that folder. One entry per PartCAD root,
   recognised by the root it serves rather than by its name (see `partcad.ai_agents`). It also names
   `PARTCAD_WORKSPACE_FOLDER`, which the editor extension sets on each workspace folder's terminals

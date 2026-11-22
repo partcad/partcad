@@ -30,6 +30,8 @@ import os
 import re
 from typing import Any, Optional
 
+from partcad_utils import jsonc
+from partcad_utils.jsonc import blank_json_comments
 from partcad_utils.workspace import determine_root_path
 
 from . import logging as pc_logging
@@ -56,70 +58,9 @@ LAUNCH_FILE = os.path.join(".vscode", "launch.json")
 LAUNCH_VERSION = "0.2.0"
 
 
-def blank_json_comments(text: str) -> str:
-    """Return `text` with every `//` and `/* */` comment replaced by blanks.
-
-    `launch.json` is "JSON with comments", which `json` refuses to parse -- and
-    Visual Studio Code puts three comment lines in the file it generates, so
-    this is the common case rather than the exotic one. String literals are
-    tracked so that a `//` inside a URL survives.
-
-    The comments are replaced character for character, and newlines are kept, so
-    that the result is the same length as the input and every offset in it is an
-    offset in the original file. Whitespace is nothing to JSON and everything to
-    an edit that has to land in the right place.
-    """
-    out: list[str] = []
-    index = 0
-    length = len(text)
-    in_string = False
-    while index < length:
-        char = text[index]
-
-        if in_string:
-            out.append(char)
-            if char == "\\" and index + 1 < length:
-                out.append(text[index + 1])
-                index += 2
-                continue
-            if char == '"':
-                in_string = False
-            index += 1
-            continue
-
-        if char == '"':
-            in_string = True
-            out.append(char)
-            index += 1
-            continue
-
-        if char == "/" and index + 1 < length:
-            if text[index + 1] == "/":
-                while index < length and text[index] != "\n":
-                    out.append(" ")
-                    index += 1
-                continue
-            if text[index + 1] == "*":
-                end = text.find("*/", index + 2)
-                end = length if end == -1 else end + 2
-                out.extend("\n" if text[i] == "\n" else " " for i in range(index, end))
-                index = end
-                continue
-
-        out.append(char)
-        index += 1
-
-    return "".join(out)
-
-
-def _drop_trailing_commas(text: str) -> str:
-    """Remove the commas that JSON forbids and editors leave behind."""
-    return re.sub(r",(\s*[}\]])", r"\1", text)
-
-
 def parse_launch_configuration(text: str) -> Any:
-    """Parse the contents of a `launch.json`."""
-    return json.loads(_drop_trailing_commas(blank_json_comments(text)))
+    """Parse the contents of a `launch.json`: JSON with comments and trailing commas."""
+    return jsonc.loads(text)
 
 
 def find_repository_root(path: str) -> Optional[str]:
@@ -178,10 +119,10 @@ def choose_editor_folder(package_dir: str, explicit: Optional[str] = None, adver
 
     * `explicit`, `pc init --editor-folder`: a person said so;
     * `advertised`, the folder the editor has open, as the PartCAD extension
-      tells the terminals of each workspace folder (`PARTCAD_WORKSPACE_FOLDER`,
-      see `partcad_utils.agent_config.WORKSPACE_FOLDER_ENV`) and the daemon's
-      `init` method is told by the extension -- but only when the package is
-      inside it. A terminal keeps the folder it was opened in, wherever it `cd`s
+      tells the terminals of each workspace folder and the `pc init` its "Init
+      package" runs (`PARTCAD_WORKSPACE_FOLDER`, see
+      `partcad_utils.agent_config.WORKSPACE_FOLDER_ENV`) -- but only when the
+      package is inside it. A terminal keeps the folder it was opened in, wherever it `cd`s
       to afterwards, and files written into a folder that does not hold the
       package would name it with a path climbing out of the editor's workspace;
     * `editor_folder`, the git repository's root, or the PartCAD root outside one.

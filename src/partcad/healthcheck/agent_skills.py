@@ -73,22 +73,26 @@ class AgentSkillsCheck(HealthCheckTest):
     def _installation_folder(cls, start: str) -> str:
         """The folder the skills `start` is under were installed in, or where `pc init` would put them.
 
-        Looked for from `start` up to the folder `pc init` writes into by
-        default -- the repository's root, or the PartCAD root outside one --
-        nearest first, because that default is not the only place they can be:
-        `pc init --editor-folder` may have put them in a folder inside the
-        repository, and outside a repository an older PartCAD put them beside
-        the package, subpackage or not. A repair writes where they were found.
+        Looked for from `start` upwards, nearest first, because the folder
+        `pc init` writes into by default -- the repository's root, or the
+        PartCAD root outside one -- is not the only place they can be: `pc init
+        --editor-folder` (or the editor extension) may have put them in a folder
+        inside the repository or in one above it holding several, and outside a
+        repository an older PartCAD put them beside the package, subpackage or
+        not. Never in the home directory itself, whose `.claude/skills` is a
+        user's own, for every project. A repair writes where they were found.
         """
         default = editor_folder(start)
+        home = os.path.abspath(os.path.expanduser("~"))
         current = os.path.abspath(start)
-        while True:
+        while current != home:
             if cls._installed_in(current):
                 return current
             parent = os.path.dirname(current)
-            if current == default or parent == current:
-                return default
+            if parent == current:
+                break
             current = parent
+        return default
 
     @staticmethod
     def _installed_in(folder: str) -> bool:
@@ -103,9 +107,8 @@ class AgentSkillsCheck(HealthCheckTest):
             pass
         for target, (directory, _) in ai_agents.SKILL_TARGETS.items():
             path = os.path.join(folder, directory)
-            if target != "claude" and os.path.isdir(path):
-                if any(name.startswith(ai_agents.CURSOR_PREFIX) for name in os.listdir(path)):
-                    return True
+            if target != "claude" and os.path.isdir(path) and AgentSkillsCheck._prefixed_versions(path):
+                return True
         return False
 
     def is_applicable(self) -> bool:

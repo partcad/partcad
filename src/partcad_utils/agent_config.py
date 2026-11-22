@@ -30,13 +30,17 @@ that is not the folder holding the file for every agent:
   configuration of the folders above the one it was started in, the way Claude
   Code does, starts the server below that folder too.
 
-So such an entry says `pc mcp --root <path>`, and the path is relative to the
-folder holding the file the entry is in. The server finds that folder by looking
-for it: from the directory it was started in, upwards, the first folder with a
-configuration (`CONFIG_FILES`) naming the same `--root` is the one that started
-it. Where there is none, the server was not started by such an entry -- or was
-started in the PartCAD image with the wrong folder mounted -- and it refuses
-rather than serve a directory it guessed.
+So such an entry says `pc mcp --root <path> --from <file>`: the path is relative
+to the folder holding the file the entry is in, and `--from` names that file,
+relative to its folder (`.mcp.json`, `.codex/config.toml`, ...). The server
+finds the folder by looking for it: from the directory it was started in,
+upwards, the first folder whose `<file>` has an entry naming the same `--root`
+is the one that started it. Naming the file is what makes that the entry that
+started it rather than another agent's naming the same path in a folder between
+the two. An entry without `--from` (written by hand) is looked for in every
+file in `CONFIG_FILES`. Where there is none, the server was not started by such
+an entry -- or was started in the PartCAD image with the wrong folder mounted --
+and it refuses rather than serve a directory it guessed.
 
 Cursor needs none of this: `${workspaceFolder}` in its `.cursor/mcp.json` is the
 folder holding that file, which is exactly the anchor, so its entry names the
@@ -48,8 +52,12 @@ import os
 import re
 from typing import Optional
 
-# The option of `pc mcp` that names the root relative to that file's folder.
+from . import jsonc
+
+# The options of `pc mcp` that name the root relative to that file's folder,
+# and the file.
 ROOT_OPTION = "--root"
+SOURCE_OPTION = "--from"
 
 # Every file an entry naming its root with `--root` can be in, relative to the
 # folder holding it, with `/` separators: the agents in
@@ -76,14 +84,23 @@ CONFIG_FILES = (
 WORKSPACE_FOLDER_ENV = "PARTCAD_WORKSPACE_FOLDER"
 
 
-def root_argument(args) -> Optional[str]:
-    """The value of `--root` in a command's arguments, or None if it has none."""
+def _argument(args, option: str) -> Optional[str]:
     if not isinstance(args, list):
         return None
     for index, arg in enumerate(args[:-1]):
-        if arg == ROOT_OPTION and isinstance(args[index + 1], str):
+        if arg == option and isinstance(args[index + 1], str):
             return args[index + 1]
     return None
+
+
+def root_argument(args) -> Optional[str]:
+    """The value of `--root` in a command's arguments, or None if it has none."""
+    return _argument(args, ROOT_OPTION)
+
+
+def source_argument(args) -> Optional[str]:
+    """The value of `--from` in a command's arguments, or None if it has none."""
+    return _argument(args, SOURCE_OPTION)
 
 
 def _names(value, root: str) -> bool:
@@ -110,8 +127,10 @@ def _load(path: str):
     except (OSError, UnicodeDecodeError):
         return None
     if not path.endswith(".toml"):
+        # With comments and trailing commas: Zed's settings, say, which a
+        # person edits by hand, and `pc init` leaves alone when they are.
         try:
-            return json.loads(text)
+            return jsonc.loads(text)
         except ValueError:
             return None
     try:
@@ -135,20 +154,21 @@ def _load(path: str):
         return None
 
 
-def _names_root(folder: str, root: str) -> bool:
-    """Whether a configuration in `folder` has an entry starting `pc mcp --root <root>`."""
-    return any(_names(_load(os.path.join(folder, *name.split("/"))), root) for name in CONFIG_FILES)
+def _names_root(folder: str, root: str, source: Optional[str]) -> bool:
+    """Whether a configuration in `folder` -- `source`, or any of `CONFIG_FILES` -- has an entry for `<root>`."""
+    names = [source] if source else CONFIG_FILES
+    return any(_names(_load(os.path.join(folder, *name.split("/"))), root) for name in names)
 
 
-def config_folder(start: str, root: str) -> Optional[str]:
-    """The folder of the configuration whose entry started `pc mcp --root <root>`, or None.
+def config_folder(start: str, root: str, source: Optional[str] = None) -> Optional[str]:
+    """The folder of the configuration whose entry started `pc mcp --root <root> [--from <source>]`, or None.
 
     Looked for from `start` -- the directory the server was started in --
     upwards, nearest first, which is the order Claude Code reads them in.
     """
     current = os.path.abspath(start)
     while True:
-        if _names_root(current, root):
+        if _names_root(current, root, source):
             return current
         parent = os.path.dirname(current)
         if parent == current:
@@ -156,7 +176,7 @@ def config_folder(start: str, root: str) -> Optional[str]:
         current = parent
 
 
-def resolve_root(start: str, root: str) -> Optional[str]:
+def resolve_root(start: str, root: str, source: Optional[str] = None) -> Optional[str]:
     """The directory `pc mcp --root <root>`, started in `start`, serves; None when nothing names it.
 
     Relative to the folder of the configuration that names it. When no
@@ -167,5 +187,5 @@ def resolve_root(start: str, root: str) -> Optional[str]:
     """
     if os.path.isabs(root):
         return os.path.normpath(root)
-    folder = config_folder(start, root)
+    folder = config_folder(start, root, source)
     return None if folder is None else os.path.normpath(os.path.join(folder, root))

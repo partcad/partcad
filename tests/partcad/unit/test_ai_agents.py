@@ -467,7 +467,7 @@ def test_both_agents_are_given_the_mcp_server(tmp_path):
     # `.mcp.json` names the root relative to the folder holding it, which `pc
     # mcp --root` finds for itself (see `partcad_utils.agent_config`).
     claude = read_json(tmp_path / ".mcp.json")["mcpServers"]["partcad"]
-    assert claude == {"type": "stdio", "command": "pc", "args": ["mcp", "--root", "."]}
+    assert claude == {"type": "stdio", "command": "pc", "args": ["mcp", "--root", ".", "--from", ".mcp.json"]}
     # Cursor spells that folder itself.
     cursor = read_json(tmp_path / ".cursor" / "mcp.json")["mcpServers"]["partcad"]
     assert cursor == {"command": "pc", "args": ["-p", "${workspaceFolder}", "mcp"]}
@@ -480,7 +480,13 @@ def test_the_server_is_pointed_at_a_package_below_the_repository_root(repository
 
     ai_agents.install_agent_skills(str(package))
 
-    assert read_json(repository / ".mcp.json")["mcpServers"]["partcad"]["args"] == ["mcp", "--root", "packages/widget"]
+    assert read_json(repository / ".mcp.json")["mcpServers"]["partcad"]["args"] == [
+        "mcp",
+        "--root",
+        "packages/widget",
+        "--from",
+        ".mcp.json",
+    ]
     assert read_json(repository / ".cursor" / "mcp.json")["mcpServers"]["partcad"]["args"][1] == (
         "${workspaceFolder}/packages/widget"
     )
@@ -582,7 +588,7 @@ def test_an_agent_with_no_project_variable_is_given_the_root_relative_to_its_fil
 
     assert read_json(repository.joinpath(*path))[key]["partcad"] == {
         "command": "pc",
-        "args": ["mcp", "--root", "packages/widget"],
+        "args": ["mcp", "--root", "packages/widget", "--from", "/".join(path)],
     }
 
 
@@ -610,7 +616,7 @@ def test_codex_is_given_a_table_of_its_own(tmp_path):
 
     assert read_toml(tmp_path / ".codex" / "config.toml")["mcp_servers"]["partcad"] == {
         "command": "pc",
-        "args": ["mcp", "--root", "."],
+        "args": ["mcp", "--root", ".", "--from", ".codex/config.toml"],
     }
 
 
@@ -630,7 +636,10 @@ def test_the_rest_of_codexs_file_is_kept_byte_for_byte(tmp_path):
     assert after.endswith('[profiles.fast]\nmodel = "o5-mini"\n')
     config = read_toml(tmp_path / ".codex" / "config.toml")
     # PartCAD's table, sub-tables and all, is replaced whole.
-    assert config["mcp_servers"]["partcad"] == {"command": "pc", "args": ["mcp", "--root", "."]}
+    assert config["mcp_servers"]["partcad"] == {
+        "command": "pc",
+        "args": ["mcp", "--root", ".", "--from", ".codex/config.toml"],
+    }
     assert config["mcp_servers"]["github"] == {"command": "gh-mcp"}
 
     # And a second run changes nothing.
@@ -833,7 +842,7 @@ def test_opencode_is_given_a_server_in_its_current_shape(repository):
     assert config["$schema"] == "https://opencode.ai/config.json"
     assert config["mcp"]["servers"]["partcad"] == {
         "type": "local",
-        "command": ["pc", "mcp", "--root", "packages/widget"],
+        "command": ["pc", "mcp", "--root", "packages/widget", "--from", "opencode.json"],
     }
 
 
@@ -855,7 +864,7 @@ def test_opencodes_deprecated_entry_of_ours_is_moved_and_the_rest_kept(tmp_path)
     assert config["model"] == "theirs"
     assert "partcad" not in config["mcp"]
     assert config["mcp"]["github"] == {"type": "local", "command": ["gh"]}
-    assert config["mcp"]["servers"]["partcad"]["command"] == ["pc", "mcp", "--root", "."]
+    assert config["mcp"]["servers"]["partcad"]["command"] == ["pc", "mcp", "--root", ".", "--from", "opencode.json"]
 
 
 @pytest.mark.parametrize("existing", ["opencode.jsonc", ".opencode/opencode.json"])
@@ -947,7 +956,10 @@ def test_a_table_between_two_of_ours_in_codexs_file_is_kept(tmp_path):
 
     config = read_toml(tmp_path / ".codex" / "config.toml")
     assert config["mcp_servers"]["github"] == {"command": "gh-mcp"}
-    assert config["mcp_servers"]["partcad"] == {"command": "pc", "args": ["mcp", "--root", "."]}
+    assert config["mcp_servers"]["partcad"] == {
+        "command": "pc",
+        "args": ["mcp", "--root", ".", "--from", ".codex/config.toml"],
+    }
     assert config["profiles"]["fast"] == {"model": "m"}
 
 
@@ -1062,6 +1074,8 @@ def test_in_the_image_the_agents_are_given_docker_run(tmp_path, in_the_image):
             "mcp",
             "--root",
             ".",
+            "--from",
+            ".mcp.json",
         ],
     }
     cursor = read_json(tmp_path / ".cursor" / "mcp.json")["mcpServers"]["partcad"]
@@ -1087,7 +1101,7 @@ def test_the_docker_entry_mounts_the_folder_and_serves_the_root(repository, in_t
     # in, and `pc mcp --root` inside the container to say when that is wrong.
     claude = read_json(repository / ".mcp.json")["mcpServers"]["partcad"]["args"]
     assert claude[claude.index("-w") - 1] == "${PWD}:${PWD}"
-    assert claude[-3:] == ["mcp", "--root", "hw"]
+    assert claude[-5:] == ["mcp", "--root", "hw", "--from", ".mcp.json"]
 
 
 def test_a_root_the_image_is_not_given_is_warned_about(repository, in_the_image, monkeypatch):
@@ -1264,7 +1278,7 @@ def test_every_root_in_a_repository_gets_a_codex_table_of_its_own(repository):
 
     assert (repository / ".codex" / "config.toml").read_text(encoding="utf-8") == before
     config = read_toml(repository / ".codex" / "config.toml")["mcp_servers"]
-    assert {name: entry["args"][-1] for name, entry in config.items()} == {
+    assert {name: entry["args"][2] for name, entry in config.items()} == {
         "partcad": "hw",
         "partcad-tools-jigs": "tools/jigs",
     }
@@ -1283,9 +1297,10 @@ def test_two_codex_tables_for_one_root_become_one(repository):
     assert ai_agents.install_mcp_config("codex", str(repository), str(hw))
 
     text = (repository / ".codex" / "config.toml").read_text(encoding="utf-8")
-    assert text == '[mcp_servers.partcad]\ncommand = "pc"\nargs = ["mcp", "--root", "hw"]\n'
+    entry = '["mcp", "--root", "hw", "--from", ".codex/config.toml"]'
+    assert text == '[mcp_servers.partcad]\ncommand = "pc"\nargs = %s\n' % entry
     assert ai_agents._toml_servers(text, "mcp_servers", None) == {
-        "partcad": {"command": "pc", "args": ["mcp", "--root", "hw"]}
+        "partcad": {"command": "pc", "args": json.loads(entry)}
     }
 
 
@@ -1330,7 +1345,7 @@ def test_an_editor_opened_above_the_repository(tmp_path):
 
     assert roots(projects / ".mcp.json") == {"partcad": "robot/hw"}
     assert roots(projects / ".cursor" / "mcp.json") == {"partcad": "${workspaceFolder}/robot/hw"}
-    assert read_toml(projects / ".codex" / "config.toml")["mcp_servers"]["partcad"]["args"][-1] == "robot/hw"
+    assert read_toml(projects / ".codex" / "config.toml")["mcp_servers"]["partcad"]["args"][2] == "robot/hw"
     assert (projects / ".cursor" / "skills" / "pc-init" / "SKILL.md").is_file()
     assert "`robot/hw/partcad.yaml`" in (projects / "AGENTS.md").read_text(encoding="utf-8")
     assert not (repository / ".mcp.json").exists()
@@ -1467,7 +1482,7 @@ def test_a_partcad_toml_table_pc_did_not_write_is_left_alone(tmp_path):
 
     config = read_toml(tmp_path / ".codex" / "config.toml")["mcp_servers"]
     assert config["partcad"] == {"command": "other"}
-    assert config["partcad-hw"]["args"] == ["mcp", "--root", "hw"]
+    assert config["partcad-hw"]["args"] == ["mcp", "--root", "hw", "--from", ".codex/config.toml"]
 
 
 def test_two_entries_for_one_root_become_one(repository):
@@ -1573,3 +1588,67 @@ def test_another_drive_writes_no_path(tmp_path, monkeypatch):
     assert (tmp_path / ".claude" / "skills" / "pc").is_dir()
     assert not (tmp_path / ".mcp.json").exists()
     assert not (tmp_path / "AGENTS.md").exists()
+
+
+# --- What review found, the second time ---
+
+
+def test_an_entry_naming_the_partcad_yaml_is_the_roots_and_is_not_gone(repository):
+    """`pc -p` takes a package's directory or its `partcad.yaml`; the file is no reason to remove the entry."""
+    hw = package(repository / "hw")
+    jigs = package(repository / "jigs")
+    theirs = {"command": "pc", "args": ["-p", "${CLAUDE_PROJECT_DIR:-.}/hw/partcad.yaml", "mcp"]}
+    (repository / ".mcp.json").write_text(json.dumps({"mcpServers": {"partcad": theirs}}), encoding="utf-8")
+
+    # Another root's `pc init` leaves it alone...
+    ai_agents.install_mcp_config("claude", str(repository), str(jigs))
+    assert servers(repository / ".mcp.json")["partcad"] == theirs
+    # ...and this root's updates it, under its name.
+    ai_agents.install_mcp_config("claude", str(repository), str(hw))
+    assert roots(repository / ".mcp.json") == {"partcad": "hw", "partcad-jigs": "jigs"}
+
+
+def test_an_opencode_entry_moved_out_of_the_old_shape_keeps_its_name(tmp_path):
+    """Its approvals are keyed by the name; moving it under `servers` is no reason to change that."""
+    before = {"mcp": {"partcad-robot": {"type": "local", "command": ["pc", "-p", ".", "mcp"]}}}
+    (tmp_path / "opencode.json").write_text(json.dumps(before), encoding="utf-8")
+
+    assert ai_agents.install_mcp_config("opencode", str(tmp_path), str(tmp_path))
+
+    config = read_json(tmp_path / "opencode.json")
+    assert "partcad-robot" not in config["mcp"]
+    assert list(config["mcp"]["servers"]) == ["partcad-robot"]
+
+
+def test_a_codex_table_for_a_folder_that_is_gone_is_replaced_where_it_is(tmp_path):
+    """Its name is free once it goes, and is the name the replacement takes: replaced, not removed and refused."""
+    pytest.importorskip("tomllib")
+    hw = package(tmp_path / "hw")
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text(
+        '[mcp_servers.partcad]\ncommand = "pc"\nargs = ["-p", "renamed-since", "mcp"]\n\n[profiles.fast]\nmodel = "m"\n',
+        encoding="utf-8",
+    )
+
+    assert ai_agents.install_mcp_config("codex", str(tmp_path), str(hw))
+
+    text = (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8")
+    assert text.startswith("[mcp_servers.partcad]\n")
+    assert read_toml(tmp_path / ".codex" / "config.toml")["mcp_servers"]["partcad"]["args"][2] == "hw"
+    assert read_toml(tmp_path / ".codex" / "config.toml")["profiles"]["fast"] == {"model": "m"}
+
+
+@pytest.mark.parametrize("existing", ["opencode.jsonc", ".opencode/opencode.json"])
+def test_the_entry_names_the_file_it_is_in(tmp_path, existing):
+    """`--from` is the file actually written -- the one a repository already has, where there is one."""
+    from partcad_utils import agent_config
+
+    path = tmp_path.joinpath(*existing.split("/"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}", encoding="utf-8")
+
+    assert ai_agents.install_mcp_config("opencode", str(tmp_path), str(tmp_path))
+
+    command = read_json(path)["mcp"]["servers"]["partcad"]["command"]
+    assert agent_config.source_argument(command) == existing
+    assert agent_config.resolve_root(str(tmp_path), ".", existing) == str(tmp_path)

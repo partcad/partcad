@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 
 import {
     advertiseWorkspaceFolders,
+    initInvocation,
     WORKSPACE_FOLDER_ENV,
     workspaceFolderOf,
     workspaceFolderValue,
@@ -120,5 +121,30 @@ suite('Workspace folder for pc init', () => {
         assert.strictEqual(workspaceFolderOf(path.join(open.uri.fsPath, 'packages', 'robot')), open.uri.fsPath);
         assert.strictEqual(workspaceFolderOf(path.resolve('/nowhere/near/it')), undefined);
         assert.strictEqual(workspaceFolderOf(''), undefined);
+    });
+
+    test('"Init package" runs pc init in the directory, telling it the folder that holds it', () => {
+        const folder = path.resolve('/work/projects');
+        const directory = path.join(folder, 'robot', 'hw');
+        const folderOf = (fsPath: string) => (fsPath.startsWith(folder) ? folder : undefined);
+
+        for (const given of [directory, path.join(directory, 'partcad.yaml')]) {
+            const init = initInvocation(given, path.resolve('/elsewhere'), folderOf);
+            // `-p` names the directory: `pc` takes it to be a path that exists,
+            // and the `partcad.yaml` does not yet.
+            assert.deepStrictEqual(init, {
+                directory,
+                args: ['-p', directory, 'init'],
+                env: { [WORKSPACE_FOLDER_ENV]: folder },
+            });
+        }
+    });
+
+    test('"Init package" outside every folder tells pc init nothing, and with no path uses the fallback', () => {
+        const outside = initInvocation(path.resolve('/tmp/loose'), path.resolve('/w'), () => undefined);
+        assert.deepStrictEqual(outside.env, {});
+
+        const fallback = initInvocation('', path.resolve('/w'), () => undefined);
+        assert.strictEqual(fallback.directory, path.resolve('/w'));
     });
 });

@@ -56,8 +56,9 @@ folder that is, in order:
 * the folder the window has open, when ``pc init`` runs in a terminal of Visual Studio Code or the PartCAD IDE
   with the PartCAD extension installed: the extension sets ``PARTCAD_WORKSPACE_FOLDER`` on the terminals of each
   workspace folder, each to its own folder in a multi-root workspace. It is used only when the package is inside
-  that folder -- a terminal keeps it after it ``cd``\ s elsewhere. The IDE's first starter package and the
-  extension's *Init package* command are told the same;
+  that folder -- a terminal keeps it after it ``cd``\ s elsewhere. The extension's *Init package* command runs
+  ``pc init`` itself, told the same, and so does the IDE's first starter package -- so the editor writes what a
+  terminal writes;
 * the root of the git repository the package is in, or, outside a repository, its PartCAD root (the topmost
   package above it).
 
@@ -74,16 +75,19 @@ below the folder.
 Each entry names its root relative to the folder holding the file, because the file is committed. Cursor spells
 that folder ``${workspaceFolder}``. No other agent has a spelling for it, and the directory a server is started
 in is not always that folder either -- Claude Code reads the ``.mcp.json`` of every folder above the one it was
-started in, and starts the server in the one it was started in -- so their entries say ``pc mcp --root <path>``,
-relative to the folder holding the configuration that names it, which ``pc mcp`` finds by looking upwards from
-where it was started:
+started in, and starts the server in the one it was started in -- so their entries say ``pc mcp --root <path>
+--from <file>``: the root relative to the folder holding the configuration, and that configuration's file, which
+``pc mcp`` looks for from where it was started, upwards. A configuration with comments in it is read too (``pc
+init`` leaves one alone rather than rewrite it without them, but an entry added to it by hand works):
 
 .. code-block:: json
 
   {
     "mcpServers": {
-      "partcad": { "type": "stdio", "command": "pc", "args": ["mcp", "--root", "hw"] },
-      "partcad-tools-jigs": { "type": "stdio", "command": "pc", "args": ["mcp", "--root", "tools/jigs"] }
+      "partcad": { "type": "stdio", "command": "pc", "args": ["mcp", "--root", "hw", "--from", ".mcp.json"] },
+      "partcad-tools-jigs": {
+        "type": "stdio", "command": "pc", "args": ["mcp", "--root", "tools/jigs", "--from", ".mcp.json"]
+      }
     }
   }
 
@@ -97,7 +101,7 @@ The ``pc`` plugin (see :ref:`claude-plugin`) brings the server along with the sk
 
   claude mcp add partcad -- pc mcp              # with PartCAD installed
   claude mcp add partcad -- uvx partcad mcp     # without
-  claude mcp add --scope project partcad -- pc mcp --root packages/robot
+  claude mcp add --scope project partcad -- pc mcp --root packages/robot --from .mcp.json
 
 Cursor
 ======
@@ -162,7 +166,7 @@ folder holding the file:
 
   [mcp_servers.partcad]
   command = "pc"
-  args = ["mcp", "--root", "."]
+  args = ["mcp", "--root", ".", "--from", ".codex/config.toml"]
 
 The same table in ``~/.codex/config.toml`` serves whichever directory Codex is started in, with ``args =
 ["mcp"]``.
@@ -178,7 +182,7 @@ as well as ``GEMINI.md``:
 
   {
     "mcpServers": {
-      "partcad": { "command": "pc", "args": ["mcp", "--root", "."] }
+      "partcad": { "command": "pc", "args": ["mcp", "--root", ".", "--from", ".gemini/settings.json"] }
     },
     "context": { "fileName": ["AGENTS.md", "GEMINI.md"] }
   }
@@ -196,7 +200,7 @@ rewritten without them; add it by hand there:
 
   {
     "context_servers": {
-      "partcad": { "command": "pc", "args": ["mcp", "--root", "."] }
+      "partcad": { "command": "pc", "args": ["mcp", "--root", ".", "--from", ".zed/settings.json"] }
     }
   }
 
@@ -225,7 +229,7 @@ has -- in the shape OpenCode 2 reads, with the root relative to the folder holdi
     "$schema": "https://opencode.ai/config.json",
     "mcp": {
       "servers": {
-        "partcad": { "type": "local", "command": ["pc", "mcp", "--root", "."] }
+        "partcad": { "type": "local", "command": ["pc", "mcp", "--root", ".", "--from", "opencode.json"] }
       }
     }
   }

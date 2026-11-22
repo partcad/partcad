@@ -94,7 +94,7 @@ export function refreshToolsPath(context: vscode.ExtensionContext, serverId: str
         if (applied !== undefined) {
             traceInfo('PartCAD: partcad.addToolsToTerminalPath is off; removing the tools from the terminal PATH');
         }
-        collection.clear();
+        forgetTools(collection);
         applied = undefined;
         return;
     }
@@ -111,10 +111,9 @@ export function refreshToolsPath(context: vscode.ExtensionContext, serverId: str
     // it. Re-applying on each activation costs nothing and cannot go stale.
     collection.persistent = false;
 
-    // Replace rather than stack: `prepend` appends to what the collection
-    // already holds, so refreshing after an upgrade would leave both the old
-    // and the new directory on PATH, oldest first.
-    collection.clear();
+    // Replace rather than stack: refreshing after an upgrade must not leave both
+    // the old and the new directory on PATH, oldest first.
+    forgetTools(collection);
     applied = directory;
 
     if (!directory) {
@@ -146,6 +145,20 @@ export function refreshToolsPath(context: vscode.ExtensionContext, serverId: str
         // pointing somewhere unusual.
         traceInfo(`PartCAD: note that ${directory} has no '${CLI}' in it`);
     }
+}
+
+/**
+ * Take off the terminal environment what `refreshToolsPath` put on it, and nothing else.
+ *
+ * Not `clear()`: on the window-wide collection that empties every scope of it
+ * (`UnifiedEnvironmentVariableCollection.clear` drops the whole map when given
+ * no scope), which would take each workspace folder's
+ * `PARTCAD_WORKSPACE_FOLDER` (`workspaceFolderEnv.ts`) with it. `delete` of a
+ * variable touches the window-wide entry for it alone.
+ */
+function forgetTools(collection: vscode.EnvironmentVariableCollection): void {
+    collection.delete('PATH');
+    collection.delete(MANAGED_BY);
 }
 
 /** The editor setting `applyAtShellIntegration` depends on. */
