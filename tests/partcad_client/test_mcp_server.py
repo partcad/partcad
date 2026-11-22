@@ -117,6 +117,8 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
             "export",
             "qual_test",
             "qual_add",
+            "comment_list",
+            "comment_add",
             "lint",
             "bom",
             "search",
@@ -165,6 +167,10 @@ def test_the_annotations_do_not_claim_less_than_the_truth(tmp_path):
     assert tools["execute"].destructive_hint is True
     assert tools["execute"].idempotent_hint is False
     assert tools["login"].read_only_hint is False
+    assert tools["comment_list"].read_only_hint is True
+    # Each call adds a comment, and none takes anything away.
+    assert tools["comment_add"].read_only_hint is False
+    assert tools["comment_add"].idempotent_hint is False
 
 
 def test_the_instructions_name_only_real_tools(tmp_path):
@@ -1135,3 +1141,80 @@ def test_used_by_is_pc_used_by_and_with_a_revision_pc_revisions_used_by(tmp_path
     assert requests(daemon, "revisions.used_by") == [
         {"package": ".", "object": None, "revision": "v1", "params": [], "context": "ctx-1"}
     ]
+
+
+# --- Comments ----------------------------------------------------------------
+
+
+def test_comment_list_asks_what_pc_comment_list_asks(tmp_path):
+    daemon, server = serve(tmp_path, {"comment.list": lambda params, emit: {"objects": {}}})
+    call(server, "comment_list", {"object": "bracket", "kind": "color"})
+    call(server, "comment_list", {})
+    first, package = requests(daemon, "comment.list")
+    assert (first["object"], first["kind"]) == ("bracket", "color")
+    assert "object" not in package
+
+
+def test_comment_add_is_signed_with_the_users_git_name_here(tmp_path, monkeypatch):
+    from partcad_utils import comments
+
+    monkeypatch.setattr(comments, "author", lambda directory=None: "Ada Lovelace")
+    (tmp_path / "photos").mkdir()
+    daemon, server = serve(tmp_path, {"comment.add": lambda params, emit: {"thread": 0}})
+    result = call(
+        server,
+        "comment_add",
+        {
+            "object": "bracket",
+            "text": "Too *thin*.",
+            "ref": 'faces(">Z")',
+            "thread": 2,
+            "attachments": ["photos/crack.jpg"],
+        },
+    )
+    assert body(result)["ok"] is True
+    (request,) = requests(daemon, "comment.add")
+    assert (request["name"], request["text"], request["ref"], request["thread"]) == (
+        "Ada Lovelace",
+        "Too *thin*.",
+        'faces(">Z")',
+        2,
+    )
+    # Absolute, as the CLI sends it: the daemon writes it relative to the package.
+    assert request["attachments"] == [str(tmp_path.resolve() / "photos" / "crack.jpg")]
+
+
+def test_comment_add_signs_with_the_name_it_is_given_and_refuses_to_sign_with_none(tmp_path, monkeypatch):
+    from partcad_utils import comments
+
+    monkeypatch.setattr(comments, "author", lambda directory=None: None)
+    daemon, server = serve(tmp_path, {"comment.add": lambda params, emit: {"thread": 0}})
+    refused = body(call(server, "comment_add", {"text": "x"}))
+    assert refused["ok"] is False and "git" in refused["error"]
+    assert requests(daemon, "comment.add") == []
+    call(server, "comment_add", {"text": "x", "author": "Grace Hopper"})
+    (request,) = requests(daemon, "comment.add")
+    assert request["name"] == "Grace Hopper"
+    assert "object" not in request
+
+
+def test_comment_add_attaches_nothing_outside_what_the_agent_may_reach(tmp_path, monkeypatch):
+    from partcad_utils import comments
+
+    monkeypatch.setattr(comments, "author", lambda directory=None: "Ada")
+    daemon, server = serve(tmp_path, {"comment.add": lambda params, emit: {"thread": 0}})
+    refused = body(call(server, "comment_add", {"text": "x", "attachments": ["/etc/passwd"]}))
+    assert refused["ok"] is False
+    assert requests(daemon, "comment.add") == []
+
+
+def test_execute_signs_a_comment_as_comment_add_does(tmp_path, monkeypatch):
+    from partcad_utils import comments
+
+    monkeypatch.setattr(comments, "author", lambda directory=None: "Ada Lovelace")
+    daemon, server = serve(tmp_path, {"comment.add": lambda params, emit: {"thread": 0}})
+    call(server, "execute", {"method": "comment.add", "params": {"object": "bracket", "text": "x"}})
+    call(server, "execute", {"method": "comment.add", "params": {"text": "y", "name": "Grace Hopper"}})
+    signed, named = requests(daemon, "comment.add")
+    assert signed["name"] == "Ada Lovelace"
+    assert named["name"] == "Grace Hopper"

@@ -715,6 +715,25 @@ Object commands
   ``>5``, is the text itself). A test the object declares under that name already is refused unless
   ``--replace``.
 
+``pc comment add``
+  Write a comment on an object -- or, with no object named, on the package -- into its ``partcad.yaml`` (see
+  :ref:`comments`). ``pc comment add bracket -m "This face is **too thin**." --ref face:12`` starts a thread
+  about one face of a part, and ``--ref 'faces(">Z")'`` or ``--ref 'faces().sort_by(Axis.Z)[-1]'`` about the
+  face a CadQuery or a build123d selection selects; ``--reply <n>`` answers thread ``n`` instead, by the index ``pc comment list``
+  shows; ``--attach <file>`` names a file of the package that goes with it, and may be repeated. The text is
+  Markdown, and ``-m -`` reads it from standard input. The comment is signed with ``git config user.name`` on
+  the machine the command runs on -- never the daemon's, which can be somebody else's -- and dated now, in UTC;
+  ``--author`` signs it with another name. The object is found by its name whatever its kind, and ``--kind``
+  names any kind, a provider's or a colour's included. ``-p <name>=<value>`` is taken as every command that
+  names an object takes it, and changes nothing: a comment is on the object's declaration, whatever the values.
+  Text that ``partcad.yaml`` would render as a Jinja2 template (``{{``, ``{%``, ``{#``) is refused, as is a
+  declaration a YAML anchor shares with another: write those by hand.
+
+``pc comment list``
+  The threads of comments on an object -- or, with no object named, on the package -- each with the index
+  ``pc comment add --reply`` answers it by, what it is about, and every comment of it, oldest first.
+  ``--json`` prints them as the daemon answered.
+
 .. _pc-info:
 
 ``pc info``

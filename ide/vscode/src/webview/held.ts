@@ -34,6 +34,11 @@ export class HeldForShow<T> {
         this.staged = false;
     }
 
+    /** Whether the show's geometry is on the stage yet: until it is, what is drawn is the last show's. */
+    public get isOnStage(): boolean {
+        return this.staged;
+    }
+
     /** The show's geometry is on the stage: what arrived for it meanwhile goes on it now. */
     public onStage(): void {
         this.staged = true;

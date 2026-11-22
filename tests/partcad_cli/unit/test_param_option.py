@@ -58,6 +58,10 @@ COMMANDS = [
     ("analysis", "cae.analyze", ["cae", "cfd"]),
     ("analysis", "cae.analyze", ["cae", "thermal"]),
     ("analysis", "cae.analyze", ["cae", "dynamic"]),
+    # A comment is on the declaration, whatever the values; they are taken all
+    # the same, so that a command line naming an instance is not refused here.
+    ("commands.comment.add", "comment.add", ["comment", "add", "--message=Too thin.", "--author=Ada"]),
+    ("commands.comment.list", "comment.list", ["comment", "list"]),
 ]
 
 

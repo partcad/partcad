@@ -103,6 +103,14 @@ _OPERATIONS = {
     # part's declaration (and its product again, where it was materialized).
     "cam.settings": operations.cam_settings,
     "cam.save": operations.cam_save,
+    # 'pc comment list' and 'pc comment add': the threads of comments a package
+    # and its objects carry, read and written (see 'partcad_utils.comments').
+    # What the IDE's 3D view shows when "Comments" is ticked, and writes.
+    "comment.list": operations.comment_list,
+    "comment.add": operations.comment_add,
+    # Not a CLI command: which face or edge of a part a click in the 3D view
+    # landed on, as a comment names it.
+    "comment.locate": operations.comment_locate,
     "search.objects": operations.search_objects,
     # 'pc login': one step of a plugin's login. The browser it may ask for is
     # opened by the client, never here (see 'operations.plugin_login').

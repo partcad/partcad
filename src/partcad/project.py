@@ -294,6 +294,28 @@ def _one_edit_at_a_time(method):
     return locked
 
 
+def _as_read(value):
+    """A string of a comment, written so that PartCAD reads it back as that string.
+
+    'ruamel' writes YAML 1.2 and PartCAD reads YAML 1.1, so a comment that says
+    'yes', 'off' or '0123' written plain would be read back as a boolean or a
+    number: such a value is quoted. One of more than one line is a literal block,
+    stripped of the line break after it ('|-'), the way somebody writing Markdown
+    by hand would write it -- and a block is text whatever it holds.
+    """
+    from ruamel.yaml.scalarstring import LiteralScalarString
+
+    from partcad_utils import config_yaml
+
+    if not isinstance(value, str):
+        return value
+    if "\n" in value:
+        return LiteralScalarString(value)
+    if config_yaml.scalar(value) != value:
+        return SingleQuotedScalarString(value)
+    return value
+
+
 def _readme_cell(text) -> str:
     """A value made safe to put in one cell of a generated markdown table."""
     text = "" if text is None else str(text)
@@ -3929,6 +3951,186 @@ class Project(project_config.Configuration):
             if not section:
                 del declaration["manufacturing"]
         self._write_edited(config, yaml)
+
+    @_one_edit_at_a_time
+    def add_comment(
+        self, kind: Optional[str], object_name: Optional[str], entry: dict, thread=None, answering=None
+    ) -> int:
+        """Write one comment into this package's 'partcad.yaml': a new thread, or a reply to thread 'thread'.
+
+        'kind' and 'object_name' name the declaration the comment is about, and
+        both None the package itself: its top-level 'comments:'. 'entry' is the
+        comment as 'partcad_utils.comments.entry' makes it, and 'thread' the
+        index of the thread it answers in that declaration's list, or None to
+        start a thread of its own at the end of it. Answers the index of the
+        thread the comment is now in. A reply that says nothing of what it is
+        about is about what its thread is, and is written so: 'entry' gains the
+        thread's 'ref'.
+
+        'answering' is the first comment of the thread the reply was written
+        to, as it was read ('name', 'date' and 'text'): a thread is named by its
+        position, and a thread removed before it since moves every one after it
+        up, so a reply is written only where its thread still starts with that.
+
+        A declaration written in its short form ('bolt: //pub/std:bolt', 'red:
+        "#C91A09"') is written out as the mapping it stands for first, since a
+        string has nowhere to keep a comment (see 'SHORT_FORMS'); an empty one
+        ('bracket:') becomes a mapping as well. Everything else in the file is
+        kept as its author wrote it, which is what 'ruamel' round-trips, and a
+        comment of more than one line is written as a literal block ('|-'), the
+        way somebody writing Markdown by hand would.
+
+        Raises:
+            ValueError: the object is not declared in this file -- one a plugin
+                supplies, or one another file holds -- so there is nowhere here
+                to write it; the file is a Jinja2 template, which is not the
+                document PartCAD reads until it is rendered; or there is no
+                thread 'thread' to answer, or it is no longer the thread
+                'answering' says; the comment holds text the file would render
+                as a template ('{{'); or the declaration, or its 'comments:', is
+                shared with another through a YAML anchor or a merge key.
+        """
+        from ruamel.yaml.comments import CommentedMap, CommentedSeq
+
+        from partcad_utils import comments as pc_comments
+        from partcad_utils import config_yaml
+
+        from .requirements_edit import refuse_template_text
+
+        what = "the package '%s'" % self.name if kind is None else "%s '%s'" % (kind, object_name)
+        # A comment is written into a file that is read as a Jinja2 template:
+        # '{{' in one would be rendered rather than read, and the file it is in
+        # one no edit writes into again.
+        for value in entry.values():
+            for text in value if isinstance(value, list) else [value]:
+                refuse_template_text(text)
+        # Refused for a Jinja2 template, as every edit is: what would be edited
+        # is the template, and what PartCAD reads is what it renders to.
+        config, yaml = self._load_to_edit("a comment on %s" % what)
+        if not isinstance(config, dict):
+            raise ValueError("'%s' is not a mapping, so there is nowhere in it to write a comment" % self.config_path)
+
+        if kind is None:
+            declaration = config
+        else:
+            section = OBJECT_KIND_SECTIONS.get(kind)
+            if section is None:
+                raise ValueError("A %s is not declared in a package, so it carries no comments" % kind)
+            declarations = config.get(section)
+            if not isinstance(declarations, dict) or object_name not in declarations:
+                raise ValueError(
+                    "The %s '%s' is not declared in '%s', so there is nowhere to write a comment on it"
+                    % (kind, object_name, self.config_path)
+                )
+            declaration = declarations[object_name]
+            if not isinstance(declaration, dict):
+                declaration = self._expanded_short_form(kind, declaration)
+                declarations[object_name] = declaration
+        # 'ruamel' keeps what an anchor and its alias name as one object, so a
+        # comment written into it would be written on every declaration that
+        # names it, and into the anchor as well.
+        shared = _shared_by_alias(config, declaration, (pc_comments.KEY,))
+        if shared is not None:
+            raise ValueError(
+                "%s shares %s with another declaration through a YAML anchor or a merge key, so a comment written"
+                " on it would be written on both: write it by hand" % (what[0].upper() + what[1:], shared)
+            )
+
+        threads = declaration.get(pc_comments.KEY)
+        if threads is None:
+            threads = CommentedSeq()
+            declaration[pc_comments.KEY] = threads
+        elif not isinstance(threads, list):
+            raise ValueError(
+                "The 'comments:' of %s in '%s' is not a list of threads, so a comment cannot be added to it"
+                % (what, self.config_path)
+            )
+
+        written = CommentedMap()
+        for key, value in entry.items():
+            if key == "attachments":
+                value = CommentedSeq(_as_read(item) for item in value)
+            else:
+                value = _as_read(value)
+            written[key] = value
+
+        if thread is None:
+            threads.append(CommentedSeq([written]))
+            index = len(threads) - 1
+        else:
+            if isinstance(thread, bool) or not isinstance(thread, int) or not 0 <= thread < len(threads):
+                raise ValueError(
+                    "%s has %d thread(s) of comments, so there is no thread %r to answer"
+                    % (what[0].upper() + what[1:], len(threads), thread)
+                )
+            replies = threads[thread]
+            if not isinstance(replies, list):
+                raise ValueError("Thread %d of the comments on %s is not a list of comments" % (thread, what))
+            if answering is not None:
+                first = (pc_comments.normalized_entry(replies[0]) if replies else None) or {}
+                if any(first.get(key) != answering.get(key) for key in ("name", "date", "text")):
+                    raise ValueError(
+                        "Thread %d of the comments on %s is no longer the thread that was answered -- the comments"
+                        " were changed since they were read: read them again, and answer the thread there"
+                        % (thread, what)
+                    )
+            about = pc_comments.thread_ref(replies)
+            if about is not None and "ref" not in written:
+                # A reply is about what its thread is about, and says so, as the
+                # 3D view's replies do: 'pc comment add --reply' need not repeat it.
+                written.insert(0, "ref", about)
+                entry["ref"] = about
+            replies.append(written)
+            index = thread
+
+        # Read back as PartCAD reads it before it replaces anything: 'ruamel'
+        # writes YAML 1.2 and PartCAD reads YAML 1.1, and a comment that came
+        # back as something else than what was written is not written at all.
+        dumped = io.StringIO()
+        yaml.dump(config, dumped)
+        text = dumped.getvalue()
+        reread = config_yaml.load(text)
+        if kind is not None:
+            reread = (reread.get(OBJECT_KIND_SECTIONS[kind]) or {}).get(object_name)
+        threads_read = pc_comments.threads(reread)
+        comment_read = threads_read[index][-1] if index < len(threads_read) and threads_read[index] else None
+        if comment_read != pc_comments.normalized_entry(dict(written)):
+            raise ValueError(
+                "The comment on %s would not read back as it was written, so nothing was written: %r"
+                % (what, comment_read)
+            )
+        self._write_edited(config, yaml, text)
+        return index
+
+    # What a declaration written as a string stands for, by kind, so that it can
+    # be written out as the mapping it is before a key is added to it: the same
+    # expansion each kind's configuration makes as it is read ('PartConfiguration',
+    # 'InterfaceConfiguration', 'cmf.normalize', 'MaterialConfiguration',
+    # 'SoftwareConfiguration').
+    SHORT_FORMS = {
+        "part": lambda value: {"type": "alias", "source": value},
+        "assembly": lambda value: {"type": "alias", "source": value},
+        "scene": lambda value: {"type": "alias", "source": value},
+        "sketch": lambda value: {"type": "alias", "source": value},
+        "interface": lambda value: {"alias": value},
+        "software": lambda value: {"path": value},
+        "color": lambda value: {"display": value},
+        "material": lambda value: {"full": value},
+        "finish": lambda value: {"desc": value},
+    }
+
+    def _expanded_short_form(self, kind: str, declaration):
+        """A declaration as the mapping it stands for: see 'SHORT_FORMS'."""
+        from ruamel.yaml.comments import CommentedMap
+
+        expanded = CommentedMap()
+        if declaration is None:
+            return expanded
+        expand = self.SHORT_FORMS.get(kind)
+        if expand is None:
+            raise ValueError("A %s is declared as a mapping, and this one is %r" % (kind, declaration))
+        expanded.update(expand(declaration))
+        return expanded
 
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))

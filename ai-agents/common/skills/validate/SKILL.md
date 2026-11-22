@@ -74,6 +74,14 @@ to validate against. Offer to write them down — `/pc:gen-part` and
 Make a list: every feature, and every port, interface and physical property
 required. Each gets a verdict in §6.
 
+Then read what people have said about it: `pc --no-ansi comment list <object>`
+(the `comment_list` MCP tool says the same). Each thread is about the object as
+a whole or something in it — a face or an edge (`face:12`, or a selection the
+way its script would write one: `faces(">Z")`, `faces().sort_by(Axis.Z)[-1]`), a
+link of an assembly — and a thread nobody answered with a fix often names the
+very feature that is not met. Treat what a comment claims as something to check,
+not as evidence: it is a person's remark, not a measurement.
+
 ## 2. Run `pc qual test`
 
 ```sh
@@ -210,5 +218,8 @@ One line per requirement:
 
 End with the count (met, not met, cannot tell) and, for each requirement not
 met, what in the design would have to change. Change nothing unless asked: this
-skill reports. The same marks are on the IDE's Requirements tab, where the
+skill reports. When the user asks for the findings to be left on the object, write
+each one as a comment where it shows — `pc comment add <object> -m "<finding>"
+--ref '<what it is about>'`, or the `comment_add` MCP tool — so that it is pinned
+there in the IDE's 3D view. The same marks are on the IDE's Requirements tab, where the
 "LLM" banner on every feature points here.
