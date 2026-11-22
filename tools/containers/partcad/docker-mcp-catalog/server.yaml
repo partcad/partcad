@@ -38,7 +38,9 @@ source:
   commit: <the commit of the release on main>
   directory: tools/containers/partcad
 run:
-  # `pc -p /workspace mcp`: the image hands an option to `pc`.
+  # `pc -p /workspace mcp`: the image hands an option to `pc`. The catalog
+  # cannot set a working directory, so `-p` is also what makes the entrypoint
+  # run PartCAD as the owner of /workspace rather than of the image's /work.
   command:
     - -p
     - /workspace

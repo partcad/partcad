@@ -705,7 +705,8 @@ Your files, and PartCAD's
 ``-v "$PWD:$PWD" -w "$PWD"`` mounts the directory you are in at the same path inside the container and works
 there. The same path is deliberate: every path PartCAD prints -- in its log, in the result of an MCP tool, in a
 file it writes -- is then a path on your machine as well. PartCAD runs as the user who owns that directory, so
-what it writes there is yours; ``-e PC_UID=<uid> -e PC_GID=<gid>`` says otherwise, and ``--user`` is honoured.
+what it writes there is yours -- or, given ``-p <directory>`` outside the working directory, as the user who owns
+that package. ``-e PC_UID=<uid> -e PC_GID=<gid>`` says otherwise, and ``--user`` is honoured.
 
 ``-v partcad-home:/home/pc/.partcad`` keeps what PartCAD keeps between runs -- its sandboxes, its conda
 package cache, its caches -- in a named volume. Without it every run builds a CAD sandbox from nothing, which
