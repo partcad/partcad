@@ -277,8 +277,12 @@ Before any sweep, the core checks the D4 metrics. The build is refused when:
 2. **Bend tighter than the profile:** the minimum radius of curvature is below the
    profile's outer radius: `diameter`/2, or for a sketch the largest distance of
    its outline from its origin, measured from the sketch's bounding box.
-3. **Path crossing itself:** two samples further apart along the path than the
-   profile's diameter (plus a margin) come closer than that diameter in space.
+3. **Path crossing itself:** the closest approach of D4, taken with the profile's
+   diameter as the threshold, is below that diameter: two samples further apart
+   along the path than the diameter, the second the nearest of its neighbours to
+   the first, come closer than the diameter in space. No margin is added: the
+   nearest-neighbour rule already keeps one stretch bending from counting as two
+   stretches meeting.
 
 After the sweep, `wrapper_route.py` refuses anything that is not exactly one
 solid, has non-positive volume, or fails `BRepCheck_Analyzer`. For a generic
