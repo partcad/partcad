@@ -165,7 +165,8 @@ once: when a VSCodium release changes the code underneath them, the build stops 
 docstring of `patch_workbench.py` quotes the source each one stands for.
 
 **The result is checked** (`tools/verify_bundle.py`): branding applied, every required extension present, no
-extension present that the policy skips, the tools where they should be, the launcher runnable. Each of those
+extension present that the policy skips, every extension the policy holds at a version at that version, the
+tools where they should be, the launcher runnable. Each of those
 failures produces an application that starts and looks right, so none of them would be noticed before a user
 hit it.
 
@@ -314,7 +315,7 @@ Windows has no `install.sh`, so `installer/partcad-ide.iss` is the equivalent: a
 innosetup`; the build says so and carries on when it is not). It needs Inno Setup 6.3 or newer, for the
 `x64compatible` architecture identifiers.
 
-It installs **per user** by default -- into `%LOCALAPPDATA%\Programs\PartCAD IDE`, with no UAC prompt -- and
+It installs **per user** by default -- into `%LOCALAPPDATA%\PartCAD IDE`, with no UAC prompt -- and
 offers "for all users" in the wizard for someone with an administrator account. That choice is what the `HKA`
 registry root in the script follows: the same entries land in `HKCU` or in `HKLM` depending on which install it
 is. What it sets up beyond the files: a Start menu entry, an optional desktop icon, the `partcad-ide://` URL
@@ -323,6 +324,31 @@ in the Explorer context menu for files and folders, and -- on by default -- `PAT
 `bin` and for the command line tools inside the application, so `partcad-ide` and `pc` work in a new terminal.
 Uninstalling removes all of it, including the `PATH` entries. `%USERPROFILE%\.partcad-ide` is left alone, the
 way `install.sh` leaves `~/.partcad`.
+
+**Every file has to fit under `MAX_PATH` once installed** -- 259 characters, and 247 for a directory -- and
+nothing in the installer can lift that. Setup is not marked long-path aware, so Windows holds it to the limit
+whatever `LongPathsEnabled` says on the machine; it refuses the `\\?\` prefix that would get around it; and
+Inno Setup has no directive for it. A file over the limit stops the installation partway through and rolls it
+all back. The editor's extensions are where the deep files are -- 2026.10.0 of the Python extension carries a
+`.pyi` 204 characters below the application directory, in a copy of typeshed inside its copy of jedi -- so two
+things keep within it:
+
+- The per-user directory is `%LOCALAPPDATA%\PartCAD IDE`, not Inno Setup's default of
+  `%LOCALAPPDATA%\Programs\PartCAD IDE`, which is nine characters fewer for every file. (`%LOCALAPPDATA%\PartCAD`
+  without the suffix is taken: it is where `install.sh` puts the command line tools.)
+- `tools/check_install_paths.py` measures the application against both directories Setup installs into, with
+  the longest user name Windows allows, before `build.sh` compiles the installer, and fails the build naming
+  the file and the extension it came from. That leaves 203 characters below the application directory. When it
+  fails, hold the extension at the last version that fit -- `"version"` in `extensions.json` -- rather than
+  shortening something else to make room; that is how `ms-python.python` is held at 2026.4.0.
+
+**An installation made before the directory was shortened is upgraded where it is**, in
+`%LOCALAPPDATA%\Programs\PartCAD IDE` -- Inno Setup keeps the directory of a previous installation
+(`UsePreviousAppDir`), and nothing here moves it. That directory is the one constraint the check reports rather
+than enforces: with 2026.4.0 an upgrade there fits a profile directory name of up to 11 characters, which is
+what installing there needed in the first place, and at 20 nothing fits, so enforcing it would fail every build.
+A user with a longer name can have an installation there only from a release whose files were shallower, and
+that one cannot be upgraded in place; uninstalling and installing again puts the IDE in the new directory.
 
 An upgrade installs over the previous one, and the file list only overwrites -- so anything an older build put
 in the application directory that this one does not survives. `[InstallDelete]` clears one place where that
@@ -389,6 +415,12 @@ the IDE's contents cannot drift apart, and nothing else needs editing -- unless 
 VSX, or cannot be redistributed, in which case `extensions.json` here says what to do about it and why. The
 build prints the whole plan before it installs anything; `tools/resolve_extensions.py --explain` prints it
 without building.
+
+An extension from the gallery is the newest version the gallery has, unless `extensions.json` holds it at
+another with `"version"` -- which needs a `"reason"`, since a hold nobody can explain is one nobody lifts. The
+build asks the editor for `<id>@<version>`, and `verify_bundle.py` fails the build if something else was
+installed. A hold for a path that is too deep is lifted by deleting it and building on Windows, where
+`check_install_paths.py` says whether the newest version fits.
 
 ## Releasing
 

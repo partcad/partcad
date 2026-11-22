@@ -492,9 +492,11 @@ if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
   # Split on the unit separator rather than on a tab: `read` folds runs of
   # whitespace delimiters together, which silently shifts every field after an
   # empty one -- and `url` and `path` are empty for most entries.
-  while IFS=$'\x1f' read -r identifier source url path required; do
+  while IFS=$'\x1f' read -r identifier source url path required version; do
     case "${source}" in
-    gallery) target="${identifier}" ;;
+    # A version held in extensions.json is asked for by name: the editor's own
+    # `<id>@<version>`, resolved against the gallery like any other.
+    gallery) target="${identifier}${version:+@${version}}" ;;
     local) target="${path}" ;;
     vsix)
       target="${WORK_DIR}/$(basename "${url}")"
@@ -517,7 +519,7 @@ if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
 import json, sys
 plan = json.load(open(sys.argv[1], encoding='utf-8'))
 for entry in plan['install']:
-    print('\x1f'.join([entry['id'], entry['source'], entry['url'] or '', entry.get('path', ''), str(entry['required'])]))
+    print('\x1f'.join([entry['id'], entry['source'], entry['url'] or '', entry.get('path', ''), str(entry['required']), entry.get('version') or '']))
 " "${PLAN_FILE}")
 
   [ -z "${FAILED_REQUIRED}" ] || fail "these extensions are required and could not be installed:${FAILED_REQUIRED}"
@@ -1048,6 +1050,16 @@ if [ "${OS_NAME}" = "windows" ] && [ "${CREATE_INSTALLER}" = "1" ]; then
   else
     INSTALLER_NAME="partcad-ide-${VERSION}-${PLATFORM}-setup"
     INSTALLER="${OUTPUT_DIR}/${INSTALLER_NAME}.exe"
+    # Setup cannot install a file whose path is longer than MAX_PATH, and nothing
+    # makes it: it is not long-path aware and refuses the \\?\ prefix. One that
+    # is stops an installation partway through, on the user's machine, and Setup
+    # rolls everything back -- which is how 2026.10.0 of the Python extension
+    # broke it. So every file is measured here against where Setup may put it,
+    # and against where the compiler reads it from, which is no better off.
+    log "==> Checking every path fits under MAX_PATH once installed"
+    "${PYTHON}" "${SCRIPT_DIR}/tools/check_install_paths.py" \
+      --root "${APP_ROOT}" \
+      --location "$(cygpath -w "${APP_ROOT}")"
     log "==> Building ${INSTALLER} with ${ISCC}"
     rm -f "${INSTALLER}" "${INSTALLER}.sha256"
     # MSYS2_ARG_CONV_EXCL stops Git Bash from rewriting the /D and /O switches
