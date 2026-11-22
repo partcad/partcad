@@ -14,6 +14,7 @@ import rich_click as click
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
 import partcad as pc
+from partcad_utils.agent_config import WORKSPACE_FOLDER_ENV
 
 from ..cli_context import CliContext
 
@@ -153,6 +154,16 @@ class DynamicPromptOption(click.Option):
     "(ghcr.io/partcad/partcad). Default: 'docker' when this runs in that image, 'pc' otherwise",
 )
 @click.option(
+    "--editor-folder",
+    "editor_folder",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    show_envvar=True,
+    help="The folder your editor or agent opens, where the launch configuration, the skills and the MCP server go. "
+    "Default: the folder the PartCAD editor extension says this terminal's window has open, if the package is in "
+    "it; otherwise the git repository's root, or the PartCAD root outside one",
+)
+@click.option(
     "-p",
     "--private",
     is_flag=True,
@@ -201,6 +212,11 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
         mcp = kwargs.pop("mcp")
         instructions = kwargs.pop("instructions")
         mcp_via = kwargs.pop("mcp_via")
+        # The folder the editor opens: `--editor-folder`, else the one the
+        # PartCAD extension advertises to this terminal, else the default --
+        # read here, by the client, and handed on (see `choose_editor_folder`).
+        explicit_folder = kwargs.pop("editor_folder")
+        advertised_folder = os.environ.get(WORKSPACE_FOLDER_ENV) or None
 
         if skills_only:
             # The whole command, for a repository that has a package already --
@@ -211,8 +227,10 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
             if not install_skills:
                 pc.logging.error("'--skills-only' and '--no-skills' ask for opposite things")
                 return
+            package_dir = os.path.dirname(os.path.abspath(dst_path))
+            folder = pc.launch_config.choose_editor_folder(package_dir, explicit_folder, advertised_folder)
             if not pc.install_agent_skills(
-                os.path.dirname(os.path.abspath(dst_path)), agents, mcp, instructions, mcp_via=mcp_via
+                package_dir, agents, mcp, instructions, mcp_via=mcp_via, editor_folder=folder
             ):
                 # An error here, unlike below: installing them is the whole of
                 # what was asked for, so there is nothing left that succeeded.
@@ -251,12 +269,13 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
             # this was run in. It reports what it did, and a failure to add it
             # is not a failure to create the package.
             package_dir = os.path.dirname(os.path.abspath(dst_path))
-            pc.add_render_configuration(package_dir)
+            folder = pc.launch_config.choose_editor_folder(package_dir, explicit_folder, advertised_folder)
+            pc.add_render_configuration(package_dir, folder)
             # And what the agent in the editor needs to press it: the skills
             # that teach it to drive PartCAD, for whichever agents are used here.
             # Reported the same way, and a failure to install them is not a
             # failure to create the package either.
             if install_skills:
-                pc.install_agent_skills(package_dir, agents, mcp, instructions, mcp_via=mcp_via)
+                pc.install_agent_skills(package_dir, agents, mcp, instructions, mcp_via=mcp_via, editor_folder=folder)
         else:
             pc.logging.error(f"Failed creating '{dst_path}'!")

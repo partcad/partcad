@@ -93,6 +93,15 @@ a CAD addon, documentation, or a PartCAD package incubated here until it has a r
   import this package -- a test fails if the two differ: edit the one here and copy it over. A comment is not what an object is made of: `comments` is among the keys
   a shape's cache key leaves out (`partcad.shape._NON_GEOMETRIC_CONFIG_KEYS`), so writing one rebuilds nothing.
 
+  `agent_config` is the rule for the MCP entry `pc init` writes and `pc mcp` reads back: in every agent's
+  configuration that has no spelling of its own folder (all but Cursor's), `pc mcp --root <path>` is relative to
+  the folder holding the configuration that names it, which the server finds by looking upwards from where it was
+  started. Claude Code reads the `.mcp.json` of every folder above the one it was started in and starts the server
+  in that one, so neither the server's directory nor any variable is that folder. One entry per PartCAD root,
+  recognised by the root it serves rather than by its name (see `partcad.ai_agents`). It also names
+  `PARTCAD_WORKSPACE_FOLDER`, which the editor extension sets on each workspace folder's terminals
+  (`ide/vscode/src/common/workspaceFolderEnv.ts`) so that `pc init` writes into the folder the window has open.
+
   `assy_lint` checks an ASSY file or a `partcad.yaml` *as it renders*, and rendering is the other thing both
   ends do: PartCAD as it loads a package, and every client as it lints the file an editor has open. So what a
   template may name (`config_template`) and what a parameter declaration means (`parameters`) are here, with
@@ -784,8 +793,8 @@ run as `uvx partcad mcp`, or as the image with the workspace mounted at `/worksp
 PyPI upload and the image on `main`, signing in with GitHub's OIDC
 token -- no secret, because a workflow in a repository owned by `partcad` is what grants that namespace; the `pc`
 plugin carries it in `ai-agents/claude/.mcp.json`; the VS Code extension registers it with the editor
-(`ide/vscode/src/common/mcp.ts`); `pc init` writes it into each agent's project configuration in the repository it
-sets up (`.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml` and the rest -- `MCP_CONFIGS` in
+(`ide/vscode/src/common/mcp.ts`); `pc init` writes it into each agent's project configuration in the folder an editor
+opens, an entry per PartCAD root (`.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml` and the rest -- `MCP_CONFIGS` in
 `partcad.ai_agents`); and the Gemini CLI extension on `plugin-dist` declares it in its `gemini-extension.json`
 (`ai-agents/scripts/gemini_extension.py`). It serves the agent skills as well -- as prompts, a `skill` tool and
 resources, read with `partcad_utils.agent_skills` out of the running PartCAD. The registry proves the wheel is ours by finding `mcp-name: io.github.partcad/partcad` in

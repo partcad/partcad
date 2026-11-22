@@ -35,11 +35,37 @@ import rich_click as click
     is_flag=True,
     help="Let the agent name any file on this machine, not only those in the workspace",
 )
+@click.option(
+    "--root",
+    "root",
+    type=str,
+    default=None,
+    help="The PartCAD root to serve, relative to the folder of the agent configuration naming it (.mcp.json, "
+    ".codex/config.toml, ...), which is looked for from the current directory upwards: what 'pc init' writes there. "
+    "By hand, name a directory with '-p' instead",
+)
 @click.pass_obj
-def cli(cli_ctx, allow_paths, allow_any_path) -> None:
+def cli(cli_ctx, allow_paths, allow_any_path, root) -> None:
     # Imported here: the SDK and pydantic cost a noticeable fraction of a second,
     # and `pc --help` imports every command module to print its short help.
     from partcad_client import mcp_server
 
-    workspace = getattr(cli_ctx, "path", None) or os.getcwd()
-    mcp_server.serve(workspace, allow_paths=allow_paths, allow_any_path=allow_any_path)
+    workspace = getattr(cli_ctx, "path", None)
+    if root is not None:
+        # Where the entry `pc init` wrote is, rather than where the agent
+        # started this: see `partcad_utils.agent_config` for why those differ.
+        from partcad_utils import agent_config
+
+        if workspace:
+            raise click.UsageError("'-p' and '--root' both say what to serve; give one of them")
+        workspace = agent_config.resolve_root(os.getcwd(), root)
+        if workspace is None:
+            raise click.UsageError(
+                "'--root %s' is relative to the folder of the agent configuration naming it (.mcp.json, "
+                ".codex/config.toml, ...), and there is none in '%s' or above: start the agent in the folder "
+                "holding the configuration that starts this server, or name the directory with '-p'"
+                % (root, os.getcwd())
+            )
+        if not os.path.isdir(workspace):
+            raise click.UsageError("'--root %s' is '%s', which does not exist" % (root, workspace))
+    mcp_server.serve(workspace or os.getcwd(), allow_paths=allow_paths, allow_any_path=allow_any_path)

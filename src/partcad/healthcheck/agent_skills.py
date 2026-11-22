@@ -32,7 +32,7 @@ import json
 import os
 
 from .. import __version__, ai_agents
-from ..launch_config import find_repository_root
+from ..launch_config import editor_folder
 from .tests import HealthCheckReport, HealthCheckTest
 
 
@@ -45,9 +45,8 @@ class AgentSkillsCheck(HealthCheckTest):
             tags=["skills", "agents", "claude", "cursor", "copilot", "codex", "gemini", "kiro"],
             description="check whether the installed AI agent skills match this PartCAD",
         )
-        # Where `pc init` would have put them: the repository holding the
-        # current directory, or the directory itself when it is in none.
-        self._root = find_repository_root(os.getcwd()) or os.path.abspath(os.getcwd())
+        # Where they are: see `_installation_folder`.
+        self._root = self._installation_folder(os.getcwd())
         # What was found stale: the `SKILL_TARGETS` to reinstall, and whether
         # the `AGENTS.md` section is one of them.
         self._stale: list[str] = []
@@ -70,16 +69,48 @@ class AgentSkillsCheck(HealthCheckTest):
     def _agents_md(self) -> str:
         return os.path.join(self._root, ai_agents.AGENTS_MD)
 
+    @classmethod
+    def _installation_folder(cls, start: str) -> str:
+        """The folder the skills `start` is under were installed in, or where `pc init` would put them.
+
+        Looked for from `start` up to the folder `pc init` writes into by
+        default -- the repository's root, or the PartCAD root outside one --
+        nearest first, because that default is not the only place they can be:
+        `pc init --editor-folder` may have put them in a folder inside the
+        repository, and outside a repository an older PartCAD put them beside
+        the package, subpackage or not. A repair writes where they were found.
+        """
+        default = editor_folder(start)
+        current = os.path.abspath(start)
+        while True:
+            if cls._installed_in(current):
+                return current
+            parent = os.path.dirname(current)
+            if current == default or parent == current:
+                return default
+            current = parent
+
+    @staticmethod
+    def _installed_in(folder: str) -> bool:
+        """Whether any of PartCAD's skills, or its `AGENTS.md` section, are installed in `folder`."""
+        if os.path.isdir(os.path.join(folder, ai_agents.CLAUDE_SKILLS_DIR, ai_agents.plugin_name())):
+            return True
+        try:
+            with open(os.path.join(folder, ai_agents.AGENTS_MD), "r", encoding="utf-8") as f:
+                if ai_agents.instructions_version(f.read()) is not None:
+                    return True
+        except (OSError, UnicodeDecodeError):
+            pass
+        for target, (directory, _) in ai_agents.SKILL_TARGETS.items():
+            path = os.path.join(folder, directory)
+            if target != "claude" and os.path.isdir(path):
+                if any(name.startswith(ai_agents.CURSOR_PREFIX) for name in os.listdir(path)):
+                    return True
+        return False
+
     def is_applicable(self) -> bool:
         """Only where somebody has installed them. Absent is not stale."""
-        if os.path.isdir(self._claude_plugin()) or self._instructions_version() is not None:
-            return True
-        for directory in self._prefixed_targets().values():
-            if os.path.isdir(directory) and any(
-                name.startswith(ai_agents.CURSOR_PREFIX) for name in os.listdir(directory)
-            ):
-                return True
-        return False
+        return self._installed_in(self._root)
 
     def _claude_version(self):
         """The version in the installed plugin manifest, or None if unreadable."""

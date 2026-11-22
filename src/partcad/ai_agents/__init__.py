@@ -57,6 +57,7 @@ opened here loads the plugin from the working tree -- and following it would
 have `pc init` overwrite the source tree with a copy of itself.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -64,11 +65,14 @@ import shutil
 from dataclasses import dataclass
 from typing import Optional
 
-from partcad_utils import agent_skills, app_image
+from partcad_utils import agent_config, agent_skills, app_image
+from partcad_utils.pcignore import PACKAGE_FILE
+from partcad_utils.workspace import determine_root_path
 
 from .. import __version__
 from .. import logging as pc_logging
-from ..launch_config import find_repository_root
+from ..launch_config import editor_folder as default_editor_folder
+from ..launch_config import relative_to
 
 # Read out of this package rather than out of the repository, because in every
 # install except a checkout there is no repository: `pyproject.toml` lists these
@@ -406,24 +410,44 @@ def default_agents(root: str) -> list[str]:
     ]
 
 
-# The MCP server, `pc mcp`, under the one name PartCAD writes into an agent's
-# configuration. The entry under that name is PartCAD's and is rewritten every
-# time; every other server in the file is somebody else's and is left alone.
+# The MCP server, `pc mcp`, in each agent's project configuration -- one entry per
+# PartCAD root, because one `pc mcp` serves one root (one daemon, and one set of
+# files the agent may use), and a repository can hold several. Three
+# directories decide what an entry says, and none of them has to be another: the
+# folder the editor or agent opens, where its configuration is and what
+# `${workspaceFolder}` is (`partcad.launch_config.choose_editor_folder`); the git
+# repository's root, which is only the default for it; and the PartCAD root the
+# entry serves (`partcad_utils.workspace.determine_root_path`, which stops at a
+# `.pcignore`).
+#
+# An entry is recognised by the root it serves rather than by its name, so
+# running `pc init` again -- for that package, or for another package of the same
+# root -- updates it where it is, and an entry an older release wrote is that
+# entry. Its name is `partcad` when that is free, the one root most repositories
+# have, wherever it is, and `partcad-<path>` otherwise (`server_name`). A name,
+# once written, is never changed: an agent keys approvals and permission rules
+# by it. Every other server in the file is somebody else's and is left alone.
 MCP_SERVER_NAME = "partcad"
+
+# Long enough for any path worth reading, short enough for every agent's limit
+# on a server's name and a tool's together: Cursor's is 60 characters, and the
+# longest tool `pc mcp` has is 13.
+MAX_SERVER_NAME = 32
 
 
 @dataclass(frozen=True)
 class McpConfig:
     """Where an agent reads a project's MCP servers from, and how.
 
-    `project` is how the file spells "the project's directory", which the
-    server's `-p` is written relative to, because the directory an agent starts
-    it in is not one every agent promises -- and in a repository whose package
-    is in a subdirectory, it would not be the package anyway. Claude Code sets no
-    `CLAUDE_PROJECT_DIR` of its own when it reads a project's `.mcp.json`, so the
-    variable has a default there; Cursor resolves `${workspaceFolder}` itself.
-    The others document no such variable, and start a project's servers in the
-    project: there the path is relative, and `None` says so.
+    `project` is how the file spells "the folder holding this file", which the
+    server's `-p` is written relative to: Cursor resolves `${workspaceFolder}` to
+    exactly that. Where it is None the agent has no such spelling, and the entry
+    says `pc mcp --root <path>` instead, relative to the folder holding the file,
+    which the server finds for itself (`partcad_utils.agent_config`). That is
+    every other agent: Claude Code expands no variable of its own in
+    `.mcp.json` (its `CLAUDE_PROJECT_DIR` is only in the server's environment),
+    reads that file in the folders above the one it was started in, and starts
+    the server in the one it was started in; the others start it in the project.
     """
 
     path: str
@@ -457,7 +481,7 @@ class McpConfig:
 
 
 MCP_CONFIGS = {
-    "claude": McpConfig(".mcp.json", project="${CLAUDE_PROJECT_DIR:-.}", extra=(("type", "stdio"),)),
+    "claude": McpConfig(".mcp.json", extra=(("type", "stdio"),)),
     "cursor": McpConfig(os.path.join(".cursor", "mcp.json"), project="${workspaceFolder}"),
     "codex": McpConfig(os.path.join(".codex", "config.toml"), key="mcp_servers", toml=True),
     "gemini": McpConfig(os.path.join(".gemini", "settings.json")),
@@ -498,14 +522,15 @@ MCP_NOT_WRITTEN = {
     "copilot": "the PartCAD extension registers it with VS Code; see 'Visual Studio Code' in the MCP documentation",
 }
 
-# How the project's directory is spelt when the server runs in the PartCAD image,
-# where it has to be an absolute path: Docker mounts it at the path it has on the
-# host. Cursor's variable is that already. Claude Code's `CLAUDE_PROJECT_DIR`
-# has a default of "." above, which a mount cannot take, so here it is the
-# environment Claude Code was started in -- the project it opened, whose
-# `.mcp.json` this is. Only these two: the other agents document no variable for
-# the project (their `McpConfig.project` is None) and name the package relative
-# to where they start the server, which a mount cannot take -- `install_mcp_config`
+# What the PartCAD image is given to mount, where the server runs in it: the
+# folder holding the configuration, at the path it has on the host -- the whole
+# folder rather than the root alone, because it holds the repository the
+# revision tools read -- which Docker needs as an absolute path. Cursor's
+# variable is that folder. Claude Code has none, so it is the directory Claude
+# Code was started in, from its environment: right when that is the folder
+# holding `.mcp.json`, and `pc mcp --root` inside the container refuses, saying
+# where to start it, when it is not. Only these two: the other agents document no
+# variable for it at all, which a mount cannot do without -- `install_mcp_config`
 # says so for each of them rather than write an entry that cannot start.
 MCP_DOCKER_PROJECT = {
     "claude": "${PWD}",
@@ -524,38 +549,39 @@ def default_mcp_via() -> str:
     return MCP_VIA_DOCKER if app_image.running_in_image() else MCP_VIA_PC
 
 
-def mcp_server_entry(agent: str, root: str, package_dir: str, via: str = MCP_VIA_PC) -> dict:
-    """The configuration entry that starts `pc mcp` for the package in `package_dir`.
+def _join(base: str, relative: str) -> str:
+    return base if relative == "." else base + "/" + relative
 
-    `pc`, not an absolute path to it: the file is committed with the package and
-    read on every machine that checks it out, where PartCAD is wherever that
-    machine installed it.
 
-    With ``via`` set to `docker`, `docker run ... ghcr.io/partcad/partcad mcp`
-    instead, for the same reason one level up: what every machine that checks
-    the package out is then asked for is Docker, and the image comes along. The
-    image is named without a tag, so like `pc` it is whatever that machine last
-    pulled. No Docker socket is passed: that hands the container the host's
-    Docker, and is for a person to add knowingly (see "Docker" in the
-    installation documentation).
+def mcp_server_entry(agent: str, folder: str, root: str, via: str = MCP_VIA_PC) -> dict:
+    """The entry, in `agent`'s configuration held by `folder`, that starts `pc mcp` for the PartCAD root `root`.
+
+    The root is named relative to `folder`, never as an absolute path: the file
+    is committed with the package and read on every machine that checks it out.
+    For the same reason the command is `pc`, not an absolute path to it --
+    PartCAD is wherever each machine installed it.
+
+    With ``via`` set to `docker`, `docker run ... ghcr.io/partcad/partcad`
+    instead, for the same reason one level up: what every machine is then asked
+    for is Docker, and the image comes along. The image is named without a tag,
+    so like `pc` it is whatever that machine last pulled. No Docker socket is
+    passed: that hands the container the host's Docker, and is for a person to
+    add knowingly (see "Docker" in the installation documentation).
     """
     if via not in MCP_VIA:
         raise ValueError("unknown way to start the MCP server: %r (expected one of %s)" % (via, ", ".join(MCP_VIA)))
+    if via == MCP_VIA_DOCKER and agent not in MCP_DOCKER_PROJECT:
+        raise ValueError("%s's configuration cannot name the absolute directory Docker has to mount" % agent)
     config = MCP_CONFIGS[agent]
-    project = config.project
-    if via == MCP_VIA_DOCKER:
-        if agent not in MCP_DOCKER_PROJECT:
-            raise ValueError("%s's configuration cannot name the absolute directory Docker has to mount" % agent)
-        project = MCP_DOCKER_PROJECT[agent]
-    relative = os.path.relpath(os.path.abspath(package_dir), os.path.abspath(root)).replace(os.sep, "/")
-    if project is None:
-        path = relative
+    relative = relative_to(root, folder)
+    if config.project is None:
+        server = ["mcp", agent_config.ROOT_OPTION, relative]
     else:
-        path = project if relative == os.curdir else project + "/" + relative
+        server = ["-p", _join(config.project, relative), "mcp"]
     if via == MCP_VIA_DOCKER:
-        command = ["docker", *app_image.docker_run_args(project, "-p", path, "mcp")]
+        command = ["docker", *app_image.docker_run_args(MCP_DOCKER_PROJECT[agent], *server)]
     else:
-        command = ["pc", "-p", path, "mcp"]
+        command = ["pc", *server]
     # Claude Code reads an entry with no "type" as stdio, and says so in its
     # documentation by always writing it out; OpenCode requires one, "local";
     # the others have no such field.
@@ -564,35 +590,231 @@ def mcp_server_entry(agent: str, root: str, package_dir: str, via: str = MCP_VIA
     return {**dict(config.extra), "command": command[0], "args": command[1:]}
 
 
-def install_mcp_config(agent: str, root: str, package_dir: str, via: str = MCP_VIA_PC) -> bool:
-    """Add (or update) the `pc mcp` entry in `agent`'s project configuration under `root`.
+# Every spelling of "the folder holding this file" PartCAD has written into an
+# entry, in this release or an earlier one: how the root an older entry serves is
+# read back out of it.
+PROJECT_SPELLINGS = ("${CLAUDE_PROJECT_DIR:-.}", "${CLAUDE_PROJECT_DIR}", "${PWD}", "${workspaceFolder}")
 
-    The file is merged into, never replaced: it is a list of servers, and the
-    others in it belong to whoever put them there. A file that cannot be merged
-    into -- not JSON (or TOML), or JSON with comments, or one without a mapping
-    of servers -- is left as it is, with a warning, because rewriting it would
-    lose whatever it holds; and so is a symbolic link, for the reason
-    `_writable_destination` gives.
+# The global option of `pc` that names a package, as PartCAD's entries use it.
+PATH_OPTIONS = ("-p", "--path")
+
+# An image of PartCAD's, by its name: `ghcr.io/partcad/partcad`, `mcp/partcad`
+# (Docker's MCP Catalog), a fork's `ghcr.io/someone/partcad`, any of them tagged
+# or pinned -- and not a host path that happens to end in `partcad`, which starts
+# with a `/`.
+_PARTCAD_IMAGE = re.compile(
+    r"(?:[a-z0-9._-]+(?::[0-9]+)?/)*partcad(?::[\w][\w.-]{0,127})?(?:@sha256:[0-9a-f]{64})?", re.IGNORECASE
+)
+
+# The options of `docker run` whose value could look like an image name.
+_DOCKER_VALUE_OPTIONS = ("--name", "--hostname", "-h", "--network", "--net", "--label", "-l", "--user", "-u")
+
+
+def _command_line(entry) -> Optional[list]:
+    """An entry's command and its arguments as one list, in either shape the configurations use."""
+    if not isinstance(entry, dict):
+        return None
+    command, args = entry.get("command"), entry.get("args", [])
+    if isinstance(command, list):
+        line = command
+    elif isinstance(args, list):
+        line = [command, *args]
+    else:
+        return None
+    return line if line and all(isinstance(arg, str) for arg in line) else None
+
+
+def _partcad_arguments(line: list) -> Optional[list]:
+    """The arguments PartCAD is given by the command `line`, or None when it does not start PartCAD.
+
+    `pc` or `partcad`, by any path; `uvx` or `pipx run` of the `partcad`
+    package; `docker run` (or `podman run`) of a PartCAD image. Anything else is
+    somebody else's server, whatever it is called and whatever it is given.
+    """
+    program = os.path.basename(line[0].replace("\\", "/")).lower()
+    if program.endswith(".exe"):
+        program = program[: -len(".exe")]
+    rest = line[1:]
+    if program in ("pc", "partcad"):
+        return rest
+    if program in ("uvx", "pipx"):
+        found = [index for index, arg in enumerate(rest) if re.fullmatch(r"partcad(?:[=@<>~!].*)?", arg)]
+        return rest[found[0] + 1 :] if found else None
+    if program in ("docker", "podman"):
+        for index, arg in enumerate(rest):
+            if _PARTCAD_IMAGE.fullmatch(arg) and (index == 0 or rest[index - 1] not in _DOCKER_VALUE_OPTIONS):
+                return rest[index + 1 :]
+    return None
+
+
+def served_directory(entry, folder: str) -> Optional[str]:
+    """The directory an entry in the configuration held by `folder` has `pc mcp` serve, or None.
+
+    Read the way PartCAD has written entries -- `pc mcp --root <path>` and
+    `pc -p <folder>/<path> mcp`, with any of `PROJECT_SPELLINGS` for the folder,
+    or the path alone -- run directly or in the image, and a path written out by
+    hand. An entry with no path at all serves the directory it is started in,
+    which for these agents is `folder`. An entry that does not start PartCAD, or
+    names its directory some other way, is not something PartCAD wrote, and None
+    leaves it alone.
+    """
+    line = _command_line(entry)
+    arguments = _partcad_arguments(line) if line else None
+    if arguments is None or "mcp" not in arguments:
+        return None
+
+    root = agent_config.root_argument(arguments)
+    if root is not None:
+        return os.path.normpath(os.path.join(folder, root))
+
+    mcp = len(arguments) - 1 - arguments[::-1].index("mcp")
+    if mcp >= 2 and arguments[mcp - 2] in PATH_OPTIONS:
+        value = arguments[mcp - 1]
+        for spelling in PROJECT_SPELLINGS:
+            if value == spelling or value.startswith(spelling + "/"):
+                return os.path.normpath(os.path.join(folder, value[len(spelling) :].lstrip("/")))
+        if "${" in value:
+            return None
+        return os.path.normpath(os.path.join(folder, value))
+    if any(arg in PATH_OPTIONS for arg in arguments[:mcp]):
+        return None
+    return os.path.normpath(folder)
+
+
+def is_partcad_name(name) -> bool:
+    """Whether `name` is one PartCAD gives its entries."""
+    return isinstance(name, str) and (name == MCP_SERVER_NAME or name.startswith(MCP_SERVER_NAME + "-"))
+
+
+def _same(a: str, b: str) -> bool:
+    return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
+def server_name(root: str, folder: str, taken) -> str:
+    """The name for a new entry serving `root`, one not in `taken`.
+
+    `partcad` if it is free. Otherwise `partcad-` and the root's path relative
+    to `folder` -- `partcad-packages-robot` -- in the characters every agent
+    accepts in a name (Claude Code's are letters, digits, `-` and `_`), cut
+    short with a hash of the path when it would be too long to read.
+    """
+    if MCP_SERVER_NAME not in taken:
+        return MCP_SERVER_NAME
+    relative = relative_to(root, folder)
+    words = relative if relative != "." else os.path.basename(os.path.abspath(root))
+    slug = re.sub(r"[^A-Za-z0-9_]+", "-", words).strip("-_") or "root"
+    base = "%s-%s" % (MCP_SERVER_NAME, slug)
+    if len(base) > MAX_SERVER_NAME:
+        digest = hashlib.sha1(relative.encode("utf-8")).hexdigest()[:6]
+        base = "%s-%s" % (base[: MAX_SERVER_NAME - len(digest) - 1].rstrip("-_"), digest)
+    name, number = base, 2
+    while name in taken:
+        name = "%s-%d" % (base, number)
+        number += 1
+    return name
+
+
+def _claimed(servers: dict, folder: str, root: str) -> tuple:
+    """PartCAD's entries in `servers` that serve `root`, and those that serve a directory that is gone."""
+    mine, gone = [], []
+    for name, existing in servers.items():
+        if not is_partcad_name(name):
+            continue
+        directory = served_directory(existing, folder)
+        if directory is None:
+            continue
+        if not os.path.isdir(directory):
+            gone.append(name)
+        elif _same(determine_root_path(directory), root):
+            mine.append(name)
+    return mine, gone
+
+
+def _plan(servers: dict, folder: str, root: str) -> tuple:
+    """The name for the entry serving `root` among `servers`, and the names of PartCAD's entries to remove.
+
+    The entry already serving the root keeps its name. Another one serving it
+    is a duplicate, and one serving a directory that is gone can only fail to
+    start; both go.
+    """
+    mine, gone = _claimed(servers, folder, root)
+    removed = mine[1:] + gone
+    name = mine[0] if mine else server_name(root, folder, set(servers) - set(removed))
+    return name, removed
+
+
+# Directories never looked into for PartCAD roots: hidden ones (`.git`, a
+# virtual environment, an editor's settings) are skipped by their dot.
+_NOT_SEARCHED = ("node_modules", "__pycache__")
+
+
+def partcad_roots(directory: str) -> list:
+    """The PartCAD roots to give entries to, for `pc init` run on `directory`.
+
+    The root of the package `directory` is in, when it is in one. Otherwise --
+    `pc init --skills-only` run at the top of a repository whose packages are in
+    subfolders -- every root below it, and `directory` itself when there are
+    none, because a server started where there is no package yet still starts
+    and says so. A root's own subfolders are not looked into: what is below it
+    is its subpackages, or folders it set apart with a `.pcignore`, whose
+    packages get an entry when `pc init` is run on them.
+    """
+    directory = os.path.abspath(directory)
+    root = determine_root_path(directory)
+    if os.path.isfile(os.path.join(root, PACKAGE_FILE)):
+        return [root]
+
+    found = []
+    for current, subdirectories, files in os.walk(directory):
+        if current != directory and PACKAGE_FILE in files:
+            found.append(current)
+            subdirectories[:] = []
+            continue
+        subdirectories[:] = sorted(
+            name for name in subdirectories if not name.startswith(".") and name not in _NOT_SEARCHED
+        )
+    return sorted(found) or [directory]
+
+
+def install_mcp_config(agent: str, folder: str, served: str, via: str = MCP_VIA_PC) -> bool:
+    """Add (or update) the entry for the PartCAD root of `served` in `agent`'s project configuration in `folder`.
+
+    `served` is any directory of the root -- a package, a subpackage, the root
+    itself; it is the root that gets the entry (see `_plan` for which entry,
+    under which name). The file is merged into, never replaced: it is a list of
+    servers, and the others in it belong to whoever put them there. A file that
+    cannot be merged into -- not JSON (or TOML), or JSON with comments, or one
+    without a mapping of servers -- is left as it is, with a warning, because
+    rewriting it would lose whatever it holds; and so is a symbolic link, for
+    the reason `_writable_destination` gives.
     """
     config = MCP_CONFIGS[agent]
     if via == MCP_VIA_DOCKER and agent not in MCP_DOCKER_PROJECT:
-        # Docker needs the project's directory as an absolute path to mount,
-        # and this agent's configuration has no way to spell one: it starts
-        # the server in the project and names it as '.', which a mount cannot
-        # take. Said rather than written as something that cannot start.
+        # Docker needs the folder as an absolute path to mount, and this
+        # agent's configuration has no way to spell one. Said rather than
+        # written as something that cannot start.
         pc_logging.warning(
             "Not adding the PartCAD MCP server for %s as 'docker run': its configuration cannot name the "
             "project's directory, which Docker has to mount. Add it by hand (see 'Docker' in the installation "
             "documentation), or run 'pc init --mcp-via pc' where PartCAD is installed" % AGENT_SPECS[agent].title
         )
         return False
-    path = config.file(root)
+    path = config.file(folder)
     if os.path.islink(path):
         pc_logging.warning("Not adding the MCP server: '%s' is a symbolic link" % path)
         return False
-    entry = mcp_server_entry(agent, root, package_dir, via)
+
+    root = determine_root_path(served)
+    relative = relative_to(root, folder)
+    if via == MCP_VIA_DOCKER and relative.split("/")[0] == "..":
+        pc_logging.warning(
+            "The PartCAD root '%s' is outside '%s', which is all the PartCAD image is given: the server '%s' starts "
+            "will not reach it. Run 'pc init --editor-folder' on a folder holding both" % (root, folder, path)
+        )
+    what = "the PartCAD MCP server for '%s'" % relative
+    entry = mcp_server_entry(agent, folder, root, via)
     if config.toml:
-        return _install_toml_server(path, config.key, entry)
+        return _install_toml_server(path, config.key, entry, lambda servers: _plan(servers, folder, root), what)
 
     def add(document: dict) -> Optional[str]:
         if not document:
@@ -602,16 +824,27 @@ def install_mcp_config(agent: str, root: str, package_dir: str, via: str = MCP_V
             if not isinstance(servers.get(key, {}), dict):
                 return "its '%s' is not an object to add to" % ".".join(config.keys())
             servers = servers.setdefault(key, {})
+        name, removed = _plan(servers, folder, root)
+        for old in removed:
+            del servers[old]
+        # Where an older form of the configuration kept them (OpenCode 1's
+        # `mcp`): PartCAD's entries there for this root, or for a folder that
+        # is gone, are what this one replaces.
         legacy = document
         for key in config.legacy_key:
             legacy = legacy.get(key) if isinstance(legacy, dict) else None
-        moved = isinstance(legacy, dict) and config.legacy_key and legacy.pop(MCP_SERVER_NAME, None) is not None
-        if servers.get(MCP_SERVER_NAME) == entry and not moved:
+        moved = []
+        if config.legacy_key and isinstance(legacy, dict) and legacy is not servers:
+            mine, gone = _claimed(legacy, folder, root)
+            moved = mine + gone
+            for old in moved:
+                del legacy[old]
+        if servers.get(name) == entry and not removed and not moved:
             return ""
-        servers[MCP_SERVER_NAME] = entry
+        servers[name] = entry
         return None
 
-    return _merge_json(path, add, "the PartCAD MCP server ('%s')" % MCP_SERVER_NAME)
+    return _merge_json(path, add, what)
 
 
 def _merge_json(path: str, change, what: str) -> bool:
@@ -680,11 +913,10 @@ def _toml_loads(text: str):
     return tomllib.loads(text)
 
 
-def _others(document: dict, key: str) -> dict:
-    """`document` without PartCAD's server: everything an edit of PartCAD's table must leave as it was."""
+def _others(document: dict, key: str, names) -> dict:
+    """`document` without the servers `names`: everything an edit of PartCAD's tables must leave as it was."""
     others = dict(document)
-    servers = dict(others.get(key) or {})
-    servers.pop(MCP_SERVER_NAME, None)
+    servers = {name: value for name, value in dict(others.get(key) or {}).items() if name not in names}
     if servers:
         others[key] = servers
     else:
@@ -692,17 +924,49 @@ def _others(document: dict, key: str) -> dict:
     return others
 
 
-def _install_toml_server(path: str, key: str, entry: dict) -> bool:
-    """Add (or update) `[<key>.partcad]` in the TOML file at `path` -- Codex's `.codex/config.toml`.
+def _toml_servers(text: str, key: str, parsed) -> dict:
+    """The servers under `[<key>.<name>]` in the TOML `text`, by name.
+
+    From the parsed document where there is a parser. Without one (Python 3.10
+    without `tomli`), read off the tables the way `pc init` writes them -- a
+    `command` and an `args` that are JSON on one line each -- which is all it
+    needs to know to recognise its own; a table it cannot read that way is
+    taken as somebody else's.
+    """
+    if parsed is not None:
+        servers = parsed.get(key)
+        return dict(servers) if isinstance(servers, dict) else {}
+    servers = {}
+    headers = list(_TOML_HEADER.finditer(text))
+    for header, following in zip(headers, headers[1:] + [None]):
+        path = _toml_key_path(header.group("name"))
+        if len(path) != 2 or path[0] != key:
+            continue
+        body = text[header.end() : following.start() if following else len(text)]
+        entry = {}
+        for field in ("command", "args"):
+            found = re.search(r"^[ \t]*%s[ \t]*=[ \t]*(.+?)[ \t]*$" % field, body, re.MULTILINE)
+            try:
+                entry[field] = json.loads(found.group(1)) if found else None
+            except ValueError:
+                entry[field] = None
+        servers[path[1]] = entry
+    return servers
+
+
+def _install_toml_server(path: str, key: str, entry: dict, plan, what: str) -> bool:
+    """Add (or update) PartCAD's `[<key>.<name>]` in the TOML file at `path` -- Codex's `.codex/config.toml`.
+
+    `plan` is given the servers already there and says which name the entry
+    goes under and which of PartCAD's tables go (see `_plan`).
 
     Edited as text, the way `launch_config` edits `launch.json`: a parse and
     re-dump would drop every comment in the file, and there is no TOML writer
-    among PartCAD's dependencies. The table PartCAD owns -- and any sub-table of
-    it, such as an `env` -- is replaced whole; everything else is kept byte for
-    byte. Where a parser is at hand the result is parsed before it is written,
-    and a file this would break is left as it was.
+    among PartCAD's dependencies. The tables PartCAD owns -- and any sub-table
+    of them, such as an `env` -- are replaced or dropped whole; everything else
+    is kept byte for byte. Where a parser is at hand the result is parsed before
+    it is written, and a file this would break is left as it was.
     """
-    what = "the PartCAD MCP server ('%s')" % MCP_SERVER_NAME
     text = ""
     if os.path.exists(path):
         try:
@@ -712,34 +976,49 @@ def _install_toml_server(path: str, key: str, entry: dict) -> bool:
             pc_logging.warning("Not adding %s to '%s', which cannot be read: %s" % (what, path, e))
             return False
 
+    try:
+        before = _toml_loads(text) if text.strip() else {}
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.warning("Not adding %s to '%s', which is not valid TOML: %s" % (what, path, e))
+        return False
+    name, removed = plan(_toml_servers(text, key, before))
     table = "[%s.%s]\ncommand = %s\nargs = [%s]\n" % (
         key,
-        MCP_SERVER_NAME,
+        name,
         json.dumps(entry["command"]),
         ", ".join(json.dumps(arg) for arg in entry["args"]),
     )
 
     # The file as the spans its headers start, each running to the next
-    # header. PartCAD's are the table and its sub-tables, wherever they are:
+    # header. PartCAD's are its tables and their sub-tables, wherever they are:
     # TOML lets `[mcp_servers.partcad.env]` come after somebody else's table,
     # so each span is replaced or dropped on its own and what lies between
     # them is kept.
-    ours = [key, MCP_SERVER_NAME]
+    ours = [key, name]
+    gone = [[key, old] for old in removed]
     headers = list(_TOML_HEADER.finditer(text))
     starts = [header.start() for header in headers]
     spans = list(zip(starts, starts[1:] + [len(text)]))
     pieces = [text[: starts[0]] if starts else text]
     replaced = False
     for header, (start, end) in zip(headers, spans):
-        if _toml_key_path(header.group("name"))[:2] != ours:
+        table_path = _toml_key_path(header.group("name"))[:2]
+        if table_path in gone:
+            continue
+        if table_path != ours:
             pieces.append(text[start:end])
         elif not replaced:
             pieces.append(table + ("\n" if end < len(text) else ""))
             replaced = True
     if replaced:
         updated = "".join(pieces)
+        if headers and _toml_key_path(headers[-1].group("name"))[:2] in gone:
+            # The table that ended the file was dropped, and the one before it
+            # kept the blank line that used to separate them.
+            updated = updated.rstrip("\n") + "\n"
     else:
-        updated = (text.rstrip("\n") + "\n\n" if text.strip() else "") + table
+        kept = "".join(pieces)
+        updated = (kept.rstrip("\n") + "\n\n" if kept.strip() else "") + table
 
     if updated == text:
         pc_logging.debug("'%s' already has %s" % (path, what))
@@ -747,14 +1026,9 @@ def _install_toml_server(path: str, key: str, entry: dict) -> bool:
     # The text edit finds tables by their header lines, and a header-shaped
     # line can also be text inside a multi-line string. So what the edit did is
     # checked by what it means: parsed before and after, the file has to be the
-    # same everywhere but PartCAD's own table, or it is left as it was. Without
+    # same everywhere but PartCAD's own tables, or it is left as it was. Without
     # a parser (Python 3.10 with no `tomli`) that cannot be checked, and a file
     # holding a multi-line string is left alone rather than edited unchecked.
-    try:
-        before = _toml_loads(text) if text.strip() else {}
-    except Exception as e:  # pylint: disable=broad-except
-        pc_logging.warning("Not adding %s to '%s', which is not valid TOML: %s" % (what, path, e))
-        return False
     try:
         parsed = _toml_loads(updated)
     except Exception as e:  # pylint: disable=broad-except
@@ -766,18 +1040,19 @@ def _install_toml_server(path: str, key: str, entry: dict) -> bool:
             % (what, path)
         )
         return False
-    if parsed is not None and _others(before, key) != _others(parsed, key):
+    touched = [name, *removed]
+    if parsed is not None and _others(before, key, touched) != _others(parsed, key, touched):
         pc_logging.warning(
-            "Not adding %s to '%s': editing it would change more than PartCAD's own table; add it by hand"
+            "Not adding %s to '%s': editing it would change more than PartCAD's own tables; add it by hand"
             % (what, path)
         )
         return False
-    if parsed is not None and parsed.get(key, {}).get(MCP_SERVER_NAME) != entry:
+    if parsed is not None and (
+        parsed.get(key, {}).get(name) != entry or any(old in parsed.get(key, {}) for old in removed)
+    ):
         # A server of that name written some other way -- inline, under
         # `[mcp_servers]` -- which this edit cannot see to replace.
-        pc_logging.warning(
-            "Not adding %s to '%s': it declares '%s' in a form this cannot edit" % (what, path, MCP_SERVER_NAME)
-        )
+        pc_logging.warning("Not adding %s to '%s': it declares '%s' in a form this cannot edit" % (what, path, name))
         return False
     try:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -829,14 +1104,21 @@ def resolve_agents(names) -> tuple[list[str], list[str]]:
 
 
 def install_agent_skills(
-    package_dir: str = ".", agents=None, mcp: bool = True, instructions: bool = True, mcp_via: Optional[str] = None
+    package_dir: str = ".",
+    agents=None,
+    mcp: bool = True,
+    instructions: bool = True,
+    mcp_via: Optional[str] = None,
+    editor_folder: Optional[str] = None,
 ) -> bool:
-    """Install the skills for `agents`, beside the package in `package_dir`.
+    """Install the skills for `agents`, for the package in `package_dir`.
 
-    The files go to the root of the git repository holding the package, because
-    that is what an editor opens as its workspace; when the package is not in a
-    repository, they go next to the package itself. This is the same root
-    `add_render_configuration` writes into, and for the same reason.
+    The files go into `editor_folder`, the folder the editor or agent opens,
+    because that is the only place any of them reads them from. Left out, it is
+    the root of the git repository holding the package, or its PartCAD root
+    outside one (`partcad.launch_config.editor_folder`): the same folder
+    `add_render_configuration` writes into, for the same reason. `pc init`
+    decides it with `partcad.launch_config.choose_editor_folder`.
 
     `agents` is the names to install for, defaulting to `default_agents`. An
     unknown name is an error rather than a no-op: a typo that silently installs
@@ -846,6 +1128,8 @@ def install_agent_skills(
     `mcp` also adds the MCP server, `pc mcp`, to each agent's project
     configuration (see `install_mcp_config`): the skills say how to drive
     PartCAD, and the server is what an agent drives it through without a shell.
+    The entry is for the PartCAD root of the package, beside any other root's;
+    where `package_dir` is in no package, one for every root below it.
     `instructions` writes PartCAD's section of `AGENTS.md` (`install_instructions`).
     `mcp_via` is how that entry starts it, `pc` or `docker` (see
     `mcp_server_entry`); left out, `docker` inside the PartCAD image and `pc`
@@ -855,9 +1139,9 @@ def install_agent_skills(
     `pc init` to fail -- the package is created either way -- so every failure
     is reported and returns False.
     """
-    root = find_repository_root(package_dir) or os.path.abspath(package_dir)
+    folder = os.path.abspath(editor_folder) if editor_folder else default_editor_folder(package_dir)
     if agents is None:
-        agents = default_agents(root)
+        agents = default_agents(folder)
     agents, unknown = resolve_agents(agents)
     if unknown:
         known = sorted([*AGENT_SPECS, *AGENT_ALIASES])
@@ -871,14 +1155,28 @@ def install_agent_skills(
     for agent in agents:
         if AGENT_SPECS[agent].skills not in targets:
             targets.append(AGENT_SPECS[agent].skills)
-    installed = [SKILL_TARGETS[target][1](root) for target in targets]
+    installed = [SKILL_TARGETS[target][1](folder) for target in targets]
+
+    try:
+        relative_to(package_dir, folder)
+    except ValueError:
+        # Two Windows drives: there is no relative path from the one to the
+        # other, and an absolute one would be this machine's in a shared file.
+        pc_logging.warning(
+            "Not adding the MCP server or the instructions to '%s': '%s' is on another drive, so they could not "
+            "name it" % (folder, os.path.abspath(package_dir))
+        )
+        return any(installed)
     if mcp:
         via = mcp_via or default_mcp_via()
-        installed += [install_mcp_config(agent, root, package_dir, via) for agent in agents if agent in MCP_CONFIGS]
+        roots = partcad_roots(package_dir)
+        installed += [
+            install_mcp_config(agent, folder, root, via) for agent in agents if agent in MCP_CONFIGS for root in roots
+        ]
     if instructions:
-        installed.append(install_instructions(root, package_dir))
+        installed.append(install_instructions(folder, package_dir))
         if "gemini" in agents:
-            installed.append(install_gemini_context(root))
+            installed.append(install_gemini_context(folder))
     return any(installed)
 
 

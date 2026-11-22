@@ -276,3 +276,51 @@ def test_a_marker_naming_a_package_outside_the_repository_is_not_followed(worksp
     assert check.fix()
 
     assert ai_agents.instructions_package((workspace / "AGENTS.md").read_text(encoding="utf-8")) == "."
+
+
+# --- Where they are: not always where `pc init` would put them by default ---
+
+
+def test_skills_an_older_release_put_beside_a_subpackage_are_found(tmp_path, monkeypatch):
+    """Outside a repository, an older PartCAD installed them beside the package, subpackage or not.
+
+    The default folder is now the PartCAD root above it, and the check has to
+    find them where they are rather than report nothing to repair.
+    """
+    (tmp_path / "partcad.yaml").write_text("desc: root\n", encoding="utf-8")
+    arm = tmp_path / "arm"
+    arm.mkdir()
+    (arm / "partcad.yaml").write_text("desc: arm\n", encoding="utf-8")
+    ai_agents.install_agent_skills(str(arm), ["cursor"], mcp=False, editor_folder=str(arm))
+    age_the_cursor_skill(arm)
+    monkeypatch.chdir(arm)
+
+    check = AgentSkillsCheck()
+    assert check.is_applicable()
+    assert check.test().findings
+    assert check.fix()
+    # Repaired where they were, not copied up to the root.
+    assert check.test().findings == []
+    assert not (tmp_path / ".cursor").exists()
+
+
+def test_skills_in_an_editor_folder_inside_the_repository_are_found(workspace, monkeypatch):
+    """`pc init --editor-folder hw` put them in `hw`; run from inside it, that is where they are."""
+    hw = workspace / "hw"
+    (hw / "motor").mkdir(parents=True)
+    ai_agents.install_agent_skills(str(hw), ["cursor"], mcp=False, editor_folder=str(hw))
+    age_the_cursor_skill(hw)
+    monkeypatch.chdir(hw / "motor")
+
+    check = AgentSkillsCheck()
+    assert check.is_applicable()
+    assert check.test().findings
+    assert check.fix()
+    assert check.test().findings == []
+    assert not (workspace / ".cursor").exists()
+
+
+def test_with_nothing_installed_on_the_way_up_it_is_the_default_folder(workspace, monkeypatch):
+    (workspace / "hw").mkdir()
+    monkeypatch.chdir(workspace / "hw")
+    assert AgentSkillsCheck()._root == str(workspace)

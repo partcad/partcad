@@ -34,6 +34,7 @@ import { identity, INSTANTIATE_METHOD, pendingSubassemblies, requestParams } fro
 import { cliBeside, ensureServiceExecutable, locateCommand, resolveServicePath, ServiceResolution } from './provision';
 import { writeTerminal } from '../terminal';
 import { refreshToolsPath } from './terminalPath';
+import { workspaceFolderOf } from './workspaceFolderEnv';
 import { getDevelIndexFromSetting, getServiceChannelFromSetting } from './settings';
 import { checkoutService, debugCheckout, DEBUG_STATUS_METHOD, DebugStatus, needsReplacing } from './debug';
 
@@ -945,7 +946,12 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.testReal', (a) => this.send('test', { package: a.packageName, object: a.objectName }));
         reg('partcad.getStats', () => this.send('info', {}));
         reg('partcad.activate', () => this.send('activate', {}));
-        reg('partcad.initPackage', (p) => this.send('init', { path: typeof p === 'string' ? p : '' }));
+        // With the workspace folder the package is in, which the daemon -- shared,
+        // and perhaps remote -- cannot know: the "Render" command goes there.
+        reg('partcad.initPackage', (p) => {
+            const packagePath = typeof p === 'string' ? p : '';
+            return this.send('init', { path: packagePath, editorFolder: workspaceFolderOf(packagePath) ?? '' });
+        });
         reg('partcad.loadPackage', (p) => this.send('package.load', { path: typeof p === 'string' ? p : '' }));
         reg('partcad.refresh', () => this.send('package.refresh', {}));
         // The package's own dependencies, not the PartCAD tool: the operation

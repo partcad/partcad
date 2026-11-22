@@ -158,19 +158,24 @@ declares it in `claude/.mcp.json`, run as `pc -p ${CLAUDE_PROJECT_DIR} mcp`, so
 `/plugin install pc@partcad` brings it with the skills, and the plugin workflow's
 smoke install fails if the installed plugin does not report it.
 
-`pc init` does not copy that file into `.claude/skills/pc/`. It writes a
-`partcad` entry into each agent's own project configuration instead — `.mcp.json`
+`pc init` does not copy that file into `.claude/skills/pc/`. It writes an entry
+per PartCAD root into each agent's own project configuration instead — `.mcp.json`
 for Claude Code, `.cursor/mcp.json`, `.codex/config.toml` (TOML, edited as text
 so its comments survive), `.gemini/settings.json`, `.zed/settings.json`,
 `.kiro/settings/mcp.json`, `.devin/mcp_config.json` and `opencode.json` (in
 OpenCode 2's `mcp.servers` shape, moving an entry of ours out of the deprecated
-flat one) — pointed at the package with `-p`, which is the one thing a plugin
-cannot know in a repository whose package is in a subdirectory, and leaves every
-other server in those files alone. A file it cannot merge into without losing
+flat one) — in the folder an editor opens (the repository's root, unless
+`--editor-folder` or the editor extension's `PARTCAD_WORKSPACE_FOLDER` says
+otherwise), naming the root relative to that folder: `-p ${workspaceFolder}/<path>`
+for Cursor, `pc mcp --root <path>` for the rest, which the server resolves
+against the folder of the file naming it. That is the one thing a plugin cannot
+know in a repository whose packages are in subdirectories. The first root's entry
+is `partcad`, every other's `partcad-<path>`; a re-run updates the entry serving
+the root under the name it has, and every other server in those files is left
+alone. A file it cannot merge into without losing
 something (JSON with comments, a server of that name written inline) is left as
 it is, with a warning. GitHub Copilot gets none, because the VS Code extension
-registers the server already; see `MCP_NOT_WRITTEN`. Re-running it rewrites the `partcad` entry; `--no-mcp` leaves
-every file untouched.
+registers the server already; see `MCP_NOT_WRITTEN`. `--no-mcp` leaves every file untouched.
 
 ### What a re-run does
 

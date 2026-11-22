@@ -164,3 +164,55 @@ def step_impl(context):
                 raise ValueError("'import.pub' key should not be present")
         except yaml.YAMLError as exc:
             raise ValueError(f"Error parsing YAML content: {exc}") from exc
+
+
+def _mcp_servers(context, filename):
+    """The servers an agent's MCP configuration lists, and its text."""
+    file_path = os.path.join(context.test_dir, filename)
+    assert os.path.isfile(file_path), f"File '{filename}' was not created"
+    with open(file_path, "r", encoding="utf-8") as file:
+        text = file.read()
+    return json.loads(text)["mcpServers"], text
+
+
+@then('there should be {count:d} MCP servers in "{filename}"')
+def step_impl(context, count, filename):
+    servers, _ = _mcp_servers(context, filename)
+    assert len(servers) == count, f"'{filename}' lists {sorted(servers)}"
+
+
+@then('the MCP server "{name}" in "{filename}" should serve "{root}"')
+def step_impl(context, name, filename, root):
+    """Which PartCAD root an entry `pc init` wrote serves, read the way its agent reads it.
+
+    `.mcp.json` says `pc mcp --root <root>`, relative to the folder holding the
+    file; `.cursor/mcp.json` says `-p ${workspaceFolder}/<root>`. Either way the
+    path is relative: the file is committed, and read on every machine that
+    checks it out.
+    """
+    servers, text = _mcp_servers(context, filename)
+    assert name in servers, f"'{filename}' has no '{name}' among {sorted(servers)}"
+    assert context.test_dir not in text, f"'{filename}' names a path only this machine has"
+
+    args = servers[name]["args"]
+    if "--root" in args:
+        served = args[args.index("--root") + 1]
+    else:
+        path = args[args.index("-p") + 1]
+        prefix = "${workspaceFolder}"
+        assert path.startswith(prefix), f"'{name}' serves {path!r}, which is not relative to the folder"
+        served = path[len(prefix) :].lstrip("/") or "."
+    assert served == root, f"'{name}' serves {served!r}, not {root!r}"
+
+
+@given('the editor extension says the window has "{folder}" open')
+def step_impl(context, folder):
+    """What the PartCAD extension sets on a terminal of that workspace folder (`PARTCAD_WORKSPACE_FOLDER`).
+
+    `folder` is relative to the scenario's directory, so `.` is the directory itself.
+    """
+    if not hasattr(context, "env"):
+        context.env = {}
+    path = os.path.normpath(os.path.join(context.test_dir, folder))
+    os.makedirs(path, exist_ok=True)
+    context.env["PARTCAD_WORKSPACE_FOLDER"] = path

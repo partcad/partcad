@@ -45,17 +45,59 @@ containerized plugins, is under :ref:`docker-image`.
 Setting up a client
 *******************
 
+What ``pc init`` writes
+=======================
+
+``pc init`` writes the server into the project configuration of each agent it installs for (see ``pc init`` in
+:doc:`/cli`), in the folder your editor or agent opens, since none of them reads it from anywhere else. Which
+folder that is, in order:
+
+* ``--editor-folder DIR``;
+* the folder the window has open, when ``pc init`` runs in a terminal of Visual Studio Code or the PartCAD IDE
+  with the PartCAD extension installed: the extension sets ``PARTCAD_WORKSPACE_FOLDER`` on the terminals of each
+  workspace folder, each to its own folder in a multi-root workspace. It is used only when the package is inside
+  that folder -- a terminal keeps it after it ``cd``\ s elsewhere. The IDE's first starter package and the
+  extension's *Init package* command are told the same;
+* the root of the git repository the package is in, or, outside a repository, its PartCAD root (the topmost
+  package above it).
+
+Without the extension nothing says which folder an editor has open -- a terminal's ``TERM_PROGRAM=vscode``
+names the editor, not the folder -- so ``pc init`` does not guess, and takes the repository's root.
+
+One ``pc mcp`` serves one PartCAD root, so there is one entry per root: ``partcad`` for the first, and
+``partcad-<path>`` for each other one in the same folder. A subpackage is served by its root's entry, and a folder
+set apart with a ``.pcignore`` is a root of its own. Running ``pc init`` again updates the entry already serving
+the root, under the name it has -- an agent keys its approvals by that name -- and removes PartCAD's entries for
+folders that are gone. ``pc init --skills-only``, run where there is no package, writes an entry for every root
+below the folder.
+
+Each entry names its root relative to the folder holding the file, because the file is committed. Cursor spells
+that folder ``${workspaceFolder}``. No other agent has a spelling for it, and the directory a server is started
+in is not always that folder either -- Claude Code reads the ``.mcp.json`` of every folder above the one it was
+started in, and starts the server in the one it was started in -- so their entries say ``pc mcp --root <path>``,
+relative to the folder holding the configuration that names it, which ``pc mcp`` finds by looking upwards from
+where it was started:
+
+.. code-block:: json
+
+  {
+    "mcpServers": {
+      "partcad": { "type": "stdio", "command": "pc", "args": ["mcp", "--root", "hw"] },
+      "partcad-tools-jigs": { "type": "stdio", "command": "pc", "args": ["mcp", "--root", "tools/jigs"] }
+    }
+  }
+
 Claude Code
 ===========
 
 The ``pc`` plugin (see :ref:`claude-plugin`) brings the server along with the skills, and
-``pc init`` adds it to the ``.mcp.json`` of the repository it sets up. Anywhere else:
+``pc init`` adds it to the ``.mcp.json`` of the folder it sets up. Anywhere else:
 
 .. code-block:: shell
 
   claude mcp add partcad -- pc mcp              # with PartCAD installed
   claude mcp add partcad -- uvx partcad mcp     # without
-  claude mcp add --scope project partcad -- pc -p packages/robot mcp
+  claude mcp add --scope project partcad -- pc mcp --root packages/robot
 
 Cursor
 ======
@@ -82,7 +124,8 @@ Visual Studio Code
 
 The PartCAD extension registers one server for every workspace folder that holds a ``partcad.yaml``, using the
 ``pc`` it found or downloaded -- there is nothing to configure, and ``pc init`` writes no ``.vscode/mcp.json``,
-which would be a second server under the same name. Without the extension, `install it with one click
+which would be a second server under the same name. Visual Studio Code also reads a ``.mcp.json`` at the root of
+each workspace folder, which is where ``pc init`` writes Claude Code's entry. Without the extension, `install it with one click
 <https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522partcad%2522%252C%2522type%2522%253A%2522stdio%2522%252C%2522command%2522%253A%2522pc%2522%252C%2522args%2522%253A%255B%2522-p%2522%252C%2522%2524%257BworkspaceFolder%257D%2522%252C%2522mcp%2522%255D%257D>`_,
 or put it in ``.vscode/mcp.json``:
 
@@ -112,14 +155,14 @@ Codex
 
 ``pc init --agents codex`` (or ``pc init`` in a repository that has a ``.codex``) adds a table to
 ``.codex/config.toml``, which Codex reads in a project you have marked trusted, and keeps every other line of
-the file as it was. Codex has no variable for the project's directory and starts servers in it, so the package
-is named relative to it:
+the file as it was. Codex has no variable for the project's directory, so the root is named relative to the
+folder holding the file:
 
 .. code-block:: toml
 
   [mcp_servers.partcad]
   command = "pc"
-  args = ["-p", ".", "mcp"]
+  args = ["mcp", "--root", "."]
 
 The same table in ``~/.codex/config.toml`` serves whichever directory Codex is started in, with ``args =
 ["mcp"]``.
@@ -135,7 +178,7 @@ as well as ``GEMINI.md``:
 
   {
     "mcpServers": {
-      "partcad": { "command": "pc", "args": ["-p", ".", "mcp"] }
+      "partcad": { "command": "pc", "args": ["mcp", "--root", "."] }
     },
     "context": { "fileName": ["AGENTS.md", "GEMINI.md"] }
   }
@@ -153,15 +196,15 @@ rewritten without them; add it by hand there:
 
   {
     "context_servers": {
-      "partcad": { "command": "pc", "args": ["-p", ".", "mcp"] }
+      "partcad": { "command": "pc", "args": ["mcp", "--root", "."] }
     }
   }
 
 Kiro
 ====
 
-``pc init --agents kiro`` adds it to ``.kiro/settings/mcp.json``, in the same shape as Cursor's but with a
-relative package, since Kiro has no variable for the project's directory.
+``pc init --agents kiro`` adds it to ``.kiro/settings/mcp.json``, in the same shape as Cursor's but with
+``pc mcp --root``, since Kiro has no variable for the project's directory.
 
 Devin Desktop (Windsurf)
 ========================
@@ -174,7 +217,7 @@ OpenCode
 
 ``pc init --agents opencode`` (or ``pc init`` in a repository with an ``opencode.json`` or an ``.opencode``) adds
 it to ``opencode.json`` -- or to the ``opencode.jsonc`` or ``.opencode/opencode.json`` the repository already
-has -- in the shape OpenCode 2 reads, with the package relative to the workspace, where OpenCode starts it:
+has -- in the shape OpenCode 2 reads, with the root relative to the folder holding the file:
 
 .. code-block:: json
 
@@ -182,12 +225,12 @@ has -- in the shape OpenCode 2 reads, with the package relative to the workspace
     "$schema": "https://opencode.ai/config.json",
     "mcp": {
       "servers": {
-        "partcad": { "type": "local", "command": ["pc", "-p", ".", "mcp"] }
+        "partcad": { "type": "local", "command": ["pc", "mcp", "--root", "."] }
       }
     }
   }
 
-A ``partcad`` entry directly under ``mcp``, the shape OpenCode 1 used and OpenCode 2 still migrates, is moved
+A PartCAD entry directly under ``mcp``, the shape OpenCode 1 used and OpenCode 2 still migrates, is moved
 under ``servers`` rather than left beside it.
 
 Claude Desktop

@@ -406,11 +406,19 @@ Package commands
   :ref:`pinning-dependencies`). With ``--offline``, or when the index cannot be reached, the package is still
   created, without the ``revision:`` line, and a warning says to run ``pc update``.
 
-  It also sets up the repository the package is in: a **Render** command in ``.vscode/launch.json``, and the
+  It also sets up the folder your editor opens: a **Render** command in ``.vscode/launch.json``, and the
   AI agent skills that teach a coding agent to drive PartCAD -- the ``pc`` plugin in
   ``.claude/skills/`` for Claude Code, and ``pc-``-prefixed skills in ``.cursor/skills/`` for Cursor. Both come
   out of the installed PartCAD, so they state the version that wrote them. Neither is a reason for the command
   to fail.
+
+  That folder is ``--editor-folder DIR`` when given -- a folder holding several repositories, or one inside a
+  repository, if that is what your editor or agent opens, since none of them reads these files from anywhere
+  else. Otherwise, in a terminal of Visual Studio Code or the PartCAD IDE with the PartCAD extension, the folder
+  that window has open (``PARTCAD_WORKSPACE_FOLDER``), when the package is inside it; otherwise the root of the
+  git repository the package is in, or, outside a repository, the package's PartCAD root (the topmost package
+  above it). ``pc -p <directory> init`` creates the package in that directory. Each package gets a **Render**
+  command of its own, the first one named ``Render`` and the others ``Render (<path>)``.
 
   ``--no-skills`` skips the skills. ``--skills-only`` installs *just* them and touches no package at all, which
   is how a repository that has a package already gets them, or gets a newer PartCAD's -- there is nothing to
@@ -419,10 +427,17 @@ Package commands
   does not know is an error, because a typo that installs nothing looks exactly like an agent that is not
   supported yet.
 
-  With the skills, each agent is also given the **MCP server**, ``pc mcp`` (see :doc:`/ai_agents/mcp`): a ``partcad``
-  entry in ``.mcp.json`` for Claude Code and in ``.cursor/mcp.json`` for Cursor, pointed at the package with
-  ``-p``. The other servers in those files are left as they are, and the ``partcad`` entry is rewritten each
-  time. ``--no-mcp`` leaves both files alone.
+  With the skills, each agent is also given the **MCP server**, ``pc mcp`` (see :doc:`/ai_agents/mcp`): an entry
+  in its project configuration -- ``.mcp.json`` for Claude Code (which Visual Studio Code reads as well),
+  ``.cursor/mcp.json`` for Cursor, ``.codex/config.toml`` for Codex, and so on. A server serves a whole PartCAD
+  root, so there is one entry per root: ``partcad`` for the first, ``partcad-<path>`` for each other one in the
+  same folder -- a subpackage is served by its root's entry, and a folder set apart with a ``.pcignore`` is a root
+  of its own. Each entry names its root relative to the folder holding the file, never as an absolute path, since
+  the file is committed. Run again, ``pc init`` updates the entry already serving the root, under the name it
+  has, and removes PartCAD's entries for folders that are gone; the other servers in those files are left as they
+  are. ``--skills-only`` run where there is no package gives every PartCAD root below the folder an entry.
+  ``--mcp-via docker`` has the agents start the PartCAD image rather than ``pc`` (see :ref:`docker-image`).
+  ``--no-mcp`` leaves the files alone.
 
   Installing again updates what is there and **removes the skills PartCAD has stopped shipping**: a retired
   skill left behind describes a CLI that has moved on, which is worse than no skill at all because the agent
@@ -1895,6 +1910,12 @@ Interacting with AI agents
 
   The agent may name files only inside the workspace unless ``--allow-path DIR`` (repeatable) or
   ``--allow-any-path`` says otherwise. :doc:`/ai_agents/mcp` lists the tools and how each MCP client is set up.
+
+  ``--root PATH`` is what ``pc init`` writes into an agent's configuration: the PartCAD root to serve, relative to
+  the folder holding the configuration that names it (``.mcp.json``, ``.codex/config.toml``, ...), which ``pc mcp``
+  finds by looking from the current directory upwards. Claude Code reads the ``.mcp.json`` of every folder above
+  the one it was started in, and starts the server in that one, so a path relative to the current directory would
+  be a different path in each.
 
 *****************
 Workflow commands
