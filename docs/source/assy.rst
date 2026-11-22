@@ -448,7 +448,8 @@ sets of points leave no room for the profile:
 * the path bends tighter than the profile's own radius, as when a `via` point is
   too close to an end;
 * the path comes back closer to itself than the profile's diameter;
-* two consecutive points coincide;
+* two of its points coincide, such as a `via` point on an end, even if they are
+  not next to each other;
 * the sweep does not come out as one valid solid.
 
 None of these has a solid, so the link is left out of the assembly. It is not

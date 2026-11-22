@@ -228,7 +228,7 @@ A part of a script type (`cadquery`, `build123d`) that declares a parameter name
 - **THEN** the build reports that the part type is not routed and does not declare a `route` parameter, and the link is left out
 
 ### Requirement: A route that cannot be built is an error, not a bad solid
-A routed part SHALL NOT be added to the assembly when its path cannot carry its profile. That is when two consecutive knots coincide, when the path bends tighter than the profile's outer radius, when two non-adjacent stretches of the path come closer than the profile's outer diameter, or when the sweep fails or yields anything but one valid solid. The build SHALL report the reason, where on the path it happens, and the values involved. `pc qual test` SHALL fail the assembly for it.
+A routed part SHALL NOT be added to the assembly when its path cannot carry its profile. That is when any two of its knots coincide, when the path bends tighter than the profile's outer radius, when two non-adjacent stretches of the path come closer than the profile's outer diameter, or when the sweep fails or yields anything but one valid solid. The build SHALL report the reason, where on the path it happens, and the values involved. `pc qual test` SHALL fail the assembly for it.
 
 #### Scenario: Bend tighter than the tube
 - **WHEN** a 6 mm tube's route has a `via` point 1 mm from an end, so that the path bends at a radius of 1.8 mm
