@@ -117,7 +117,8 @@ a CAD addon, documentation, or a PartCAD package incubated here until it has a r
   command it mirrors sends, plus one `execute` that reaches every method -- so a new daemon method is reachable
   without a new tool, and a tool cannot come to mean something its command does not. Failures are tool results
   with the daemon's log attached, never protocol errors, and the paths an agent names are confined to the
-  workspace unless `--allow-path` widens that. It is published four ways beyond the wheel (see "Packaging").
+  workspace unless `--allow-path` widens that. It is published five ways beyond the wheel and the image (see
+  "Packaging").
 
   All of it acts on **this machine**, from the process running out of it. A daemon can be remote, where
   "update PartCAD" would mean updating somebody else's installation and "stop the local daemons" somebody
@@ -749,16 +750,38 @@ and not in this tree.
 
 ### Packaging
 
-Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all four entry
+Seven artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all four entry
 points, with a `partcad-cli` shim published beside it from `dev-tools/shim/` so the older install instruction keeps
 working), the standalone PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those
 bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for the
-same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux bundle and is
-built but not published yet.
+same reason the wheel has one), the `pc` plugin for Claude Code, the snap, which wraps the Linux bundle and is
+built but not published yet, and the **PartCAD image**, `ghcr.io/partcad/partcad` (`tools/containers/partcad`).
 
-**The MCP server, `pc mcp`, is in the wheel and every bundle, and is published five more ways**, none of them an
-artifact of its own: `server.json` at the root is the **MCP Registry** entry (`io.github.partcad/partcad`, run as
-`uvx partcad mcp`), which `deploy.yml` publishes after the PyPI upload on `main`, signing in with GitHub's OIDC
+**The PartCAD image is PartCAD itself, for whoever would rather `docker run` it**, and not one of the
+`partcad-container-*` images beside it, which PartCAD pulls for itself: GHCR only, plain multi-architecture tags
+(`<version>`, `<major>.<minor>`, `latest`), and `partcad.app` so that `pc system prune` leaves it alone. It is the
+release's own wheel on the GStreamer flavour of the Python base, with micromamba on `PATH` -- so the sandbox it
+chooses is conda's, which provisions whatever Python a package asks for -- and OpenSCAD. With the host's Docker
+socket mounted, PartCAD in it starts its sandboxes, KiCad and plugin containers as siblings on the host's daemon,
+and **only in `upload` mode**, which the image sets: its installation is in its image layer, which no daemon can
+bind into a sandbox, so `mount` mode would pass the `docker` sandbox over without a word. Its entrypoint runs
+PartCAD as the owner of the working directory and adds the socket's group, because an MCP client starts it from a
+JSON file where `--user` and `--group-add` cannot be computed. Inside it `partcad_utils.app_image` says so, and three
+things change: `pc upgrade` refuses (pull instead), `pc init` writes `docker run ...` as the MCP server, and
+`pc healthcheck` advises the socket rather than an installation. `dev-tools/ci/build-partcad-image.sh` is the one
+way it is built -- by the "Container (PartCAD)" job in `test.yml` (gated on its own `app-image` subject, not on
+`images`), which then runs it through `dev-tools/ci/test-partcad-image.sh`, and by `publish-image` in
+`deploy.yml`, which rehearses on a version tag and publishes on `main` after the PyPI approval and before the
+MCP Registry. **Docker Hub only ever has it as `mcp/partcad`**, which Docker builds from this directory for its MCP
+Catalog (`tools/containers/partcad/docker-mcp-catalog/server.yaml`, at a release's commit, with no build arguments --
+hence the Dockerfile's self-contained defaults); never publish to the `partcad` namespace there, which is not
+PartCAD's. See `tools/containers/partcad/README.md`.
+
+**The MCP server, `pc mcp`, is in the wheel, every bundle and the image, and is published five more ways**, none of
+them an artifact of its own: `server.json` at the root is the **MCP Registry** entry (`io.github.partcad/partcad`,
+run as `uvx partcad mcp`, or as the image with the workspace mounted at `/workspace` -- whose label
+`io.modelcontextprotocol.server.name` is that image's ownership proof), which `deploy.yml` publishes after the
+PyPI upload and the image on `main`, signing in with GitHub's OIDC
 token -- no secret, because a workflow in a repository owned by `partcad` is what grants that namespace; the `pc`
 plugin carries it in `ai-agents/claude/.mcp.json`; the VS Code extension registers it with the editor
 (`ide/vscode/src/common/mcp.ts`); `pc init` writes it into each agent's project configuration in the repository it

@@ -30,6 +30,7 @@ other than the one the user's parts render on.
 
 from partcad import runtime as pc_runtime
 from partcad.user_config import user_config
+from partcad_utils import app_image
 
 from .tests import SEVERITY_WARNING, HealthCheckReport, HealthCheckTest
 
@@ -65,7 +66,19 @@ class DockerAvailableCheck(HealthCheckTest):
         # answer, and to a reader they are entirely different things.
         turned_off = not user_config.use_docker
 
-        if not enabled and not turned_off:
+        # In the PartCAD image, "install Docker" is the wrong advice: the host
+        # has one, and what is missing is the container being given it.
+        in_image = app_image.running_in_image()
+
+        if not enabled and not turned_off and in_image:
+            self.findings.append(
+                "This is the PartCAD image, and it was not given the host's Docker. Parts render in conda "
+                "inside the container without it, but an implementation that declares a container, a KiCad "
+                "PCB, and the 'docker' Python sandbox each need one and will fail. Add "
+                "'-v %s:%s' to 'docker run' to give it the host's -- which also gives the "
+                "container control of the host's Docker." % (app_image.DOCKER_SOCKET, app_image.DOCKER_SOCKET)
+            )
+        elif not enabled and not turned_off:
             self.findings.append(
                 "No container runtime is answering on this machine. PartCAD renders in conda or in a "
                 "virtual environment without one, but an implementation that declares a container, a "
@@ -75,7 +88,24 @@ class DockerAvailableCheck(HealthCheckTest):
                 "as none here, because every image PartCAD uses is a Linux image."
             )
 
+        # The image's own installation is in its image layer, which a daemon
+        # outside the container cannot bind into a sandbox -- so in there,
+        # containers have to be reached in 'upload' mode, and the image turns it
+        # on. Somebody who turned it back off has every container failing to
+        # find PartCAD's wrappers, and this is the one place that can say why.
+        if enabled and in_image and not user_config.use_docker_remote:
+            self.findings.append(
+                "This is the PartCAD image with the host's Docker, and 'useDockerRemote' is off: PartCAD would "
+                "bind its own files into containers, and this image's are not anywhere the host's Docker can "
+                "bind from. Leave PC_USE_DOCKER_REMOTE=true, as the image sets it."
+            )
+
         report = HealthCheckReport(self.name, self.findings)
+        if enabled and in_image:
+            report.debug(
+                "The PartCAD image, using the host's Docker; files reach containers %s"
+                % ("by upload" if user_config.use_docker_remote else "by bind mount")
+            )
         if turned_off:
             report.debug("Containers are turned off here ('useDocker'), so none was looked for")
         elif enabled:

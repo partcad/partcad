@@ -1,0 +1,62 @@
+# PartCAD's entry in Docker's MCP Catalog -- what Docker Desktop's MCP Toolkit
+# lists -- kept here and submitted as `servers/partcad/server.yaml` in a pull
+# request to https://github.com/docker/mcp-registry. Docker builds the image
+# from this repository and publishes it as `mcp/partcad` on Docker Hub, in its
+# own namespace. PartCAD publishes nothing to Docker Hub itself, and never under
+# `partcad` there. See "Docker's MCP Catalog" in `../README.md` for the
+# procedure.
+#
+# Docker builds `source.directory` at `source.commit` with a plain
+# `docker buildx build` and no build arguments, which is what the Dockerfile's
+# defaults are for: at a release's commit it installs that release from PyPI on
+# that release's base image. So `commit` is always a released one -- a commit on
+# `main` -- and never one of `devel`'s, whose version PyPI does not have yet.
+#
+# No Docker socket is passed: the catalog's containers run isolated, and the
+# CAD scripts an agent writes run in a conda sandbox inside this one. KiCad and
+# containerized plugins need the host's Docker, which is `docker run` by hand
+# ("Docker" in the installation documentation), not this entry.
+name: partcad
+image: mcp/partcad
+type: server
+meta:
+  # One of the categories `task create` offers in a checkout of docker/mcp-registry.
+  category: devops
+  tags:
+    - cad
+    - hardware
+    - 3d
+    - engineering
+about:
+  title: PartCAD
+  description: Inspect, render, test and export the parts and assemblies of PartCAD hardware packages
+  icon: https://github.com/partcad.png
+source:
+  project: https://github.com/partcad/partcad
+  # The release commit on `main` the catalog builds; Docker's bot proposes
+  # newer ones as pull requests to docker/mcp-registry.
+  commit: <the commit of the release on main>
+  directory: tools/containers/partcad
+run:
+  # `pc -p /workspace mcp`: the image hands an option to `pc`.
+  command:
+    - -p
+    - /workspace
+    - mcp
+  volumes:
+    - '{{partcad.workspace|volume-target}}:/workspace'
+    # The sandboxes and caches, kept between runs. Without it every session
+    # builds a CAD sandbox from nothing, which takes minutes.
+    - partcad-home:/home/pc/.partcad
+  # Not `disableNetwork`: the first render builds a conda sandbox, and a
+  # package's own requirements, from conda-forge and PyPI.
+config:
+  description: The PartCAD workspace the agent works in, mounted into the container at /workspace
+  parameters:
+    type: object
+    properties:
+      workspace:
+        type: string
+        description: The directory holding partcad.yaml, or a repository above it
+    required:
+      - workspace

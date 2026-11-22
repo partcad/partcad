@@ -64,7 +64,7 @@ import shutil
 from dataclasses import dataclass
 from typing import Optional
 
-from partcad_utils import agent_skills
+from partcad_utils import agent_skills, app_image
 
 from .. import __version__
 from .. import logging as pc_logging
@@ -498,29 +498,73 @@ MCP_NOT_WRITTEN = {
     "copilot": "the PartCAD extension registers it with VS Code; see 'Visual Studio Code' in the MCP documentation",
 }
 
+# How the project's directory is spelt when the server runs in the PartCAD image,
+# where it has to be an absolute path: Docker mounts it at the path it has on the
+# host. Cursor's variable is that already. Claude Code's `CLAUDE_PROJECT_DIR`
+# has a default of "." above, which a mount cannot take, so here it is the
+# environment Claude Code was started in -- the project it opened, whose
+# `.mcp.json` this is. Only these two: the other agents document no variable for
+# the project (their `McpConfig.project` is None) and name the package relative
+# to where they start the server, which a mount cannot take -- `install_mcp_config`
+# says so for each of them rather than write an entry that cannot start.
+MCP_DOCKER_PROJECT = {
+    "claude": "${PWD}",
+    "cursor": "${workspaceFolder}",
+}
 
-def mcp_server_entry(agent: str, root: str, package_dir: str) -> dict:
+# The two ways an agent's configuration can start the server: the `pc` this
+# machine has installed, or the PartCAD image (`partcad_utils.app_image`).
+MCP_VIA_PC = "pc"
+MCP_VIA_DOCKER = "docker"
+MCP_VIA = (MCP_VIA_PC, MCP_VIA_DOCKER)
+
+
+def default_mcp_via() -> str:
+    """`docker` where `pc init` runs in the PartCAD image, whose user has no `pc` outside it; `pc` elsewhere."""
+    return MCP_VIA_DOCKER if app_image.running_in_image() else MCP_VIA_PC
+
+
+def mcp_server_entry(agent: str, root: str, package_dir: str, via: str = MCP_VIA_PC) -> dict:
     """The configuration entry that starts `pc mcp` for the package in `package_dir`.
 
     `pc`, not an absolute path to it: the file is committed with the package and
     read on every machine that checks it out, where PartCAD is wherever that
     machine installed it.
+
+    With ``via`` set to `docker`, `docker run ... ghcr.io/partcad/partcad mcp`
+    instead, for the same reason one level up: what every machine that checks
+    the package out is then asked for is Docker, and the image comes along. The
+    image is named without a tag, so like `pc` it is whatever that machine last
+    pulled. No Docker socket is passed: that hands the container the host's
+    Docker, and is for a person to add knowingly (see "Docker" in the
+    installation documentation).
     """
+    if via not in MCP_VIA:
+        raise ValueError("unknown way to start the MCP server: %r (expected one of %s)" % (via, ", ".join(MCP_VIA)))
     config = MCP_CONFIGS[agent]
+    project = config.project
+    if via == MCP_VIA_DOCKER:
+        if agent not in MCP_DOCKER_PROJECT:
+            raise ValueError("%s's configuration cannot name the absolute directory Docker has to mount" % agent)
+        project = MCP_DOCKER_PROJECT[agent]
     relative = os.path.relpath(os.path.abspath(package_dir), os.path.abspath(root)).replace(os.sep, "/")
-    if config.project is None:
+    if project is None:
         path = relative
     else:
-        path = config.project if relative == os.curdir else config.project + "/" + relative
+        path = project if relative == os.curdir else project + "/" + relative
+    if via == MCP_VIA_DOCKER:
+        command = ["docker", *app_image.docker_run_args(project, "-p", path, "mcp")]
+    else:
+        command = ["pc", "-p", path, "mcp"]
     # Claude Code reads an entry with no "type" as stdio, and says so in its
     # documentation by always writing it out; OpenCode requires one, "local";
     # the others have no such field.
     if config.command_array:
-        return {**dict(config.extra), "command": ["pc", "-p", path, "mcp"]}
-    return {**dict(config.extra), "command": "pc", "args": ["-p", path, "mcp"]}
+        return {**dict(config.extra), "command": command}
+    return {**dict(config.extra), "command": command[0], "args": command[1:]}
 
 
-def install_mcp_config(agent: str, root: str, package_dir: str) -> bool:
+def install_mcp_config(agent: str, root: str, package_dir: str, via: str = MCP_VIA_PC) -> bool:
     """Add (or update) the `pc mcp` entry in `agent`'s project configuration under `root`.
 
     The file is merged into, never replaced: it is a list of servers, and the
@@ -531,11 +575,22 @@ def install_mcp_config(agent: str, root: str, package_dir: str) -> bool:
     `_writable_destination` gives.
     """
     config = MCP_CONFIGS[agent]
+    if via == MCP_VIA_DOCKER and agent not in MCP_DOCKER_PROJECT:
+        # Docker needs the project's directory as an absolute path to mount,
+        # and this agent's configuration has no way to spell one: it starts
+        # the server in the project and names it as '.', which a mount cannot
+        # take. Said rather than written as something that cannot start.
+        pc_logging.warning(
+            "Not adding the PartCAD MCP server for %s as 'docker run': its configuration cannot name the "
+            "project's directory, which Docker has to mount. Add it by hand (see 'Docker' in the installation "
+            "documentation), or run 'pc init --mcp-via pc' where PartCAD is installed" % AGENT_SPECS[agent].title
+        )
+        return False
     path = config.file(root)
     if os.path.islink(path):
         pc_logging.warning("Not adding the MCP server: '%s' is a symbolic link" % path)
         return False
-    entry = mcp_server_entry(agent, root, package_dir)
+    entry = mcp_server_entry(agent, root, package_dir, via)
     if config.toml:
         return _install_toml_server(path, config.key, entry)
 
@@ -773,7 +828,9 @@ def resolve_agents(names) -> tuple[list[str], list[str]]:
     return resolved, unknown
 
 
-def install_agent_skills(package_dir: str = ".", agents=None, mcp: bool = True, instructions: bool = True) -> bool:
+def install_agent_skills(
+    package_dir: str = ".", agents=None, mcp: bool = True, instructions: bool = True, mcp_via: Optional[str] = None
+) -> bool:
     """Install the skills for `agents`, beside the package in `package_dir`.
 
     The files go to the root of the git repository holding the package, because
@@ -790,6 +847,9 @@ def install_agent_skills(package_dir: str = ".", agents=None, mcp: bool = True, 
     configuration (see `install_mcp_config`): the skills say how to drive
     PartCAD, and the server is what an agent drives it through without a shell.
     `instructions` writes PartCAD's section of `AGENTS.md` (`install_instructions`).
+    `mcp_via` is how that entry starts it, `pc` or `docker` (see
+    `mcp_server_entry`); left out, `docker` inside the PartCAD image and `pc`
+    everywhere else.
 
     Returns True when anything was installed. Nothing here is a reason for
     `pc init` to fail -- the package is created either way -- so every failure
@@ -813,7 +873,8 @@ def install_agent_skills(package_dir: str = ".", agents=None, mcp: bool = True, 
             targets.append(AGENT_SPECS[agent].skills)
     installed = [SKILL_TARGETS[target][1](root) for target in targets]
     if mcp:
-        installed += [install_mcp_config(agent, root, package_dir) for agent in agents if agent in MCP_CONFIGS]
+        via = mcp_via or default_mcp_via()
+        installed += [install_mcp_config(agent, root, package_dir, via) for agent in agents if agent in MCP_CONFIGS]
     if instructions:
         installed.append(install_instructions(root, package_dir))
         if "gemini" in agents:

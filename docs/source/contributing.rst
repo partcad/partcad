@@ -1339,8 +1339,16 @@ published: the standalone bundles for every supported OS version, the IDE that c
 Claude Code plugin are all built first, and ``Publish to PyPI`` is deliberately blocked on every one of them, so
 that a release cannot exist with the wheels on it but not the bundles ``install.sh`` downloads. On ``main`` that
 job then enters the ``pypi`` environment, which has a **required reviewer** -- so it waits for a maintainer to
-approve it, however long that takes -- and the GitHub release, the VS Code Marketplace, the MCP Registry and the
-``plugin-dist`` branch are all published after it.
+approve it, however long that takes -- and the GitHub release, the VS Code Marketplace, the PartCAD image
+(``ghcr.io/partcad/partcad``), the MCP Registry and the ``plugin-dist`` branch are all published after it. The MCP
+Registry waits for the image as well, because its entry names the image's tag.
+
+.. note::
+
+  The first release to publish the image creates its package on GHCR, and GHCR creates a package private.
+  ``Publish the PartCAD image`` then fails at "Check that anybody can pull it", naming the package's settings
+  page, and the MCP Registry entry is held back with it. Make the package public there -- once -- and re-run the
+  failed jobs.
 
 So the version is released when that run has **finished**, not when ``main`` moved. Until then PyPI still has the
 previous one, and the run can also fail outright or sit unapproved indefinitely.

@@ -140,3 +140,31 @@ def test_the_rest_of_the_environment_is_carried_over(monkeypatch):
     """It is this process's environment plus one variable, not a replacement."""
     monkeypatch.setenv("PARTCAD_TEST_MARKER", "kept")
     assert pc_conda.bundled_command_env("/state/partcad")["PARTCAD_TEST_MARKER"] == "kept"
+
+
+def _on_path(monkeypatch, **found):
+    """A PATH holding exactly the named executables, at the given paths."""
+    monkeypatch.setattr(pc_conda.shutil, "which", lambda name: found.get(name))
+
+
+def test_a_micromamba_on_path_is_a_conda(monkeypatch):
+    """What the PartCAD image has, and what somebody who wanted no Miniforge has."""
+    monkeypatch.delattr(pc_conda.sys, "frozen", raising=False)
+    _on_path(monkeypatch, micromamba="/usr/local/bin/micromamba")
+    assert pc_conda.find_executable() == "/usr/local/bin/micromamba"
+
+
+def test_mamba_and_conda_come_before_micromamba(monkeypatch):
+    """An installation, with its channels and its cache, wins over a single executable."""
+    _on_path(monkeypatch, micromamba="/usr/local/bin/micromamba", conda="/opt/conda/bin/conda")
+    assert pc_conda.find_executable() == "/opt/conda/bin/conda"
+    _on_path(monkeypatch, micromamba="/usr/local/bin/micromamba", mamba="/opt/conda/bin/mamba")
+    assert pc_conda.find_executable() == "/opt/conda/bin/mamba"
+
+
+def test_a_host_micromamba_wins_over_the_bundled_one(bundle, monkeypatch):
+    """It is the host's, like any conda on PATH, and keeps its own root prefix."""
+    _make_payload(bundle)
+    _on_path(monkeypatch, micromamba="/usr/bin/micromamba")
+    assert pc_conda.find_executable() == "/usr/bin/micromamba"
+    assert not pc_conda.is_bundled("/usr/bin/micromamba")

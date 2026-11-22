@@ -616,6 +616,164 @@ jobs:
       id-token: write
     uses: ./.github/workflows/vsix-publish.yml
 
+  # The PartCAD image, "ghcr.io/partcad/partcad": PartCAD itself, for whoever
+  # would rather `docker run` it than install it -- the command line, `pc mcp`
+  # and the daemon, with conda and OpenSCAD (see "tools/containers/partcad").
+  # Built from the wheel this run built, which is the file uploaded to PyPI and
+  # not a second build of the source, on the GStreamer flavour of this
+  # release's Python base image, by "dev-tools/ci/build-partcad-image.sh" -- the
+  # same script the "Container (PartCAD)" job in "test.yml" builds and tests it
+  # with. Both architectures, as one manifest list under plain tags:
+  # "<version>", "<major>.<minor>" and "latest", because a person types these
+  # and the "-<arch>" suffix of the sandbox images is for PartCAD to append.
+  #
+  # On a version tag it is a rehearsal: both architectures are built and
+  # nothing is kept, so an image that no longer builds -- most likely the arm64
+  # half, which nothing else builds -- is found on "devel" and not on "main".
+  # On "main" it waits for "publish-to-pypi", and through it for the maintainer
+  # who approves the release, and pushes. The MCP Registry entry names this
+  # image's tag, so it is published after this.
+  #
+  # Never twice. A version tag that is already in the registry is left alone,
+  # so that a re-run of an older release cannot rebuild what was published --
+  # apt and pip resolve against the day they run -- or move "latest" backwards.
+  publish-image:
+    name: Publish the PartCAD image
+    needs:
+      - build
+      - publish-to-pypi
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    # One at a time across runs, for the reason "publish-plugin-dist" gives:
+    # "latest" and "<major>.<minor>" are overwritten, and two releases going
+    # out close together must not interleave their pushes. Not cancelled: a
+    # push stopped halfway is the thing to avoid.
+    concurrency:
+      group: publish-image
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/partcad/partcad
+      BASE_IMAGE: ghcr.io/partcad/partcad-container-python
+      PUBLISH: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist
+
+      - name: Which release this is
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^current_version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+            dev-tools/bumpversion.toml)"
+          if [ -z "${version}" ] || [ ! -f "dist/partcad-${version}-py3-none-any.whl" ]; then
+            echo "::error::dist holds no wheel of '${version}' -- this run mixed the artifacts of two builds"
+            ls -l dist
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "minor=${version%.*}" >> "${GITHUB_OUTPUT}"
+
+      - name: Is this version published already
+        id: published
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "${PUBLISH}" = "true" ] && docker buildx imagetools inspect "${IMAGE}:${VERSION}" >/dev/null 2>&1; then
+            echo "::notice::${IMAGE}:${VERSION} is published already, and is left as it is."
+            echo "already=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "already=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      # The base is published by the version bump's own run of "test.yml"
+      # ("Build Docker Containers"), which on a tag runs beside this workflow
+      # rather than before it. On "main" it was published long ago.
+      - name: Wait for this release's base image
+        if: steps.published.outputs.already != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            ref="${BASE_IMAGE}:${VERSION}-py3.11-gstreamer-${arch}"
+            for _ in $(seq 1 90); do
+              if docker buildx imagetools inspect "${ref}" >/dev/null 2>&1; then
+                echo "${ref} is there"
+                continue 2
+              fi
+              sleep 60
+            done
+            echo "::error::${ref} was not published within ninety minutes; see the version bump's run of CI"
+            exit 1
+          done
+
+      - name: Set up QEMU
+        if: steps.published.outputs.already != 'true'
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
+        with:
+          platforms: arm64
+      - name: Set up Docker Buildx
+        if: steps.published.outputs.already != 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - name: Login to GitHub Container Registry
+        if: steps.published.outputs.already != 'true' && env.PUBLISH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the image, and on "main" publish it
+        if: steps.published.outputs.already != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          MINOR: ${{ steps.version.outputs.minor }}
+        run: |
+          set -euo pipefail
+          PC_IMAGE_REFS="${IMAGE}:${VERSION} ${IMAGE}:${MINOR} ${IMAGE}:latest" \
+          PC_WHEELS_DIR=dist \
+          PC_PARTCAD_VERSION="${VERSION}" \
+          PC_BASE_IMAGE="${BASE_IMAGE}" \
+          PC_BASE_TAG="${VERSION}-py3.11-gstreamer" \
+          PC_PLATFORMS=linux/amd64,linux/arm64 \
+          PC_PUSH="$([ "${PUBLISH}" = "true" ] && echo true || echo none)" \
+            dev-tools/ci/build-partcad-image.sh
+
+      # Pulled the way somebody without credentials pulls it, because that is
+      # who it is for -- and the MCP Registry, which reads its label to decide
+      # the image is ours. A package GHCR has never seen before is created
+      # private, and nothing about the push says so: this is where it is found,
+      # before the registry entry naming it is published.
+      - name: Check that anybody can pull it
+        if: env.PUBLISH == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          if ! manifest="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" 2>&1)"; then
+            echo "::error::${IMAGE}:${VERSION} cannot be pulled without credentials. Make the package public:"
+            echo "::error::https://github.com/orgs/partcad/packages/container/partcad/settings"
+            echo "${manifest}"
+            exit 1
+          fi
+          echo "${manifest}"
+          for platform in linux/amd64 linux/arm64; do
+            echo "${manifest}" | grep -q "Platform:[[:space:]]*${platform}$" || {
+              echo "::error::${IMAGE}:${VERSION} has no ${platform} image"
+              exit 1
+            }
+          done
+
   # The MCP Registry entry (registry.modelcontextprotocol.io): `server.json` at
   # the root of this repository, which names the `partcad` wheel just uploaded
   # and `pc mcp` as the way to run it, so that an MCP client installs PartCAD's
@@ -630,7 +788,11 @@ jobs:
   # again, which is why a re-run of an older release finds it there and stops.
   publish-mcp-registry:
     name: Publish to the MCP Registry
-    needs: publish-to-pypi
+    # The image too: server.json names it beside the wheel, and the registry
+    # refuses an entry whose image it cannot read the label of.
+    needs:
+      - publish-to-pypi
+      - publish-image
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
@@ -664,7 +826,11 @@ jobs:
           python3 - "${version}" <<'EOF'
           import json, sys
           server = json.load(open("server.json"))
-          versions = {server["version"], *(package["version"] for package in server["packages"])}
+          # An image names its release in its tag, and has no "version" field.
+          versions = {server["version"]} | {
+              package["identifier"].rpartition(":")[2] if package["registryType"] == "oci" else package["version"]
+              for package in server["packages"]
+          }
           if versions != {sys.argv[1]}:
               sys.exit("::error::server.json names %s, and this release is %s" % (sorted(versions), sys.argv[1]))
           EOF
