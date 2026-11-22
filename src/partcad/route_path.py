@@ -447,28 +447,36 @@ def canonical_stops(stops: Sequence[Stop]) -> List[Stop]:
 
 
 def canonical_json(stops: Sequence[Stop], step: float = DEFAULT_STEP) -> str:
-    """The route as the JSON a routed part is given (D5): the stops in order, the
-    knots' sample indices and the sampled path with its frames, every number
-    rounded to 1e-6 mm and every key sorted, so that equal routes are
-    byte-identical and an unchanged route keeps its cache key."""
+    """The route as the JSON a routed part is given (D5), every number rounded to
+    1e-6 mm and every key sorted, so that equal routes are byte-identical and an
+    unchanged route keeps its cache key.
+
+    'ends' mirrors the YAML (D12): each end's frame and lead, and the 'via'
+    points passed on the way to it. 'path' is the sampled centreline: 'points',
+    the tangent 'z' and the profile's 'x' axis at each, the sample index of each
+    knot in 'knots', and the 'length'.
+    """
     stops = canonical_stops(stops)
     path = RoutePath(stops, step)
+    ends = []
+    via = []
+    for stop in stops:
+        if isinstance(stop, EndFrame):
+            end = stop.as_dict()
+            end["via"] = via
+            ends.append(end)
+            via = []
+        else:
+            via.append(list(stop))
     document = {
-        "stops": [
-            (
-                dict(
-                    {"kind": "end"},
-                    **{k: (_round_vec(v) if isinstance(v, list) else _round(v)) for k, v in s.as_dict().items()},
-                )
-                if isinstance(s, EndFrame)
-                else {"kind": "via", "point": _round_vec(s)}
-            )
-            for s in stops
-        ],
-        "knots": path.knot_samples,
-        "length": _round(path.length),
-        "path": [_round_vec(p) for p in path.points],
-        "x": [_round_vec(frame[0]) for frame in path.frames],
+        "ends": ends,
+        "path": {
+            "points": [_round_vec(p) for p in path.points],
+            "z": [_round_vec(frame[2]) for frame in path.frames],
+            "x": [_round_vec(frame[0]) for frame in path.frames],
+            "knots": path.knot_samples,
+            "length": _round(path.length),
+        },
     }
     return json.dumps(document, sort_keys=True, separators=(",", ":"))
 

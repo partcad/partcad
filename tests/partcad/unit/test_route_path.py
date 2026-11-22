@@ -9,6 +9,7 @@
 'pc qual test' go by, so it is tested here against shapes whose answer is known.
 """
 
+import json
 import math
 
 import pytest
@@ -160,12 +161,28 @@ def test_jitter_below_the_rounding_does_not():
 
 def test_the_canonical_form_is_sorted_and_rounded():
     text = canonical_json(_route())
-    assert text.startswith('{"knots":')
+    assert text.startswith('{"ends":')
     assert "-0.0," not in text and "-0.0]" not in text
-    import json
-
     document = json.loads(text)
-    assert [stop["kind"] for stop in document["stops"]] == ["end", "via", "end"]
-    for point in document["path"]:
+    for point in document["path"]["points"]:
         for value in point:
             assert round(value, 6) == value
+
+
+def test_each_end_carries_the_via_points_on_the_way_to_it():
+    """The JSON mirrors the YAML (D12): 'via' is listed on the end it leads to."""
+    grommet = EndFrame((50, 0, 50), (1, 0, 0))
+    stops = [
+        EndFrame((0, 0, 0), (0, 0, 1)),
+        (10, 5, 30),
+        grommet,
+        (70, -5, 40),
+        (90, 0, 20),
+        EndFrame((100, 0, 0), (0, 0, 1)),
+    ]
+    document = json.loads(canonical_json(stops))
+    assert [end["via"] for end in document["ends"]] == [[], [[10, 5, 30]], [[70, -5, 40], [90, 0, 20]]]
+    assert document["ends"][1]["origin"] == [50, 0, 50]
+    path = document["path"]
+    assert len(path["points"]) == len(path["z"]) == len(path["x"])
+    assert [path["points"][k] for k in path["knots"]][2] == [50, 0, 50]
