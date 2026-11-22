@@ -26,11 +26,17 @@ with their ports by Jinja variables shared between the route and the ports.
   (a plug, a ferrule, a fitting), is a part of its own, and the route ends at its
   cable-exit port. None is required: a route can end straight at any port.
 - New ASSY placement section `route:` for a part link, as an alternative to
-  `location:`, `connect:` and `connectPorts:`. It lists two or more `ends`, each an
-  ordinary `connectPorts:` or `connect:` section with an optional straight `lead`,
-  and optional `via` waypoints in the assembly frame. The first or last end may
-  instead be free, a `location:` where the cable just ends, for hoses and cords
-  connected at one end only.
+  `location:`, `connect:` and `connectPorts:`. It lists its two `ends` and,
+  optionally, the ports it passes `through` (a grommet, a clip), each an ordinary
+  `connectPorts:` or `connect:` section with an optional straight `lead` and
+  optional `via` waypoints, in the assembly frame, for the stretch leading to it.
+  Either end may instead be free, a `location:` where the cable just ends, for
+  hoses and cords connected at one end only.
+- A flat or keyed profile meets every port it reaches turned the way that port
+  is, the roll spread evenly along the path.
+- `pc qual test`'s interference check covers routed parts, with each route end
+  and port passed through counted as a joint, so a cable sent through a part by a
+  misplaced waypoint fails it.
 - A route whose path cannot carry the profile is refused, with the position and
   the reason, instead of yielding a self-intersecting solid. That covers a bend
   tighter than the profile, a path that crosses itself, coincident points, and a

@@ -17,7 +17,7 @@ A part declared with `type: routed` SHALL be a profile swept along the path of t
 
 #### Scenario: Sketch profile
 - **WHEN** a part declares `type: routed` and `sketch: flat-cable-section`
-- **THEN** the sketch is swept along the route, in the plane normal to the path at the first end, with the sketch's X axis along that end's X axis
+- **THEN** the sketch is swept along the route, in the plane normal to the path, with its X axis along the first end's X axis there, and along the X axis of each `through` entry and of the second end where the path reaches them, the roll between them spread evenly along the path
 
 #### Scenario: Both or neither profile
 - **WHEN** a part declares `type: routed` with both `diameter` and `sketch`, or with neither
@@ -58,7 +58,7 @@ A routed part's solid SHALL be the swept profile only: no geometry SHALL be adde
 - **THEN** the routed solid ends at the end face, and nothing is drawn between it and the target port
 
 ### Requirement: Route placement
-An ASSY part link SHALL accept a `route:` section whose `ends` list two or more ends, each a connection or a free end (see "Free ends"). A connection is a `connectPorts:` or a `connect:` section with the fields that name the two sides, with their usual meaning, and an optional `lead`. A `route:` SHALL NOT be combined with `location:`, `connect:` or `connectPorts:` on the same link.
+An ASSY part link SHALL accept a `route:` section whose `ends` list exactly two ends, each a connection or a free end (see "Free ends"), and whose optional `through` lists the connections the route passes through between them. A connection is a `connectPorts:` or a `connect:` section with the fields that name the two sides, with their usual meaning, and an optional `lead`. A `route:` SHALL NOT be combined with `location:`, `connect:` or `connectPorts:` on the same link.
 
 #### Scenario: Ends by port
 - **WHEN** a routed link has `ends: [{connectPorts: {name: pump, to: outlet}}, {connectPorts: {name: reactor, to: inlet}}]`
@@ -68,8 +68,12 @@ An ASSY part link SHALL accept a `route:` section whose `ends` list two or more 
 - **WHEN** a routed tube implements `push-fit-6mm-tube`, and an end is `{connect: {with: push-fit-6mm-tube, name: manifold, to: push-fit-6mm}}`
 - **THEN** that end is resolved by the interfaces and the mating between them, as a `connect:` would resolve it
 
+#### Scenario: Not two ends
+- **WHEN** a route's `ends` lists one end, or three
+- **THEN** schema validation and `pc lint` report it, saying that ports passed through go in `through`, and the build reports it and leaves the link out
+
 #### Scenario: Fields that make no sense for an end
-- **WHEN** an end's section gives `how`, `motion`, `physics`, `joint`, `exploded` or `interferes`
+- **WHEN** an end's or a `through` entry's section gives `how`, `motion`, `physics`, `joint`, `exploded` or `interferes`
 - **THEN** schema validation and `pc lint` report the field, and the build ignores it
 
 #### Scenario: Placement stated twice
@@ -77,7 +81,7 @@ An ASSY part link SHALL accept a `route:` section whose `ends` list two or more 
 - **THEN** schema validation and `pc lint` report the conflict, and the build reports it and ignores the `route:`
 
 ### Requirement: The routed part's side of a connection
-A connection end that omits the routed part's side (`with`) SHALL be connected as if by a port at the end frame's origin, unturned. Only the first and the last end MAY give `with`, and it SHALL name a port or an interface the part declares.
+A connection end that omits the routed part's side (`with`) SHALL be connected as if by a port at the end frame's origin, unturned. Only an end MAY give `with`, not a `through` entry, and it SHALL name a port or an interface the part declares.
 
 #### Scenario: Plain tube names no port
 - **WHEN** a routed part declares no ports, and neither end of its route gives `with`
@@ -110,35 +114,54 @@ Each end's frame SHALL be the placement the routed part would get if that end's 
 - **WHEN** an end connects by interfaces whose mating keeps a rotation free
 - **THEN** the end frame is taken at the rotation's default, and no joint is added to the assembly
 
-### Requirement: Leads, intermediate ends and waypoints
-An end MAY give `lead`, a straight length in millimetres that the path runs along the end's axis before it bends. A route with more than two ends SHALL pass through each intermediate end in order, along that end frame's Z axis. A route MAY list `via` points in the frame of its `links:` list, and the path SHALL pass through each of them, in order.
+### Requirement: Leads and ports passed through
+An end or a `through` entry MAY give `lead`, a straight length in millimetres that the path runs along its axis before it bends. The path SHALL pass through each `through` entry in order, from the first end towards the second, along the Z axis of that entry's frame.
 
 #### Scenario: Straight lead
 - **WHEN** an end gives `lead: 10`
 - **THEN** the first 10 mm of the path from that end lie on the end's axis
 
 #### Scenario: Cable through a grommet
-- **WHEN** a route lists three ends: a connector, `{connectPorts: {name: panel, to: grommet}}`, and a sensor
-- **THEN** the path passes through the grommet's port along its axis, between the other two ends
+- **WHEN** a route's ends are a connector and a sensor, and its `through` is `[{connectPorts: {name: panel, to: grommet}}]`
+- **THEN** the path passes through the grommet's port along its axis, between the two ends
 
-#### Scenario: Side named on an intermediate end
-- **WHEN** an intermediate end gives `with`
+#### Scenario: Two ports passed through
+- **WHEN** a route's `through` lists a grommet and then a clip
+- **THEN** the path passes through the grommet, then the clip, then reaches the second end
+
+#### Scenario: Side named on a port passed through
+- **WHEN** a `through` entry gives `with`
 - **THEN** schema validation and `pc lint` report the end, and the build reports it and leaves the link out
+
+### Requirement: Waypoints
+Each `through` entry and the second end MAY list `via` points, in the frame of the route's `links:` list: the points the path SHALL pass through, in order, on its way to that entry from the one before it. The first end SHALL NOT give `via`. A route without `through` MAY give `via` on the route instead, meaning the same as `via` on its second end. A route SHALL NOT give both, and a route with `through` SHALL NOT give a route-level `via`.
 
 #### Scenario: Waypoints
 - **WHEN** a two-ended route gives `via: [[0, 0, 120], [40, 0, 120]]`
-- **THEN** the path passes through both points, in the order listed
+- **THEN** the path passes through both points, in the order listed, exactly as when its second end gives that `via`
+
+#### Scenario: Waypoints on each stretch
+- **WHEN** a route's ends are a sensor and a board that gives `via: [B]`, and its `through` is a grommet that gives `via: [A]`
+- **THEN** the path passes through A between the sensor and the grommet, and through B between the grommet and the board
+
+#### Scenario: Several waypoints on several stretches
+- **WHEN** a route's `through` lists a grommet with `via: [A1, A2]` and a clip with `via: [C]`, and its second end gives `via: [B1, B2]`
+- **THEN** the path passes A1, A2, the grommet, C, the clip, B1, B2 and the second end, in that order
+
+#### Scenario: Waypoints in the wrong place
+- **WHEN** the first end gives `via`, or a route with `through` gives a route-level `via`, or a route gives `via` both on the route and on its second end
+- **THEN** schema validation and `pc lint` report it, and the build reports it and leaves the link out
 
 ### Requirement: Free ends
-The first or the last end of a route MAY be a free end: `location:`, in the OCCT location syntax of a link, giving the end frame directly in the frame of the route's `links:` list, instead of a connection. A free end MAY give `lead` and SHALL NOT give `with`. At least one end of a route SHALL be a connection, and an intermediate end SHALL NOT be free.
+Either end of a route MAY be a free end: `location:`, in the OCCT location syntax of a link, giving the end frame directly in the frame of the route's `links:` list, instead of a connection. A free end MAY give `lead` and SHALL NOT give `with`. At least one end of a route SHALL be a connection, and a `through` entry SHALL NOT be free.
 
 #### Scenario: Hose with a free end
 - **WHEN** a route's ends are `{connectPorts: {name: pump, to: drain}}` and `{location: [[300, 0, 40], [0, 0, 1], 0]}`
 - **THEN** the path runs from the pump's `drain` port and ends with its end face at (300, 0, 40), the hose above it, arriving downwards, against that frame's +Z, which points into the hose
 
 #### Scenario: Free end with waypoints and a grommet
-- **WHEN** a route's ends are a connection, an intermediate connection to a grommet, and a free end, and the route gives `via` points
-- **THEN** the path passes through the grommet and every `via` point, in order, and ends at the free end
+- **WHEN** a route's ends are a connection and a free end, its `through` is a grommet, and the grommet and the free end give `via` points
+- **THEN** the path passes through the grommet and every `via` point, each on its stretch, and ends at the free end
 
 #### Scenario: Free end stays put
 - **WHEN** the link at the connected end of a one-ended route is moved and the assembly is rebuilt
@@ -148,12 +171,12 @@ The first or the last end of a route MAY be a free end: `location:`, in the OCCT
 - **WHEN** every end of a route is free
 - **THEN** schema validation, `pc lint` and the build report that a route needs at least one connected end (a shape with a fixed path is a `sweep`), and the link is left out
 
-#### Scenario: Free intermediate end, or a free end that also connects
-- **WHEN** an intermediate end gives `location:`, or one end gives both `location:` and `connectPorts:` or `connect:`, or a free end gives `with`
+#### Scenario: Free port passed through, or a free end that also connects
+- **WHEN** a `through` entry gives `location:`, or one end gives both `location:` and `connectPorts:` or `connect:`, or a free end gives `with`
 - **THEN** schema validation and `pc lint` report the end, and the build reports it and leaves the link out
 
 ### Requirement: Ends reach ports through the assembly tree
-An end's `name` SHALL be a link of the route's own `links:` list, or a path that starts at such a link and descends through the links of the sub-assemblies it places, separated by `/`. An end SHALL resolve whether its link is listed before or after the route.
+The `name` of an end or a `through` entry SHALL be a link of the route's own `links:` list, or a path that starts at such a link and descends through the links of the sub-assemblies it places, separated by `/`. An end SHALL resolve whether its link is listed before or after the route.
 
 #### Scenario: Port inside a sub-assembly
 - **WHEN** the top assembly places `reactor` (an assembly with a link `core`), and an end is `{connectPorts: {name: reactor/core, to: probe}}`
@@ -179,14 +202,14 @@ A routed part SHALL be built after every other link of its `links:` list has bee
 - **THEN** the routed part comes from the cache rather than being rebuilt
 
 ### Requirement: Routed parts cannot be connection targets
-No other link SHALL be placed against a routed link by `connect:`, `connectPorts:`, `alsoConnectPorts:` or a route end.
+No other link SHALL be placed against a routed link by `connect:`, `connectPorts:`, `alsoConnectPorts:`, or another route's end or `through` entry.
 
 #### Scenario: Connecting to a routed link
 - **WHEN** a link's `connectPorts:` names a link that is placed by `route:`
 - **THEN** the build refuses the connection, with a message saying that a routed link cannot be connected to
 
 ### Requirement: Script parts can be routed
-A part of a script type (`cadquery`, `build123d`) that declares a parameter named `route` of type `string` SHALL be placeable with `route:`. The parameter SHALL then be given the route as JSON: each end's frame (origin, Z and X axes) and `lead`, and the `via` points, in the frame of the route's `links:` list. Its ends are connected as a routed part's are. Placing a part with `route:` when it is neither `routed` nor declares that parameter SHALL be reported as an error.
+A part of a script type (`cadquery`, `build123d`) that declares a parameter named `route` of type `string` SHALL be placeable with `route:`. The parameter SHALL then be given the route as JSON, in the frame of the route's `links:` list: the frame, `lead` and `via` points of each end and `through` entry, and the sampled path. Its ends are connected as a routed part's are. Placing a part with `route:` when it is neither `routed` nor declares that parameter SHALL be reported as an error.
 
 #### Scenario: Script receives the ends
 - **WHEN** a build123d part declares `parameters: {route: {type: string}}` and is placed with a two-ended `route:`
@@ -201,7 +224,7 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 
 #### Scenario: Bend tighter than the tube
 - **WHEN** a 6 mm tube's route has a `via` point 1 mm from an end, so that the path bends at a radius of 1.8 mm
-- **THEN** the routed link is left out, and the build reports a bend radius of 1.8 mm at the given point against the tube's 3 mm radius, suggesting a `lead` or moving the `via` point
+- **THEN** the routed link is left out, and the build reports a bend radius of 1.8 mm at the given point against the tube's 3 mm radius, suggesting moving the `via` point
 
 #### Scenario: Path crossing itself
 - **WHEN** `via` points make the path loop back through itself
@@ -214,6 +237,25 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 #### Scenario: Sweep yields an invalid solid
 - **WHEN** a sketch profile's sweep along an otherwise acceptable path produces a shape that OCCT rejects as invalid, or that is not one solid
 - **THEN** the routed link is left out and the build reports the defect, rather than adding the shape with a warning
+
+### Requirement: Routes are checked for interference
+`pc qual test`'s interference check SHALL cover routed parts. Each end and `through` entry SHALL count as a joint between the routed part and the part it connects to, so an overlap there SHALL be expected only where that joint's ports, interfaces or mating declare it, as for a connected part. Anywhere else, a routed part that shares space with another part SHALL fail the check, naming both.
+
+#### Scenario: Waypoint on the wrong stretch
+- **WHEN** a cable's `via` point meant for the stretch before a panel's grommet is listed on the second end instead, so that the path goes back through the panel
+- **THEN** `pc qual test` fails the assembly with an interference naming the cable and the panel
+
+#### Scenario: Waypoint on the right stretch
+- **WHEN** the same `via` point is listed on the grommet
+- **THEN** no interference is reported
+
+#### Scenario: Tube pushed over a barb
+- **WHEN** a tube's end overlaps the barb it is pushed onto, and the barb port declares `snapIn`
+- **THEN** no interference is reported for that end
+
+#### Scenario: Cable resting against a part
+- **WHEN** a cable's path touches a part's surface without entering it
+- **THEN** no interference is reported
 
 ### Requirement: Length and bend radius are checked
 When a routed part declares `length`, `pc qual test` SHALL fail the assembly if the route's centreline is longer than that length. The centreline runs from the first end face to the last, so it includes leads but not port offsets. When it declares `minBendRadius`, `pc qual test` SHALL fail the assembly if the tightest bend of the centreline has a smaller radius. Either failure SHALL state the measured and the declared value. The route SHALL NOT be reshaped to meet either limit.

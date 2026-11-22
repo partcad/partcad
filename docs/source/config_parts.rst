@@ -1097,10 +1097,12 @@ Declare ports and interfaces, in the end frame, only for ends that differ:
 Ports and interfaces cannot depend on the route, because the ends have to be
 known before the route can be.
 
-**Sketch profiles** are swept in the plane normal to the path at the first end,
-with the sketch's X axis along that end's X axis. A flat cable keeps that
-orientation along the route, and does not twist. Its roll at the last end is not
-controlled.
+**Sketch profiles** are swept in the plane normal to the path, with the sketch's
+X axis along the X axis of each port the route reaches: both ends, and every
+port it passes `through`. Between two of them, the profile rolls evenly along the
+path, the short way round, so a flat cable arrives at each connector turned the
+way the connector is. Declare the ports' X axes accordingly. A round tube shows
+none of this.
 
 **Limits.** ``length`` and ``minBendRadius`` describe the real cable, and
 :doc:`pc qual test </digital_thread/lifecycle/qualification_tests>` fails an assembly whose route needs more
@@ -1137,9 +1139,12 @@ same way a routed part's are:
   import json
 
   route = json.loads(route)
-  # route["ends"]: [{"origin": [x, y, z], "z": [...], "x": [...], "lead": mm}, ...]
-  # route["via"]:  [[x, y, z], ...]
-  # route["path"]: {"points": [...], "tangents": [...], "length": mm}
+  # route["ends"]:    [first, second], each {"origin": [x, y, z], "z": [...], "x": [...], "lead": mm}
+  # route["through"]: [{...the same...}, ...]   # the ports passed through, in order
+  # Each 'through' entry and the second end also has "via": [[x, y, z], ...],
+  # the points passed on the way to it.
+  # route["path"]: {"points": [[x, y, z], ...], "z": [...], "x": [...],
+  #                 "knots": [sample index, ...], "length": mm}
   # All of it in the frame of the assembly's 'links:' list that places the part.
 
 **Routed or sweep?** Use ``sweep`` for a shape with a fixed path: a bent rod, a

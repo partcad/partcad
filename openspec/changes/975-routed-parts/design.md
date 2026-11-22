@@ -38,7 +38,7 @@ the assembly works out the path:
 | Frame | The part's own frame. Placed afterwards | The frame of its `links:` list. The geometry *is* the placement |
 | Ends move | The axis has to be edited by hand | Rerouted on the next build |
 | End directions | Uncontrolled | Whatever the end's connection makes them, exactly as for a part placed there |
-| Profile | A sketch, used as drawn at the origin. `MakePipe` per face | A round section or a sketch, placed in the first end's frame. `MakePipeShell`, corrected Frenet |
+| Profile | A sketch, used as drawn at the origin. `MakePipe` per face | A round section or a sketch, placed in the first end's frame and rolled to meet each port's X axis. `MakePipeShell` along the computed frames |
 | Built | With the other parts, before placement | In a second pass, after its list is placed |
 | One part, many links | Same geometry each time | A different geometry per link, cached per route |
 | A path that cannot carry the profile | `MakePipe` raising is a part error. A self-intersecting result goes through, with at most a warning (the `validity` check only reports) | Refused before sweeping, and an invalid result is an error (D9) |
@@ -73,7 +73,6 @@ The route pass is the first to build a part there, so:
 - Branching routes (a Y-splitter).
 - Links placed against a routed part, and joints at route ends.
 - Ends that reach up out of the assembly being built.
-- Control of the profile's roll at the last end (v1 sets it at the first end only).
 
 ## Decisions
 
@@ -123,18 +122,18 @@ one of them: it is a part of its own (D11).
 **Decision.** Routed parts, and script parts that declare `route`, get no ports
 they did not declare. Every end may omit `with`, and is then connected as if by a
 port at the end frame's origin, unturned. `with` names a declared port or
-interface. Intermediate ends never give it.
+interface. `through` entries never give it.
 
 **Why.** An earlier draft gave every port-less routed part two default ports,
 `start` and `end`, both at the end frame's origin:
 - for a plain tube they are one port under two names, and say nothing;
-- the order of `ends` already says which end is first;
+- the order of `ends` already says which end is which;
 - the cables whose ends really differ (a push-fit end that mates by interface, an
   offset on one side, a port turned the other way round) declare their own ports
   anyway.
 
 So the defaults only made every end say `with: start` or `with: end` for nothing,
-and made intermediate ends an exception.
+and made the ports passed through an exception.
 
 **Consequences.**
 - A plain tube's route names no cable ports at all.
@@ -182,20 +181,47 @@ Errors list the names available at the level that failed.
 the hand-written plumbing the issue wants removed.
 
 ### D4. Path = cubic Hermite spline in a new `route_path.py`
-The knots, in order, are: each end's origin, its lead point (origin + lead·Z),
-and the `via` points. The tangent at an end is its Z axis (reversed at the last
-end, so the path arrives along it). At a `via` point it is the Catmull-Rom
-tangent. Tangent magnitudes are the chord length, which avoids loops. The module
-returns a dense sample (points, tangents and frames transported from the first
-end's X axis), the arc length (adaptive Simpson), the minimum radius of curvature
-and where it occurs, and the closest approach between non-adjacent stretches.
+The knots, in order, are: each end's and `through` entry's origin, its lead
+point (origin + lead·Z), and the `via` points. The tangent at an end is its Z
+axis (reversed at the second end, so the path arrives along it). At a `via` point
+it is the Catmull-Rom tangent. At a `through` entry it is whichever sign of Z
+points on along the route. Both tangents of a segment get the chord length times 1/cos²(a/2), where
+a is the mean angle between the tangents and the chord, capped at 2×. That is the
+length a cubic needs to follow a circular arc, so points on a circle give that
+circle's radius (to under 1 %). A segment whose tangents lie along its chord, a
+lead, stays straight. With plain chord-length magnitudes a quarter circle measured
+37 % tighter than it is, which would refuse routes that are fine. The module
+returns a dense sample (points, tangents and frames: see "Roll" below), the arc length (Simpson over the sample
+intervals), the minimum radius of curvature and where it occurs, and the closest
+approach between stretches. A pair of samples counts towards the closest approach
+when the second is the nearest of its neighbours to the first, and they are
+further apart along the path than the threshold. A straight route never
+approaches itself; a hairpin approaches itself by its gap.
+
+`route_path` takes the stops (frames and `via` points) as one ordered list,
+which the placement code builds from `ends`, `through` and their `via` lists
+(D12, D14).
+
+**Roll.** The frames are carried from the first end's X axis by double reflection
+(rotation-minimizing), then rolled about the path so that the profile's X meets
+the X axis of every `through` entry and of the second end. The roll each entry
+asks for is spread evenly by arc length over the stretch before it, the short way
+round (within half a turn). Rolling the starting frame about the tangent rolls
+every carried frame by the same angle, so this is exact rather than iterative. A
+round tube shows none of it. A flat or keyed profile arrives at each port turned
+the way the port is, rather than the way the path happened to carry it, and a
+route reads the same whichever end is listed first. A first version carried the
+roll from the first end only, which left the second end's turn to chance.
 
 *Alternative:* let OCCT interpolate and measure in the sandbox. Rejected, because
 the metrics would be lost on a cache hit and could not be tested in the core.
 
 ### D5. The route reaches the part as a reserved parameter `route`
 The canonical JSON holds the end frames, leads, `via` points and the sampled
-path, with coordinates rounded to 1e-6 mm and keys sorted. It is passed as
+path, with coordinates rounded to 1e-6 mm and keys sorted. The path is built
+from the rounded stops, not rounded after: rounding thousands of samples would
+let a sub-micrometre jitter of an end flip some of them and change the cache key.
+It is passed as
 `{"route": json}` to `_get_part_async`. This gives a per-link instance and a
 cache key that is unchanged when the route is. `routed` declares the parameter
 implicitly, and a script part declares it explicitly. The ends are resolved
@@ -205,7 +231,9 @@ that depend on it.
 ### D6. A wrapper of its own; the factory-side sketch handling is shared with `sweep`
 `PartFactoryRouted` runs a new `wrapper_route.py` (`GeomAPI_PointsToBSpline`
 through the samples, the profile placed in the first end frame,
-`BRepOffsetAPI_MakePipeShell` in corrected Frenet mode, then `finish_request`).
+`BRepOffsetAPI_MakePipeShell` with an auxiliary spine through each sample offset
+along its frame's X, so that the profile follows the D4 frames and their roll
+rather than OCCT's own, then `finish_request`).
 The sketch resolution and sketch cache-key folding of `PartFactorySweep` move into
 a helper that both factories use.
 
@@ -257,8 +285,10 @@ solid always means the path could not carry the profile.
 Any refusal leaves the link out of the assembly. The log message names the link,
 the reason, the path position (as a point in the list frame) and the values. The
 same text goes into `joint_problems`, so `pc qual test` fails the assembly with
-it. Stage 1 and the bend check also suggest the remedy (`lead`, or moving the
-`via` point named).
+it. Stage 1 and the bend check also suggest the remedy: moving the `via` point
+named, or giving the path room near the end named. A `lead` is not suggested,
+because it moves where the bend starts and not how tight it is: with a `via`
+point 1 mm from an end, a lead makes the path double back to it.
 
 Two limits look alike and are kept apart. The profile radius (2) is geometry: the
 solid cannot exist, so the route is refused. `minBendRadius` is the material's
@@ -289,15 +319,15 @@ than by placing a dummy part with a port at the free end.
 | d. Not supported | A dummy part with a port, placed by hand | Nothing new | A fake part in the BOM and the instruction book |
 
 Rules (spec: "Free ends"):
-- only the first or the last end may be free;
+- either end may be free, a `through` entry may not;
 - at least one end must be a connection, since a route with none is a `sweep`;
 - a free end gives no `with` and may give `lead`;
 - `length` and `minBendRadius` are checked as for any route;
 - the schema makes `location` exclusive with `connectPorts`/`connect` within one end.
 
 Moving the connected end changes the route, and the free end stays where it was
-written. A free end is one more knot with a frame, so `via` points, intermediate
-ends and `lead` work with it unchanged, and D4 and D9 need nothing new.
+written. A free end is one more knot with a frame, so `via` points, `through`
+entries and `lead` work with it unchanged, and D4 and D9 need nothing new.
 
 In the implementation, a free end skips the D3 and D8 resolution: its frame is
 the parsed location. The instruction book says "leave the other end at (x, y, z)".
@@ -351,6 +381,71 @@ ordinary connections tree paths would be a separate change.
   push-fit tube.
 - A moulded cable assembly appears in the BOM as two items, plug and cable.
   Option 2 is the follow-up if that matters.
+
+### D12. `via` points are listed on the entry they lead to (decided 2026-11-22: option a)
+A `via` point is a waypoint: a point in the list's frame that the path passes
+through. It places nothing, follows nothing, and has no direction of its own. Any
+entry may list several, passed in the order listed. The first spelling, one
+`via:` list on the route, says nothing about which stretch a point is on once the
+route passes through another port. With a sensor, a
+grommet and a board, `via: [A, B]` could mean A before the grommet and B after,
+or both before; the path might cross the panel twice to reach them.
+
+| Option | Spelling | Pros | Cons |
+|---|---|---|---|
+| **a. `via` on each entry (chosen)** | Every entry but the first end lists the points passed on the way to it | Unambiguous for any number of ports passed through. Moving a `through` entry in the list moves its waypoints with it. Mirrors the script JSON (each end carries its `via`) | Waypoints of one route are spread over its ends |
+| b. Route-level `via` only, two ends only | One list, refused once a port is passed through | Simplest | A route through a grommet cannot be steered at all |
+| c. Waypoints as stops in `ends` | `ends: [sensor, {via: A}, grommet, {via: B}, board]` | One flat ordered list | `ends` then holds things that are not ends; every end rule needs "except via entries" |
+
+After D14 the entries are `through[0]`, `through[1]`, … and the second end, in the
+order the cable reaches them, and each lists the `via` points of the stretch that
+leads to it. A route with no `through` keeps the route-level `via:` as a shorthand
+for `via` on its second end: it is what most routes need, and it reads as the
+path's shape. Giving both, or a route-level `via` together with `through`, is an
+error rather than a merge rule. The first end never gives `via`, since nothing
+comes before it.
+
+### D13. Routes are checked for interference; their ends are joints
+A `via` point on the wrong stretch, or written in the wrong frame, gives a path
+that can be built: D9 cannot tell it from a deliberate detour. What gives it away
+is that the cable then runs through a part. `pc qual test` already fails an
+assembly whose parts share space (`qual/topology/interference.py`), and it
+covers routed parts like any other.
+
+The interference check reads each overlap against the joint between the two
+parts, and accepts it only where that joint's ports, interfaces or mating declare
+it (`snapIn`, `selfScrew`). Each end and `through` entry of a route is such a joint
+between the routed part and the part it connects to: a tube stretched over a barb
+is accepted where the barb port declares `snapIn`, the same as for any part pushed
+onto it. Everywhere else, a cable that shares space with a part fails, naming
+both. A cable that merely rests against a surface bounds no volume, and passes.
+
+A detour through free air that touches nothing is still not caught. It shows in
+the render, and as a `length` failure where the cable declares one.
+
+*Alternative:* a check of its own for routes, such as path samples inside a solid.
+Rejected, because it would duplicate the interference test with a second notion of
+"expected overlap".
+
+### D14. Two `ends` and a `through` list (decided 2026-11-23)
+The first spelling put every port the route met in `ends`, so a grommet in the
+middle was an "end" where the cable has none, and every end rule had an
+exception for the middle ones.
+
+| Option | Spelling | Pros | Cons |
+|---|---|---|---|
+| **a. `ends` (two) and `through` (chosen)** | `ends: [a, b]`, `through: [g1, g2]` | The words say what each entry is. The rules come from the structure: only `ends` give `with` or are free, `through` never does. No direction implied | The order of travel is `ends[0]`, `through`…, `ends[1]`: the second end is listed before the ports that precede it |
+| b. `start` / `through` / `end` | Three keys | Reads in travel order | Implies a direction a route does not have: the path is the same either way round, and the roll is matched at both ends |
+| c. One list under another name | `attach:` or `anchors:` | One ordered list | First and last are still special by position, so every rule keeps its exception |
+| d. Keep `ends`, fix the prose | Middle "ends" called pass-through ports | No change | The key still says "end" for things that are not |
+
+A route has no direction: the path through the same knots is the same curve
+either way round, the checks are symmetric, and with the roll matched at every
+port (D4) the solid is too. Flow direction (a pump's outlet to a reservoir) is not
+modelled; if it is ever needed, it is a field of its own rather than something
+read from which end is listed first.
+
+## Risks / Trade-offs
 
 ## Risks / Trade-offs
 

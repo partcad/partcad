@@ -130,8 +130,9 @@ The following syntax is used to create a node that places a part in the assembly
       physics: <(optional) what moving it costs, see "Joints" below>
       joint: <(optional) the name of the joint it makes, see "Joints" below>
     route: # alternative to the three above, for a routed part, see "Routes" below
-      ends: <two or more ends: each a connection ("connectPorts" or "connect"), or a free first or last end ("location")>
-      via: <(optional) points the path passes through, in this list's frame>
+      ends: <the two ends: each a connection ("connectPorts" or "connect") or a free end ("location"); each may give "lead", and the second "via">
+      through: <(optional) the ports passed through between the ends, in order: each a connection, which may give "lead" and "via">
+      via: <(optional, without "through" only) points the path passes through, in this list's frame; the same as "via" on the second end>
       comment: <(optional) free form text, see "Comment" below>
 
 The `name` a node is given is how everything else in and around this assembly
@@ -361,21 +362,55 @@ terminal and to a well.
               lead: 15
             - connectPorts: { name: reactor/core, to: thermistor-well }
 
-**Through other ports.** Ends between the first and the last are ports the cable
-passes through, such as a grommet or a clip. The cable has no end there, so they
-never give `with`:
+**Through other ports.** A cable often passes through ports on its way, such
+as a grommet or a clip. They are listed in `through`, in the order the cable
+reaches them going from the first end to the second. The cable has no end there,
+so they never give `with` and are never free:
 
   .. code-block:: yaml
 
     route:
       ends:
         - connectPorts: { name: board, to: j3 }
-        - connectPorts: { name: panel, to: grommet }
         - connectPorts: { name: sensor, to: socket }
+      through:
+        - connectPorts: { name: panel, to: grommet }
+        - connectPorts: { name: frame, to: clip-2 }
+
+A route has no direction: listing the ends the other way round, with `through`
+reversed, gives the same cable.
+
+**Waypoints.** A `via` point is a point in this list's frame that the path passes
+through. It places nothing and follows nothing: it only steers the cable, around
+a bracket or along a wall, and stays where it is written when the parts move. The
+path's direction there comes from the points either side of it.
+
+Each `through` entry, and the second end, lists the `via` points the path passes
+on its way there from the entry before it, in order, as many as it needs. So a
+point always belongs to one stretch of the route:
+
+  .. code-block:: yaml
+
+    route:
+      ends:
+        - connectPorts: { name: sensor, to: out }
+        - connectPorts: { name: board, to: j3 }
+          via: [[160, 0, 60]]                  # B: over the top, after the grommet
+      through:
+        - connectPorts: { name: panel, to: grommet }
+          via: [[30, 0, -40]]                  # A: under the bracket, before the grommet
+
+.. image:: images/routed-via.png
+   :alt: A cable from a sensor, under a bracket through via point A, through a grommet in a panel, then over via point B and down into a board. A is listed on the grommet's entry and B on the board's.
+
+The first end has nothing before it, so it gives no `via`. A route with no
+`through` may give `via` on the route instead, as in the examples above: it means
+the same as giving it on the second end. A route with `through` gives it on the
+entries only.
 
 **Free ends.** A drain hose that ends over a bucket, a sensor pigtail, or a cord
-that leaves the model is connected at one end only. Its other end, the first or
-the last, is given by a `location:` instead of a connection, in the location
+that leaves the model is connected at one end only. Its other end, either one,
+is given by a `location:` instead of a connection, in the location
 syntax of a link and in this list's frame. That is where the end face is, with
 +Z pointing into the cable. So a hose that hangs down to its free end has +Z up:
 
@@ -392,17 +427,18 @@ syntax of a link and in this list's frame. That is where the end face is, with
 .. image:: images/routed-free-end.png
    :alt: A drain hose from a pump to a free end over a bucket. When the pump is moved, the hose reroutes, and the free end and the via point stay where they are.
 
-A free end gives no `with`, and may give a `lead`. `via` points and ports passed
-through work as on any route. Moving the pump reroutes the hose, and the free end
+A free end gives no `with`, and may give a `lead` and, as the second end, `via`
+points. Ports passed through work as on any route. Moving the pump reroutes the hose, and the free end
 stays where its `location:` says. At least one end has to be a connection, since a
 shape with a fixed path is a :ref:`sweep <sweep>`. The instruction book says
 where to leave the free end.
 
 **Nothing connects to a route.** A routed link cannot be the target of a
-`connect`, a `connectPorts`, an `alsoConnectPorts` or another route's end.
+`connect`, a `connectPorts`, an `alsoConnectPorts`, or another route's end or
+`through` entry.
 
 **When a route cannot be built.** The path runs straight along each end's
-`lead`, and curves smoothly through the `via` points and intermediate ends. Some
+`lead`, and curves smoothly through the `via` points and `through` ports. Some
 sets of points leave no room for the profile:
 
 * the path bends tighter than the profile's own radius, as when a `via` point is
@@ -413,8 +449,17 @@ sets of points leave no room for the profile:
 
 None of these has a solid, so the link is left out of the assembly. It is not
 added with a warning. The build names the link, the reason and the point on the
-path, and suggests what to change: a `lead` on the end, or moving the `via`
-point it names. `pc qual test` fails the assembly with the same words.
+path, and suggests what to change: moving the `via` point it names, or giving
+the path more room near the end it names. `pc qual test` fails the assembly with the same words.
+
+**Checked like any part.** `pc qual test`'s interference check covers routed
+parts. Where a route meets a port, at an end or a `through` entry, it is joined
+to that part, and an overlap there is expected only where that joint says so, as
+for any connected part: a tube stretched over a barb needs the barb's port, or
+the mating, to declare `snapIn`. Anywhere else, a cable that runs through a part
+fails the check, naming both. That is how a `via` point listed on the wrong
+stretch, sending the cable back through a panel, shows up. A cable that only
+rests against a surface passes.
 
 A bend that the profile survives, but the real cable is not rated for, is
 different. The part is built, and `pc qual test` fails the assembly against the
