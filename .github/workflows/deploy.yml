@@ -636,7 +636,14 @@ jobs:
   #
   # Never twice. A version tag that is already in the registry is left alone,
   # so that a re-run of an older release cannot rebuild what was published --
-  # apt and pip resolve against the day they run -- or move "latest" backwards.
+  # apt and pip resolve against the day they run. The build pushes that tag and
+  # nothing else; "<major>.<minor>" and "latest" are then pointed at its digest
+  # by "dev-tools/ci/partcad_image_tags.py", on every run, a re-run included --
+  # one push of all three could stop after the first, and a re-run that skipped
+  # everything once the version was there left the other two on the previous
+  # release. They follow "publish-plugin-dist"'s rule, never backwards: an alias
+  # carrying a newer release than this one is left where it is, and this job
+  # stops there as "publish-mcp-registry" does, finding the work done.
   publish-image:
     name: Publish the PartCAD image
     needs:
@@ -679,14 +686,32 @@ jobs:
             exit 1
           fi
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "minor=${version%.*}" >> "${GITHUB_OUTPUT}"
+
+      # Before anything asks the registry, so that what it answers is about
+      # the tag and not about who is asking; and whether or not there is
+      # anything to build, because the aliases are moved on a re-run too.
+      - name: Login to GitHub Container Registry
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Is this version published already
         id: published
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if [ "${PUBLISH}" = "true" ] && docker buildx imagetools inspect "${IMAGE}:${VERSION}" >/dev/null 2>&1; then
+          set -euo pipefail
+          # "Not found" is the one answer that means "build it": anything else
+          # the registry says fails here, rather than rebuilding over a tag a
+          # refused or timed-out inspection could not see.
+          already=false
+          if [ "${PUBLISH}" = "true" ]; then
+            already="$(python3 dev-tools/ci/partcad_image_tags.py published "${IMAGE}" "${VERSION}")"
+          fi
+          if [ "${already}" = "true" ]; then
             echo "::notice::${IMAGE}:${VERSION} is published already, and is left as it is."
             echo "already=true" >> "${GITHUB_OUTPUT}"
           else
@@ -724,22 +749,14 @@ jobs:
         if: steps.published.outputs.already != 'true'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
-      - name: Login to GitHub Container Registry
-        if: steps.published.outputs.already != 'true' && env.PUBLISH == 'true'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build the image, and on "main" publish it
         if: steps.published.outputs.already != 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          MINOR: ${{ steps.version.outputs.minor }}
         run: |
           set -euo pipefail
-          PC_IMAGE_REFS="${IMAGE}:${VERSION} ${IMAGE}:${MINOR} ${IMAGE}:latest" \
+          # The version tag alone; the next step moves the aliases.
+          PC_IMAGE_REFS="${IMAGE}:${VERSION}" \
           PC_WHEELS_DIR=dist \
           PC_PARTCAD_VERSION="${VERSION}" \
           PC_BASE_IMAGE="${BASE_IMAGE}" \
@@ -747,6 +764,12 @@ jobs:
           PC_PLATFORMS=linux/amd64,linux/arm64 \
           PC_PUSH="$([ "${PUBLISH}" = "true" ] && echo true || echo none)" \
             dev-tools/ci/build-partcad-image.sh
+
+      - name: Point "<major>.<minor>" and "latest" at it
+        if: env.PUBLISH == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python3 dev-tools/ci/partcad_image_tags.py aliases "${IMAGE}" "${VERSION}"
 
       # Pulled the way somebody without credentials pulls it, because that is
       # who it is for -- and the MCP Registry, which reads its label to decide
@@ -760,19 +783,9 @@ jobs:
         run: |
           set -euo pipefail
           docker logout ghcr.io >/dev/null 2>&1 || true
-          if ! manifest="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" 2>&1)"; then
-            echo "::error::${IMAGE}:${VERSION} cannot be pulled without credentials. Make the package public:"
-            echo "::error::https://github.com/orgs/partcad/packages/container/partcad/settings"
-            echo "${manifest}"
-            exit 1
-          fi
-          echo "${manifest}"
-          for platform in linux/amd64 linux/arm64; do
-            echo "${manifest}" | grep -q "Platform:[[:space:]]*${platform}$" || {
-              echo "::error::${IMAGE}:${VERSION} has no ${platform} image"
-              exit 1
-            }
-          done
+          # The version tag with both architectures, and each alias where the
+          # rule above puts it -- this release, or a newer one.
+          python3 dev-tools/ci/partcad_image_tags.py aliases "${IMAGE}" "${VERSION}" --check
 
   # The MCP Registry entry (registry.modelcontextprotocol.io): `server.json` at
   # the root of this repository, which names the `partcad` wheel just uploaded

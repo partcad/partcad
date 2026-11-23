@@ -96,7 +96,16 @@ Python it has to agree with.
 
 `publish-image` in `deploy.yml`: rehearsed on every version tag (both architectures built, nothing kept), and
 published on `main` after the PyPI upload is approved, and before the MCP Registry entry that names its tag. A version
-already in the registry is never rebuilt, so `latest` cannot move backwards.
+already in the registry is never rebuilt.
+
+The build pushes the version tag alone. `dev-tools/ci/partcad_image_tags.py` then points `<major>.<minor>` and `latest`
+at its digest (`docker buildx imagetools create`, no rebuild), on every run -- so a re-run of a publish that stopped
+after the version tag finishes the job instead of finding the version there and stopping. An alias never moves
+backwards, the rule `publish-plugin-dist` follows for its branch: one that already carries a newer release (read from
+its `org.opencontainers.image.version` label, compared as `sort -V` does) is left there, and a re-run of an older
+release succeeds without touching it. Only "not found" from the registry counts as an absent tag; any other error
+stops the job. The pull check then verifies, without credentials, the version tag's two architectures and both
+aliases. `tests/dev_tools/test_partcad_image_tags.py` runs all of it against a fake registry.
 
 The first publish creates the package on GHCR, and GHCR creates a package private. The job checks that the image
 can be pulled without credentials and fails, naming the settings page, until somebody makes it public -- once.
