@@ -315,17 +315,21 @@ advance, and do not apply to it; its
 `length` and `minBendRadius`, if declared, are still checked (D7). Where a radius
 is needed after the build, as for the interference region (D13), it is measured
 from the built solid, at the joint it is needed for, in two steps:
-1. *Local section.* Section the solid with the joint's plane (through the
-   joint's origin, square to its axis: the end face at an end, the plane through
-   the origin at a `through` entry) and keep only the face that contains the
-   joint's origin: the cable's own cross-section there. Another stretch of the
-   cable crossing the same plane is a separate face and is left out.
+1. *Local section.* The cable's own section at a point of its path is found the
+   same way wherever it is needed: section the solid with the plane through that
+   point, square to the path, and keep the face whose outer outline encloses the
+   point. A hollow cable's annular face counts, its outer outline enclosing the
+   bore the point lies in; another stretch of the cable crossing the same plane
+   is a separate face whose outline does not enclose the point, and is left out.
+   The local section is that face at the joint's origin (in the end face at an
+   end, in the plane through the origin at a `through` entry).
 2. *Depth.* The push distance; without one, twice the largest distance of that
    local section from the axis. It runs on the cable side of an end, and on both
    sides of a `through` entry, measured along the path.
-3. *The joint's own stretch* (D13). Cut the solid with a disc square to the path
-   at each end of that stretch of path, each the size of the local section plus a
-   margin, and keep the piece still connected to the local section. The cut is
+3. *The joint's own stretch* (D13). Cut the solid at each end of that stretch of
+   path with the cable's own section there (step 1), which severs the cable
+   exactly however wide it is at that point and touches no other stretch, and
+   keep the piece still connected to the local section. The cut is
    by connection, not by distance: a stretch of the cable that passes nearby
    later along the path is a separate piece, however close it comes, and a bulge
    of the joint's own stretch stays with it, however close it comes to another

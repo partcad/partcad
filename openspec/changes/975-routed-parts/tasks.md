@@ -96,6 +96,8 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a tube that loops back through the same manifold, inside the joint's cylinder but far along the path from the joint, fails at that second pass; the same for a script cable, whose measured radius is not widened by the second pass;
   - a script cable with no push distance, whose later stretch crosses the joint's plane 100 mm from the axis, gets its depth from its own section only;
   - a bulge of the joint's own stretch lying nearer to a thin later stretch's centreline than to its own is still excused.
+  - a hollow script tube, whose joint origin lies in its bore, gets its local section from the annular face around it;
+  - a script cable wider at the end of the joint's stretch than at the joint is severed there by its own section, so a later stretch beyond the cut is not excused.
   - a script part's region uses the radius measured from its built section at each joint: a script cable pushed onto a barb passes within it, and fails beyond it; a script cable thicker at a `through` entry than at its ends gets the radius measured there;
   - a tube pushed onto a barb overlaps it on the cable side of its end face (+Z), and passes within the joint's depth.
 - [ ] 5.2 Make the instruction book (`assembly_guide.py`) state each route step, from end to end with tree paths, and "leave the other end at (x, y, z)" for a free end. Verify with cases in `test_assembly_guide.py` for a two-ended route and a one-ended one.
