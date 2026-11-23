@@ -31,8 +31,13 @@ is read from the label every image of it has, `org.opencontainers.image.version`
 (the Dockerfile sets it from `PARTCAD_VERSION`), and compared the way `sort -V`
 compares, as the branch's check does. An alias whose release cannot be read is
 an error rather than a guess, and so is any answer from the registry other than
-"not found": treating a refused or timed-out inspection as an absent tag is how
-`latest` would be moved backwards by a network hiccup.
+"<the tag itself>: not found": treating a refused or timed-out inspection as an
+absent tag is how `latest` would be moved backwards by a network hiccup. That
+includes a "not found" about something else. With `--format`, buildx resolves
+the tag and then fetches the manifests and configurations it references, and a
+missing one of those fails as "could not fetch content descriptor <digest> ...
+from remote: not found" -- about a tag that exists. Only containerd's resolver
+puts the reference first ("<ref>: not found"), so that is the one read as absent.
 
 `--check` is the same decision with nothing written, run without credentials:
 the version tag and every alias must be pullable by anybody, and every alias
@@ -95,7 +100,10 @@ class Registry:
     def _inspect(self, ref, template):
         status, out, err = self.run(["buildx", "imagetools", "inspect", ref, "--format", template])
         if status != 0:
-            if re.search(r"\bnot found\b", err, re.I):
+            # The tag itself, and not content it references (see the module's
+            # docstring). `ref` is fully qualified, which is how buildx prints
+            # it back.
+            if re.search(r"(?:^|\s)%s: not found\b" % re.escape(ref), err):
                 return None
             raise TagError("could not inspect %s: %s" % (ref, (err or out).strip()))
         try:

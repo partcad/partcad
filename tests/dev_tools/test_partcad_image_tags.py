@@ -181,9 +181,20 @@ def test_an_alias_that_does_not_say_its_release_is_an_error_not_a_guess():
     assert state["tags"]["latest"] == "sha256:unlabelled"
 
 
-@pytest.mark.parametrize("failure", ["unexpected status from HEAD request: 503", "denied: denied", "i/o timeout"])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "unexpected status from HEAD request: 503",
+        "denied: denied",
+        "i/o timeout",
+        # The tag resolved, and what it references did not: still "not found",
+        # but about a tag that is there. See the module's docstring.
+        "could not fetch content descriptor sha256:0123 (application/vnd.oci.image.config.v1+json) from remote: not found",
+        "ghcr.io/partcad/partcad-container-python:0.10.35-amd64: not found",
+    ],
+)
 def test_only_not_found_means_absent(failure):
-    """A refused or timed-out inspection is not an absent tag: taken for one, it rebuilds or moves `latest` back."""
+    """Only "<this tag>: not found" is an absent tag: anything else, taken for one, rebuilds or moves `latest` back."""
     state = registry(["0.10.35"], {"latest": "0.11.0"})
     state["fail"] = failure
     for argv in (("published", IMAGE, "0.10.35"), ("aliases", IMAGE, "0.10.35")):
