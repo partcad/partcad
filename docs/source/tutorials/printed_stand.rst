@@ -510,7 +510,9 @@ the part moves is in the line every run logs (step 14's, above): the middle of t
 ======================================================
 
 Six millimetres is a lot for a table 200 mm long: what stands on it leans, and what rolls, rolls to the middle. Hold
-the top to 2 mm, a hundredth of its length, by changing the one line from step 11 from ``null`` to ``2``:
+the top to 2 mm, a hundredth of its length, by setting the ``max_displacement`` line from step 11 to ``2``. (If you
+saved the infill from the CAM tab, that line now reads ``max_displacement:`` with nothing after it: the tab writes the
+file back, and an empty value is YAML's other spelling of ``null``.)
 
 .. code-block:: yaml
 
