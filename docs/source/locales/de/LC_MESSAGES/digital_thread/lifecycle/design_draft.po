@@ -37,38 +37,46 @@ msgstr ""
 msgid ""
 "PartCAD does not draw it. A **drawing package** does, the way an export "
 "implementation writes a file (see :doc:`/plugins/output`), and the tab "
-"names the one it used. Two are offered: draftwright, which dimensions "
-"what it draws, and SolidCraft, which lays out the standard views on an "
-"ISO sheet with its title block and places no dimensions."
+"names the one it used. Three are offered: draftwright, which dimensions "
+"what it draws; SolidCraft, which lays out the standard views on an ISO "
+"sheet with its title block and places no dimensions; and CADCraft, which "
+"dimensions the overall sizes and the holes of the views PartCAD projects,"
+" on an ISO sheet with a title block."
 msgstr ""
 "PartCAD zeichnet sie nicht. Ein **Zeichnungspaket** tut es, so wie eine "
 "Export-Implementierung eine Datei schreibt (siehe "
 ":doc:`/plugins/output`), und der Tab benennt das, das verwendet wurde. "
-"Zwei werden angeboten: draftwright, das bemaßt, was es zeichnet, und "
+"Drei werden angeboten: draftwright, das bemaßt, was es zeichnet; "
 "SolidCraft, das die Standardansichten auf einem ISO-Blatt mit seinem "
-"Schriftfeld anordnet und keine Maße setzt."
+"Schriftfeld anordnet und keine Maße setzt; und CADCraft, das die "
+"Gesamtmaße und die Bohrungen der Ansichten bemaßt, die PartCAD "
+"projiziert, auf einem ISO-Blatt mit Schriftfeld."
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:18
+#: ../../source/digital_thread/lifecycle/design_draft.rst:19
 msgid "In the UI"
 msgstr "In der Benutzeroberfläche"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:20
+#: ../../source/digital_thread/lifecycle/design_draft.rst:21
 msgid ""
 "**Drawn by** names the drawing package: "
 "``//pub/feature/render/draftwright`` unless you choose "
-"``//pub/feature/cad/solidcraft`` or type another, exactly as ``pc render "
-"-e`` names one. The formats offered are whatever that package declares --"
-" PDF, SVG and DXF for draftwright, and PNG as well for SolidCraft -- and "
-"**Save…** writes the file."
+"``//pub/feature/cad/solidcraft`` or ``//pub/feature/cad/cadcraft``, or "
+"type another, exactly as ``pc render -e`` names one. The formats offered "
+"are whatever that package declares -- PDF, SVG and DXF for draftwright, "
+"and PNG as well for SolidCraft; for CADCraft, PDF, SVG and PNG are the "
+"sheet, and its DWG and DXF a single view -- and **Save…** writes the "
+"file."
 msgstr ""
 "**Drawn by** benennt das Zeichnungspaket: "
 "``//pub/feature/render/draftwright``, sofern Sie nicht "
-"``//pub/feature/cad/solidcraft`` wählen oder ein anderes eintippen, genau"
-" so, wie ``pc render -e`` eines benennt. Die angebotenen Formate sind "
-"die, die dieses Paket deklariert -- PDF, SVG und DXF bei draftwright, bei"
-" SolidCraft zusätzlich PNG --, und **Save…** schreibt die Datei."
+"``//pub/feature/cad/solidcraft`` oder ``//pub/feature/cad/cadcraft`` "
+"wählen oder ein anderes eintippen, genau so, wie ``pc render -e`` eines "
+"benennt. Die angebotenen Formate sind die, die dieses Paket deklariert --"
+" PDF, SVG und DXF bei draftwright, bei SolidCraft zusätzlich PNG; bei "
+"CADCraft sind PDF, SVG und PNG das Blatt, DWG und DXF eine einzelne "
+"Ansicht --, und **Save…** schreibt die Datei."
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:26
+#: ../../source/digital_thread/lifecycle/design_draft.rst:29
 msgid ""
 "A picture is shown on the tab and can be zoomed, dragged and put back with a"
 " double-click. A PDF or a DXF cannot be drawn there; it is saved and opened "
@@ -79,7 +87,7 @@ msgstr ""
 "gezeichnet werden; es wird stattdessen gespeichert und in einem anderen "
 "Programm geöffnet."
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:30
+#: ../../source/digital_thread/lifecycle/design_draft.rst:33
 msgid ""
 "The Design group's Draft tab: a dimensioned drawing, with \"Drawn by\" above"
 " it"
@@ -87,7 +95,7 @@ msgstr ""
 "Der Draft-Tab der Gruppe Design: eine bemaßte Zeichnung, mit \"Drawn by\" "
 "darüber"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:35
+#: ../../source/digital_thread/lifecycle/design_draft.rst:38
 msgid ""
 "The first drawing takes a few minutes, while PartCAD installs the drawing "
 "package into the sandbox it runs in; afterwards it is as quick as any other "
@@ -104,18 +112,18 @@ msgstr ""
 "design-3d>` sind hier daher deaktiviert und sagen, warum -- ein Schnitt ist "
 "es nicht, und die Zeichnung wird vom geschnittenen Objekt gemacht."
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:43
+#: ../../source/digital_thread/lifecycle/design_draft.rst:46
 msgid "On the command line"
 msgstr "Auf der Befehlszeile"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:53
+#: ../../source/digital_thread/lifecycle/design_draft.rst:57
 msgid "Agent skills"
 msgstr "Agent-Skills"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:55
+#: ../../source/digital_thread/lifecycle/design_draft.rst:59
 msgid "``/pc:render``"
 msgstr "``/pc:render``"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:56
+#: ../../source/digital_thread/lifecycle/design_draft.rst:60
 msgid "Asks for a drawing like any other rendered file."
 msgstr "Fordert eine Zeichnung an wie jede andere gerenderte Datei."

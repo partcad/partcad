@@ -104,4 +104,4 @@ Licensed under [Apache 2.0](https://github.com/partcad/partcad/blob/main/LICENSE
 [OpenSCAD]: https://openscad.org/
 [SDF]: https://github.com/fogleman/sdf
 [KiCad EDA]: https://www.kicad.org/
-[SolidCraft]: https://github.com/bherbruck/solidcraft
+[SolidCraft]: https://github.com/tangency-labs/solidcraft

@@ -35,46 +35,52 @@ msgstr ""
 msgid ""
 "PartCAD does not draw it. A **drawing package** does, the way an export "
 "implementation writes a file (see :doc:`/plugins/output`), and the tab "
-"names the one it used. Two are offered: draftwright, which dimensions "
-"what it draws, and SolidCraft, which lays out the standard views on an "
-"ISO sheet with its title block and places no dimensions."
+"names the one it used. Three are offered: draftwright, which dimensions "
+"what it draws; SolidCraft, which lays out the standard views on an ISO "
+"sheet with its title block and places no dimensions; and CADCraft, which "
+"dimensions the overall sizes and the holes of the views PartCAD projects,"
+" on an ISO sheet with a title block."
 msgstr ""
 "PartCAD 不画它。画它的是一个 **制图包**，方式与导出实现写出一个文件相同（参见 :doc:`/plugins/output` "
-"），而该标签页会指出它用的是哪一个。提供了两个：draftwright，会给所画的内容标注尺寸；以及 "
-"SolidCraft，会把标准视图连同标题栏排布在一张 ISO 图纸上，但不标注尺寸。"
+"），而该标签页会指出它用的是哪一个。提供了三个：draftwright，会给所画的内容标注尺寸；SolidCraft，会把标准视图连同标题栏排布在一张"
+" ISO 图纸上，但不标注尺寸；以及 CADCraft，会给 PartCAD 投影出的视图标注总体尺寸和孔径，排布在带标题栏的 ISO 图纸上。"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:18
+#: ../../source/digital_thread/lifecycle/design_draft.rst:19
 msgid "In the UI"
 msgstr "在界面中"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:20
+#: ../../source/digital_thread/lifecycle/design_draft.rst:21
 msgid ""
 "**Drawn by** names the drawing package: "
 "``//pub/feature/render/draftwright`` unless you choose "
-"``//pub/feature/cad/solidcraft`` or type another, exactly as ``pc render "
-"-e`` names one. The formats offered are whatever that package declares --"
-" PDF, SVG and DXF for draftwright, and PNG as well for SolidCraft -- and "
-"**Save…** writes the file."
+"``//pub/feature/cad/solidcraft`` or ``//pub/feature/cad/cadcraft``, or "
+"type another, exactly as ``pc render -e`` names one. The formats offered "
+"are whatever that package declares -- PDF, SVG and DXF for draftwright, "
+"and PNG as well for SolidCraft; for CADCraft, PDF, SVG and PNG are the "
+"sheet, and its DWG and DXF a single view -- and **Save…** writes the "
+"file."
 msgstr ""
-"**Drawn by** 指出所用的制图包：除非你选择 ``//pub/feature/cad/solidcraft`` "
-"或手工输入另一个，否则就是 ``//pub/feature/render/draftwright`` ，与 ``pc render -e`` "
+"**Drawn by** 指出所用的制图包：除非你选择 ``//pub/feature/cad/solidcraft`` 或 "
+"``//pub/feature/cad/cadcraft`` ，或手工输入另一个，否则就是 "
+"``//pub/feature/render/draftwright`` ，与 ``pc render -e`` "
 "指名一个制图包的方式完全相同。所提供的格式就是那个包所声明的那些 -- 对 draftwright 而言是 PDF、SVG 和 "
-"DXF，SolidCraft 还多一个 PNG -- 而 **Save…** 会把文件写出来。"
+"DXF，SolidCraft 还多一个 PNG；对 CADCraft 而言，PDF、SVG 和 PNG 是整张图纸，DWG 和 DXF "
+"则是单个视图 -- 而 **Save…** 会把文件写出来。"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:26
+#: ../../source/digital_thread/lifecycle/design_draft.rst:29
 msgid ""
 "A picture is shown on the tab and can be zoomed, dragged and put back with a"
 " double-click. A PDF or a DXF cannot be drawn there; it is saved and opened "
 "in another program instead."
 msgstr "标签页上会显示一张图片，可以缩放、拖动，并双击复位。PDF 或 DXF 无法在那里绘制；它们会被保存下来，再用别的程序打开。"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:30
+#: ../../source/digital_thread/lifecycle/design_draft.rst:33
 msgid ""
 "The Design group's Draft tab: a dimensioned drawing, with \"Drawn by\" above"
 " it"
 msgstr "Design 组的 Draft 标签页：一张带尺寸的图纸，上方是“Drawn by”"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:35
+#: ../../source/digital_thread/lifecycle/design_draft.rst:38
 msgid ""
 "The first drawing takes a few minutes, while PartCAD installs the drawing "
 "package into the sandbox it runs in; afterwards it is as quick as any other "
@@ -88,18 +94,18 @@ msgstr ""
 ":ref:`视图面板 <dt-design-3d>` 的那些轴按钮和视角在这里是禁用的，并会说明原因 -- "
 "而剖切不禁用，图纸就是用剖切之后的对象画出来的。"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:43
+#: ../../source/digital_thread/lifecycle/design_draft.rst:46
 msgid "On the command line"
 msgstr "在命令行中"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:53
+#: ../../source/digital_thread/lifecycle/design_draft.rst:57
 msgid "Agent skills"
 msgstr "智能体技能"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:55
+#: ../../source/digital_thread/lifecycle/design_draft.rst:59
 msgid "``/pc:render``"
 msgstr "``/pc:render``"
 
-#: ../../source/digital_thread/lifecycle/design_draft.rst:56
+#: ../../source/digital_thread/lifecycle/design_draft.rst:60
 msgid "Asks for a drawing like any other rendered file."
 msgstr "像索取其他任何渲染文件那样去索取一张图纸。"

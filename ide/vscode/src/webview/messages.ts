@@ -168,9 +168,17 @@ export function isRenderTab(tab: TabId): boolean {
  *   as PDF, SVG and DXF;
  * - SolidCraft, '//pub/feature/cad/solidcraft': its plugin package, whose
  *   'render:' section draws standard views on an ISO sheet with SolidCraft's
- *   own drawing workspace, as SVG, PDF, DXF and PNG.
+ *   own drawing workspace, as SVG, PDF, DXF and PNG;
+ * - CADCraft, '//pub/feature/cad/cadcraft': its plugin package, whose PDF, SVG
+ *   and PNG are a sheet CADCraft drafts -- the views PartCAD projects,
+ *   dimensioned, in an ISO layout with a title block -- beside the single
+ *   projection its DWG and DXF are unless they say 'sheet: true'.
  */
-export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright', '//pub/feature/cad/solidcraft'];
+export const DRAFT_PLUGINS = [
+    '//pub/feature/render/draftwright',
+    '//pub/feature/cad/solidcraft',
+    '//pub/feature/cad/cadcraft',
+];
 
 /**
  * The simulation plugins the Simulation tab offers, as '<package>:<name>': the two

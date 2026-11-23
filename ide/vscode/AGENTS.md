@@ -449,10 +449,13 @@ it -- never while it is typed -- and the toolbar holding it is made once and kep
 does not take the field from somebody typing in it; the Run-like button next to it is pressed without leaving
 the field, so a name typed and not entered runs once rather than twice.
 
-Draft's quick choices are `DRAFT_PLUGINS` (`messages.ts`): draftwright, which the tab starts on, and SolidCraft's
-plugin package, `//pub/feature/cad/solidcraft`, whose `render:` section draws with SolidCraft. Neither is listed
-with its file types: what a package draws is asked of it (`render.formats`) when it is chosen, so a package that
-gains a file type offers it here without a change to this extension.
+Draft's quick choices are `DRAFT_PLUGINS` (`messages.ts`): draftwright, which the tab starts on, and the plugin
+packages of SolidCraft (`//pub/feature/cad/solidcraft`) and CADCraft (`//pub/feature/cad/cadcraft`), whose `render:`
+sections draw with those applications. None is listed with its file types: what a package draws is asked of it
+(`render.formats`) when it is chosen, so a package that gains a file type offers it here without a change to this
+extension. That is also why CADCraft's list starts with DWG and DXF, which are one projection unless a package
+says `sheet: true`, while its PDF, SVG and PNG are the dimensioned sheet -- the tab starts on SVG
+(`PREFERRED_DRAFT_FORMATS`), which is the sheet.
 
 `analysis.ts` imports no three.js and draws through a `CaeResultView`, which `cae.ts` (`CaeResult`)
 implements -- the split is what lets `viewerAnalysis.test.ts` run the list in the extension host. The model is

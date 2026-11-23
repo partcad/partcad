@@ -14,8 +14,8 @@
 // declares. It names it in the field the Simulation and the Analysis tabs name
 // their packages in ('packagePicker.ts'): filled in with the first of the
 // drawing packages PartCAD knows of, offering every one of them ('DRAFT_PLUGINS'
-// - draftwright and SolidCraft), and taking any other name typed into it - a
-// package of the user's own draws as well as any.
+// - draftwright, SolidCraft and CADCraft), and taking any other name typed into
+// it - a package of the user's own draws as well as any.
 //
 // The pane down the left is the one the 3D view has, built by the same 'Tree' and
 // styled by the same rules, because it is answering the same question. What it

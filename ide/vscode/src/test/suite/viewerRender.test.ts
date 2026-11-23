@@ -227,14 +227,14 @@ suite('The 2D and Draft tabs', () => {
         assert.strictEqual(view.plugin, '//other/draw');
     });
 
-    test('the Draft tab offers draftwright and SolidCraft, and starts on draftwright', () => {
+    test('the Draft tab offers draftwright, SolidCraft and CADCraft, and starts on draftwright', () => {
         const { root, view, calls } = pane({ plugins: DRAFT_PLUGINS });
         assert.strictEqual(view.plugin, '//pub/feature/render/draftwright');
 
         const options = root.find('package-picker-option');
         assert.deepStrictEqual(
             options.map((option) => option.find('package-picker-value')[0].textContent),
-            ['//pub/feature/render/draftwright', '//pub/feature/cad/solidcraft'],
+            ['//pub/feature/render/draftwright', '//pub/feature/cad/solidcraft', '//pub/feature/cad/cadcraft'],
         );
         // Choosing SolidCraft is naming its plugin package, as 'pc render -e' names it:
         // what it draws is asked of it then ('render.formats'), not listed here.

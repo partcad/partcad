@@ -286,7 +286,7 @@ Output types a package implements itself, for both ``render:`` and ``export:``. 
 .. _OpenSCAD: https://openscad.org/
 .. _SDF: https://github.com/fogleman/sdf
 .. _KiCad EDA: https://www.kicad.org/
-.. _SolidCraft: https://github.com/bherbruck/solidcraft
+.. _SolidCraft: https://github.com/tangency-labs/solidcraft
 .. _partcad-solidcraft: https://github.com/partcad/partcad-solidcraft
 .. _partcad-sim-gazebo: https://github.com/partcad/partcad-sim-gazebo
 .. _partcad-sim-mujoco: https://github.com/partcad/partcad-sim-mujoco

@@ -121,8 +121,9 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
     chosen from a list. For a part, an assembly, a scene or a sketch.
   - **Draft** — a dimensioned technical drawing of a part or an assembly, made by a drawing package the way
     ``pc render -e`` uses one. **Drawn by** names it: ``//pub/feature/render/draftwright`` unless you choose
-    ``//pub/feature/cad/solidcraft`` or type another, and the formats are whatever it declares (PDF, SVG and
-    DXF, and PNG for SolidCraft). The first drawing takes a few minutes while PartCAD installs the package.
+    ``//pub/feature/cad/solidcraft`` or ``//pub/feature/cad/cadcraft``, or type another, and the formats are
+    whatever it declares (PDF, SVG and DXF; PNG for SolidCraft and CADCraft, and DWG for CADCraft). The first
+    drawing takes a few minutes while PartCAD installs the package.
 
   - **CMF** — for a part, an assembly or a scene: the colour, material and finish of each item it is made of,
     set by set with a swatch of each colour, what is unspecified, and what keeps it from being made -- the items
