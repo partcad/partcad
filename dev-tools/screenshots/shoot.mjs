@@ -179,7 +179,7 @@ async function openViewer(page) {
 
 const FEATURE_INTERFACE = ['feature_interface'];
 
-// The package docs/source/tutorial_printed_stand.rst builds, as it stands at its
+// The package docs/source/tutorials/printed_stand.rst builds, as it stands at its
 // step 11. Each picture is of a copy of it in the work directory, changed the
 // way the tutorial has changed it by then.
 const TUTORIAL_STAND = path.join(REPO, 'dev-tools', 'screenshots', 'tutorial-stand');
@@ -213,7 +213,7 @@ function tutorialStand(change = (text) => text) {
 // the stand may move; step 10 adds that by hand.
 const withoutParams = (text) => text.replace(/\n {8}params:\n(?: {10}.*\n)+/, '\n');
 // Step 13: printed denser.
-const denser = (text) => text.replace('infill: 10%', 'infill: 40%');
+const denser = (text) => text.replace('infill: 10%', 'infill: 50%');
 
 /** The Digital Thread on 'object' of the tutorial's package, on the tab 'group'/'sub'. */
 async function tutorialObject(page, object, group, sub, { assembly = false, editor = 640 } = {}) {
@@ -247,10 +247,10 @@ async function tutorialTerminal(page, line, pattern) {
     await sleep(2000);
 }
 
-// Where the stand's top is cut to show its inside: 62 mm up its 64, half way
-// through the top's 4 mm, between its solid skins. In the view panel's steps,
-// a thousand from the bottom of the object to its top.
-const THROUGH_THE_TOP = Math.round((62 / 64) * 1000);
+// Where the stand's top is cut to show its inside: 61.4 mm up its 64.8 (the top
+// of the seat), half way through the top's 2.8 mm, between its solid skins. In
+// the view panel's steps, a thousand from the bottom of the object to its top.
+const THROUGH_THE_TOP = Math.round((61.4 / 64.8) * 1000);
 
 /**
  * Cut the shown object with the Z slider of the view panel of 'pane' -- every tab that draws in 3D has a panel of
@@ -287,8 +287,8 @@ async function tutorialSection(page, pane = '3d') {
     }
     await sleep(3000);
     // Looked at more from above and closer, once the cut has arrived (a new
-    // geometry is fitted to the view): a line of infill is a millimetre wide,
-    // and the whole stand is 120.
+    // geometry is fitted to the view): a line of infill is half a millimetre
+    // wide, and the whole stand is 200.
     await orbit(page, { up: 35 });
     await zoom(page, 1.25);
 }
@@ -449,7 +449,7 @@ function tutorialStandShots() {
             });
         },
 
-        // Step 13: the CAM tab, the infill raised to 40% and not saved yet, cut
+        // Step 13: the CAM tab, the infill raised to 50% and not saved yet, cut
         // through the top as in step 4.
         async [name('11-cam')]() {
             await inVSCode(tutorialStand(), async (page) => {
@@ -457,7 +457,7 @@ function tutorialStandShots() {
                 await filled(page, '.cam-field');
                 const frame = await webviewFrame(page, 'input.cam-field[aria-label="Infill"]');
                 await frame.locator('input.cam-field[aria-label="Infill"]').evaluate((input) => {
-                    input.value = '40%';
+                    input.value = '50%';
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                 });
                 // The print is made again with the new infill before anything is cut.

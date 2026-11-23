@@ -4,4 +4,4 @@ links:
     location: [[0, 0, 0], [0, 0, 1], 0]
   - part: block
     name: block
-    location: [[0, 0, 114], [0, 0, 1], 0]
+    location: [[0, 0, 114.8], [0, 0, 1], 0]

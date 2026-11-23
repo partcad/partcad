@@ -1,14 +1,15 @@
-####################################
-Tutorial: a printed stand under load
-####################################
+##########################
+A printed stand under load
+##########################
 
 This tutorial builds a small product end to end and asks it the question its designer would: *will it hold?* A
-3D-printed stand, shaped like a table, carries a 100 mm block of steel. You will model the stand, say how it is
-printed, put the two together in an assembly, show in a simulation that nothing moves, turn what the simulation
-measured into a stress analysis of the stand, watch the stand fail it at a low infill, and make it pass by printing it
-denser -- in the PartCAD IDE and on the command line, side by side.
+3D-printed stand, shaped like a table, carries a 100 mm block of steel in the middle of its top, as far from its legs
+as it can be, where its weight bends the top the most. You will model the stand, say how it is printed, put the two
+together in an assembly, show in a simulation that nothing moves, turn what the simulation measured into a stress
+analysis of the stand, watch the analysis say that a light print of it is at risk of breaking, and make it pass by
+printing it denser -- in the PartCAD IDE and on the command line, side by side.
 
-Every step is done in the **PartCAD IDE**, the standalone application (see :doc:`installation`); it works the same in
+Every step is done in the **PartCAD IDE**, the standalone application (see :doc:`/installation`); it works the same in
 Visual Studio Code or VSCodium with the PartCAD extension. The screenshots are of the IDE.
 
 .. contents:: Steps
@@ -28,7 +29,7 @@ You need:
 * `CalculiX <http://www.calculix.de/>`_'s solver, ``ccx``, unless PartCAD runs the analysis in a container (it does
   where Docker is available). On Debian and Ubuntu: ``sudo apt-get install calculix-ccx``.
 * For step 9, `Claude Code <https://claude.com/claude-code>`_ with PartCAD's skills (``pc init`` installs them into
-  the package; see :doc:`ai_agents/skills`). It is optional: step 10 does the same by hand.
+  the package; see :doc:`/ai_agents/skills`). It is optional: step 10 does the same by hand.
 
 =================================
 1. Create the package and open it
@@ -44,7 +45,7 @@ You need:
 ``pc init`` writes a ``partcad.yaml`` that depends on the public index (``pub``), and ``pc ide workspace`` opens the
 directory in the IDE, in the PartCAD workbench.
 
-.. image:: ./images/tutorial-stand-01-package.png
+.. image:: ../images/tutorial-stand-01-package.png
   :alt: The PartCAD IDE with the new, empty package open
   :align: center
 
@@ -90,32 +91,43 @@ and the analysis in step 9 will hold the stand by the first and load it at the s
 3. Model the design
 ===================
 
-The stand is five boxes: a top 120 by 80 mm and 4 mm thick, and four legs 8 mm square and 60 mm long. Add them under
-``parts:``, and join them with ``boolean`` parts -- a ``boolean`` combines exactly two parts, so five boxes take four:
+The stand is six boxes: a top 200 by 120 mm and 2.8 mm thick, four legs 8 mm square and 60 mm long at its corners,
+and a seat 20 mm square and 2 mm high in the middle of the top, which is what the block will stand on -- it touches
+nothing else. The seat puts the whole of the block's weight in the middle of the top, more than 100 mm from every leg,
+which is the hardest place for a table to carry it. Add them under ``parts:``, and join them with ``boolean`` parts -- a ``boolean`` combines exactly
+two parts, so six boxes take five:
 
 .. code-block:: yaml
 
   parts:
     top:
       type: basic
-      cuboid: [120, 80, 4]
-      offset: [[0, 0, 62], [0, 0, 1], 0]
+      cuboid: [200, 120, 2.8]
+      offset: [[0, 0, 61.4], [0, 0, 1], 0]
+    seat:
+      type: basic
+      cuboid: [20, 20, 2]
+      offset: [[0, 0, 63.8], [0, 0, 1], 0]
     leg-1:
       type: basic
       cuboid: [8, 8, 60]
-      offset: [[-52, -32, 30], [0, 0, 1], 0]
+      offset: [[-92, -52, 30], [0, 0, 1], 0]
     leg-2:
       type: basic
       cuboid: [8, 8, 60]
-      offset: [[52, -32, 30], [0, 0, 1], 0]
+      offset: [[92, -52, 30], [0, 0, 1], 0]
     leg-3:
       type: basic
       cuboid: [8, 8, 60]
-      offset: [[52, 32, 30], [0, 0, 1], 0]
+      offset: [[92, 52, 30], [0, 0, 1], 0]
     leg-4:
       type: basic
       cuboid: [8, 8, 60]
-      offset: [[-52, 32, 30], [0, 0, 1], 0]
+      offset: [[-92, 52, 30], [0, 0, 1], 0]
+    tabletop:
+      type: boolean
+      operation: or
+      parts: [top, seat]
     legs-front:
       type: boolean
       operation: or
@@ -131,23 +143,23 @@ The stand is five boxes: a top 120 by 80 mm and 4 mm thick, and four legs 8 mm s
     stand-design:
       type: boolean
       operation: or
-      parts: [top, legs]
+      parts: [tabletop, legs]
       manufacturable: false       # a design is not made on its own: its print is
       parameters:
         material: {type: string, default: ":pla"}
       implements:
         foot:
-          fl: [[-52, -32, 0], [0, 0, 1], 0]
-          fr: [[52, -32, 0], [0, 0, 1], 0]
-          br: [[52, 32, 0], [0, 0, 1], 0]
-          bl: [[-52, 32, 0], [0, 0, 1], 0]
-        pad: [[0, 0, 64], [0, 0, 1], 0]
+          fl: [[-92, -52, 0], [0, 0, 1], 0]
+          fr: [[92, -52, 0], [0, 0, 1], 0]
+          br: [[92, 52, 0], [0, 0, 1], 0]
+          bl: [[-92, 52, 0], [0, 0, 1], 0]
+        pad: [[0, 0, 64.8], [0, 0, 1], 0]
 
 ``stand-design`` is what the designer has in mind: a solid table, made of PLA, with a foot under each leg and the pad
-on its top. Save the file and select ``stand-design`` in the PartCAD side bar: the Digital Thread opens on its
+on top of its seat. Save the file and select ``stand-design`` in the PartCAD side bar: the Digital Thread opens on its
 **Design > 3D** tab.
 
-.. image:: ./images/tutorial-stand-02-design.png
+.. image:: ../images/tutorial-stand-02-design.png
   :alt: The stand's design in the Digital Thread's 3D view
   :align: center
 
@@ -155,8 +167,8 @@ on its top. Save the file and select ``stand-design`` in the PartCAD side bar: t
 4. Say how it is printed
 ========================
 
-The stand you will make is not the solid design: it is the design *printed*, with two walls, a few solid layers top
-and bottom, and a sparse infill inside. Say so, under ``parts:``:
+The stand you will make is not the solid design: it is the design *printed* -- and printed light and fast, with two
+walls, two solid layers top and bottom, and a sparse infill inside. Say so, under ``parts:``:
 
 .. code-block:: yaml
 
@@ -170,24 +182,26 @@ and bottom, and a sparse infill inside. Say so, under ``parts:``:
         fff:                      # a filament printer
           layerHeight: 0.2 mm
           walls: 2
+          topLayers: 2
+          bottomLayers: 2
           infill: 10%
 
 ``stand`` has no ``type:`` and no file: it **is what the printer makes** of its design (see
 :ref:`manufactured-parts`). PartCAD writes the route a printer would follow -- the same G-code ``pc cam :stand``
 writes -- and follows it, bead by bead, so the part is the print, empty inside but for its infill, and it weighs what
-the printer deposits: 30 grams, where the solid design would weigh 67. It is made of the design's PLA and has the
+the printer deposits: 39 grams, where the solid design would weigh 103. It is made of the design's PLA and has the
 design's ports.
 
 Select ``stand``. Its **3D** tab draws the print -- **Extra details**, last in the view panel, is ticked for a part --
 and cut with a section from the view panel, its infill shows. While a slider moves, the view cuts what it already has
-and the print looks solid; let go, and the cut print arrives (see :doc:`digital_thread/lifecycle/design_3d`).
+and the print looks solid; let go, and the cut print arrives (see :doc:`/digital_thread/lifecycle/design_3d`).
 
-.. image:: ./images/tutorial-stand-03-print.png
+.. image:: ../images/tutorial-stand-03-print.png
   :alt: The printed stand in section, with its walls, skins and sparse infill
   :align: center
 
 Its **CAM** tab shows the same print beside every setting of its printer, which you will come back to in step 13 (see
-:doc:`digital_thread/lifecycle/design_cam`).
+:doc:`/digital_thread/lifecycle/design_cam`).
 
 .. tip::
 
@@ -214,7 +228,7 @@ A 100 mm cube of steel weighs 7.85 kg.
 ===================================
 
 An assembly is a file of its own. Create ``stand-with-block.assy`` beside ``partcad.yaml`` (**File > New File...**),
-and place the stand at the origin and the block on its top -- the top's upper face is 64 mm up, and the block's
+and place the stand at the origin and the block on its seat -- the seat's upper face is 64.8 mm up, and the block's
 origin is its centre, 50 mm above its bottom:
 
 .. code-block:: yaml
@@ -225,9 +239,9 @@ origin is its centre, 50 mm above its bottom:
       location: [[0, 0, 0], [0, 0, 1], 0]
     - part: block
       name: block
-      location: [[0, 0, 114], [0, 0, 1], 0]
+      location: [[0, 0, 114.8], [0, 0, 1], 0]
 
-Typing ``- pa`` in an ASSY file offers the part selected in the side bar (see :doc:`tutorial`). Then declare the
+Typing ``- pa`` in an ASSY file offers the part selected in the side bar (see :doc:`/tutorial`). Then declare the
 assembly under ``assemblies:`` in ``partcad.yaml``:
 
 .. code-block:: yaml
@@ -237,7 +251,7 @@ assembly under ``assemblies:`` in ``partcad.yaml``:
       type: assy
       path: stand-with-block.assy
 
-.. image:: ./images/tutorial-stand-04-assembly.png
+.. image:: ../images/tutorial-stand-04-assembly.png
   :alt: The block standing on the printed stand
   :align: center
 
@@ -269,11 +283,11 @@ the assembly's declaration:
               ) < 2.0
 
 Select ``stand-with-block`` and open **Qualification > Simulation**. Run ``stands``: it passes, with the run's video
-and pictures of before and after. Unfold **After**: the assembly is one rigid body of 7.881 kg -- the block and the
-30 g of printed stand -- and its ``loads`` are what holds it up: a ``contact`` from the ``world`` of 77.31 N at its
+and pictures of before and after. Unfold **After**: the assembly is one rigid body of 7.889 kg -- the block and the
+39 g of printed stand -- and its ``loads`` are what holds it up: a ``contact`` from the ``world`` of 77.39 N at its
 four feet, against the ``gravity`` of the same.
 
-.. image:: ./images/tutorial-stand-05-simulation.png
+.. image:: ../images/tutorial-stand-05-simulation.png
   :alt: The simulation tab: the run passed, and the forces at its end
   :align: center
 
@@ -294,19 +308,19 @@ Open a terminal in the IDE (**Terminal > New Terminal**) and run the same simula
 
   bodies:
     subject:
-      mass: 7.88060885829
+      mass: 7.88899347191
       loads:
       - kind: contact
         from: world
-        force: [0.0, 0.0, 77.30877289982494]
+        force: [8.642051352785148e-13, 1.6117811709129956e-13, 77.39102616136282]
         contacts: 4
       - kind: gravity
         from: subject
-        force: [0.0, 0.0, -77.3087728998249]
+        force: [0.0, 0.0, -77.3910259594371]
 
 ``--json`` prints the whole result instead, ``loads`` included, which is what a script or an agent reads.
 
-.. image:: ./images/tutorial-stand-06-cli-simulation.png
+.. image:: ../images/tutorial-stand-06-cli-simulation.png
   :alt: The simulation run in the IDE's terminal
   :align: center
 
@@ -338,13 +352,13 @@ simulation, holding the stand where the load leaves it and loading it where the 
           # Where the load leaves it: the floor, under its four feet.
           fix: [foot]
           load:
-            # Where it enters: the block's weight, 77.31 N on the floor less the
-            # stand's own 0.30 N.
+            # Where it enters: the block's weight, 77.39 N on the floor less the
+            # stand's own 0.38 N.
             pad: [0 N, 0 N, -77.01 N]
           # Its own weight.
           gravity: [0, 0, -9.81]
 
-.. image:: ./images/tutorial-stand-07-scenario.png
+.. image:: ../images/tutorial-stand-07-scenario.png
   :alt: The FEA scenario the skill added, in partcad.yaml
   :align: center
 
@@ -363,15 +377,17 @@ PartCAD's schema as you type. What each key says:
 * ``gravity:`` adds the part's own weight.
 * ``params:`` re-tunes the implementation for this scenario alone.
 
-The analysis passes a part only if it reports nothing. Its steel defaults are replaced by the stand's PLA, and how far
-the part may move is one of its parameters. Say it out loud -- the top may not sag more than a millimetre:
+The analysis passes a part only if it reports nothing. Its steel defaults are replaced by the stand's PLA, so what it
+holds the stress to is what PLA can take, over a safety factor of 1.5. How far the part may move is one of its
+parameters too, and unless told otherwise it is a millimetre -- which a top 2.8 mm thick and 200 mm long cannot keep
+to under a block, however strong it is. Say what this stand needs instead: the top may not sag more than 8 mm.
 
 .. code-block:: yaml
 
           params:
-            max_displacement: 1.0     # mm
+            max_displacement: 8.0     # mm
 
-.. image:: ./images/tutorial-stand-08-yaml.png
+.. image:: ../images/tutorial-stand-08-yaml.png
   :alt: Editing the FEA scenario in partcad.yaml
   :align: center
 
@@ -380,27 +396,30 @@ the part may move is one of its parameters. Say it out loud -- the top may not s
 =======================================
 
 Select ``stand`` and open **Analysis > FEA**. Pick ``stands`` and press **Analyse**. The stand is meshed as its
-design, and it is made of what its print is: 10% infill and two walls deposit 46% of the design's volume, so the
-analysis is handed PLA at 46% of its stiffness, strength and density. The log says so:
+design, and it is made of what its print is: two walls, two solid layers top and bottom and 10% infill deposit 38% of
+the design's volume, so the analysis is handed PLA at 38% of its stiffness, strength and density. The log says so:
 
 .. code-block:: text
 
-  //:stand: analysed as its design, 'stand-design', at the 46% of it the printer deposits
-  //:stand: Peak von Mises stress 7.83 MPa, peak displacement 1.13 mm, over 3297 elements
+  //:stand: analysed as its design, 'stand-design', at the 38% of it the printer deposits
+  //:stand: Peak von Mises stress 16.2 MPa (129% of the allowable 12.6 MPa), peak displacement 10.3 mm, over 2331 elements
 
-The stress is far below what 46% of PLA can take, but the top sags 1.13 mm under the block: the scenario is marked
-failed with a red cross, and the finding is under the picture:
+38% of PLA yields at 19 MPa, and the stand reaches 16.2 MPa holding the block: it holds it today, at six sevenths of
+what breaks it, and a knock or a heavier block is the rest. That is what the safety factor is for -- the allowable is
+12.6 MPa, and the stand is past it. It also bends 10.3 mm doing so. The scenario is marked failed with a red cross,
+and the findings are under the picture:
 
 .. code-block:: text
 
-  WARNING  The part moves 1.13 mm under this load, past the 1 mm it is allowed.  (peak displacement)
+  WARNING  The part does not reach the safety factor of 1.50: peak stress 16.2 MPa against an allowable 12.6 MPa.  (peak von Mises stress)
+  WARNING  The part moves 10.3 mm under this load, past the 8 mm it is allowed.  (peak displacement)
 
-.. image:: ./images/tutorial-stand-09-fea-fails.png
-  :alt: The FEA tab: the scenario failed, sagging past what it is allowed
+.. image:: ../images/tutorial-stand-09-fea-fails.png
+  :alt: The FEA tab: the scenario failed, too close to breaking and bending past what it is allowed
   :align: center
 
 The colours are the stress, from none (blue) to the peak of this run (red): they say *where* the stand works hardest
--- under the block -- not whether that is too much. The verdict says that.
+-- where the legs hold the top, and under the block -- not whether that is too much. The verdict says that.
 
 ==============================================
 12. ``pc qual test`` fails for the same reason
@@ -416,11 +435,12 @@ run, a commit hook or a CI job too:
 .. code-block:: text
 
   ERROR:partcad:Qualification failed: //:stand: fea: //:stand: FEA 'stands' findings:
-          WARNING The part moves 1.13 mm under this load, past the 1 mm it is allowed.    (peak displacement)
+          WARNING The part does not reach the safety factor of 1.50: peak stress 16.2 MPa against an allowable 12.6 MPa.    (peak von Mises stress)
+          WARNING The part moves 10.3 mm under this load, past the 8 mm it is allowed.    (peak displacement)
 
 It exits with status 1.
 
-.. image:: ./images/tutorial-stand-10-cli-fails.png
+.. image:: ../images/tutorial-stand-10-cli-fails.png
   :alt: pc qual test failing in the IDE's terminal
   :align: center
 
@@ -428,11 +448,11 @@ It exits with status 1.
 13. Print it denser, and pass
 =============================
 
-Open the stand's **Design > CAM** tab, set **infill** to 40% and press **Save** -- or change ``infill: 10%`` to
-``infill: 40%`` in ``partcad.yaml``. With the section on, the CAM tab shows the denser inside before you save.
+Open the stand's **Design > CAM** tab, set **infill** to 50% and press **Save** -- or change ``infill: 10%`` to
+``infill: 50%`` in ``partcad.yaml``. With the section on, the CAM tab shows the denser inside before you save.
 
-.. image:: ./images/tutorial-stand-11-cam.png
-  :alt: The CAM tab with the infill raised to 40%
+.. image:: ../images/tutorial-stand-11-cam.png
+  :alt: The CAM tab with the infill raised to 50%
   :align: center
 
 Run the check again:
@@ -441,9 +461,10 @@ Run the check again:
 
   pc --no-ansi qual test -f fea :stand
 
-The print now deposits 63% of the design, the top sags 0.82 mm, and the run exits with status 0.
+The print now deposits 65% of the design, so the same 16.2 MPa is 75% of an allowable 21.6 MPa, the top sags
+5.99 mm, and the run exits with status 0.
 
-.. image:: ./images/tutorial-stand-12-cli-passes.png
+.. image:: ../images/tutorial-stand-12-cli-passes.png
   :alt: pc qual test passing in the IDE's terminal
   :align: center
 
@@ -452,10 +473,11 @@ The print now deposits 63% of the design, the top sags 0.82 mm, and the run exit
 ==============================
 
 Back on **Analysis > FEA**, press **Analyse** again: the scenario's red cross is a tick, and there is no finding under
-it. The picture's colours have barely changed, because the stress has not -- a stiffer stand carries the same block
-the same way -- and what changed is how far it bends, and the verdict.
+it. The picture's colours have barely changed, because the stress has not -- a denser stand carries the same block
+the same way -- and what changed is how much of PLA's strength there is to carry it with, how far it bends, and the
+verdict.
 
-.. image:: ./images/tutorial-stand-13-fea-passes.png
+.. image:: ../images/tutorial-stand-13-fea-passes.png
   :alt: The FEA tab: the scenario passed
   :align: center
 
@@ -467,7 +489,7 @@ Where to go next
   --materialize``.
 * :ref:`additive` -- every printer setting, and what each one does to the route.
 * :ref:`cae-section` and :ref:`pc cae <cae>` -- analyses, their scenarios and their implementations.
-* :doc:`digital_thread/lifecycle/simulation` -- simulations, and how their verdicts are judged.
+* :doc:`/digital_thread/lifecycle/simulation` -- simulations, and how their verdicts are judged.
 
 ==================
 The whole package
@@ -475,11 +497,11 @@ The whole package
 
 ``partcad.yaml`` as it stands at step 11, before the infill is raised:
 
-.. literalinclude:: ../../dev-tools/screenshots/tutorial-stand/partcad.yaml
+.. literalinclude:: ../../../dev-tools/screenshots/tutorial-stand/partcad.yaml
   :language: yaml
   :lines: 5-
 
 and ``stand-with-block.assy``:
 
-.. literalinclude:: ../../dev-tools/screenshots/tutorial-stand/stand-with-block.assy
+.. literalinclude:: ../../../dev-tools/screenshots/tutorial-stand/stand-with-block.assy
   :language: yaml

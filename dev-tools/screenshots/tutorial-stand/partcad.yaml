@@ -1,4 +1,4 @@
-# The package docs/source/tutorial_printed_stand.rst builds, as it stands at its
+# The package docs/source/tutorials/printed_stand.rst builds, as it stands at its
 # step 11: printed at 10% infill, with the FEA scenario of steps 9 and 10.
 # dev-tools/screenshots/shoot.mjs ('tutorial-stand') takes the tutorial's
 # pictures of it, and the tutorial includes this file whole at its end.
@@ -37,24 +37,32 @@ interfaces:
 parts:
   top:
     type: basic
-    cuboid: [120, 80, 4]
-    offset: [[0, 0, 62], [0, 0, 1], 0]
+    cuboid: [200, 120, 2.8]
+    offset: [[0, 0, 61.4], [0, 0, 1], 0]
+  seat:
+    type: basic
+    cuboid: [20, 20, 2]
+    offset: [[0, 0, 63.8], [0, 0, 1], 0]
   leg-1:
     type: basic
     cuboid: [8, 8, 60]
-    offset: [[-52, -32, 30], [0, 0, 1], 0]
+    offset: [[-92, -52, 30], [0, 0, 1], 0]
   leg-2:
     type: basic
     cuboid: [8, 8, 60]
-    offset: [[52, -32, 30], [0, 0, 1], 0]
+    offset: [[92, -52, 30], [0, 0, 1], 0]
   leg-3:
     type: basic
     cuboid: [8, 8, 60]
-    offset: [[52, 32, 30], [0, 0, 1], 0]
+    offset: [[92, 52, 30], [0, 0, 1], 0]
   leg-4:
     type: basic
     cuboid: [8, 8, 60]
-    offset: [[-52, 32, 30], [0, 0, 1], 0]
+    offset: [[-92, 52, 30], [0, 0, 1], 0]
+  tabletop:
+    type: boolean
+    operation: or
+    parts: [top, seat]
   legs-front:
     type: boolean
     operation: or
@@ -70,17 +78,17 @@ parts:
   stand-design:
     type: boolean
     operation: or
-    parts: [top, legs]
+    parts: [tabletop, legs]
     manufacturable: false
     parameters:
       material: {type: string, default: ":pla"}
     implements:
       foot:
-        fl: [[-52, -32, 0], [0, 0, 1], 0]
-        fr: [[52, -32, 0], [0, 0, 1], 0]
-        br: [[52, 32, 0], [0, 0, 1], 0]
-        bl: [[-52, 32, 0], [0, 0, 1], 0]
-      pad: [[0, 0, 64], [0, 0, 1], 0]
+        fl: [[-92, -52, 0], [0, 0, 1], 0]
+        fr: [[92, -52, 0], [0, 0, 1], 0]
+        br: [[92, 52, 0], [0, 0, 1], 0]
+        bl: [[-92, 52, 0], [0, 0, 1], 0]
+      pad: [[0, 0, 64.8], [0, 0, 1], 0]
   stand:
     desc: The stand, printed
     parameters:
@@ -91,6 +99,8 @@ parts:
       fff:
         layerHeight: 0.2 mm
         walls: 2
+        topLayers: 2
+        bottomLayers: 2
         infill: 10%
     fea:
       stands:
@@ -99,14 +109,14 @@ parts:
         # Where the load leaves it: the floor, under its four feet.
         fix: [foot]
         load:
-          # Where it enters: the block's weight, 77.31 N on the floor less the
-          # stand's own 0.30 N.
+          # Where it enters: the block's weight, 77.39 N on the floor less the
+          # stand's own 0.38 N.
           pad: [0 N, 0 N, -77.01 N]
         # Its own weight.
         gravity: [0, 0, -9.81]
         params:
           # The top may not sag more than this, in millimetres.
-          max_displacement: 1.0
+          max_displacement: 8.0
   block:
     type: basic
     cuboid: 100
