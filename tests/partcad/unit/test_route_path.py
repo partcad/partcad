@@ -356,3 +356,13 @@ def test_a_through_entry_with_its_neighbours_level_along_its_axis_is_refused():
     (refusal,) = refusals
     assert refusal.reason == "through-direction-ambiguous"
     assert "the knots before and after through 1 lie level along its axis" in refusal.message
+
+
+def test_a_through_entry_reached_square_to_its_axis_but_left_along_it_is_passed():
+    """Previous (100, 0, 0), next (0, 0, 100), axis Z: the incoming chord is square to Z,
+    but the next knot lies 100 further along it, so the path passes along +Z."""
+    stops = [EndFrame((100, 0, 0), (-1, 0, 0)), EndFrame((0, 0, 0), (0, 0, 1)), EndFrame((0, 0, 100), (0, 0, -1))]
+    path, refusals = check_route(stops, 3.0)
+    assert "through-direction-ambiguous" not in [refusal.reason for refusal in refusals]
+    grommet = next(k for k, knot in enumerate(path.knots) if knot.source == ("through", 0))
+    assert path.tangents[path.knot_samples[grommet]] == pytest.approx((0, 0, 1), abs=1e-12)

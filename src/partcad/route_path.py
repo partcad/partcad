@@ -126,9 +126,10 @@ Stop = Union[EndFrame, Sequence[float]]
 
 
 class AmbiguousDirection(ValueError):
-    """The knots before and after a 'through' entry lie level along its axis (as
-    when the path comes to it at right angles), so which way along the axis it
-    passes is not decided by anything."""
+    """The knots before and after a 'through' entry lie level along its axis, so
+    which way along the axis it passes is not decided by anything. Only that
+    chord matters: a path that comes in square to the axis but leaves along it
+    has a direction."""
 
     def __init__(self, source, point):
         super().__init__("route_path: the knots before and after %s lie level along its axis" % describe_source(source))
