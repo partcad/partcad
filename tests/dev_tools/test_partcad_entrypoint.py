@@ -10,12 +10,16 @@
 executables it hands over to -- replaced by stubs on `PATH`. `stat` answers from
 a table rather than from the file system, because the uids that matter here are
 ones no test machine has; `setpriv` and the PartCAD executables only write down
-how they were called. What the image does in a real container is
-`dev-tools/ci/test-partcad-image.sh`.
+how they were called. The lists the image writes at build time -- `pc`'s
+commands, and its options that take a value -- are written here by the
+Dockerfile's own lines, run against this checkout's `pc`. What the image does in
+a real container is `dev-tools/ci/test-partcad-image.sh`.
 """
 
+import functools
 import os
 import pathlib
+import re
 import shutil
 import socket
 import subprocess
@@ -24,8 +28,9 @@ import sys
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-ENTRYPOINT = REPO_ROOT / "tools" / "containers" / "partcad" / "entrypoint.sh"
-COMMANDS_IN_IMAGE = "/usr/local/share/partcad/commands"
+IMAGE_DIR = REPO_ROOT / "tools" / "containers" / "partcad"
+ENTRYPOINT = IMAGE_DIR / "entrypoint.sh"
+SHARE_IN_IMAGE = "/usr/local/share/partcad/"
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("sh") is None, reason="the entrypoint is a POSIX shell script"
@@ -64,6 +69,32 @@ printf 'as-is %s\\n' "$(basename "$0") $*" >> "${STUB_LOG}"
 """
 
 
+@functools.lru_cache(maxsize=None)
+def _written_at_build_time():
+    """``{name: content}`` of what the Dockerfile's `python3 -c "..." > /usr/local/share/partcad/<name>` write."""
+    dockerfile = (IMAGE_DIR / "Dockerfile").read_text(encoding="utf-8")
+    written = {}
+    for code, name in re.findall(r'python3 -c "(.*?)" > %s(\w+)' % re.escape(SHARE_IN_IMAGE), dockerfile, re.S):
+        # Inside the shell's double quotes a backslash-newline is a continuation, and nothing else is special here.
+        done = subprocess.run(
+            [sys.executable, "-c", code.replace("\\\n", "")], capture_output=True, text=True, check=True, timeout=300
+        )
+        written[name] = done.stdout
+    return written
+
+
+def test_the_lists_the_entrypoint_reads_are_the_ones_the_image_writes():
+    written = _written_at_build_time()
+    assert set(written) == {"commands", "options"}
+    assert {"mcp", "render", "init"} <= set(written["commands"].split())
+    options = set(written["options"].split())
+    assert {"-p", "--path", "--threads-max", "--cache-s3-bucket"} <= options
+    assert not {"-v", "--verbose", "--no-ansi", "--offline"} & options, "flags take no value"
+    script = ENTRYPOINT.read_text(encoding="utf-8")
+    for name in written:
+        assert script.count(SHARE_IN_IMAGE + name) == 1, name
+
+
 @pytest.fixture
 def image(tmp_path):
     """A directory tree standing in for the container: stubs, the commands list, and a table of owners."""
@@ -76,12 +107,13 @@ def image(tmp_path):
         (bin_dir / name).write_text(body, encoding="utf-8")
         (bin_dir / name).chmod(0o755)
 
-    commands = tmp_path / "commands"
-    commands.write_text("init\nmcp\nrender\n", encoding="utf-8")
-    script = ENTRYPOINT.read_text(encoding="utf-8")
-    assert script.count(COMMANDS_IN_IMAGE) == 1
+    share = tmp_path / "share"
+    share.mkdir()
+    for name, content in _written_at_build_time().items():
+        (share / name).write_text(content, encoding="utf-8")
+    script = ENTRYPOINT.read_text(encoding="utf-8").replace(SHARE_IN_IMAGE, "%s/" % share)
     entrypoint = tmp_path / "entrypoint.sh"
-    entrypoint.write_text(script.replace(COMMANDS_IN_IMAGE, str(commands)), encoding="utf-8")
+    entrypoint.write_text(script, encoding="utf-8")
 
     for name in ("work", "workspace", "workspace/sub", "workspace/sub/pkg", "elsewhere", "rootdir"):
         (tmp_path / name).mkdir(parents=True, exist_ok=True)
@@ -145,6 +177,12 @@ def test_the_docker_catalog_runs_pc_as_the_owner_of_the_mounted_workspace(image)
         lambda path: ["-p" + path],
         lambda path: ["--no-ansi", "-p", path, "-v"],
         lambda path: ["--threads-max", "4", "-p", path],
+        lambda path: ["-vp", path],
+        lambda path: ["-vqp" + path],
+        lambda path: ["-v", "-p", path, "--threads-max=4"],
+        # The value of an option that takes one, however much it looks like a command, is not the command.
+        lambda path: ["--cache-s3-bucket", "render", "-p", path],
+        lambda path: ["--python-sandbox", "--offline", "-p", path],
     ],
 )
 def test_every_way_pc_reads_its_package_option(image, spelling):
@@ -152,6 +190,19 @@ def test_every_way_pc_reads_its_package_option(image, spelling):
     args = spelling(str(image.root / "elsewhere"))
     ran, _, _ = image.run(*args, "render")
     assert ran.startswith("setpriv 1001 1002 1002 pc "), ran
+
+
+def test_the_first_argument_that_is_no_option_is_the_command(image):
+    """`pc <command> -p <dir>` is that command's `-p`, whatever comes before it, and whether `pc` knows it or not."""
+    image.own(OWNERS)
+    elsewhere = str(image.root / "elsewhere")
+    for args in (
+        ["--offline", "render", "-p", elsewhere],
+        ["-v", "no-such-command", "-p", elsewhere],
+        ["--", "-p", elsewhere],
+    ):
+        ran, _, _ = image.run(*args)
+        assert ran.startswith("setpriv 999 999 999 pc "), (args, ran)
 
 
 def test_minus_p_equals_is_what_click_makes_of_it(image):

@@ -173,13 +173,19 @@ ENV HOME=/home/pc \
     PARTCAD_MANAGED_BY=docker-image \
     PARTCAD_IMAGE=${PARTCAD_IMAGE}
 
-# The names `docker run <image> <name> ...` hands to `pc`, worked out from the
-# wheel just installed rather than written down here, so that a new command is
-# one without anybody remembering this file. See the entrypoint.
+# The names `docker run <image> <name> ...` hands to `pc`, and the options
+# before them that take a value, worked out from the wheel just installed
+# rather than written down here, so that a new command or option is one
+# without anybody remembering this file. See the entrypoint.
 RUN python3 -c "import click; from partcad_cli.click.command import cli; \
 print('\n'.join(cli.list_commands(click.Context(cli))))" > /usr/local/share/partcad/commands \
+  && python3 -c "import click; from partcad_cli.click.command import cli; \
+print('\n'.join(o for p in cli.params if isinstance(p, click.Option) and not (p.is_flag or p.count) \
+for o in p.opts + p.secondary_opts))" > /usr/local/share/partcad/options \
   && grep -qx render /usr/local/share/partcad/commands \
   && grep -qx mcp /usr/local/share/partcad/commands \
+  && grep -qx -- -p /usr/local/share/partcad/options \
+  && grep -qx -- --path /usr/local/share/partcad/options \
   && rm -rf /root/.partcad /home/pc/.partcad/* \
   && chmod 1777 /home/pc/.partcad
 

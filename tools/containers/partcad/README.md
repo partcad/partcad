@@ -71,7 +71,8 @@ why nothing PartCAD writes -- not `pc init`'s MCP entry, not the MCP Registry's 
 * A PartCAD command started as root runs as the **owner of the directory it works in** (or `PC_UID`/`PC_GID`), with
   the socket's group added when there is a socket -- so the files it writes belong to whoever owns the workspace on
   the host. That directory is the working directory, unless `pc` is pointed at a package outside it -- `-p`/`--path`
-  before the command, or `PC_PATH` -- and then it is the package's. A package inside the working directory (what
+  before the command, or `PC_PATH`, parsed as `pc` parses them with the build-time list of its options that take a
+  value -- and then it is the package's. A package inside the working directory (what
   `pc init --mcp-via docker` writes) changes nothing; one outside it is Docker's MCP Catalog, below, which cannot set
   a working directory. An MCP client starts the image from a JSON file, where `--user "$(id -u)"` and
   `--group-add "$(stat -c %g /var/run/docker.sock)"` cannot be written. `--user`, and a root-owned working

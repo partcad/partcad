@@ -25,7 +25,8 @@
 #
 # The directory it works in is the working directory (`-w`), unless `pc` is
 # pointed at a package outside it -- `-p <dir>`/`--path <dir>` before the
-# command, or 'PC_PATH', read the way `pc` reads them -- and then it is that
+# command, or 'PC_PATH', read the way `pc` reads them (`-vp <dir>`, `-p<dir>`,
+# and skipping the value of every option that takes one) -- and then it is that
 # package's directory (a YAML file's, for a file). A package inside the working
 # directory leaves the working directory the answer, so `-w <workspace>` with
 # any package in it means what it always did. The other case is Docker's MCP
@@ -43,6 +44,9 @@
 set -eu
 
 COMMANDS=/usr/local/share/partcad/commands
+# `pc`'s options that take a value, one per spelling (`-p`, `--path`, ...),
+# written at build time like the commands.
+OPTIONS=/usr/local/share/partcad/options
 
 if [ "$#" -eq 0 ]; then
   set -- pc --help
@@ -66,29 +70,58 @@ if [ "$(id -u)" != "0" ]; then
   exec "$@"
 fi
 
+takes_value() {
+  grep -qx -- "$1" "${OPTIONS}" 2>/dev/null
+}
+
 # The package `pc` is pointed at, if any: `-p`/`--path` among the options
 # before its command -- a command's own `-p` means something else -- else
-# 'PC_PATH'. Read as click reads it, so `-pDIR` is DIR and `-p=DIR` is "=DIR".
+# 'PC_PATH'. Parsed as click parses it: the first argument that is neither an
+# option nor an option's value is the command; an option that takes a value
+# takes the next argument, or what follows it in the same one (`-pDIR`, and
+# so `-p=DIR` is "=DIR"); and in a cluster of short options (`-vp DIR`) the
+# first one that takes a value takes the rest.
 package_path() {
   case "$1" in
   pc | partcad) shift ;;
   *) return 0 ;;
   esac
   path="${PC_PATH:-}"
-  value=""
+  next=""
   for arg in "$@"; do
-    if [ -n "${value}" ]; then
+    case "${next}" in
+    path)
       path="${arg}"
-      value=""
+      next=""
       continue
-    fi
+      ;;
+    skip)
+      next=""
+      continue
+      ;;
+    esac
     case "${arg}" in
     --) break ;;
-    -p | --path) value=1 ;;
+    --path) next=path ;;
     --path=*) path="${arg#--path=}" ;;
-    -p*) path="${arg#-p}" ;;
-    -*) ;;
-    *) if grep -qx -- "${arg}" "${COMMANDS}" 2>/dev/null; then break; fi ;;
+    --*=*) ;;
+    --*) if takes_value "${arg}"; then next=skip; fi ;;
+    -?*)
+      rest="${arg#-}"
+      while [ -n "${rest}" ]; do
+        option="${rest%"${rest#?}"}"
+        rest="${rest#?}"
+        if [ "${option}" = p ]; then
+          if [ -n "${rest}" ]; then path="${rest}"; else next=path; fi
+          break
+        fi
+        if takes_value "-${option}"; then
+          if [ -z "${rest}" ]; then next=skip; fi
+          break
+        fi
+      done
+      ;;
+    *) break ;;
     esac
   done
   printf '%s' "${path}"
