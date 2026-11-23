@@ -366,3 +366,24 @@ def test_a_through_entry_reached_square_to_its_axis_but_left_along_it_is_passed(
     assert "through-direction-ambiguous" not in [refusal.reason for refusal in refusals]
     grommet = next(k for k, knot in enumerate(path.knots) if knot.source == ("through", 0))
     assert path.tangents[path.knot_samples[grommet]] == pytest.approx((0, 0, 1), abs=1e-12)
+
+
+def test_the_next_through_entry_counts_by_its_origin():
+    """Two through entries in a row: the first's direction comes from the second's origin.
+
+    The second's origin lies 1 mm further along the first's axis than the knot
+    before the first, but its lead point lies 9 mm short of it: the origin gives +Z,
+    the lead point would give -Z. The lead point depends on the second entry's own
+    direction, decided only when the path reaches it, so it cannot decide the first."""
+    first = EndFrame((-100, 0, 0), (1, 0, 0))
+    t1 = EndFrame((0, 0, 0), (0, 0, 1))
+    t2 = EndFrame((100, 0, 1), (0, 0, 1), lead=10)
+    second = EndFrame((100, 0, 200), (0, 0, -1))
+    path = RoutePath([first, t1, t2, second])
+    at = {knot.source: path.knot_samples[k] for k, knot in enumerate(path.knots)}
+    assert path.tangents[at[("through", 0)]] == pytest.approx((0, 0, 1), abs=1e-12)
+    # The second entry, decided when the path reaches it (towards the second end),
+    # has its lead points either side of its origin along +Z.
+    assert path.tangents[at[("through", 1)]] == pytest.approx((0, 0, 1), abs=1e-12)
+    leads = [knot.point for knot in path.knots if knot.source == ("through", 1, "lead")]
+    assert leads == [pytest.approx((100, 0, -9)), pytest.approx((100, 0, 11))]
