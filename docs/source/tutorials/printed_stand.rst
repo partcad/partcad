@@ -5,9 +5,11 @@ A printed stand under load
 This tutorial builds a small product end to end and asks it the question its designer would: *will it hold?* A
 3D-printed stand, shaped like a table, carries a 100 mm block of steel in the middle of its top, as far from its legs
 as it can be, where its weight bends the top the most. You will model the stand, say how it is printed, put the two
-together in an assembly, show in a simulation that nothing moves, turn what the simulation measured into a stress
-analysis of the stand, watch the analysis say that a light print of it is at risk of breaking, and make it pass by
-printing it denser -- in the PartCAD IDE and on the command line, side by side.
+together in an assembly, show in a simulation that nothing moves, and turn what the simulation measured into a stress
+analysis of the stand. Then you ask it two questions, one at a time. *Will it break?* A light print of it is at risk,
+and printing it denser fixes that. *Will it bend too far?* It sags more than a table should, and no infill fixes that:
+the shape has to change. Strength and stiffness are different questions, each with a fix of its own -- and you will
+see both in the PartCAD IDE and on the command line, side by side.
 
 Every step is done in the **PartCAD IDE**, the standalone application (see :doc:`/installation`); it works the same in
 Visual Studio Code or VSCodium with the PartCAD extension. The screenshots are of the IDE.
@@ -200,7 +202,7 @@ and the print looks solid; let go, and the cut print arrives (see :doc:`/digital
   :alt: The printed stand in section, with its walls, skins and sparse infill
   :align: center
 
-Its **CAM** tab shows the same print beside every setting of its printer, which you will come back to in step 13 (see
+Its **CAM** tab shows the same print beside every setting of its printer, which you will come back to in step 14 (see
 :doc:`/digital_thread/lifecycle/design_cam`).
 
 .. tip::
@@ -375,25 +377,41 @@ PartCAD's schema as you type. What each key says:
 * ``load:`` puts a force on a port: an interface, then the force, as a magnitude (``77 N``, pulling straight down) or
   as a vector in the part's frame.
 * ``gravity:`` adds the part's own weight.
-* ``params:`` re-tunes the implementation for this scenario alone.
 
-The analysis passes a part only if it reports nothing. Its steel defaults are replaced by the stand's PLA, so what it
-holds the stress to is what PLA can take, over a safety factor of 1.5. How far the part may move is one of its
-parameters too, and unless told otherwise it is a millimetre -- which a top 2.8 mm thick and 200 mm long cannot keep
-to under a block, however strong it is. Say what this stand needs instead: the top may not sag more than 8 mm.
+==========================
+11. One question at a time
+==========================
+
+The analysis passes a part only if it reports nothing, and it asks two questions. *Will it break?* The peak stress is
+held to the material's yield strength over a safety factor of 1.5, and the material is the stand's PLA. *Will it bend
+too far?* The part may move no more than ``max_displacement``, which is 1 mm unless told otherwise. Those are
+different questions, with different answers and different fixes, so take them one at a time: switch the second off
+for the stand. Under ``stand:``, above its ``fea:``, add:
 
 .. code-block:: yaml
 
-          params:
-            max_displacement: 8.0     # mm
+    stand:
+      # ...
+      # How far the stand may move under load, in millimetres: a setting of the
+      # implementation behind every 'fea:' scenario below. null checks strength alone.
+      cae:
+        fea:
+          max_displacement: null
+      fea:
+        stands:
+          # ...
 
-.. image:: ../images/tutorial-stand-08-yaml.png
-  :alt: Editing the FEA scenario in partcad.yaml
+``fea:`` holds the stand's scenarios: what it is asked. ``cae: fea:`` holds the settings of the implementation that
+answers every one of them -- the ``fea`` file type of the CalculiX package -- for the stand alone. ``null`` turns the
+check off.
+
+.. image:: ../images/tutorial-stand-08-sag-off.png
+  :alt: The stand's cae section in partcad.yaml, with the displacement limit switched off
   :align: center
 
-=======================================
-11. Run the analysis, and watch it fail
-=======================================
+====================================================
+12. Will it break? Run the analysis, and see it fail
+====================================================
 
 Select ``stand`` and open **Analysis > FEA**. Pick ``stands`` and press **Analyse**. The stand is meshed as its
 design, and it is made of what its print is: two walls, two solid layers top and bottom and 10% infill deposit 38% of
@@ -406,23 +424,23 @@ the design's volume, so the analysis is handed PLA at 38% of its stiffness, stre
 
 38% of PLA yields at 19 MPa, and the stand reaches 16.2 MPa holding the block: it holds it today, at six sevenths of
 what breaks it, and a knock or a heavier block is the rest. That is what the safety factor is for -- the allowable is
-12.6 MPa, and the stand is past it. It also bends 10.3 mm doing so. The scenario is marked failed with a red cross,
-and the findings are under the picture:
+12.6 MPa, and the stand is past it. The scenario is marked failed with a red cross, and the finding is under the
+picture:
 
 .. code-block:: text
 
   WARNING  The part does not reach the safety factor of 1.50: peak stress 16.2 MPa against an allowable 12.6 MPa.  (peak von Mises stress)
-  WARNING  The part moves 10.3 mm under this load, past the 8 mm it is allowed.  (peak displacement)
 
-.. image:: ../images/tutorial-stand-09-fea-fails.png
-  :alt: The FEA tab: the scenario failed, too close to breaking and bending past what it is allowed
+.. image:: ../images/tutorial-stand-09-fea-fails-strength.png
+  :alt: The FEA tab: the scenario failed, short of its safety factor
   :align: center
 
 The colours are the stress, from none (blue) to the peak of this run (red): they say *where* the stand works hardest
--- where the legs hold the top, and under the block -- not whether that is too much. The verdict says that.
+-- where the legs hold the top, and under the block -- not whether that is too much. The verdict says that. The log
+line also says the top moves 10.3 mm; with the limit off, the verdict says nothing about it.
 
 ==============================================
-12. ``pc qual test`` fails for the same reason
+13. ``pc qual test`` fails for the same reason
 ==============================================
 
 The analysis is one of the checks ``pc qual test`` runs (``fea``), so what failed in the IDE fails a qualification
@@ -436,17 +454,16 @@ run, a commit hook or a CI job too:
 
   ERROR:partcad:Qualification failed: //:stand: fea: //:stand: FEA 'stands' findings:
           WARNING The part does not reach the safety factor of 1.50: peak stress 16.2 MPa against an allowable 12.6 MPa.    (peak von Mises stress)
-          WARNING The part moves 10.3 mm under this load, past the 8 mm it is allowed.    (peak displacement)
 
 It exits with status 1.
 
-.. image:: ../images/tutorial-stand-10-cli-fails.png
-  :alt: pc qual test failing in the IDE's terminal
+.. image:: ../images/tutorial-stand-10-cli-fails-strength.png
+  :alt: pc qual test failing in the IDE's terminal, on strength
   :align: center
 
-=============================
-13. Print it denser, and pass
-=============================
+=================================
+14. Print it denser, and it holds
+=================================
 
 Open the stand's **Design > CAM** tab, set **infill** to 50% and press **Save** -- or change ``infill: 10%`` to
 ``infill: 50%`` in ``partcad.yaml``. With the section on, the CAM tab shows the denser inside before you save.
@@ -461,24 +478,122 @@ Run the check again:
 
   pc --no-ansi qual test -f fea :stand
 
-The print now deposits 65% of the design, so the same 16.2 MPa is 75% of an allowable 21.6 MPa, the top sags
-5.99 mm, and the run exits with status 0.
+.. code-block:: text
 
-.. image:: ../images/tutorial-stand-12-cli-passes.png
-  :alt: pc qual test passing in the IDE's terminal
+  //:stand: analysed as its design, 'stand-design', at the 65% of it the printer deposits
+  //:stand: Peak von Mises stress 16.2 MPa (75% of the allowable 21.6 MPa), peak displacement 5.99 mm, over 2331 elements
+
+The print now deposits 65% of the design -- 67 g of PLA rather than 39 -- so the same 16.2 MPa is 75% of an
+allowable 21.6 MPa, and the run exits with status 0.
+
+.. image:: ../images/tutorial-stand-12-cli-passes-strength.png
+  :alt: pc qual test passing in the IDE's terminal, at 50% infill
   :align: center
 
-==============================
-14. And see it pass in the IDE
-==============================
+===============================================
+15. See it hold in the IDE, and look at the sag
+===============================================
 
 Back on **Analysis > FEA**, press **Analyse** again: the scenario's red cross is a tick, and there is no finding under
 it. The picture's colours have barely changed, because the stress has not -- a denser stand carries the same block
-the same way -- and what changed is how much of PLA's strength there is to carry it with, how far it bends, and the
-verdict.
+the same way -- and what changed is how much of PLA's strength there is to carry it with.
 
-.. image:: ../images/tutorial-stand-13-fea-passes.png
-  :alt: The FEA tab: the scenario passed
+.. image:: ../images/tutorial-stand-13-fea-passes-strength.png
+  :alt: The FEA tab: the scenario passed at 50% infill
+  :align: center
+
+So the stand will not break. Whether it is good enough is the other question. The FEA tab colours the stress; how far
+the part moves is in the line every run logs (step 14's, above): the middle of the top sinks 5.99 mm under the block.
+
+======================================================
+16. Will it bend too far? Say how far, and see it fail
+======================================================
+
+Six millimetres is a lot for a table 200 mm long: what stands on it leans, and what rolls, rolls to the middle. Hold
+the top to 2 mm, a hundredth of its length, by changing the one line from step 11 from ``null`` to ``2``:
+
+.. code-block:: yaml
+
+      cae:
+        fea:
+          max_displacement: 2
+
+Press **Analyse**: the scenario fails again, on how far it moves alone.
+
+.. image:: ../images/tutorial-stand-14-fea-fails-sag.png
+  :alt: The FEA tab: the scenario failed, sagging past 2 mm
+  :align: center
+
+``pc qual test`` says the same, and exits with status 1:
+
+.. code-block:: text
+
+  ERROR:partcad:Qualification failed: //:stand: fea: //:stand: FEA 'stands' findings:
+          WARNING The part moves 5.99 mm under this load, past the 2 mm it is allowed.    (peak displacement)
+
+.. image:: ../images/tutorial-stand-15-cli-fails-sag.png
+  :alt: pc qual test failing in the IDE's terminal, on sag
+  :align: center
+
+Printing denser will not fix this one, and the numbers say why. The **stress** is the load spread over the shape,
+and neither has changed: 16.2 MPa at 10% infill, at 50%, and at 100% too (the same analysis of a stand printed solid
+says so). What the infill changes is what the stand may take -- an allowable of 12.6, 21.6 and 32.9 MPa. The **sag**
+is the load over the stiffness, and the stiffness is the material's modulus times the shape. The modulus scales with
+what the printer deposits: the top sags 10.3 mm at 38% of the design, 5.99 mm at 65%, and printed solid, at 99%,
+still 3.94 mm. The fraction stops at 100%, so this shape cannot get under 2 mm however it is printed. The shape has
+to change.
+
+========================
+17. Make the top thicker
+========================
+
+A plate's sag goes roughly with one over its thickness cubed, so thickness is the cheap way to stiffness: a top 6 mm
+thick is (6 / 2.8)\ :sup:`3`, about ten times, as stiff as one 2.8 mm thick. Thicken it downwards, so that its upper
+face, the seat, the block and the ports all stay where they are. In ``top:``, change two numbers:
+
+.. code-block:: yaml
+
+    top:
+      type: basic
+      cuboid: [200, 120, 6]
+      offset: [[0, 0, 59.8], [0, 0, 1], 0]
+
+The top now reaches 3.2 mm down over the legs; ``stand-design`` is the union of the two, so the overlap is simply
+gone. Nothing else changes: the assembly, the simulation and the scenario stay as they are, and the load is still the
+block's weight.
+
+.. image:: ../images/tutorial-stand-16-thicker-top.png
+  :alt: The thicker top in partcad.yaml, and the design in the 3D view
+  :align: center
+
+============================================
+18. Pass, on the command line and in the IDE
+============================================
+
+.. code-block:: shell
+
+  pc --no-ansi qual test -f fea :stand
+
+.. code-block:: text
+
+  //:stand: analysed as its design, 'stand-design', at the 58% of it the printer deposits
+  //:stand: Peak von Mises stress 6.83 MPa (35% of the allowable 19.4 MPa), peak displacement 1.09 mm, over 2511 elements
+
+It exits with status 0. A thicker top is stiffer and stronger both: the stress falls to 6.83 MPa, a third of what
+the stand may take, and the top sags 1.09 mm, a little over half of what it may. The thicker top prints sparser, at
+58% of the design rather than 65%, and still the print weighs 115 g where it weighed 67: stiffness is paid for in
+plastic, as strength was.
+
+.. image:: ../images/tutorial-stand-17-cli-passes.png
+  :alt: pc qual test passing in the IDE's terminal, with the thicker top
+  :align: center
+
+On **Analysis > FEA**, press **Analyse**: the tick is back, with no finding under it. The colours have changed this
+time, because the shape has. They still run from nothing to this run's own peak, and the peak has moved: the thick top
+is mostly blue, and what works hardest now is the legs, just under the top.
+
+.. image:: ../images/tutorial-stand-18-fea-passes.png
+  :alt: The FEA tab: the scenario passed with the thicker top
   :align: center
 
 ================
@@ -491,11 +606,12 @@ Where to go next
 * :ref:`cae-section` and :ref:`pc cae <cae>` -- analyses, their scenarios and their implementations.
 * :doc:`/digital_thread/lifecycle/simulation` -- simulations, and how their verdicts are judged.
 
-==================
+=================
 The whole package
-==================
+=================
 
-``partcad.yaml`` as it stands at step 11, before the infill is raised:
+``partcad.yaml`` as it stands at the end of the tutorial -- the top 6 mm thick, printed at 50% infill, held to a
+2 mm sag:
 
 .. literalinclude:: ../../../dev-tools/screenshots/tutorial-stand/partcad.yaml
   :language: yaml

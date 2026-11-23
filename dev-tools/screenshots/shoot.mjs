@@ -180,8 +180,8 @@ async function openViewer(page) {
 const FEATURE_INTERFACE = ['feature_interface'];
 
 // The package docs/source/tutorials/printed_stand.rst builds, as it stands at its
-// step 11. Each picture is of a copy of it in the work directory, changed the
-// way the tutorial has changed it by then.
+// end. Each picture is of a copy of it in the work directory, wound back to the
+// step the picture is of (see the changes below).
 const TUTORIAL_STAND = path.join(REPO, 'dev-tools', 'screenshots', 'tutorial-stand');
 
 /**
@@ -209,11 +209,43 @@ function tutorialStand(change = (text) => text) {
     return folder;
 }
 
-// Step 9 is the scenario as the skill writes it, which says nothing about how far
-// the stand may move; step 10 adds that by hand.
-const withoutParams = (text) => text.replace(/\n {8}params:\n(?: {10}.*\n)+/, '\n');
-// Step 13: printed denser.
-const denser = (text) => text.replace('infill: 10%', 'infill: 50%');
+/** 'text' with 'old' replaced by 'replacement', which has to be there exactly once: a step that is not undone is a wrong picture. */
+function undo(text, old, replacement) {
+    const at = text.indexOf(old);
+    if (at < 0 || text.indexOf(old, at + 1) >= 0) {
+        throw new Error(`the tutorial's package does not say ${JSON.stringify(old)} exactly once`);
+    }
+    return text.slice(0, at) + replacement + text.slice(at + old.length);
+}
+
+// The tutorial's changes, each undone. Before step 17, the top was 2.8 mm thick.
+const thinTop = (text) =>
+    undo(
+        text,
+        'cuboid: [200, 120, 6]\n    offset: [[0, 0, 59.8], [0, 0, 1], 0]',
+        'cuboid: [200, 120, 2.8]\n    offset: [[0, 0, 61.4], [0, 0, 1], 0]',
+    );
+// Before step 16, nothing limited how far the stand moves.
+const noSagLimit = (text) => undo(text, '        max_displacement: 2\n', '        max_displacement: null\n');
+// Before step 14, it was printed at 10% infill.
+const sparse = (text) => undo(text, 'infill: 50%', 'infill: 10%');
+// Before step 11, it had no 'cae:' section: step 9 is the scenario as the skill writes it.
+const noCae = (text) => {
+    // From its comment to the scenarios' 'fea:', at the stand's own indent: the
+    // 'fea:' inside 'cae:' is indented further, and stays out with it.
+    const at = text.indexOf('\n    # How far the stand may move');
+    const end = text.indexOf('\n    fea:\n', at);
+    if (at < 0 || end < 0) {
+        throw new Error("the tutorial's package has no 'cae:' section to take out");
+    }
+    return text.slice(0, at) + text.slice(end);
+};
+// Steps 2 to 13: the thin top, sparse, asked about its strength alone.
+const early = (text) => sparse(noSagLimit(thinTop(text)));
+// Steps 14 and 15: printed denser.
+const denser = (text) => noSagLimit(thinTop(text));
+// Step 16: held to a 2 mm sag.
+const sagLimited = (text) => thinTop(text);
 
 /** The Digital Thread on 'object' of the tutorial's package, on the tab 'group'/'sub'. */
 async function tutorialObject(page, object, group, sub, { assembly = false, editor = 640 } = {}) {
@@ -293,6 +325,60 @@ async function tutorialSection(page, pane = '3d') {
     await zoom(page, 1.25);
 }
 
+/** Untick the 3D view's port and interface names, where what a picture is about is the shape under them. */
+async function hidePortNames(page) {
+    const frame = await viewer(page);
+    await frame.evaluate(() => {
+        for (const label of document.querySelectorAll('#pane-3d label.control-label')) {
+            const box = label.querySelector('input[type="checkbox"]');
+            if (box?.checked && /^(Port|Interface) names$/.test(label.textContent.trim())) {
+                box.click();
+            }
+        }
+    });
+    await sleep(2000);
+}
+
+/** 'partcad.yaml' of the package as 'change' leaves it, open, with the lines from 'from' to 'until' picked out. */
+async function tutorialYaml(file, change, from, until) {
+    const folder = tutorialStand(change);
+    const yaml = path.join(folder, 'partcad.yaml');
+    await inVSCode(folder, async (page) => {
+        await partcadView(page, ['Explorer']);
+        await openFile(page, yaml);
+        await lineOf(page, yaml, from, until);
+        await tidy(page);
+        await shot(page, out(file), await belowTitle(page));
+    });
+}
+
+/** The FEA tab of the stand as 'change' leaves it, with its finding(s) under the model when 'failed'. */
+async function tutorialFeaShot(file, change, failed) {
+    await inVSCode(tutorialStand(change), async (page) => {
+        await tutorialFea(page);
+        if (failed) {
+            await filled(page, '.cae-finding');
+        }
+        await tidy(page);
+        await shot(page, out(file), await panel(page));
+    });
+}
+
+/**
+ * `pc qual test -f fea :stand` in a terminal, on the package as 'change' leaves it.
+ *
+ * A verdict PartCAD has given before on the same package is said again from its
+ * cache, with "remembered from an earlier run" after it: clear
+ * `~/.partcad/cache/tests` first for the picture of a first run.
+ */
+async function tutorialCheck(file, change) {
+    await inVSCode(tutorialStand(change), async (page) => {
+        await tutorialTerminal(page, 'pc --no-ansi qual test -f fea :stand; echo "exit status $?"', /exit status \d/);
+        await tidy(page);
+        await shot(page, out(file), await belowTitle(page));
+    });
+}
+
 /** The FEA tab of the stand, once it has run its scenario. */
 async function tutorialFea(page) {
     await tutorialObject(page, 'stand', 'analysis', 'fea');
@@ -321,7 +407,7 @@ function tutorialStandShots() {
 
         // Step 3: the design, solid, in the 3D view.
         async [name('02-design')]() {
-            await inVSCode(tutorialStand(), async (page) => {
+            await inVSCode(tutorialStand(early), async (page) => {
                 await tutorialObject(page, 'stand-design');
                 await tidy(page);
                 await shot(page, out(name('02-design')), await panel(page));
@@ -331,20 +417,11 @@ function tutorialStandShots() {
         // Step 4: the print, cut through its top: walls, skins and the sparse
         // infill between them.
         async [name('03-print')]() {
-            await inVSCode(tutorialStand(), async (page) => {
+            await inVSCode(tutorialStand(early), async (page) => {
                 await tutorialObject(page, 'stand');
                 // The names of its feet and its pad, which step 2 was about, are
                 // in the way of its inside, which this step is about.
-                const frame = await viewer(page);
-                await frame.evaluate(() => {
-                    for (const label of document.querySelectorAll('#pane-3d label.control-label')) {
-                        const box = label.querySelector('input[type="checkbox"]');
-                        if (box?.checked && /^(Port|Interface) names$/.test(label.textContent.trim())) {
-                            box.click();
-                        }
-                    }
-                });
-                await sleep(2000);
+                await hidePortNames(page);
                 await tutorialSection(page);
                 await tidy(page);
                 await shot(page, out(name('03-print')), await panel(page));
@@ -353,7 +430,7 @@ function tutorialStandShots() {
 
         // Step 6: the block on the stand.
         async [name('04-assembly')]() {
-            await inVSCode(tutorialStand(), async (page) => {
+            await inVSCode(tutorialStand(early), async (page) => {
                 await tutorialObject(page, 'stand-with-block', null, null, { assembly: true });
                 await tidy(page);
                 await shot(page, out(name('04-assembly')), await panel(page));
@@ -362,7 +439,7 @@ function tutorialStandShots() {
 
         // Step 7: the simulation, passed, with what holds the assembly up.
         async [name('05-simulation')]() {
-            await inVSCode(tutorialStand(), async (page) => {
+            await inVSCode(tutorialStand(early), async (page) => {
                 await tutorialObject(page, 'stand-with-block', 'qualification', 'simulation', {
                     assembly: true,
                     editor: 260,
@@ -395,7 +472,7 @@ function tutorialStandShots() {
 
         // Step 8: the same simulation in the terminal, and what it ended in.
         async [name('06-cli-simulation')]() {
-            await inVSCode(tutorialStand(), async (page) => {
+            await inVSCode(tutorialStand(early), async (page) => {
                 await tutorialTerminal(
                     page,
                     'pc --no-ansi qual test --simulation -a stand-with-block -f stands --after after.yaml 2>&1 | tail -3; cat after.yaml',
@@ -408,51 +485,28 @@ function tutorialStandShots() {
 
         // Step 9: the scenario the skill adds, in the editor.
         async [name('07-scenario')]() {
-            const folder = tutorialStand(withoutParams);
-            await inVSCode(folder, async (page) => {
-                await partcadView(page, ['Explorer']);
-                await openFile(page, path.join(folder, 'partcad.yaml'));
-                await lineOf(page, path.join(folder, 'partcad.yaml'), /^ {4}fea:/, /^ {8}gravity:/);
-                await tidy(page);
-                await shot(page, out(name('07-scenario')), await belowTitle(page));
-            });
+            await tutorialYaml(name('07-scenario'), (text) => noCae(early(text)), /^ {4}fea:/, /^ {8}gravity:/);
         },
 
-        // Step 10: the same, with how far it may move said by hand.
-        async [name('08-yaml')]() {
-            const folder = tutorialStand();
-            await inVSCode(folder, async (page) => {
-                await partcadView(page, ['Explorer']);
-                await openFile(page, path.join(folder, 'partcad.yaml'));
-                await lineOf(page, path.join(folder, 'partcad.yaml'), /^ {8}params:/, /max_displacement:/);
-                await tidy(page);
-                await shot(page, out(name('08-yaml')), await belowTitle(page));
-            });
+        // Step 11: the displacement limit switched off, for the stand.
+        async [name('08-sag-off')]() {
+            await tutorialYaml(name('08-sag-off'), early, /^ {4}# How far the stand may move/, /max_displacement:/);
         },
 
-        // Step 11: the analysis, failed.
-        async [name('09-fea-fails')]() {
-            await inVSCode(tutorialStand(), async (page) => {
-                await tutorialFea(page);
-                await filled(page, '.cae-finding');
-                await tidy(page);
-                await shot(page, out(name('09-fea-fails')), await panel(page));
-            });
+        // Step 12: the analysis, failed on strength.
+        async [name('09-fea-fails-strength')]() {
+            await tutorialFeaShot(name('09-fea-fails-strength'), early, true);
         },
 
-        // Step 12: the check, failed, in the terminal.
-        async [name('10-cli-fails')]() {
-            await inVSCode(tutorialStand(), async (page) => {
-                await tutorialTerminal(page, 'pc --no-ansi qual test -f fea :stand; echo "exit status $?"', /exit status \d/);
-                await tidy(page);
-                await shot(page, out(name('10-cli-fails')), await belowTitle(page));
-            });
+        // Step 13: the check, failed on strength, in the terminal.
+        async [name('10-cli-fails-strength')]() {
+            await tutorialCheck(name('10-cli-fails-strength'), early);
         },
 
-        // Step 13: the CAM tab, the infill raised to 50% and not saved yet, cut
+        // Step 14: the CAM tab, the infill raised to 50% and not saved yet, cut
         // through the top as in step 4.
         async [name('11-cam')]() {
-            await inVSCode(tutorialStand(), async (page) => {
+            await inVSCode(tutorialStand(early), async (page) => {
                 await tutorialObject(page, 'stand', 'design', 'cam');
                 await filled(page, '.cam-field');
                 const frame = await webviewFrame(page, 'input.cam-field[aria-label="Infill"]');
@@ -468,22 +522,57 @@ function tutorialStandShots() {
             });
         },
 
-        // Step 13: the check again, printed denser.
-        async [name('12-cli-passes')]() {
-            await inVSCode(tutorialStand(denser), async (page) => {
-                await tutorialTerminal(page, 'pc --no-ansi qual test -f fea :stand; echo "exit status $?"', /exit status \d/);
+        // Step 14: the check again, printed denser, passed.
+        async [name('12-cli-passes-strength')]() {
+            await tutorialCheck(name('12-cli-passes-strength'), denser);
+        },
+
+        // Step 15: the analysis, passed.
+        async [name('13-fea-passes-strength')]() {
+            await tutorialFeaShot(name('13-fea-passes-strength'), denser, false);
+        },
+
+        // Step 16: held to a 2 mm sag, the analysis failed again, on that alone.
+        async [name('14-fea-fails-sag')]() {
+            await tutorialFeaShot(name('14-fea-fails-sag'), sagLimited, true);
+        },
+
+        // Step 16: the same in the terminal.
+        async [name('15-cli-fails-sag')]() {
+            await tutorialCheck(name('15-cli-fails-sag'), sagLimited);
+        },
+
+        // Step 17: the thicker top, in the editor and in the 3D view beside it.
+        async [name('16-thicker-top')]() {
+            const folder = tutorialStand();
+            const file = path.join(folder, 'partcad.yaml');
+            await inVSCode(folder, async (page) => {
+                await partcadView(page, ['Explorer']);
+                // The file first, so that the Digital Thread opens beside it.
+                await openFile(page, file);
+                await openViewer(page);
+                await layout(page, { sidebar: 300, editor: 760 });
+                await showStill(page, 'stand-design', 1);
+                await hidePortNames(page);
+                // The side bar has done its job: its room goes to the 3D view.
+                await command(page, 'View: Close Primary Side Bar');
+                await sleep(3000);
+                // Back in the file, the lines this step changes picked out.
+                await command(page, 'View: Focus First Editor Group');
+                await lineOf(page, file, /^ {2}top:/, /^ {4}offset:/);
                 await tidy(page);
-                await shot(page, out(name('12-cli-passes')), await belowTitle(page));
+                await shot(page, out(name('16-thicker-top')), await belowTitle(page));
             });
         },
 
-        // Step 14: the analysis, passed.
-        async [name('13-fea-passes')]() {
-            await inVSCode(tutorialStand(denser), async (page) => {
-                await tutorialFea(page);
-                await tidy(page);
-                await shot(page, out(name('13-fea-passes')), await panel(page));
-            });
+        // Step 18: the check, passed, in the terminal.
+        async [name('17-cli-passes')]() {
+            await tutorialCheck(name('17-cli-passes'), (text) => text);
+        },
+
+        // Step 18: the analysis, passed.
+        async [name('18-fea-passes')]() {
+            await tutorialFeaShot(name('18-fea-passes'), (text) => text, false);
         },
     };
 }

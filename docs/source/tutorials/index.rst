@@ -16,7 +16,8 @@ written to be followed from beginning to end; to look up how one particular thin
 :doc:`A printed stand under load <printed_stand>`
   A 3D-printed stand, shaped like a table, carries a block of steel in the middle of its top. You model the stand
   and the block, say how the stand is printed, put the two together in an assembly, show in a simulation that nothing
-  moves, turn what the simulation measured into a stress analysis of the stand, watch the analysis say that a light
-  print of it is at risk of breaking, and make it pass by printing it denser. It teaches materials and interfaces,
-  ``basic`` and ``boolean`` parts, a part that *is* its print, an assembly, a simulation, an FEA scenario -- written
-  by an agent skill or by hand -- and ``pc qual test`` failing and passing for the same reason the IDE shows.
+  moves, and turn what the simulation measured into a stress analysis of the stand. The analysis first finds that a
+  light print would break, which printing denser fixes; then that the top sags too far, which no infill fixes and a
+  thicker top does. It teaches materials and interfaces, ``basic`` and ``boolean`` parts, a part that *is* its print,
+  an assembly, a simulation, an FEA scenario -- written by an agent skill or by hand -- strength and stiffness as two
+  separate questions, and ``pc qual test`` failing and passing for the same reasons the IDE shows.

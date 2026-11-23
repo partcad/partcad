@@ -1,7 +1,7 @@
-# The package docs/source/tutorials/printed_stand.rst builds, as it stands at its
-# step 11: printed at 10% infill, with the FEA scenario of steps 9 and 10.
-# dev-tools/screenshots/shoot.mjs ('tutorial-stand') takes the tutorial's
-# pictures of it, and the tutorial includes this file whole at its end.
+# The package docs/source/tutorials/printed_stand.rst builds, as it stands at
+# its end: a 6 mm top, printed at 50% infill, held to a 2 mm sag. shoot.mjs
+# ('tutorial-stand') winds it back to each earlier step to take the pictures,
+# and the tutorial includes this file whole at its end.
 desc: A printed stand holding a steel block.
 partcad: ">=0.10.9"
 
@@ -37,8 +37,8 @@ interfaces:
 parts:
   top:
     type: basic
-    cuboid: [200, 120, 2.8]
-    offset: [[0, 0, 61.4], [0, 0, 1], 0]
+    cuboid: [200, 120, 6]
+    offset: [[0, 0, 59.8], [0, 0, 1], 0]
   seat:
     type: basic
     cuboid: [20, 20, 2]
@@ -101,7 +101,12 @@ parts:
         walls: 2
         topLayers: 2
         bottomLayers: 2
-        infill: 10%
+        infill: 50%
+    # How far the stand may move under load, in millimetres: a setting of the
+    # implementation behind every 'fea:' scenario below. null checks strength alone.
+    cae:
+      fea:
+        max_displacement: 2
     fea:
       stands:
         desc: At rest at the end of 'stands', holding the block on its top
@@ -114,9 +119,6 @@ parts:
           pad: [0 N, 0 N, -77.01 N]
         # Its own weight.
         gravity: [0, 0, -9.81]
-        params:
-          # The top may not sag more than this, in millimetres.
-          max_displacement: 8.0
   block:
     type: basic
     cuboid: 100
