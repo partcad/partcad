@@ -157,12 +157,20 @@ export function isRenderTab(tab: TabId): boolean {
 }
 
 /**
- * Where the Draft tab's drawings come from, until there is more than one.
+ * Where the Draft tab's drawings can come from: the drawing packages registered
+ * in the public index, the first of them the one the tab starts on.
  *
- * A package whose 'render:' section implements drawing file types, used the way
- * 'pc render -e' uses one: see 'examples/feature_render_custom'.
+ * Each is a package whose 'render:' section implements drawing file types, used
+ * the way 'pc render -e' uses one (see 'examples/feature_render_custom'), and
+ * which file types it offers is asked of it rather than listed here:
+ *
+ * - draftwright, '//pub/feature/render/draftwright': dimensioned drawings,
+ *   as PDF, SVG and DXF;
+ * - SolidCraft, '//pub/feature/cad/solidcraft': its plugin package, whose
+ *   'render:' section draws standard views on an ISO sheet with SolidCraft's
+ *   own drawing workspace, as SVG, PDF, DXF and PNG.
  */
-export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright'];
+export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright', '//pub/feature/cad/solidcraft'];
 
 /**
  * The simulation plugins the Simulation tab offers, as '<package>:<name>': the two

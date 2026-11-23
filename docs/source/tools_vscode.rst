@@ -120,9 +120,9 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
   - **2D** — the object rendered to a picture, as ``pc render`` renders it: PNG, JPEG or SVG,
     chosen from a list. For a part, an assembly, a scene or a sketch.
   - **Draft** — a dimensioned technical drawing of a part or an assembly, made by a drawing package the way
-    ``pc render -e`` uses one. **Drawn by** names it: ``//pub/feature/render/draftwright`` unless you choose or
-    type another, and the formats are whatever it declares (PDF, SVG and DXF). The first drawing takes a few
-    minutes while PartCAD installs draftwright.
+    ``pc render -e`` uses one. **Drawn by** names it: ``//pub/feature/render/draftwright`` unless you choose
+    ``//pub/feature/cad/solidcraft`` or type another, and the formats are whatever it declares (PDF, SVG and
+    DXF, and PNG for SolidCraft). The first drawing takes a few minutes while PartCAD installs the package.
 
   - **CMF** — for a part, an assembly or a scene: the colour, material and finish of each item it is made of,
     set by set with a swatch of each colour, what is unspecified, and what keeps it from being made -- the items

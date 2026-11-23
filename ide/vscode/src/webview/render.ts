@@ -12,9 +12,10 @@
 // renderers for a picture (PNG, JPEG, SVG), and the Draft tab names a package
 // that draws, the way 'pc render -e' names one, and offers whatever that package
 // declares. It names it in the field the Simulation and the Analysis tabs name
-// their packages in ('packagePicker.ts'): filled in with the drawing package
-// PartCAD knows of, offering every one it knows of, and taking any other name
-// typed into it - a package of the user's own draws as well as any.
+// their packages in ('packagePicker.ts'): filled in with the first of the
+// drawing packages PartCAD knows of, offering every one of them ('DRAFT_PLUGINS'
+// - draftwright and SolidCraft), and taking any other name typed into it - a
+// package of the user's own draws as well as any.
 //
 // The pane down the left is the one the 3D view has, built by the same 'Tree' and
 // styled by the same rules, because it is answering the same question. What it
@@ -114,7 +115,7 @@ export class RenderView {
                     options.plugins,
                     first,
                     (value, named) => value === named,
-                    'The drawing package PartCAD knows of',
+                    'The drawing package used unless another is chosen',
                     'the default',
                 ),
             );

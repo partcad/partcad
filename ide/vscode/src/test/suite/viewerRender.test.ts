@@ -17,7 +17,7 @@
 
 import * as assert from 'assert';
 
-import { RenderData } from '../../webview/messages';
+import { DRAFT_PLUGINS, RenderData } from '../../webview/messages';
 import { RenderView } from '../../webview/render';
 
 class FakeElement {
@@ -225,6 +225,24 @@ suite('The 2D and Draft tabs', () => {
 
         assert.deepStrictEqual(calls.plugins, ['//other/draw']);
         assert.strictEqual(view.plugin, '//other/draw');
+    });
+
+    test('the Draft tab offers draftwright and SolidCraft, and starts on draftwright', () => {
+        const { root, view, calls } = pane({ plugins: DRAFT_PLUGINS });
+        assert.strictEqual(view.plugin, '//pub/feature/render/draftwright');
+
+        const options = root.find('package-picker-option');
+        assert.deepStrictEqual(
+            options.map((option) => option.find('package-picker-value')[0].textContent),
+            ['//pub/feature/render/draftwright', '//pub/feature/cad/solidcraft'],
+        );
+        // Choosing SolidCraft is naming its plugin package, as 'pc render -e' names it:
+        // what it draws is asked of it then ('render.formats'), not listed here.
+        options[1].fire('mousedown');
+
+        assert.deepStrictEqual(calls.plugins, ['//pub/feature/cad/solidcraft']);
+        assert.strictEqual(view.plugin, '//pub/feature/cad/solidcraft');
+        assert.strictEqual(view.format, undefined);
     });
 
     test('any drawing package may be named, not only the ones offered', () => {

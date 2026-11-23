@@ -10,15 +10,18 @@ dimensions and its title block.
 
 PartCAD does not draw it. A **drawing package** does, the way an export
 implementation writes a file (see :doc:`/plugins/output`), and the tab names the
-one it used.
+one it used. Two are offered: draftwright, which dimensions what it draws, and
+SolidCraft, which lays out the standard views on an ISO sheet with its title
+block and places no dimensions.
 
 In the UI
 =========
 
 **Drawn by** names the drawing package: ``//pub/feature/render/draftwright``
-unless you choose or type another, exactly as ``pc render -e`` names one. The
-formats offered are whatever that package declares -- PDF, SVG and DXF for
-draftwright -- and **Save…** writes the file.
+unless you choose ``//pub/feature/cad/solidcraft`` or type another, exactly as
+``pc render -e`` names one. The formats offered are whatever that package
+declares -- PDF, SVG and DXF for draftwright, and PNG as well for SolidCraft --
+and **Save…** writes the file.
 
 A picture is shown on the tab and can be zoomed, dragged and put back with a
 double-click. A PDF or a DXF cannot be drawn there; it is saved and opened in
@@ -44,6 +47,7 @@ On the command line
   pc ide view --design-draft :bracket                                  # this tab
   pc render -t pdf -e //pub/feature/render/draftwright :bracket        # the same drawing
   pc render -t dxf -e //pub/feature/render/draftwright :bracket        # another of its formats
+  pc render -t pdf -e //pub/feature/cad/solidcraft :bracket            # drawn by SolidCraft
 
 Agent skills
 ============

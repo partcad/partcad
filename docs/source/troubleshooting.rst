@@ -304,7 +304,7 @@ Typical problems
 
 The **Draft** tab says a package is not found
 
- - The drawing package, ``//pub/feature/render/draftwright``, comes from the
-   public PartCAD index. A workspace that does not import ``pub`` has no such
-   package; ``pc init`` adds that import, and ``examples/feature_render_custom``
-   shows it written out.
+ - The drawing packages, ``//pub/feature/render/draftwright`` and
+   ``//pub/feature/cad/solidcraft``, come from the public PartCAD index. A
+   workspace that does not import ``pub`` has no such package; ``pc init`` adds
+   that import, and ``examples/feature_render_custom`` shows it written out.
