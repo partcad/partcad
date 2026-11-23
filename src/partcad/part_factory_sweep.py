@@ -10,11 +10,12 @@
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, wrapper
 from .part_factory import PartFactory
+from .part_factory_sketch_profile import SketchProfile
 from .process_crash import describe_exit_code
 from .sketch import Sketch
 
 
-class PartFactorySweep(PartFactory):
+class PartFactorySweep(SketchProfile, PartFactory):
     WRAPPERS = ("sweep.py",)
 
     PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
@@ -43,19 +44,7 @@ class PartFactorySweep(PartFactory):
 
             self.ratio = config.get("ratio", None)
 
-            self.source_sketch_name = config.get("sketch", "sketch")
-            if "project" in config:
-                self.source_project_name = config["project"]
-                if self.source_project_name == "this" or self.source_project_name == "":
-                    self.source_project_name = source_project.name
-            else:
-                if ":" in self.source_sketch_name:
-                    self.source_project_name, self.source_sketch_name = source_project.resolve(
-                        self.source_sketch_name,
-                    )
-                else:
-                    self.source_project_name = source_project.name
-            self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
+            self.resolve_sketch(source_project, config)
 
             self._create(config)
             sweep_config = {}
@@ -74,31 +63,11 @@ class PartFactorySweep(PartFactory):
             # what the sketch contains is not in this key.
             self.part.cache_dependencies_broken = True
 
-    async def prepare_async(self, part) -> None:
-        """Resolve the sketch, and key this part on what it contains too.
-
-        The name of the sketch is in the key already; its content is not, and
-        without it an edited sketch goes on being swept from the entry
-        the old one produced.
-        """
-        sketch = self.ctx.get_sketch(self.source_sketch_spec, referrer=self.project.name)
-        if sketch is None:
-            # Reported by 'instantiate', which is where it always was.
-            return
-        if await part.add_cache_key_of(sketch):
-            part.cache_dependencies_broken = False
-        else:
-            # A sketch with no key - 'cache: false' - has content nothing here
-            # can vouch for, so neither has what is built out of it.
-            part.cacheable = False
-
     async def instantiate(self, part):
         with pc_logging.Action("Sweep", part.project_name, part.name):
             try:
-                self.sketch = self.project.ctx.get_sketch(self.source_sketch_spec, referrer=self.project.name)
-                sketch_env = await self.sketch.get_wrapped(self.ctx)
+                sketch_env = await self.sketch_envelope(part)
                 if sketch_env is None:
-                    part.error("%s: %s: the source sketch produced no shape" % (part.project_name, part.name))
                     return None
 
                 # The sweep (Bezier path plus OCCT BRepOffsetAPI_MakePipe) runs in
