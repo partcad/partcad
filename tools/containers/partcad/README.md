@@ -68,9 +68,13 @@ why nothing PartCAD writes -- not `pc init`'s MCP entry, not the MCP Registry's 
 * `docker run <image> render my_part` is `pc render my_part`: a first argument that is one of `pc`'s commands (the
   installed wheel's own list, written at build time), an option, or nothing is handed to `pc`. Anything else runs as
   it is, which is what a CI system starting a shell in the image expects.
-* A PartCAD command started as root runs as the **owner of the working directory** (or `PC_UID`/`PC_GID`), with the
-  socket's group added when there is a socket -- so the files it writes belong to whoever owns the workspace on the
-  host. An MCP client starts the image from a JSON file, where `--user "$(id -u)"` and
+* A PartCAD command started as root runs as the **owner of the directory it works in** (or `PC_UID`/`PC_GID`), with
+  the socket's group added when there is a socket -- so the files it writes belong to whoever owns the workspace on
+  the host. That directory is the working directory, unless `pc` is pointed at a package outside it -- `-p`/`--path`
+  before the command, or `PC_PATH`, parsed as `pc` parses them with the build-time list of its options that take a
+  value -- and then it is the package's. A package inside the working directory (what
+  `pc init --mcp-via docker` writes) changes nothing; one outside it is Docker's MCP Catalog, below, which cannot set
+  a working directory. An MCP client starts the image from a JSON file, where `--user "$(id -u)"` and
   `--group-add "$(stat -c %g /var/run/docker.sock)"` cannot be written. `--user`, and a root-owned working
   directory, leave it alone.
 * `/home/pc` and its `.partcad` are `1777`, like the base's `/dot-partcad`, so whichever uid that is can use them; a
@@ -130,6 +134,12 @@ empty `wheels` stage makes the build install that release from PyPI, on that rel
   follows that repository's `pkg/servers/types.go`; the `category` has to be one `task create` offers.
 * **Updating**: Docker's bot opens a pull request in that repository proposing a newer commit; the entry here
   changes only when what the server needs from the catalog does.
+
+The catalog has no working-directory field (`run` takes `command`, `volumes`, `user`, `env`, `allowHosts` and
+`disableNetwork`), and its `command` is the image's arguments. So the entry runs `-p /workspace mcp` from the image's
+own `/work`, and the entrypoint takes the uid and gid from `/workspace`, the package `-p` names, rather than from
+`/work`, which belongs to the image's own uid. `user:` would not do: it is a fixed value or one the person types in,
+and nothing in the catalog can work out who owns the folder they picked.
 
 The catalog runs the container isolated and without the host's Docker socket, so it is the conda-in-the-container
 way of running the image: everything but KiCad and containerized plugins.

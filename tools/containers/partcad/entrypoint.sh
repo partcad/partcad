@@ -16,16 +16,27 @@
 # As whom. PartCAD writes into the directory it works in, and the files it
 # leaves there have to belong to whoever owns that directory on the host, not to
 # root and not to whatever uid this image happened to be built with. So a
-# PartCAD command started as root runs as the owner of the working directory --
-# 'PC_UID' and 'PC_GID' say otherwise -- and, when the host's Docker socket is
+# PartCAD command started as root runs as the owner of the directory it works
+# in -- 'PC_UID' and 'PC_GID' say otherwise -- and, when the host's Docker socket is
 # mounted, with that socket's group added, so that the sandboxes and KiCad can
 # start containers. That is the whole reason this starts as root: an MCP client
 # starts the image from a JSON file, where `--user "$(id -u)"` and
 # `--group-add "$(stat -c %g /var/run/docker.sock)"` cannot be written.
 #
+# The directory it works in is the working directory (`-w`), unless `pc` is
+# pointed at a package outside it -- `-p <dir>`/`--path <dir>` before the
+# command, or 'PC_PATH', read the way `pc` reads them (`-vp <dir>`, `-p<dir>`,
+# and skipping the value of every option that takes one) -- and then it is that
+# package's directory (a YAML file's, for a file). A package inside the working
+# directory leaves the working directory the answer, so `-w <workspace>` with
+# any package in it means what it always did. The other case is Docker's MCP
+# Catalog, which cannot set a working directory: it mounts the workspace at
+# /workspace and runs `-p /workspace mcp` from the image's own /work, whose
+# owner is this image's uid and nobody on the host.
+#
 # It does not change users for anything else, and does nothing at all when the
-# image is started with `--user`. A working directory owned by root (the user is
-# root, or Docker created the directory because nothing was mounted there) keeps
+# image is started with `--user`. A directory owned by root (the user is root,
+# or Docker created the directory because nothing was mounted there) keeps
 # root, which is who owns what PartCAD writes there anyway.
 #
 # Nothing here writes to standard output: `pc mcp` speaks the protocol there.
@@ -33,6 +44,9 @@
 set -eu
 
 COMMANDS=/usr/local/share/partcad/commands
+# `pc`'s options that take a value, one per spelling (`-p`, `--path`, ...),
+# written at build time like the commands.
+OPTIONS=/usr/local/share/partcad/options
 
 if [ "$#" -eq 0 ]; then
   set -- pc --help
@@ -56,8 +70,83 @@ if [ "$(id -u)" != "0" ]; then
   exec "$@"
 fi
 
-uid="${PC_UID:-$(stat -c %u .)}"
-gid="${PC_GID:-$(stat -c %g .)}"
+takes_value() {
+  grep -qx -- "$1" "${OPTIONS}" 2>/dev/null
+}
+
+# The package `pc` is pointed at, if any: `-p`/`--path` among the options
+# before its command -- a command's own `-p` means something else -- else
+# 'PC_PATH'. Parsed as click parses it: the first argument that is neither an
+# option nor an option's value is the command; an option that takes a value
+# takes the next argument, or what follows it in the same one (`-pDIR`, and
+# so `-p=DIR` is "=DIR"); and in a cluster of short options (`-vp DIR`) the
+# first one that takes a value takes the rest.
+package_path() {
+  case "$1" in
+  pc | partcad) shift ;;
+  *) return 0 ;;
+  esac
+  path="${PC_PATH:-}"
+  next=""
+  for arg in "$@"; do
+    case "${next}" in
+    path)
+      path="${arg}"
+      next=""
+      continue
+      ;;
+    skip)
+      next=""
+      continue
+      ;;
+    esac
+    case "${arg}" in
+    --) break ;;
+    --path) next=path ;;
+    --path=*) path="${arg#--path=}" ;;
+    --*=*) ;;
+    --*) if takes_value "${arg}"; then next=skip; fi ;;
+    -?*)
+      rest="${arg#-}"
+      while [ -n "${rest}" ]; do
+        option="${rest%"${rest#?}"}"
+        rest="${rest#?}"
+        if [ "${option}" = p ]; then
+          if [ -n "${rest}" ]; then path="${rest}"; else next=path; fi
+          break
+        fi
+        if takes_value "-${option}"; then
+          if [ -z "${rest}" ]; then next=skip; fi
+          break
+        fi
+      done
+      ;;
+    *) break ;;
+    esac
+  done
+  printf '%s' "${path}"
+}
+
+# Whose directory PartCAD works in: the package's, when it is outside the
+# working directory, and otherwise the working directory's.
+owned=.
+package="$(package_path "$@")"
+if [ -n "${package}" ]; then
+  if [ -f "${package}" ]; then
+    package="$(dirname -- "${package}")"
+  fi
+  # Not there at all, and `pc` refuses it: the working directory answers.
+  if [ -d "${package}" ] && package="$(CDPATH='' cd -P -- "${package}" 2>/dev/null && pwd -P)"; then
+    here="$(pwd -P)"
+    case "${package}/" in
+    "${here%/}/"*) ;;
+    *) owned="${package}" ;;
+    esac
+  fi
+fi
+
+uid="${PC_UID:-$(stat -c %u "${owned}")}"
+gid="${PC_GID:-$(stat -c %g "${owned}")}"
 if [ "${uid}" = "0" ]; then
   exec "$@"
 fi
