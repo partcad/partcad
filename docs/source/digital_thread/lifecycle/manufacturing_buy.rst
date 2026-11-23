@@ -145,3 +145,7 @@ Agent skills
 ``/pc:validate``
   Reads the bill of materials, which is what is procured, as part of giving a
   requirement its verdict.
+
+``/pc:quote-pack``
+  Asks ``pc supply quote`` for prices -- with your agreement, since a provider
+  may be somebody else's store -- and never ``pc supply order``.

@@ -41,6 +41,9 @@ Two other ways to install the same plugin:
 The plugin is versioned with everything else in the release that publishes it, so the plugin and the ``pc``
 command line tool state the same version when they came from the same release.
 
+The same plugin installs into the Claude app as well, beside Anthropic's Claude for Manufacturing: see
+:doc:`/ai_agents/claude_for_manufacturing`.
+
 ==========
 Gemini CLI
 ==========

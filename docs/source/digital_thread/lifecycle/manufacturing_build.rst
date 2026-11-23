@@ -131,6 +131,11 @@ Agent skills
 ``/pc:export`` and ``/pc:convert``
   Write the file a machine or a shop is given, in the format it asks for.
 
+``/pc:rfq-pack``
+  Writes everything a shop quotes the built parts from: a line per part, its
+  STEP file and its dimensioned drawing, and these instructions when the shop
+  assembles it too (see :doc:`/ai_agents/claude_for_manufacturing`).
+
 ``/pc:validate``
   Reads the assembly instructions these steps become, as part of giving a
   requirement its verdict.

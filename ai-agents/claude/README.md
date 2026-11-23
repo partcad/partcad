@@ -21,6 +21,11 @@ It brings PartCAD's skills and one MCP server.
   simulation into a stress analysis of one part.
 - `/pc:render`, `/pc:export`, `/pc:convert`, `/pc:describe` and `/pc:search`
   draw, write out, convert, describe and find objects.
+- `/pc:rfq-pack`, `/pc:quote-pack` and `/pc:change-impact` hand a design to
+  the people who buy, quote and inspect: a request for quotation, the basis of
+  a customer quote, and a draft engineering change notice, each a folder with a
+  manifest naming the commit behind every file — what Claude for Manufacturing
+  reads from PartCAD.
 - The `partcad` MCP server, `pc mcp`, lets the agent list, inspect, render,
   qualify and export the objects of the project it is working in.
 

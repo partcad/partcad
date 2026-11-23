@@ -71,6 +71,7 @@ product development process.**
    ai_agents/skills.rst
    ai_agents/plugins.rst
    ai_agents/mcp.rst
+   ai_agents/claude_for_manufacturing.rst
 
 .. toctree::
    :maxdepth: 2

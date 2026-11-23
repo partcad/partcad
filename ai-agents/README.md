@@ -405,6 +405,37 @@ The plugin folder is named `claude`, but the command namespace comes from
   one. Searches the local package by default; a `...` suffix on the package
   (`-P //...`) widens to every imported package (the public registry and
   dependencies).
+- **`/pc:rfq-pack <object> [quantity] [which parts] [where]`** — writes a
+  request for quotation: a folder a supplier quotes from, with one line per
+  made part in `lines.csv` (quantity, method, material, finish, stock,
+  tolerance, size, mass — each read from `pc info`, none estimated), a STEP and
+  a dimensioned drawing (`//pub/feature/render/draftwright`) of each, a 3MF of
+  what is printed, the assembly and its instructions when the supplier
+  assembles it, a `cover.md` for a person to send, and a `manifest.json` giving
+  the commit and the exact command behind every file. Which lines are made comes
+  from the Build vs Buy tree (`manufacturing.tree`, through the MCP server's
+  `execute`) or, without it, from `pc instructions -r -b`. A field PartCAD does
+  not know is an *open item*, never a guess, and nothing is sent.
+- **`/pc:quote-pack <object> <quantity>`** — the basis for quoting a customer:
+  `costing.csv` with every bought line and every piece of stock rounded up to
+  whole SKUs (`count_per_sku`), priced only where `pc supply quote -j` answers;
+  every made line with its cost drivers (method, material, size, mass,
+  tolerance, and `pc cam`'s cutting length where a route is declared); the
+  number of assembly steps; and `quote-basis.md`, which leaves rates, margins
+  and unquoted prices blank and claims no total.
+- **`/pc:change-impact <revision> [objects]`** — a draft engineering change
+  notice: `pc revisions diff` and `git diff` for what changed (a dependency whose
+  pin moved included), `pc compare` of each part at the revision against now
+  for mass, volume and surface distance, `pc used-by --load` up to the products
+  plus the parts made from changed stock, a BOM delta from `pc bom -j` at both
+  revisions (`<package>@<revision>:<assembly>`), `pc qual test` on everything
+  affected, and what has to be reissued and who told. Disposition and
+  effectivity are left for a person.
+
+These three are what [Claude for
+Manufacturing](https://claude.com/resources/articles/claude-for-manufacturing)
+reads from PartCAD; `docs/source/ai_agents/claude_for_manufacturing.rst` is the
+guide.
 
 ## Gemini CLI
 

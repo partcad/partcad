@@ -44,3 +44,11 @@ Agent skills
 ``/pc:validate``
   Reads the bill of materials as part of giving a requirement its verdict: a
   line of it is evidence for a feature that no measurement can judge.
+
+``/pc:quote-pack``
+  Rounds every line up to the packs it is sold in, prices what a supplier
+  quotes, and writes it out as the basis of a customer quote (see
+  :doc:`/ai_agents/claude_for_manufacturing`).
+
+``/pc:change-impact``
+  Compares the bill of materials at a revision with the one now, line by line.

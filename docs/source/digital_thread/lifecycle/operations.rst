@@ -84,8 +84,11 @@ daemon (see ``pc revisions diff`` in :doc:`/cli`).
 Agent skills
 ============
 
-None of its own. An agent reaches the same answers through the MCP server
-(``pc mcp``), whose ``revisions``, ``diff``, ``revision_uses`` and ``used_by``
+``/pc:change-impact`` follows a change from these answers to everything it
+reaches -- the assemblies that use it, their bills of materials, qualification,
+the files to reissue -- and writes it up as a draft engineering change notice
+(see :doc:`/ai_agents/claude_for_manufacturing`). Besides it, an agent reaches
+the same answers through the MCP server (``pc mcp``), whose ``revisions``, ``diff``, ``revision_uses`` and ``used_by``
 tools are these commands, the diff unified as the command prints it -- and
 through ``execute``, which reaches the daemon methods the tab is drawn from:
 ``revisions.list``, ``revisions.compare``, ``revisions.uses``,

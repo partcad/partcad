@@ -81,7 +81,7 @@ notice.
 The skills PartCAD ships
 ========================
 
-Sixteen of them. The name in each heading is what you type in Claude Code; under
+Nineteen of them. The name in each heading is what you type in Claude Code; under
 every other agent, and as a prompt of ``pc mcp``, the same skill is ``pc-<name>``,
 and an agent that chooses skills by their description will reach for the right one
 without being told.
@@ -340,3 +340,43 @@ Checking and analysing
   runs ``pc cae fea`` on it and shows the result where there is somewhere to
   show it. The step that matters is the third: a force on a welded body is not a
   force on the part until somebody decides which of it the part carries.
+
+
+Handing off to manufacturing
+============================
+
+Three skills write what the people who buy, quote and inspect work from: a
+folder of files, laid out the same way every time, with a ``manifest.json``
+saying which commit each file came from and the ``pc`` command that wrote it.
+They are what :doc:`/ai_agents/claude_for_manufacturing` reads, and are as
+useful without it. None of them sends anything or places an order, and none
+fills in a number PartCAD does not know: a tolerance nobody stated, a price
+nobody quoted, a labour rate, is left blank and listed as an open item.
+
+``/pc:rfq-pack``
+  A request for quotation: what a supplier quotes from. One line per part to
+  be made, with its quantity, method, material, finish, stock, tolerance, size
+  and mass, read from ``pc info``; a STEP file and a dimensioned drawing of
+  each, and a 3MF of each part that is printed; the assembly and its
+  instructions when the supplier assembles it too; and a cover sheet for a
+  person to read and send. Which parts are made follows the
+  :doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>` choices.
+
+``/pc:quote-pack``
+  The basis for quoting a customer: what building *N* of a product takes. What
+  is bought and how many of each SKU, rounded up to the packs it is sold in and
+  priced where a supplier answers ``pc supply quote``; what is made, from how
+  much of which material, with the size, mass, tolerance and cutting length
+  machining is estimated from; how many assembly steps it takes. Rates, margins
+  and the prices nobody quoted are left for the estimator, and no total is
+  claimed for the product.
+
+``/pc:change-impact``
+  A draft engineering change notice: what changed in a package since a
+  revision (``pc revisions diff``, and the files behind each object), how each
+  changed part moved (``pc compare`` of the part at the revision against the
+  part now: mass, volume and surface distance), which assemblies use it
+  (``pc used-by``, and the parts made from changed stock), how each bill of
+  materials changed, whether it all still passes ``pc qual test``, and which
+  files, suppliers and people that touches. The disposition of parts already
+  made, and from when the change applies, are left for a person.
