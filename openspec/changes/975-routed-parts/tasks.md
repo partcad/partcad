@@ -29,7 +29,7 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a figure-eight of `via` points that crosses itself;
   - a hairpin whose gap is below the diameter, refused, and the same hairpin with the gap above it, which passes;
   - a 2 m route with 5 000 samples, checked in under 1 s, or 5 s while coverage is measuring (tracing slows pure Python several times);
-  - a `through` entry whose knots before and after lie level along its axis is refused, naming the entry, both at right angles and with the knots on either side (previous (100, 0, 100), next (-100, 0, 100), axis Z); where a `via` point on the knot before it is the cause, the coincidence is reported instead;
+  - a `through` entry whose knots before and after lie level along its axis is refused, naming the entry (previous (100, 0, 100), next (-100, 0, 100), axis Z), while one reached square to its axis whose next knot lies further along it (previous (100, 0, 0), next (0, 0, 100)) is passed; where a `via` point on the knot before it is the cause, the coincidence is reported instead;
   - the path `check_route` checks is the path built from the rounded stops, and handing it to `canonical_json` gives the same JSON as sampling again.
 - [ ] 2.4 Roll the carried frames to meet the X axis of each `through` entry and of the second end, spread evenly by arc length, the short way round (D4); name knots as the YAML does (`end 2`, `through 1`, `via point 1 of end 2`); give the JSON `ends`, `through` and per-entry `via` (D14). Verify in `test_route_path.py` that a straight route to a second end turned 90° rolls linearly to it, that one turned 270° rolls 90° the other way, that on a curved route through two entries the frame's X equals each entry's X (to 1e-9) with the frames still orthonormal, and that knot names match the YAML.
 
@@ -94,6 +94,8 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a cable through a grommet that grips it on both sides of the port passes when the joint declares the overlap, and an overlap beyond the joint's depth on either side fails;
   - a script cable that bulges within a grommet's depth passes where the joint declares the overlap, the radius being measured over the whole depth; an overlap beyond the depth still fails;
   - a tube that loops back through the same manifold, inside the joint's cylinder but far along the path from the joint, fails at that second pass; the same for a script cable, whose measured radius is not widened by the second pass;
+  - a script cable with no push distance, whose later stretch crosses the joint's plane 100 mm from the axis, gets its depth from its own section only;
+  - a bulge of the joint's own stretch lying nearer to a thin later stretch's centreline than to its own is still excused.
   - a script part's region uses the radius measured from its built section at each joint: a script cable pushed onto a barb passes within it, and fails beyond it; a script cable thicker at a `through` entry than at its ends gets the radius measured there;
   - a tube pushed onto a barb overlaps it on the cable side of its end face (+Z), and passes within the joint's depth.
 - [ ] 5.2 Make the instruction book (`assembly_guide.py`) state each route step, from end to end with tree paths, and "leave the other end at (x, y, z)" for a free end. Verify with cases in `test_assembly_guide.py` for a two-ended route and a one-ended one.

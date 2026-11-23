@@ -191,9 +191,9 @@ it is the Catmull-Rom tangent. At a `through` entry it is the sign of Z along
 which the knot it goes to next lies further than the knot it comes from (a `via`
 point, or the entry before, or that entry's lead point): the sign of Z · (next −
 previous). If the two lie level along the axis (that product is zero), neither
-sign is preferred, and the route is refused (D9) rather than given one. That
-includes, but is not only, a path that comes to the entry at right angles to its
-axis. Both tangents of a segment get the chord length times 1/cos²(a/2), where
+sign is preferred, and the route is refused (D9) rather than given one. Only
+the chord from the knot before to the knot after matters: a path that comes in
+square to the axis but leaves along it has a sign. Both tangents of a segment get the chord length times 1/cos²(a/2), where
 a is the mean angle between the tangents and the chord, capped at 2×. That is the
 length a cubic needs to follow a circular arc, so points on a circle give that
 circle's radius (to under 1 %). A segment whose tangents lie along its chord, a
@@ -315,16 +315,24 @@ advance, and do not apply to it; its
 `length` and `minBendRadius`, if declared, are still checked (D7). Where a radius
 is needed after the build, as for the interference region (D13), it is measured
 from the built solid, at the joint it is needed for, in two steps:
-1. *Depth.* The push distance; without one, twice the solid's radius in the
-   joint's plane (the plane through the joint's origin, square to its axis: the
-   end face at an end, the plane through the origin at a `through` entry). It runs
-   on the cable side of an end, and on both sides of a `through` entry.
-2. *Radius.* The largest distance from the joint's axis of the joint's own
-   stretch of the solid (D13): the part of it nearest to the stretch of path
-   within that depth of the joint, measured along the path. A script cable that
-   widens inside the joint (a bulge a grommet grips) is covered over the whole
-   depth; a stretch of the same cable that comes back past the joint later
-   along the path is not, however close it passes.
+1. *Local section.* Section the solid with the joint's plane (through the
+   joint's origin, square to its axis: the end face at an end, the plane through
+   the origin at a `through` entry) and keep only the face that contains the
+   joint's origin: the cable's own cross-section there. Another stretch of the
+   cable crossing the same plane is a separate face and is left out.
+2. *Depth.* The push distance; without one, twice the largest distance of that
+   local section from the axis. It runs on the cable side of an end, and on both
+   sides of a `through` entry, measured along the path.
+3. *The joint's own stretch* (D13). Cut the solid with a disc square to the path
+   at each end of that stretch of path, each the size of the local section plus a
+   margin, and keep the piece still connected to the local section. The cut is
+   by connection, not by distance: a stretch of the cable that passes nearby
+   later along the path is a separate piece, however close it comes, and a bulge
+   of the joint's own stretch stays with it, however close it comes to another
+   stretch.
+4. *Radius.* The largest distance from the joint's axis of that piece. A script
+   cable that widens inside the joint (a bulge a grommet grips) is covered over
+   the whole depth.
 
 The radius is measured like a sketch's, from the solid rather than declared. Beyond
 the depth, or outside the cylinder, an overlap is still reported.
@@ -550,11 +558,16 @@ same manifold can pass through the cylinder too, far along the path from the
 joint. So the allowance is tied to the joint's own stretch of cable, the stretch
 of path within the joint's depth of it measured along the path (on the cable side
 of an end, on both sides of a `through` entry). Only overlap that is inside the
-cylinder *and* belongs to that stretch is excused:
-- for a `diameter` or `sketch` profile, the stretch is the profile swept along that
-  part of the path alone, so the split is exact;
-- for a script part, which cannot be swept piecewise, a piece of the overlap
-  belongs to the stretch of path it is nearest to.
+cylinder *and* inside that stretch's piece of the solid is excused. The piece is
+found as D9 describes, by cutting the solid at the ends of the stretch and keeping
+what stays connected to the joint's own cross-section, for every profile: for a
+`diameter` or `sketch` profile it is the same piece as the profile swept along
+that part of the path alone, and for a script part it is found the same way from
+the built solid. Nearness to the path decides nothing, so a bulge next to a thin
+later stretch is still the joint's.
+
+Further geometric edge cases of this region are settled where it is built (task
+5.3), against real solids, rather than by refining this text.
 
 Whatever is left is reported, naming the cable, the part and where, including
 overlap of another stretch of the same cable inside the cylinder. Overlaps of ordinary connected parts keep the pair

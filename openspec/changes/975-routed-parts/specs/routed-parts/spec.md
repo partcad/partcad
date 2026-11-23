@@ -239,7 +239,7 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 - **THEN** the routed link is left out, and the build reports the two path positions that come closer than the profile's diameter
 
 #### Scenario: A port passed through with no way decided
-- **WHEN** the knots before and after a `through` entry lie level along its axis, as when the path comes to it at right angles, so that nothing decides which way along the axis it passes; for a routed part or a script part alike
+- **WHEN** the knots before and after a `through` entry lie level along its axis, so that nothing decides which way along the axis it passes; for a routed part or a script part alike
 - **THEN** the routed link is left out before anything is built, and the build names the entry and suggests moving a `via` point so that the path comes to it along its axis
 
 #### Scenario: Coincident knots
