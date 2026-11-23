@@ -190,7 +190,11 @@ axis (reversed at the second end, so the path arrives along it). At a `via` poin
 it is the Catmull-Rom tangent. At a `through` entry it is the sign of Z along
 which the knot it goes to next lies further than the knot it comes from (a `via`
 point, or the entry before, or that entry's lead point): the sign of Z · (next −
-previous). If the two lie level along the axis (that product is zero), neither
+previous). The knot it goes to next is a `via` point, the second end's lead
+point (or its origin, without a lead), or, when the next entry is another
+`through` entry, that entry's origin: its lead point would depend on its own
+direction, which is decided only when the path reaches it. If the two lie level
+along the axis (that product is zero), neither
 sign is preferred, and the route is refused (D9) rather than given one. Only
 the chord from the knot before to the knot after matters: a path that comes in
 square to the axis but leaves along it has a sign. Both tangents of a segment get the chord length times 1/cos²(a/2), where
