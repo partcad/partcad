@@ -595,6 +595,20 @@ def canonical_json(stops: Sequence[Stop], step: float = DEFAULT_STEP, path: Opti
     return json.dumps(document, sort_keys=True, separators=(",", ":"))
 
 
+def stops_from_json(route) -> List[Stop]:
+    """The stops a canonical route JSON (or the dict it parses to) was written from,
+    in order: the first end, each 'through' entry and the second end, each after
+    the 'via' points that lead to it. The inverse of the 'ends'/'through' part of
+    'canonical_json'."""
+    document = json.loads(route) if isinstance(route, str) else route
+    first, second = document["ends"]
+    stops: List[Stop] = []
+    for entry in [first] + list(document.get("through", [])) + [second]:
+        stops.extend(tuple(point) for point in entry.get("via", []))
+        stops.append(EndFrame(entry["origin"], entry["z"], entry["x"], entry.get("lead", 0.0)))
+    return stops
+
+
 # -- Feasibility (D9, before any sweep) -----------------------------------------
 
 

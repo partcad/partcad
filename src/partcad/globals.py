@@ -40,6 +40,7 @@ from .part_factory_gltf import PartFactoryGltf
 from .part_factory_kicad import PartFactoryKicad
 from .part_factory_manufactured import create as create_manufactured_part
 from .part_factory_obj import PartFactoryObj
+from .part_factory_routed import PartFactoryRouted
 from .part_factory_scad import PartFactoryScad
 from .part_factory_sdf import PartFactorySdf
 from .part_factory_step import PartFactoryStep
@@ -104,6 +105,8 @@ factory.register("part", "scad", PartFactoryScad)
 factory.register("part", "kicad", PartFactoryKicad)
 factory.register("part", "extrude", PartFactoryExtrude)
 factory.register("part", "sweep", PartFactorySweep)
+# A profile swept along the route an assembly places it by: see 'part_factory_routed'.
+factory.register("part", "routed", PartFactoryRouted)
 # Two other parts, combined: see 'part_factory_boolean'.
 factory.register("part", "boolean", PartFactoryBoolean)
 # What a part whose geometry is what its manufacturing makes is given as its

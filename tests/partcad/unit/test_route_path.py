@@ -24,6 +24,7 @@ from partcad.route_path import (
     canonical_stops,
     check_route,
     describe_source,
+    stops_from_json,
 )
 
 
@@ -387,3 +388,18 @@ def test_the_next_through_entry_counts_by_its_origin():
     assert path.tangents[at[("through", 1)]] == pytest.approx((0, 0, 1), abs=1e-12)
     leads = [knot.point for knot in path.knots if knot.source == ("through", 1, "lead")]
     assert leads == [pytest.approx((100, 0, -9)), pytest.approx((100, 0, 11))]
+
+
+def test_the_stops_are_read_back_from_the_json():
+    grommet = EndFrame((50, 0, 50), (1, 0, 0), lead=5)
+    stops = [
+        EndFrame((0, 0, 0), (0, 0, 1)),
+        (10, 5, 30),
+        grommet,
+        (70, -5, 40),
+        (90, 0, 20),
+        EndFrame((100, 0, 0), (0, 0, 1)),
+    ]
+    again = stops_from_json(canonical_json(stops))
+    assert canonical_json(again) == canonical_json(stops)
+    assert [isinstance(stop, EndFrame) for stop in again] == [True, False, True, False, False, True]
