@@ -346,3 +346,13 @@ def test_a_through_entry_reached_at_right_angles_is_refused():
     assert refusal.reason == "through-direction-ambiguous"
     assert refusal.point == pytest.approx((50, 0, 0))
     assert "through 1" in refusal.message
+
+
+def test_a_through_entry_with_its_neighbours_level_along_its_axis_is_refused():
+    """Not at right angles, but level: previous (100, 0, 100), next (-100, 0, 100), axis Z."""
+    stops = [EndFrame((100, 0, 100), (1, 0, 0)), EndFrame((0, 0, 0), (0, 0, 1)), EndFrame((-100, 0, 100), (1, 0, 0))]
+    path, refusals = check_route(stops, 3.0)
+    assert path is None
+    (refusal,) = refusals
+    assert refusal.reason == "through-direction-ambiguous"
+    assert "the knots before and after through 1 lie level along its axis" in refusal.message

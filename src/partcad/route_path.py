@@ -126,11 +126,12 @@ Stop = Union[EndFrame, Sequence[float]]
 
 
 class AmbiguousDirection(ValueError):
-    """The path reaches a 'through' entry at right angles to its axis, so which
-    way along the axis it passes is not decided by anything."""
+    """The knots before and after a 'through' entry lie level along its axis (as
+    when the path comes to it at right angles), so which way along the axis it
+    passes is not decided by anything."""
 
     def __init__(self, source, point):
-        super().__init__("route_path: %s is reached at right angles to its axis" % describe_source(source))
+        super().__init__("route_path: the knots before and after %s lie level along its axis" % describe_source(source))
         self.source = source
         self.point = point
 
@@ -659,8 +660,8 @@ def check_route(stops: Sequence[Stop], outer_radius: float, step: float = DEFAUL
                 problem.point,
                 {},
                 "move a 'via' point so that the path comes to it along its axis",
-                "the path reaches %s at right angles to its axis, so which way it passes is not decided"
-                % describe_source(problem.source),
+                "the knots before and after %s lie level along its axis, so which way the path passes it"
+                " is not decided" % describe_source(problem.source),
             )
         )
         return None, refusals
