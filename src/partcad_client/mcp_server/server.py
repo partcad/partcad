@@ -223,8 +223,8 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
         "object -- volume, displacement, mass, and how far apart their surfaces are -- with compare; write STEP, "
         "STL, 3MF and "
         "the rest with export. What has become of an object since it was written: its package's revisions with "
-        "revisions, what changed since one, as a unified diff, with diff, what the package depended on then with "
-        "revision_uses, and what uses it with used_by; an object of a package at a revision is "
+        "ops_list, what changed since one, as a unified diff, with ops_diff, what the package depended on then "
+        "with ops_uses, and what uses it with used_by; an object of a package at a revision is "
         "'//package@<revision>:name'. "
         "To create or change an object, edit partcad.yaml and its script with your own file "
         "tools -- the daemon reloads what changed -- then render and qual_test again. Everything else PartCAD does "
@@ -887,7 +887,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         return report(outcome)
 
     @server.tool(title="List a package's revisions", annotations=_READS)
-    async def revisions(
+    async def ops_list(
         ctx: Context,
         object: SomeObjectName = None,
         kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
@@ -896,15 +896,15 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     ) -> CallToolResult:
         """List the commits that changed the package of an object, or the package itself, newest first.
 
-        `pc revisions list --json`: each commit's id, its first eight characters, its summary, author and time,
+        `pc ops list --json`: each commit's id, its first eight characters, its summary, author and time,
         and which one is checked out ('head'). A package sharing its repository lists the commits that changed its
         own directory; one in no git repository is not published ('published': false). Any of them is a revision
-        diff, revision_uses and used_by take.
+        ops_diff, ops_uses and used_by take.
         """
         return await run(ctx, "revisions.list", {**_subject(package, object, kind), "params": _assignments(params)})
 
     @server.tool(title="What changed since a revision", annotations=_READS)
-    async def diff(
+    async def ops_diff(
         ctx: Context,
         revision: Revision,
         object: SomeObjectName = None,
@@ -917,7 +917,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     ) -> CallToolResult:
         """Show what changed in an object -- or, with no object, the package's partcad.yaml -- since a revision.
 
-        `pc revisions diff`: a unified diff of the object at the revision against the object now, each written out
+        `pc ops diff`: a unified diff of the object at the revision against the object now, each written out
         as `pc copy` writes one -- rendered, normalized, defaults left out -- so a comment or a reformatted line is
         no change; for a package, its partcad.yaml as Jinja2 rendered it at each. The diff follows the result as
         text of its own ("No change since ..." when nothing changed, 'same': true). 'missing' on a side says the
@@ -942,7 +942,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         return report(outcome, content=[TextContent(type="text", text=text)])
 
     @server.tool(title="A revision's dependencies", annotations=_READS)
-    async def revision_uses(
+    async def ops_uses(
         ctx: Context,
         revision: Revision,
         package: PackageName = None,
@@ -951,7 +951,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     ) -> CallToolResult:
         """List the dependencies a package declared at a revision, each with the commit it is at.
 
-        `pc revisions uses --json`: of the package named, or of the package the object is in. Each comes with the
+        `pc ops uses --json`: of the package named, or of the package the object is in. Each comes with the
         name that loads it at that commit ('versioned', '<package>@<sha>'), which any tool takes. Loading a
         dependency may download it.
         """
@@ -968,7 +968,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Optional[str],
             Field(
                 description="Ask about the package at this revision instead of what is checked out "
-                "('pc revisions used-by'): what refers to it by its commit, a tag or a branch."
+                "('pc ops used-by'): what refers to it by its commit, a tag or a branch."
             ),
         ] = None,
         load: Annotated[
@@ -982,7 +982,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     ) -> CallToolResult:
         """List the loaded objects that use an object -- or anything in a package -- each with how many times.
 
-        `pc used-by --json`, or with a revision `pc revisions used-by --json`. An assembly that places a bolt four
+        `pc used-by --json`, or with a revision `pc ops used-by --json`. An assembly that places a bolt four
         times uses it four times. Only what is loaded is looked at, so an empty list is not "nothing uses it":
         load asks for the workspace's packages to be loaded first.
         """
@@ -1499,7 +1499,7 @@ def _kind_flag(kind: Optional[str]) -> dict:
 
 
 def _subject(package: Optional[str], object: Optional[str], kind: Optional[str]) -> dict:
-    """What `pc revisions` and `pc used-by` ask about: the object, or with none the package (see 'operations_args')."""
+    """What `pc ops` and `pc used-by` ask about: the object, or with none the package (see 'operations_args')."""
     if not object:
         return {"package": package or ".", "kind": "package"}
     return {"package": package, "object": object, **_kind(kind)}

@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc revisions list [OBJECT]`: the commits that changed a package, newest first.
+"""`pc ops list [OBJECT]`: the commits that changed a package, newest first.
 
 What the IDE's Revisions tab lists down its left. Of the package OBJECT is in,
 or of the package `-P` selects when no OBJECT is given; a package that shares

@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc revisions uses REVISION`: the dependencies a package declared at a revision, each at its commit.
+"""`pc ops uses REVISION`: the dependencies a package declared at a revision, each at its commit.
 
 The Revisions tab's "Uses (Dependencies)" view: the name each dependency is
 declared under, the first eight characters of the commit it is at, and the

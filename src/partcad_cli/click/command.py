@@ -173,7 +173,7 @@ command_groups = [
             # What has become of an object since it was written -- the IDE's
             # Operations tabs: the package's history, what changed since a
             # revision, and what among the loaded packages uses it.
-            "revisions",
+            "ops",
             "used-by",
             "export",
             "render",

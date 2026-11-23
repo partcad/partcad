@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc revisions used-by REVISION`: what among the loaded packages uses a package at a revision.
+"""`pc ops used-by REVISION`: what among the loaded packages uses a package at a revision.
 
 The Revisions tab's "Used By" view: every object the daemon has loaded that
 refers to the package at REVISION -- by its commit, a tag, a branch, or as the

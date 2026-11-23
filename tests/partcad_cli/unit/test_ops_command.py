@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""'pc revisions list|diff|uses|used-by' and 'pc used-by': what reaches the daemon, and what is printed.
+"""'pc ops list|diff|uses|used-by' and 'pc used-by': what reaches the daemon, and what is printed.
 
 What the daemon answers is pinned beside 'partcad.revisions' and 'partcad.usage'
 and in 'tests/partcad_service_json_rpc/test_operations_tab.py'; what is pinned
@@ -55,16 +55,16 @@ UNIFIED = "--- //@aaaaaaaa:cube\n+++ //:cube\n@@ -1,2 +1,2 @@\n cube:\n-  cuboid
 
 
 def test_both_are_commands_of_their_own():
-    result = _invoke("--help")
-
-    assert "revisions" in result.output
-    assert "used-by" in result.output
+    assert _invoke("ops", "--help").exit_code == 0
+    assert _invoke("used-by", "--help").exit_code == 0
+    # Renamed before it shipped: there is no 'pc revisions' to keep.
+    assert _invoke("revisions", "--help").exit_code != 0
 
 
 def test_list_with_no_object_is_of_the_package(monkeypatch):
-    recorder = _record(monkeypatch, "revisions.list", HISTORY)
+    recorder = _record(monkeypatch, "ops.list", HISTORY)
 
-    result = _invoke("revisions", "list")
+    result = _invoke("ops", "list")
 
     assert result.exit_code == 0, result.output
     ((method, params, needs_context),) = recorder.calls
@@ -77,25 +77,25 @@ def test_list_with_no_object_is_of_the_package(monkeypatch):
 
 
 def test_list_of_an_object_says_its_kind_when_a_flag_does(monkeypatch):
-    recorder = _record(monkeypatch, "revisions.list", HISTORY)
+    recorder = _record(monkeypatch, "ops.list", HISTORY)
 
-    _invoke("revisions", "list", "-a", "-P", "//pkg", "frame")
+    _invoke("ops", "list", "-a", "-P", "//pkg", "frame")
 
     assert recorder.calls[0][1] == {"package": "//pkg", "object": "frame", "kind": "assembly", "params": []}
 
 
 def test_a_package_not_published_says_so(monkeypatch):
-    _record(monkeypatch, "revisions.list", {"package": "//", "published": False, "head": None, "revisions": []})
+    _record(monkeypatch, "ops.list", {"package": "//", "published": False, "head": None, "revisions": []})
 
-    result = _invoke("revisions", "list")
+    result = _invoke("ops", "list")
 
     assert "not published yet" in result.output
 
 
 def test_diff_prints_the_unified_diff_the_daemon_wrote(monkeypatch):
-    recorder = _record(monkeypatch, "revisions.diff", {"same": False, "unified": UNIFIED, "rows": []})
+    recorder = _record(monkeypatch, "ops.diff", {"same": False, "unified": UNIFIED, "rows": []})
 
-    result = _invoke("revisions", "diff", "-U", "1", "v1", "cube")
+    result = _invoke("ops", "diff", "-U", "1", "v1", "cube")
 
     assert result.exit_code == 0, result.output
     ((method, params, _),) = recorder.calls
@@ -105,9 +105,9 @@ def test_diff_prints_the_unified_diff_the_daemon_wrote(monkeypatch):
 
 
 def test_diff_with_no_object_is_of_the_package(monkeypatch):
-    recorder = _record(monkeypatch, "revisions.diff", {"same": True, "unified": "", "rows": []})
+    recorder = _record(monkeypatch, "ops.diff", {"same": True, "unified": "", "rows": []})
 
-    result = _invoke("revisions", "diff", "v1")
+    result = _invoke("ops", "diff", "v1")
 
     assert result.exit_code == 0, result.output
     assert recorder.calls[0][1]["kind"] == "package"
@@ -116,18 +116,18 @@ def test_diff_with_no_object_is_of_the_package(monkeypatch):
 
 @pytest.mark.parametrize("same, code", [(True, 0), (False, 1)])
 def test_diff_exit_code_says_whether_anything_changed(monkeypatch, same, code):
-    _record(monkeypatch, "revisions.diff", {"same": same, "unified": "" if same else UNIFIED, "rows": []})
+    _record(monkeypatch, "ops.diff", {"same": same, "unified": "" if same else UNIFIED, "rows": []})
 
-    result = _invoke("revisions", "diff", "--exit-code", "v1", "cube")
+    result = _invoke("ops", "diff", "--exit-code", "v1", "cube")
 
     assert result.exit_code == code
 
 
 def test_diff_json_is_the_daemon_s_answer(monkeypatch):
     answer = {"same": False, "unified": UNIFIED, "rows": [{"tag": "equal"}]}
-    _record(monkeypatch, "revisions.diff", answer)
+    _record(monkeypatch, "ops.diff", answer)
 
-    result = _invoke("revisions", "diff", "--json", "v1", "cube")
+    result = _invoke("ops", "diff", "--json", "v1", "cube")
 
     assert json.loads(result.output) == answer
 
@@ -135,7 +135,7 @@ def test_diff_json_is_the_daemon_s_answer(monkeypatch):
 def test_uses_lists_each_dependency_at_its_commit(monkeypatch):
     recorder = _record(
         monkeypatch,
-        "revisions.uses",
+        "ops.uses",
         {
             "package": "//",
             "revision": "a" * 40,
@@ -145,7 +145,7 @@ def test_uses_lists_each_dependency_at_its_commit(monkeypatch):
         },
     )
 
-    result = _invoke("revisions", "uses", "v1")
+    result = _invoke("ops", "uses", "v1")
 
     assert result.exit_code == 0, result.output
     assert recorder.calls[0][0] == "revisions.uses"
@@ -153,14 +153,14 @@ def test_uses_lists_each_dependency_at_its_commit(monkeypatch):
     assert result.output.split() == ["std", "f00dfeed", "//std@" + "f" * 40]
 
 
-def test_revisions_used_by_is_a_command_of_two_words(monkeypatch):
+def test_ops_used_by_is_a_command_of_two_words(monkeypatch):
     recorder = _record(
         monkeypatch,
-        "revisions.used_by",
+        "ops.used_by",
         {"package": "//", "revision": "a" * 40, "objects": [{"object": "//x:pair", "kind": "assembly", "count": 2}]},
     )
 
-    result = _invoke("revisions", "used-by", "v1")
+    result = _invoke("ops", "used-by", "v1")
 
     assert result.exit_code == 0, result.output
     assert recorder.calls[0][0] == "revisions.used_by"
@@ -187,10 +187,10 @@ def test_a_kind_flag_needs_an_object():
 @pytest.mark.parametrize(
     "module, method, command",
     [
-        ("revisions.list", "revisions.list", ["revisions", "list"]),
-        ("revisions.diff", "revisions.compare", ["revisions", "diff", "v1"]),
-        ("revisions.uses", "revisions.uses", ["revisions", "uses", "v1"]),
-        ("revisions.used_by", "revisions.used_by", ["revisions", "used-by", "v1"]),
+        ("ops.list", "revisions.list", ["ops", "list"]),
+        ("ops.diff", "revisions.compare", ["ops", "diff", "v1"]),
+        ("ops.uses", "revisions.uses", ["ops", "uses", "v1"]),
+        ("ops.used_by", "revisions.used_by", ["ops", "used-by", "v1"]),
         ("used_by", "usage.used_by", ["used-by"]),
         ("copy", "copy.object", ["copy"]),
     ],

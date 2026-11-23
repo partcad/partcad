@@ -4611,7 +4611,7 @@ def revisions_compare(session, params):
     when PartCAD read it -- and the answer is the rows of a side-by-side view
     (see ``partcad.revisions.compare``), and the same as a unified diff
     (``unified``, with ``lines`` lines around each change): what the IDE
-    draws, and what ``pc revisions diff`` and an agent read. The revision is
+    draws, and what ``pc ops diff`` and an agent read. The revision is
     loaded as ``<package>@<revision>`` into the same context, where it stays.
     """
     ctx = _ctx(session, params)

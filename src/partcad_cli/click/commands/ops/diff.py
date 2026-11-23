@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc revisions diff REVISION [OBJECT]`: what changed since a revision, as a unified diff.
+"""`pc ops diff REVISION [OBJECT]`: what changed since a revision, as a unified diff.
 
 The comparison the IDE's Revisions tab draws side by side, printed the way
 'git diff' prints one: the object at REVISION against the object as it is now,

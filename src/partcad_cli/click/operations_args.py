@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""What `pc revisions` and `pc used-by` share: what they are about, and how they print what the daemon answers.
+"""What `pc ops` and `pc used-by` share: what they are about, and how they print what the daemon answers.
 
 The IDE's Operations tabs on the command line. Every one of them is about an
 object or, with no OBJECT, a whole package -- the package `-P` selects, or this
