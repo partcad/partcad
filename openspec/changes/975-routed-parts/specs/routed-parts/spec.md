@@ -238,9 +238,9 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 - **WHEN** `via` points make the path loop back through itself
 - **THEN** the routed link is left out, and the build reports the two path positions that come closer than the profile's diameter
 
-#### Scenario: A port passed through at right angles
-- **WHEN** the path reaches a `through` entry at right angles to its axis, so that nothing decides which way along the axis it passes
-- **THEN** the routed link is left out, and the build names the entry and suggests moving a `via` point so that the path comes to it along its axis
+#### Scenario: A port passed through with no way decided
+- **WHEN** the knots before and after a `through` entry lie level along its axis, as when the path comes to it at right angles, so that nothing decides which way along the axis it passes; for a routed part or a script part alike
+- **THEN** the routed link is left out before anything is built, and the build names the entry and suggests moving a `via` point so that the path comes to it along its axis
 
 #### Scenario: Coincident knots
 - **WHEN** a `via` point coincides with an end's or a `through` entry's origin, two `via` points coincide, or two ends are at the same point, whether or not the two are next to each other along the route
@@ -276,6 +276,10 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 #### Scenario: Grommet gripping the cable on both sides
 - **WHEN** a `through` entry joins a cable to a grommet in the middle of a panel, the joint declares the overlap, and the grommet grips the cable on both sides of its port
 - **THEN** no interference is reported for the grommet on either side, within the joint's depth from the port
+
+#### Scenario: Same cable back past the joint
+- **WHEN** a cable pushed onto a manifold's barb loops back and passes through the manifold again within the joint's depth of the barb's axis but far along the path from the joint
+- **THEN** `pc qual test` fails the assembly with an interference at that second pass: only the joint's own stretch of cable is excused
 
 #### Scenario: Joined at one place, colliding at another
 - **WHEN** a hose is pushed onto a manifold's barb, whose port declares `snapIn`, and its path also runs back through the same manifold elsewhere

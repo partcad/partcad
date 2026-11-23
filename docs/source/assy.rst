@@ -450,8 +450,9 @@ sets of points leave no room for the profile:
 * the path comes back closer to itself than the profile's diameter;
 * two of its points coincide, such as a `via` point on an end, even if they are
   not next to each other;
-* the path reaches a port it passes `through` at right angles to that port's
-  axis, so which way it passes is not decided;
+* the points before and after a port it passes `through` lie level along that
+  port's axis (as when the path comes to it at right angles), so which way it
+  passes is not decided;
 * the sweep does not come out as one valid solid.
 
 None of these has a solid, so the link is left out of the assembly. It is not

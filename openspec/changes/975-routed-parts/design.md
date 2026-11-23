@@ -187,11 +187,13 @@ the lead point before it, its origin and the lead point after it; then the secon
 end's `via` points, its lead point, and last its origin. The path therefore always
 finishes on the second end's face, with or without a lead. The tangent at an end is its Z
 axis (reversed at the second end, so the path arrives along it). At a `via` point
-it is the Catmull-Rom tangent. At a `through` entry it is the sign of Z that
-points from the knot the path comes from (a `via` point, or the entry before, or
-that entry's lead point) towards the knot it goes to next. If the path reaches the
-entry at right angles to its axis, nothing decides the sign, and the route is
-refused (D9) rather than given one. Both tangents of a segment get the chord length times 1/cos²(a/2), where
+it is the Catmull-Rom tangent. At a `through` entry it is the sign of Z along
+which the knot it goes to next lies further than the knot it comes from (a `via`
+point, or the entry before, or that entry's lead point): the sign of Z · (next −
+previous). If the two lie level along the axis (that product is zero), neither
+sign is preferred, and the route is refused (D9) rather than given one. That
+includes, but is not only, a path that comes to the entry at right angles to its
+axis. Both tangents of a segment get the chord length times 1/cos²(a/2), where
 a is the mean angle between the tangents and the chord, capped at 2×. That is the
 length a cubic needs to follow a circular arc, so points on a circle give that
 circle's radius (to under 1 %). A segment whose tangents lie along its chord, a
@@ -300,14 +302,16 @@ Before any sweep, the core checks the D4 metrics. The build is refused when:
    the first, come closer than the diameter in space. No margin is added: the
    nearest-neighbour rule already keeps one stretch bending from counting as two
    stretches meeting.
-4. **Direction at a `through` entry undecided:** the path reaches the entry at
-   right angles to its axis (D4). Where that comes from a `via` point on the knot
+4. **Direction at a `through` entry undecided:** the knots before and after the
+   entry lie level along its axis (D4). Where that comes from a `via` point on the knot
    just before it, the coincidence is reported instead, being the cause.
 
 A script part that declares `route` has no `diameter` or `sketch`: its profile
-is whatever its script builds, and is not known before it runs. Only check 1
-applies to it before it is built, and the post-build checks below after. Checks 2
-and 3 need the profile's radius in advance, and do not apply to it; its
+is whatever its script builds, and is not known before it runs. Checks 1 and 4,
+which need no profile, apply to it before it is built (its script receives the
+sampled path, which needs a direction at every `through` entry), and the
+post-build checks below after. Checks 2 and 3 need the profile's radius in
+advance, and do not apply to it; its
 `length` and `minBendRadius`, if declared, are still checked (D7). Where a radius
 is needed after the build, as for the interference region (D13), it is measured
 from the built solid, at the joint it is needed for, in two steps:
@@ -315,9 +319,12 @@ from the built solid, at the joint it is needed for, in two steps:
    joint's plane (the plane through the joint's origin, square to its axis: the
    end face at an end, the plane through the origin at a `through` entry). It runs
    on the cable side of an end, and on both sides of a `through` entry.
-2. *Radius.* The largest distance from the joint's axis of any part of the solid
-   within that depth, not only in the joint's plane. A script cable that widens
-   inside the joint (a bulge a grommet grips) is covered over the whole depth.
+2. *Radius.* The largest distance from the joint's axis of the joint's own
+   stretch of the solid (D13): the part of it nearest to the stretch of path
+   within that depth of the joint, measured along the path. A script cable that
+   widens inside the joint (a bulge a grommet grips) is covered over the whole
+   depth; a stretch of the same cable that comes back past the joint later
+   along the path is not, however close it passes.
 
 The radius is measured like a sketch's, from the solid rather than declared. Beyond
 the depth, or outside the cylinder, an overlap is still reported.
@@ -537,8 +544,20 @@ D9):
   origin.
 
 The depth is the connection's push distance, or else the profile's diameter.
-Only the part of the overlap inside that region is excused; whatever is left is reported, naming the
-cable, the part and where. Overlaps of ordinary connected parts keep the pair
+
+The region in space is not enough on its own: a cable that loops back through the
+same manifold can pass through the cylinder too, far along the path from the
+joint. So the allowance is tied to the joint's own stretch of cable, the stretch
+of path within the joint's depth of it measured along the path (on the cable side
+of an end, on both sides of a `through` entry). Only overlap that is inside the
+cylinder *and* belongs to that stretch is excused:
+- for a `diameter` or `sketch` profile, the stretch is the profile swept along that
+  part of the path alone, so the split is exact;
+- for a script part, which cannot be swept piecewise, a piece of the overlap
+  belongs to the stretch of path it is nearest to.
+
+Whatever is left is reported, naming the cable, the part and where, including
+overlap of another stretch of the same cable inside the cylinder. Overlaps of ordinary connected parts keep the pair
 rule; tightening that too would be a separate change to the check.
 
 A detour through free air that touches nothing is still not caught. It shows in
