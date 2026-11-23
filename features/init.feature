@@ -131,6 +131,88 @@ Feature: `pc init` command
     And a file named ".mcp.json" should contain "partcad-home:/home/pc/.partcad"
     And a file named ".cursor/mcp.json" should contain "${workspaceFolder}:${workspaceFolder}"
     And a file named ".mcp.json" should not contain "docker.sock"
+    And the MCP server "partcad" in ".mcp.json" should serve "."
+    And the MCP server "partcad" in ".cursor/mcp.json" should serve "."
+
+  @pc-init @agent-skills @mcp @roots
+  Scenario: Give every PartCAD root in a repository an MCP server of its own
+    # One "pc mcp" serves one PartCAD root, and a repository can hold several.
+    # The files are at the repository's root, which is what an editor opens;
+    # each entry names its root relative to it. The second root's "pc init"
+    # used to replace the first root's entry, and found "Render" taken.
+    Given a directory named ".git" exists
+    And a directory named "hw" exists
+    And a directory named "tools/jigs" exists
+    When I run "pc --no-ansi --offline -p hw init"
+    Then the command should exit with a status code of "0"
+    And a file named "hw/partcad.yaml" should be created
+    When I run "pc --no-ansi --offline -p tools/jigs init"
+    Then the command should exit with a status code of "0"
+    And there should be 2 MCP servers in ".mcp.json"
+    And the MCP server "partcad" in ".mcp.json" should serve "hw"
+    And the MCP server "partcad-tools-jigs" in ".mcp.json" should serve "tools/jigs"
+    And there should be 2 MCP servers in ".cursor/mcp.json"
+    And the MCP server "partcad-tools-jigs" in ".cursor/mcp.json" should serve "tools/jigs"
+    And the file ".vscode/launch.json" should hold the "Render" run command
+    And the file ".vscode/launch.json" should hold the "Render (tools/jigs)" run command
+    And a file named "hw/.mcp.json" should not exist
+    # Run again from the top, where there is no package: every root below is
+    # served, and none twice.
+    When I run "pc --no-ansi init --skills-only"
+    Then the command should exit with a status code of "0"
+    And there should be 2 MCP servers in ".mcp.json"
+    And there should be 2 MCP servers in ".cursor/mcp.json"
+
+  @pc-init @agent-skills @mcp @roots
+  Scenario: A subpackage is served by its root's MCP server
+    Given a directory named ".git" exists
+    And a directory named "hw/motor" exists
+    When I run "pc --no-ansi --offline -p hw init"
+    Then the command should exit with a status code of "0"
+    When I run "pc --no-ansi --offline -p hw/motor init"
+    Then the command should exit with a status code of "0"
+    And there should be 1 MCP servers in ".mcp.json"
+    And the MCP server "partcad" in ".mcp.json" should serve "hw"
+    And the file ".vscode/launch.json" should hold the "Render (hw/motor)" run command
+
+  @pc-init @agent-skills @mcp @editor-folder
+  Scenario: Write the agents' files into the folder the editor opens
+    # A folder holding several repositories: no agent reads a repository's
+    # files from there, so they go where the editor does read them.
+    Given a directory named "robot/.git" exists
+    And a directory named "robot/hw" exists
+    When I run "pc --no-ansi --offline -p robot/hw init --editor-folder ."
+    Then the command should exit with a status code of "0"
+    And the MCP server "partcad" in ".mcp.json" should serve "robot/hw"
+    And the MCP server "partcad" in ".cursor/mcp.json" should serve "robot/hw"
+    And a file named ".cursor/skills/pc-init/SKILL.md" should be created
+    And the file ".vscode/launch.json" should hold the "Render" run command
+    And a file named "robot/.mcp.json" should not exist
+
+  @pc-init @agent-skills @mcp @editor-folder
+  Scenario: In a terminal of the editor, write into the folder its window has open
+    # The PartCAD extension tells each workspace folder's terminals which
+    # folder that is, which "pc init" cannot otherwise know.
+    Given a directory named "robot/.git" exists
+    And a directory named "robot/hw" exists
+    And the editor extension says the window has "." open
+    When I run "pc --no-ansi --offline -p robot/hw init"
+    Then the command should exit with a status code of "0"
+    And the MCP server "partcad" in ".mcp.json" should serve "robot/hw"
+    And the file ".vscode/launch.json" should hold the "Render" run command
+    And a file named "robot/.mcp.json" should not exist
+
+  @pc-init @agent-skills @mcp @editor-folder
+  Scenario: A folder the editor has open but the package is not in is not written into
+    # A terminal keeps its folder after it "cd"s out of it.
+    Given a directory named "robot/.git" exists
+    And a directory named "robot/hw" exists
+    And the editor extension says the window has "notes" open
+    When I run "pc --no-ansi --offline -p robot/hw init"
+    Then the command should exit with a status code of "0"
+    And STDERR should contain "is not inside it"
+    And the MCP server "partcad" in "robot/.mcp.json" should serve "hw"
+    And a file named "notes/.mcp.json" should not exist
 
   @pc-init @agent-skills @skills-only
   Scenario: Install the skills into a repository that has a package already

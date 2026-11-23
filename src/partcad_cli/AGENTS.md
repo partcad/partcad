@@ -180,9 +180,11 @@ Those two are the only daemon calls an in-process command makes, and `IN_PROCESS
 widening it is a decision somebody makes on purpose.
 
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
-`init` (creates the workspace, before any package or context exists, and adds the `Render` command to the
-repository's `.vscode/launch.json` — see `src/partcad/launch_config.py`; the daemon's `init` operation
-does the same, so both entry points leave the same repository behind), `config` (prints the client's resolved
+`init` (creates the workspace, before any package or context exists, and writes into the folder an editor opens:
+the `Render` command in `.vscode/launch.json`, the agents' skills, MCP servers and `AGENTS.md` section -- see
+`src/partcad/launch_config.py` and `src/partcad/ai_agents`. The editor extension's "Init package" runs `pc init`
+too, for that reason, and then asks the daemon only to load the package; the daemon's `init` operation, which
+writes `partcad.yaml` and `Render` alone, is left for the FreeCAD addon), `config` (prints the client's resolved
 `user_config` with its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses this host), and **all of
 `pc system ...`** — `system status`, `system reset` and `system set telemetry ...` act on the machine the CLI
 runs on, by definition: its internal state directory, its user configuration — and `upgrade`, which replaces
