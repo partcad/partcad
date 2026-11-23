@@ -181,3 +181,20 @@ def test_the_docker_catalog_entry_runs_pc_mcp_on_the_mounted_workspace_with_the_
 def test_the_docker_catalog_entry_does_not_hand_over_the_hosts_docker():
     assert "docker.sock" not in CATALOG.read_text(encoding="utf-8").split("\nname:")[1]
     assert not yaml.safe_load(CATALOG.read_text(encoding="utf-8"))["run"].get("disableNetwork")
+
+
+def test_the_docker_catalog_mounts_the_workspace_as_picked_and_writable_only_once_allowed():
+    """Docker's MCP gateway checks the host side of a bind itself (`pkg/gateway/docker_binds.go` there).
+
+    It refuses a folder outside its temporary directories unless it is allowed, mounts it read-only unless
+    MCP_GATEWAY_DOCKER_BIND_ALLOW_WRITABLE_PATHS names it, and refuses an explicit `:rw` it does not name. So
+    no mode, which is writable exactly when the person allowed it; and the source as the person picked it, since
+    `volume-target` and `volume` turn `C:\\work` into `/C/work`, a path inside a container and no folder on Windows.
+    The person is told what to allow where they pick the folder.
+    """
+    entry = yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
+    (workspace,) = [volume for volume in entry["run"]["volumes"] if "partcad.workspace" in volume]
+    template, separator, target = workspace.partition("}}:")
+    assert separator and "|" not in template, workspace
+    assert target == entry["run"]["command"][1], "the package `-p` names, and no mode after it"
+    assert "MCP_GATEWAY_DOCKER_BIND_ALLOW_WRITABLE_PATHS" in entry["config"]["description"]

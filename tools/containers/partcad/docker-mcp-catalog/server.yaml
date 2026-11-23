@@ -46,14 +46,28 @@ run:
     - /workspace
     - mcp
   volumes:
-    - '{{partcad.workspace|volume-target}}:/workspace'
+    # The folder as the person picked it: the gateway resolves and checks the
+    # host side itself. Not `volume-target` of it, which is for a path inside
+    # the container and turns `C:\work` into `/C/work`, no folder on Windows.
+    # And no mode, on purpose: the gateway refuses a host folder outside its
+    # temporary directories unless it is allowed, mounts it read-only unless
+    # MCP_GATEWAY_DOCKER_BIND_ALLOW_WRITABLE_PATHS names it, and refuses an
+    # explicit `:rw` it does not -- so with no mode it is writable exactly
+    # when the person has allowed that. See "Docker's MCP Catalog" in
+    # `../README.md`.
+    - "{{partcad.workspace}}:/workspace"
     # The sandboxes and caches, kept between runs. Without it every session
     # builds a CAD sandbox from nothing, which takes minutes.
     - partcad-home:/home/pc/.partcad
   # Not `disableNetwork`: the first render builds a conda sandbox, and a
   # package's own requirements, from conda-forge and PyPI.
 config:
-  description: The PartCAD workspace the agent works in, mounted into the container at /workspace
+  description: >-
+    The PartCAD workspace the agent works in, mounted into the container at /workspace.
+    Docker's MCP gateway mounts a folder only once it is allowed: set
+    MCP_GATEWAY_DOCKER_BIND_ALLOW_WRITABLE_PATHS to this folder in the gateway's environment
+    (the env of the MCP client entry that runs `docker mcp gateway run`) for PartCAD to work
+    in it, or MCP_GATEWAY_DOCKER_BIND_ALLOWED_PATHS to it or a parent for read-only access.
   parameters:
     type: object
     properties:

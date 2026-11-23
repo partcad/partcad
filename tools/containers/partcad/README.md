@@ -141,5 +141,23 @@ own `/work`, and the entrypoint takes the uid and gid from `/workspace`, the pac
 `/work`, which belongs to the image's own uid. `user:` would not do: it is a fixed value or one the person types in,
 and nothing in the catalog can work out who owns the folder they picked.
 
+**The workspace has to be allowed in Docker's MCP gateway**, which checks every host folder an entry mounts (since
+its v0.43.1: `pkg/gateway/docker_binds.go`, and "Host Bind Mount Safety" in its `docs/server-entry-spec.md`):
+
+* A folder outside the temporary directories (`/tmp`, `/var/tmp`, the OS's) is refused, and the server does not
+  start, unless `MCP_GATEWAY_DOCKER_BIND_ALLOWED_PATHS` holds it or a parent of it. It is then mounted read-only.
+* It is writable only when `MCP_GATEWAY_DOCKER_BIND_ALLOW_WRITABLE_PATHS` names that exact folder, which also lets
+  it through on its own. That is the one setting a PartCAD workspace needs.
+* Both are read from the gateway's environment, so they go in the `env` of the MCP client's entry that starts
+  `docker mcp gateway run`; several paths are separated by `:`, or `;` on Windows.
+
+Read-only, PartCAD lists, shows, looks at, qualifies, lints, compares and searches, and the tools that write into
+the workspace -- `export`, `qual_add`, `comment_add`, and an `execute` of a method that writes -- fail. Its own
+state is the `partcad-home` volume, which is no host folder and which the gateway does not check.
+
+So the workspace's volume has no mode: an explicit `:rw` is refused unless allowed, and with no mode it is writable
+exactly when it is. Its source is the folder as the person picked it, not `volume-target` of it -- that filter is
+for a path inside the container, and turns `C:\work` into `/C/work`, which is no folder on a Windows host.
+
 The catalog runs the container isolated and without the host's Docker socket, so it is the conda-in-the-container
 way of running the image: everything but KiCad and containerized plugins.
