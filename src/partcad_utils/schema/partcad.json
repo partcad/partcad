@@ -2413,7 +2413,7 @@
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
                     "obj", "gltf", "kicad", "compound", "fcstd", "wall", "iges", "f3d",
                     "sldprt", "ipt", "catpart", "sat", "pvz", "usd", "heightmap", "dem", "pointcloud",
-                    "e57", "voxels", "boolean"
+                    "e57", "voxels", "boolean", "routed"
                   ]
                 },
                 "aliases": {
@@ -2470,7 +2470,22 @@
                 "ratio": { "type": "number", "minimum": 0.5, "maximum": 1.0 },
                 "length": {
                   "type": ["number", "string"],
-                  "description": "'wall' only: how long the wall is along its base, in millimetres - along the arc, for an arc wall. A number, or a '%...%' expression over the part's parameters."
+                  "description": "'wall': how long the wall is along its base, in millimetres - along the arc, for an arc wall. A number, or a '%...%' expression over the part's parameters. 'routed': how long the real cable is, in millimetres; 'pc qual test' fails an assembly whose route is longer, and the route is never reshaped to meet it."
+                },
+                "diameter": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "'routed' only: the outer diameter of a round cable, hose or tube, in millimetres. A routed part gives this or 'sketch', not both."
+                },
+                "innerDiameter": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "'routed' only, with 'diameter': the bore of a hollow tube, in millimetres. Smaller than 'diameter', which the part checks, the schema being unable to compare two values."
+                },
+                "minBendRadius": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "'routed' only: the tightest bend the real cable is rated for, measured at its centreline, in millimetres; 'pc qual test' fails an assembly whose route bends tighter. A bend tighter than the profile's own radius cannot be built at all, and is refused by the build."
                 },
                 "height": {
                   "type": ["number", "string"],
@@ -2690,6 +2705,17 @@
                   "description": "An alias is the object it names under another name, and takes no 'map:'. Names of its own for what that object has are given by an enrich of the same 'source'.",
                   "if": { "properties": { "type": { "const": "alias" } }, "required": ["type"] },
                   "then": { "properties": { "map": false } }
+                },
+                {
+                  "description": "A routed part's profile is a round section ('diameter', hollow with 'innerDiameter') or a sketch ('sketch'): exactly one of the two.",
+                  "if": { "properties": { "type": { "const": "routed" } }, "required": ["type"] },
+                  "then": {
+                    "oneOf": [
+                      { "required": ["diameter"], "not": { "required": ["sketch"] } },
+                      { "required": ["sketch"], "not": { "required": ["diameter"] } }
+                    ],
+                    "dependencies": { "innerDiameter": ["diameter"] }
+                  }
                 }
               ],
               "additionalProperties": false
