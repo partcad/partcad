@@ -40,7 +40,7 @@ class Loader(click.RichGroup):
                     rv.append(filename.replace("_", "-"))
                 elif filename.endswith(".py") and filename != "__init__.py":
                     # A command of two words is a module with an underscore:
-                    # 'used_by.py' is 'pc used-by', which is how it is typed.
+                    # 'used_by.py' is 'pc ops used-by', which is how it is typed.
                     rv.append(filename[:-3].replace("_", "-"))
             rv.sort()
             return rv

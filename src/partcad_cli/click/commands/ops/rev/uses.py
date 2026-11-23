@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc ops uses REVISION`: the dependencies a package declared at a revision, each at its commit.
+"""`pc ops rev uses REVISION`: the dependencies a package declared at a revision, each at its commit.
 
 The Revisions tab's "Uses (Dependencies)" view: the name each dependency is
 declared under, the first eight characters of the commit it is at, and the
@@ -13,9 +13,9 @@ takes. Loading a dependency may download it.
 
 import rich_click as click
 
-from ...operations_args import echo_json, print_dependencies
-from ...parameters import param_option, param_params
-from ...service import run
+from ....operations_args import echo_json, print_dependencies
+from ....parameters import param_option, param_params
+from ....service import run
 
 
 @click.command(

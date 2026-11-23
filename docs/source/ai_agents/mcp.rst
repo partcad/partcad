@@ -341,23 +341,23 @@ its compound, rather than as the tree of what it places (see :ref:`part-compound
      - ``pc compare --json``
      - Reads one part or assembly against another: volume, mass, tolerances, with ``displacement`` what each
        would push aside if submerged, and with ``surface_distance`` how far apart their surfaces are. ``ok`` is false when something it was held to does not hold.
-   * - ``ops_list``
-     - ``pc ops list --json``
+   * - ``ops_rev_list``
+     - ``pc ops rev list --json``
      - The commits that changed an object's package -- or, with no object, the package -- newest first, and which
        is checked out. See :doc:`/digital_thread/lifecycle/operations`.
-   * - ``ops_diff``
-     - ``pc ops diff``
+   * - ``ops_rev_diff``
+     - ``pc ops rev diff``
      - What changed in an object, or with no object the package's rendered ``partcad.yaml``, since a
        ``revision``: a unified diff, as text after the result, of both sides written as ``pc copy`` writes them.
        ``lines`` is ``-U``. Where the Digital Thread draws the comparison side by side, this is the same comparison
        as a unified diff.
-   * - ``ops_uses``
-     - ``pc ops uses --json``
+   * - ``ops_rev_uses``
+     - ``pc ops rev uses --json``
      - The dependencies a package declared at a ``revision``, each with its commit and the name that loads it there.
-   * - ``used_by``
-     - ``pc used-by --json``
+   * - ``ops_used_by``
+     - ``pc ops used-by --json``
      - The objects PartCAD has loaded that use an object, or anything in a package, each with how many times; with
-       ``revision``, what uses the package at that revision (``pc ops used-by``). ``load`` is ``--load``.
+       ``revision``, what uses the package at that revision (``pc ops rev used-by``). ``load`` is ``--load``.
    * - ``version``
      - ``pc version``
      - The version of the server and of the daemon serving the workspace.

@@ -76,8 +76,8 @@ _OPERATIONS = {
     # requirement of an object, written into its declaration or taken out.
     "requirements.add": operations.requirements_add,
     "requirements.remove": operations.requirements_remove,
-    # What the IDE's Operations tabs are drawn from, and 'pc ops list',
-    # 'diff', 'uses' and 'used-by' and 'pc used-by': the commits that changed a
+    # What the IDE's Operations tabs are drawn from, and 'pc ops rev list',
+    # 'diff', 'uses' and 'used-by' and 'pc ops used-by': the commits that changed a
     # package, an object compared with one of them (side by side, and as a
     # unified diff), and what uses what among what the context has loaded (see
     # 'partcad.revisions' and 'partcad.usage').

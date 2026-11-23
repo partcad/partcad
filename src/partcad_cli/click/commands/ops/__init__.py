@@ -19,16 +19,15 @@ class OpsCommands(Loader):
 @click.command(
     cls=OpsCommands,
     help=(
-        "Operations: the revisions of a package in its git repository -- list them, show what changed in an "
-        "object (or the package) since one of them, and what the package used and was used by at one"
+        "Operations: what has become of an object since it was written -- the revisions of its package (rev) "
+        "and what uses it (used-by)"
     ),
 )
 def cli() -> None:
-    """The `pc ops` group: `list`, `diff`, `uses` and `used-by`.
+    """The `pc ops` group: `rev` and `used-by`.
 
-    The IDE's Operations > Revisions tab on the command line, asking the daemon
-    what the tab asks it (`revisions.list`, `revisions.compare`,
-    `revisions.uses`, `revisions.used_by`). A revision is loaded into the
-    daemon's context as `<package>@<sha>` and stays there, as it does for the tab
-    (see "A package at a revision" in docs/source/config_package.rst).
+    The IDE's Operations tabs on the command line: `pc ops rev` is its
+    Revisions tab and `pc ops used-by` its Used By tab, each asking the daemon
+    what the tab asks it. `rev` is a group of its own so that what is done with
+    a revision (`pc ops rev list|diff|uses|used-by`) has room to grow beside it.
     """

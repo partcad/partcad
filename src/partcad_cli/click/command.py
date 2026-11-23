@@ -174,7 +174,6 @@ command_groups = [
             # Operations tabs: the package's history, what changed since a
             # revision, and what among the loaded packages uses it.
             "ops",
-            "used-by",
             "export",
             "render",
             # Beside `render` because `pc render -t pdf` writes the same book:

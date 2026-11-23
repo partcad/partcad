@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc ops list [OBJECT]`: the commits that changed a package, newest first.
+"""`pc ops rev list [OBJECT]`: the commits that changed a package, newest first.
 
 What the IDE's Revisions tab lists down its left. Of the package OBJECT is in,
 or of the package `-P` selects when no OBJECT is given; a package that shares
@@ -12,9 +12,9 @@ its repository with others lists the commits that changed its own directory.
 
 import rich_click as click
 
-from ...operations_args import echo_json, print_revisions, target_options, target_params
-from ...parameters import param_option, param_params
-from ...service import run
+from ....operations_args import echo_json, print_revisions, target_options, target_params
+from ....parameters import param_option, param_params
+from ....service import run
 
 
 @click.command(

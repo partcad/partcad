@@ -66,26 +66,26 @@ Every view of the tab is a command, asking the daemon what the tab asks it:
 
 .. code-block:: shell
 
-  pc ops list bracket                           # the package's commits, newest first
-  pc ops diff v1.2 bracket                      # what changed since v1.2, as a unified diff
-  pc ops diff v1.2                              # the package's partcad.yaml, as rendered at each
-  pc ops uses v1.2                              # what it depended on then, each at its commit
-  pc ops used-by v1.2                           # what loaded uses the package at v1.2
-  pc used-by --load bracket                     # what in this workspace uses the bracket
-  pc info //@v1.2:bracket                       # an object at a revision
-  pc copy //@v1.2:bracket bracket_v1            # brought back under a name of its own
-  pc ide view --operations-revisions :bracket   # this tab
+  pc ops rev list bracket                      # the package's commits, newest first
+  pc ops rev diff v1.2 bracket                 # what changed since v1.2, as a unified diff
+  pc ops rev diff v1.2                         # the package's partcad.yaml, as rendered at each
+  pc ops rev uses v1.2                         # what it depended on then, each at its commit
+  pc ops rev used-by v1.2                      # what loaded uses the package at v1.2
+  pc ops used-by --load bracket                # what in this workspace uses the bracket
+  pc info //@v1.2:bracket                      # an object at a revision
+  pc copy //@v1.2:bracket bracket_v1           # brought back under a name of its own
+  pc ide view --operations-revisions :bracket  # this tab
   pc ide view --operations-used-by :bracket
 
-Where the tab draws a comparison side by side, ``pc ops diff`` prints it
+Where the tab draws a comparison side by side, ``pc ops rev diff`` prints it
 as a unified diff -- the same comparison of the same two texts, written by the
-daemon (see ``pc ops diff`` in :doc:`/cli`).
+daemon (see ``pc ops rev diff`` in :doc:`/cli`).
 
 Agent skills
 ============
 
 None of its own. An agent reaches the same answers through the MCP server
-(``pc mcp``), whose ``ops_list``, ``ops_diff``, ``ops_uses`` and ``used_by``
+(``pc mcp``), whose ``ops_rev_list``, ``ops_rev_diff``, ``ops_rev_uses`` and ``ops_used_by``
 tools are these commands, the diff unified as the command prints it -- and
 through ``execute``, which reaches the daemon methods the tab is drawn from:
 ``revisions.list``, ``revisions.compare``, ``revisions.uses``,

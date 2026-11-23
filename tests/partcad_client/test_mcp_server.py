@@ -125,10 +125,10 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
             "login",
             "instructions",
             "compare",
-            "ops_list",
-            "ops_diff",
-            "ops_uses",
-            "used_by",
+            "ops_rev_list",
+            "ops_rev_diff",
+            "ops_rev_uses",
+            "ops_used_by",
             "version",
             "list_methods",
             "execute",
@@ -155,10 +155,10 @@ def test_the_annotations_do_not_claim_less_than_the_truth(tmp_path):
         "search",
         "instructions",
         "compare",
-        "ops_list",
-        "ops_diff",
-        "ops_uses",
-        "used_by",
+        "ops_rev_list",
+        "ops_rev_diff",
+        "ops_rev_uses",
+        "ops_used_by",
     ):
         assert tools[name].read_only_hint is True, name
     assert tools["export"].read_only_hint is False
@@ -236,10 +236,10 @@ def test_a_list_value_is_written_the_way_a_name_spells_it(tmp_path):
         ("export", "render.inline", {"format": "step", "path": "out/box.step"}),
         ("qual_test", "qual.run", {}),
         ("instructions", "assembly.guide", {}),
-        ("ops_list", "revisions.list", {}),
-        ("ops_diff", "revisions.compare", {"revision": "v1"}),
-        ("ops_uses", "revisions.uses", {"revision": "v1"}),
-        ("used_by", "usage.used_by", {}),
+        ("ops_rev_list", "revisions.list", {}),
+        ("ops_rev_diff", "revisions.compare", {"revision": "v1"}),
+        ("ops_rev_uses", "revisions.uses", {"revision": "v1"}),
+        ("ops_used_by", "usage.used_by", {}),
     ],
 )
 def test_every_tool_naming_an_object_takes_its_parameter_values(tmp_path, tool, method, arguments):
@@ -1071,23 +1071,23 @@ def test_no_other_client_is_made_to_give_a_request(tmp_path):
 UNIFIED = "--- //@aaaaaaaa:cube\n+++ //:cube\n@@ -1 +1 @@\n-  cuboid: 10\n+  cuboid: 30\n"
 
 
-def test_ops_list_sends_what_pc_ops_list_sends(tmp_path):
-    """No object is the package, as 'pc ops list' with no OBJECT; an object says its kind when told."""
+def test_ops_rev_list_sends_what_pc_ops_rev_list_sends(tmp_path):
+    """No object is the package, as 'pc ops rev list' with no OBJECT; an object says its kind when told."""
     daemon, server = serve(tmp_path, {"revisions.list": lambda params, emit: {"published": True, "revisions": []}})
-    assert not call(server, "ops_list").is_error
-    call(server, "ops_list", {"object": "frame", "kind": "assembly", "package": "//pkg"})
+    assert not call(server, "ops_rev_list").is_error
+    call(server, "ops_rev_list", {"object": "frame", "kind": "assembly", "package": "//pkg"})
     assert requests(daemon, "revisions.list") == [
         {"package": ".", "kind": "package", "params": [], "context": "ctx-1"},
         {"package": "//pkg", "object": "frame", "kind": "assembly", "params": [], "context": "ctx-1"},
     ]
 
 
-def test_ops_diff_is_the_unified_diff_and_not_the_side_by_side_rows(tmp_path):
+def test_ops_rev_diff_is_the_unified_diff_and_not_the_side_by_side_rows(tmp_path):
     """The comparison comes back as the unified diff, as text of its own; the IDE's rows are left out."""
     answer = {"revision": "a" * 40, "short": "a" * 8, "same": False, "rows": [{"tag": "equal"}], "unified": UNIFIED}
     daemon, server = serve(tmp_path, {"revisions.compare": lambda params, emit: answer})
 
-    result = call(server, "ops_diff", {"revision": "v1", "object": "cube", "lines": 1})
+    result = call(server, "ops_rev_diff", {"revision": "v1", "object": "cube", "lines": 1})
 
     assert not result.is_error
     (request,) = requests(daemon, "revisions.compare")
@@ -1104,26 +1104,26 @@ def test_ops_diff_is_the_unified_diff_and_not_the_side_by_side_rows(tmp_path):
     assert result.content[1].text == UNIFIED
 
 
-def test_ops_diff_of_nothing_changed_says_so(tmp_path):
+def test_ops_rev_diff_of_nothing_changed_says_so(tmp_path):
     answer = {"short": "a" * 8, "same": True, "rows": [], "unified": ""}
     daemon, server = serve(tmp_path, {"revisions.compare": lambda params, emit: answer})
 
-    result = call(server, "ops_diff", {"revision": "v1"})
+    result = call(server, "ops_rev_diff", {"revision": "v1"})
 
     assert requests(daemon, "revisions.compare")[0]["kind"] == "package"
     assert result.content[1].text == "No change since aaaaaaaa."
 
 
-def test_ops_uses_sends_what_pc_ops_uses_sends(tmp_path):
+def test_ops_rev_uses_sends_what_pc_ops_rev_uses_sends(tmp_path):
     daemon, server = serve(tmp_path, {"revisions.uses": lambda params, emit: {"dependencies": []}})
 
-    assert not call(server, "ops_uses", {"revision": "v1"}).is_error
+    assert not call(server, "ops_rev_uses", {"revision": "v1"}).is_error
     assert requests(daemon, "revisions.uses") == [
         {"package": ".", "object": None, "revision": "v1", "params": [], "context": "ctx-1"}
     ]
 
 
-def test_used_by_is_pc_used_by_and_with_a_revision_pc_revisions_used_by(tmp_path):
+def test_ops_used_by_is_pc_ops_used_by_and_with_a_revision_pc_ops_rev_used_by(tmp_path):
     daemon, server = serve(
         tmp_path,
         {
@@ -1132,8 +1132,8 @@ def test_used_by_is_pc_used_by_and_with_a_revision_pc_revisions_used_by(tmp_path
         },
     )
 
-    call(server, "used_by", {"object": "cube", "load": True})
-    call(server, "used_by", {"revision": "v1"})
+    call(server, "ops_used_by", {"object": "cube", "load": True})
+    call(server, "ops_used_by", {"revision": "v1"})
 
     assert requests(daemon, "usage.used_by") == [
         {"package": None, "object": "cube", "params": [], "load": True, "context": "ctx-1"}

@@ -4611,7 +4611,7 @@ def revisions_compare(session, params):
     when PartCAD read it -- and the answer is the rows of a side-by-side view
     (see ``partcad.revisions.compare``), and the same as a unified diff
     (``unified``, with ``lines`` lines around each change): what the IDE
-    draws, and what ``pc ops diff`` and an agent read. The revision is
+    draws, and what ``pc ops rev diff`` and an agent read. The revision is
     loaded as ``<package>@<revision>`` into the same context, where it stays.
     """
     ctx = _ctx(session, params)
@@ -4719,7 +4719,7 @@ def usage_used_by(session, params):
 
     Each with how many times it does: an assembly placing a bolt four times
     uses it four times. What the IDE's Operations > Used By tab lists, and
-    ``pc used-by`` (see ``partcad.usage``); nothing is loaded or built to
+    ``pc ops used-by`` (see ``partcad.usage``); nothing is loaded or built to
     answer, unless ``load`` asks for every package of the workspace to be
     loaded first (``usage.load_workspace``).
     """
@@ -4730,7 +4730,7 @@ def usage_used_by(session, params):
     from partcad import usage
 
     if params.get("load"):
-        # 'pc used-by --load': the workspace's own packages, all of them, so
+        # 'pc ops used-by --load': the workspace's own packages, all of them, so
         # that the answer is about the workspace (see 'usage.load_workspace').
         with pc.logging.Process("Load", ctx.name):
             usage.load_workspace(ctx)
