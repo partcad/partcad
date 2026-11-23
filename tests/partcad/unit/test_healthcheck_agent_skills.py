@@ -91,7 +91,9 @@ def test_it_says_nothing_about_skills_it_did_not_write(workspace):
     (theirs / "SKILL.md").write_text("---\nname: pc-mine\ndescription: mine\n---\n", encoding="utf-8")
 
     check = AgentSkillsCheck()
-    assert check.is_applicable()
+    # Not PartCAD's installation at all: only a stamped skill is one (review
+    # found an unstamped `pc-` skill hiding a stale installation further up).
+    assert not check.is_applicable()
     assert check.test().findings == []
 
 
@@ -276,3 +278,83 @@ def test_a_marker_naming_a_package_outside_the_repository_is_not_followed(worksp
     assert check.fix()
 
     assert ai_agents.instructions_package((workspace / "AGENTS.md").read_text(encoding="utf-8")) == "."
+
+
+# --- Where they are: not always where `pc init` would put them by default ---
+
+
+def test_skills_an_older_release_put_beside_a_subpackage_are_found(tmp_path, monkeypatch):
+    """Outside a repository, an older PartCAD installed them beside the package, subpackage or not.
+
+    The default folder is now the PartCAD root above it, and the check has to
+    find them where they are rather than report nothing to repair.
+    """
+    (tmp_path / "partcad.yaml").write_text("desc: root\n", encoding="utf-8")
+    arm = tmp_path / "arm"
+    arm.mkdir()
+    (arm / "partcad.yaml").write_text("desc: arm\n", encoding="utf-8")
+    ai_agents.install_agent_skills(str(arm), ["cursor"], mcp=False, editor_folder=str(arm))
+    age_the_cursor_skill(arm)
+    monkeypatch.chdir(arm)
+
+    check = AgentSkillsCheck()
+    assert check.is_applicable()
+    assert check.test().findings
+    assert check.fix()
+    # Repaired where they were, not copied up to the root.
+    assert check.test().findings == []
+    assert not (tmp_path / ".cursor").exists()
+
+
+def test_skills_in_an_editor_folder_inside_the_repository_are_found(workspace, monkeypatch):
+    """`pc init --editor-folder hw` put them in `hw`; run from inside it, that is where they are."""
+    hw = workspace / "hw"
+    (hw / "motor").mkdir(parents=True)
+    ai_agents.install_agent_skills(str(hw), ["cursor"], mcp=False, editor_folder=str(hw))
+    age_the_cursor_skill(hw)
+    monkeypatch.chdir(hw / "motor")
+
+    check = AgentSkillsCheck()
+    assert check.is_applicable()
+    assert check.test().findings
+    assert check.fix()
+    assert check.test().findings == []
+    assert not (workspace / ".cursor").exists()
+
+
+def test_with_nothing_installed_on_the_way_up_it_is_the_default_folder(workspace, monkeypatch):
+    (workspace / "hw").mkdir()
+    monkeypatch.chdir(workspace / "hw")
+    assert AgentSkillsCheck()._root == str(workspace)
+
+
+def test_a_users_own_pc_skill_does_not_hide_an_installation_above_it(workspace, monkeypatch):
+    """Only a stamped skill is PartCAD's; an unstamped `pc-` one nearer the current directory is somebody else's."""
+    ai_agents.install_agent_skills(str(workspace), ["cursor"], mcp=False)
+    age_the_cursor_skill(workspace)
+    theirs = workspace / "hw" / ".cursor" / "skills" / "pc-custom"
+    theirs.mkdir(parents=True)
+    (theirs / "SKILL.md").write_text("---\nname: pc-custom\ndescription: mine\n---\n", encoding="utf-8")
+    monkeypatch.chdir(workspace / "hw")
+
+    check = AgentSkillsCheck()
+    assert check._root == str(workspace)
+    assert check.test().findings
+
+
+def test_skills_in_an_editor_folder_above_the_repository_are_found(tmp_path, monkeypatch):
+    """`pc init --editor-folder` on a folder holding several repositories put them there."""
+    projects = tmp_path / "projects"
+    repository = projects / "robot"
+    (repository / ".git").mkdir(parents=True)
+    (repository / "hw").mkdir()
+    ai_agents.install_agent_skills(str(repository / "hw"), ["cursor"], mcp=False, editor_folder=str(projects))
+    age_the_cursor_skill(projects)
+    monkeypatch.chdir(repository / "hw")
+
+    check = AgentSkillsCheck()
+    assert check._root == str(projects)
+    assert check.test().findings
+    assert check.fix()
+    assert check.test().findings == []
+    assert not (repository / ".cursor").exists()

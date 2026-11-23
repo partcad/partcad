@@ -20,6 +20,7 @@ import {
 import { updateServiceBundle } from './common/provision';
 import { registerMcpServers } from './common/mcp';
 import { refreshToolsPath, warnIfShellIntegrationOff } from './common/terminalPath';
+import { registerWorkspaceFolderVariable } from './common/workspaceFolderEnv';
 import { activateWhenTrusted } from './common/trust';
 import { loadServerDefaults } from './common/setup';
 import { getLSClientTraceLevel } from './common/utilities';
@@ -163,6 +164,9 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
     // whatever is already installed, and a user who opened a terminal first
     // should not have to wait for a language server to get `pc`.
     refreshToolsPath(context, serverId);
+    // And which folder each terminal's window has open, for `pc init` to write
+    // the agents' configuration into (see `common/workspaceFolderEnv.ts`).
+    registerWorkspaceFolderVariable(context);
     // And `pc mcp` for the editor's own agent, naming that same `pc`; refreshed
     // wherever the PATH is, because it goes stale for the same reasons.
     const mcpServers = registerMcpServers(context, serverId);

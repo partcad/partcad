@@ -264,3 +264,188 @@ def test_what_is_written_is_json(tmp_path):
 
     assert launch_config.add_render_configuration(str(tmp_path))
     json.loads(launch.read_text(encoding="utf-8"))
+
+
+# --------------------------------------------------------------------------- #
+# Which folder, and which package                                              #
+# --------------------------------------------------------------------------- #
+
+
+def package(path):
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "partcad.yaml").write_text("desc: a package\n", encoding="utf-8")
+    return path
+
+
+def commands(path):
+    return {configuration["name"]: configuration["cwd"] for configuration in read(path)["configurations"]}
+
+
+def test_each_package_gets_a_command_of_its_own(repository):
+    """A second package's `pc init` used to find "Render" taken and add nothing."""
+    hw = package(repository / "hw")
+    jigs = package(repository / "tools" / "jigs")
+
+    assert launch_config.add_render_configuration(str(hw))
+    assert launch_config.add_render_configuration(str(jigs))
+
+    assert commands(repository / ".vscode" / "launch.json") == {
+        "Render": "${workspaceFolder}/hw",
+        "Render (tools/jigs)": "${workspaceFolder}/tools/jigs",
+    }
+    # And neither is added twice.
+    assert not launch_config.add_render_configuration(str(hw))
+    assert not launch_config.add_render_configuration(str(jigs))
+    assert len(commands(repository / ".vscode" / "launch.json")) == 2
+
+
+def test_a_render_command_with_no_cwd_runs_in_the_folder(repository):
+    """`node-terminal` starts in `${workspaceFolder}` when nothing says otherwise."""
+    launch = repository / ".vscode" / "launch.json"
+    launch.parent.mkdir()
+    launch.write_text(
+        '{"version": "0.2.0", "configurations": [{"name": "Render", "type": "node-terminal", '
+        '"request": "launch", "command": "pc render"}]}',
+        encoding="utf-8",
+    )
+
+    assert not launch_config.add_render_configuration(str(package(repository)))
+
+
+def test_without_a_repository_it_goes_to_the_partcad_root(tmp_path):
+    """Not into a subpackage, which nobody opens an editor on."""
+    robot = package(tmp_path / "robot")
+    arm = package(robot / "arm")
+
+    assert launch_config.add_render_configuration(str(arm))
+
+    assert not (arm / ".vscode").exists()
+    assert commands(robot / ".vscode" / "launch.json") == {"Render": "${workspaceFolder}/arm"}
+
+
+def test_the_folder_the_editor_opens_can_be_named(tmp_path):
+    """A folder of repositories, which an editor reads no repository's `launch.json` from."""
+    repository = tmp_path / "robot"
+    (repository / ".git").mkdir(parents=True)
+    hw = package(repository / "hw")
+
+    assert launch_config.add_render_configuration(str(hw), str(tmp_path))
+
+    assert commands(tmp_path / ".vscode" / "launch.json") == {"Render": "${workspaceFolder}/robot/hw"}
+    assert not (repository / ".vscode").exists()
+
+
+def test_the_editor_folder_is_the_repository_else_the_partcad_root(tmp_path):
+    robot = package(tmp_path / "robot")
+    arm = package(robot / "arm")
+    assert launch_config.editor_folder(str(arm)) == str(robot)
+
+    (robot / ".git").mkdir()
+    loose = tmp_path / "robot" / "notes"
+    loose.mkdir()
+    assert launch_config.editor_folder(str(loose)) == str(robot)
+    assert launch_config.editor_folder(str(arm)) == str(robot)
+
+
+def test_a_launch_only_named_like_render_is_not_the_command(repository):
+    """Review found a "Render preview" running Blender taken for the package's `pc render`."""
+    hw = package(repository / "hw")
+    launch = repository / ".vscode" / "launch.json"
+    launch.parent.mkdir()
+    launch.write_text(
+        json.dumps(
+            {
+                "version": "0.2.0",
+                "configurations": [
+                    {
+                        "name": "Render preview",
+                        "type": "node-terminal",
+                        "command": "blender",
+                        "cwd": "${workspaceFolder}/hw",
+                    },
+                    {
+                        "name": "Build",
+                        "type": "node-terminal",
+                        "command": "pc renderer",
+                        "cwd": "${workspaceFolder}/hw",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert launch_config.add_render_configuration(str(hw))
+    assert commands(launch)["Render"] == "${workspaceFolder}/hw"
+
+
+def test_a_render_command_with_options_of_its_own_is_still_the_packages(repository):
+    """A user who made it `pc render -r` has the package's command already, under whatever name."""
+    hw = package(repository / "hw")
+    launch = repository / ".vscode" / "launch.json"
+    launch.parent.mkdir()
+    launch.write_text(
+        json.dumps(
+            {
+                "version": "0.2.0",
+                "configurations": [{"name": "Draw", "command": "pc  render -r", "cwd": "${workspaceFolder}/hw/"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert not launch_config.add_render_configuration(str(hw))
+
+
+def test_another_drive_is_refused_rather_than_raised(tmp_path, monkeypatch):
+    """On Windows `relpath` between two drives raises; the package is created by then, and stays created."""
+
+    def across_drives(path, start):
+        raise ValueError("path is on mount 'C:', start on mount 'D:'")
+
+    monkeypatch.setattr(launch_config.os.path, "relpath", across_drives)
+
+    assert not launch_config.add_render_configuration(str(package(tmp_path / "hw")), str(tmp_path))
+    assert not (tmp_path / ".vscode").exists()
+
+
+# --- Which folder: --editor-folder, then what the editor says, then the default ---
+
+
+def test_an_editor_folder_given_is_the_folder(repository):
+    hw = package(repository / "hw")
+    elsewhere = repository / "docs"
+    elsewhere.mkdir()
+    assert launch_config.choose_editor_folder(str(hw), str(elsewhere), str(hw)) == str(elsewhere)
+
+
+def test_the_folder_the_editor_advertises_is_the_folder_when_the_package_is_in_it(tmp_path):
+    projects = tmp_path / "projects"
+    repository = projects / "robot"
+    (repository / ".git").mkdir(parents=True)
+    hw = package(repository / "hw")
+
+    # Above the repository, and inside it: whatever the editor opened.
+    assert launch_config.choose_editor_folder(str(hw), advertised=str(projects)) == str(projects)
+    assert launch_config.choose_editor_folder(str(hw), advertised=str(hw)) == str(hw)
+
+
+def test_a_folder_the_package_is_not_in_is_not_written_into(tmp_path, monkeypatch):
+    """A terminal keeps the folder it was opened in after it `cd`s out of it."""
+    opened = tmp_path / "opened"
+    opened.mkdir()
+    (tmp_path / "elsewhere" / ".git").mkdir(parents=True)
+    hw = package(tmp_path / "elsewhere" / "hw")
+    said = []
+    monkeypatch.setattr(launch_config.pc_logging, "info", said.append)
+
+    assert launch_config.choose_editor_folder(str(hw), advertised=str(opened)) == str(tmp_path / "elsewhere")
+    assert any("not inside it" in line for line in said)
+    # Nor one that does not exist.
+    assert launch_config.choose_editor_folder(str(hw), advertised=str(tmp_path / "gone")) == str(tmp_path / "elsewhere")
+
+
+def test_with_nothing_said_it_is_the_default(repository):
+    hw = package(repository / "hw")
+    assert launch_config.choose_editor_folder(str(hw)) == str(repository)
+    assert launch_config.choose_editor_folder(str(hw), None, "") == str(repository)

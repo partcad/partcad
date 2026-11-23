@@ -157,13 +157,23 @@ function starterPackageDirectory() {
  * beside wherever it was run. `--no-ansi` because nobody is watching this
  * terminal -- it turns the progress bars into plain text on stderr, which is
  * what the output channel below is for.
+ *
+ * `PARTCAD_WORKSPACE_FOLDER` is the folder the IDE opens next -- this one --
+ * which is where `pc init` puts the agents' configuration and the "Render"
+ * command, so that the window that opens on it reads them. The extension
+ * tells every terminal the same thing (`ide/vscode/src/common/workspaceFolderEnv.ts`).
  */
 function runInit(cli, directory) {
     return new Promise((resolve) => {
         execFile(
             cli,
             ['--no-ansi', 'init', '--desc', STARTER_DESCRIPTION],
-            { cwd: directory, timeout: INIT_TIMEOUT_MS, windowsHide: true },
+            {
+                cwd: directory,
+                env: { ...process.env, PARTCAD_WORKSPACE_FOLDER: directory },
+                timeout: INIT_TIMEOUT_MS,
+                windowsHide: true,
+            },
             (error, stdout, stderr) => {
                 for (const stream of [stdout, stderr]) {
                     const text = (stream || '').trim();

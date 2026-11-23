@@ -52,7 +52,9 @@ class RecordingCollection {
         return undefined;
     }
     forEach(): void {}
-    delete(): void {}
+    delete(variable: string): void {
+        this.calls.push(`delete ${variable}`);
+    }
     getScoped(): any {
         return this;
     }
@@ -199,12 +201,19 @@ suite('Terminal PATH', () => {
             collection.calls.filter((c) => c.startsWith('prepend')),
             [`prepend PATH=${oldDir}${path.delimiter}`, `prepend PATH=${newDir}${path.delimiter}`],
         );
-        // Every prepend is preceded by a clear, so only the last one is live.
+        // Every prepend follows taking the old PATH entry off, so only the last one is live.
         const firstPrepend = collection.calls.findIndex((c) => c.startsWith('prepend'));
-        const lastClear = collection.calls.lastIndexOf('clear');
+        const lastForget = collection.calls.lastIndexOf('delete PATH');
         const lastPrepend = collection.calls.length - 1;
-        assert.ok(firstPrepend > 0 && collection.calls[firstPrepend - 1] === 'clear');
-        assert.strictEqual(lastClear, lastPrepend - 1, 'the final prepend follows a clear');
+        assert.ok(firstPrepend > 0 && collection.calls.slice(0, firstPrepend).includes('delete PATH'));
+        assert.ok(lastForget >= 0 && lastForget < lastPrepend, 'the final prepend follows taking PATH off');
+        assert.ok(
+            collection.calls.slice(lastForget + 1, lastPrepend).every((c) => !c.startsWith('prepend')),
+            'nothing was prepended in between',
+        );
+        // And never `clear()`: on the window-wide collection that empties every
+        // workspace folder's scope too, `PARTCAD_WORKSPACE_FOLDER` and all.
+        assert.ok(!collection.calls.includes('clear'));
     });
 
     test('refreshing with an unchanged directory does not touch the collection', async () => {
