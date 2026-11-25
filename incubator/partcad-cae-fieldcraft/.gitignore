@@ -1,0 +1,15 @@
+# What PartCAD leaves behind in a package it has worked in.
+.partcad
+__pycache__
+*.pyc
+.pytest_cache
+
+# What an analysis writes beside the part it analysed.
+*.fea.*.glb
+*.dynamic.*.glb
+*.thermal.*.glb
+*.cfd.*.glb
+*.fea.glb
+*.dynamic.glb
+*.thermal.glb
+*.cfd.glb

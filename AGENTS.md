@@ -212,15 +212,19 @@ a CAD addon, documentation, or a PartCAD package incubated here until it has a r
 
   PartCAD *packages* - plugins, not code of the wheel - kept here until they have repositories of their own
   that the public index pins. Each directory is one future repository, named as it will be, and moves out
-  whole. No package is here today: DigiKey, Octopart, McMaster-Carr and Mouser -- each a store provider and
+  whole. One package is here today, `partcad-cae-fieldcraft`: the four `cae:` analyses (and linear buckling)
+  by FieldCraft, a Rust CAE application with solvers of its own, driven over its MCP interface on PartCAD's own
+  gmsh mesh and fetched as one checksum-pinned executable, so it needs no container; its README has how, and
+  the incubator README what else FieldCraft could do for PartCAD. DigiKey, Octopart, McMaster-Carr and Mouser -- each a store provider and
   a catalogue (a repository plugin) from one API -- have moved out to `partcad/partcad-svc-commerce-*`. All
   four share a toolkit (`_shared/distributor.py`, which builds on `plugin_models`): `_shared/` is the copy to
   edit, and `_shared/copy.sh` copies it into checkouts of their repositories, each held to it by a digest. The README has the evaluation of the eleven distributors considered. Google Earth,
   a repository plugin serving a place as parts made, when they are built, from Google's data with the user's
   own key, was incubated here too and has moved out to `partcad/partcad-repo-google-earth` -- the one package
   that says `"persist": false`, so that PartCAD keeps none of what it serves beyond the process. Nothing here is built, packaged or tested
-  by CI (`changed-scopes` counts it as documentation); the linters read it, and the toolkit's tests run by
-  hand: `cd incubator/_shared && pytest -c /dev/null --rootdir . .`.
+  by CI (`changed-scopes` counts it as documentation); the linters read it, and each directory's tests run by
+  hand: `cd incubator/_shared && pytest -c /dev/null --rootdir . .`, and the same in
+  `incubator/partcad-cae-fieldcraft`.
 
 * [README.md](./README.md) and [docs/source](./docs/source):
 

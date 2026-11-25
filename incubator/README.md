@@ -159,6 +159,176 @@ what it serves beyond the process that fetched it. The index publishes it as
 `//pub/collection/google-earth`, beside the other collections, once a PartCAD that keeps a
 package's answers for the process only is released.
 
+## FieldCraft as a solver
+
+[FieldCraft](https://github.com/tangency-labs/fieldcraft) (tangency-labs, MIT or Apache-2.0) is a clean-room
+CAE application in Rust: a desktop app, a command line and an MCP server over one engine of ~160 commands,
+with **solvers of its own** rather than wrappers -- linear static, nonlinear static (large deformation,
+plasticity, hyperelasticity, mortar contact with friction), linear buckling, block Lanczos modes, steady and
+transient heat, coupled thermal stress, explicit dynamics (impact, drop, erosion), and a D3Q19 lattice
+Boltzmann flow solver (turbulence models, conjugate heat transfer into conducting solids, fans with curves,
+porous vents, free surfaces) on the CPU or the GPU. It meshes for itself too -- constrained Delaunay
+tetrahedra, swept, mapped and multi-block hexahedra, an all-hex octree mesher -- and writes Abaqus, Nastran,
+LS-DYNA and OpenFOAM decks. It is young (first commit October 2026, 0.8.1 on 18 November 2026, ~1,300
+commits, ~2,900 tests and an oracle of 116 cases with closed-form or reference answers) and moving fast.
+
+What decides how PartCAD can use it:
+
+* **One self-contained executable per platform** -- Linux x86_64 (glibc 2.35+), macOS on Apple silicon,
+  Windows x64 -- linking only the C library. No Python package, no image, no installation needed. No Linux
+  arm64 build is published (its Nix flake builds one).
+* **Every interface runs the same commands**, but only MCP answers them all: `fieldcraft-cli run script.json`
+  prints the model summary and drops each command's reply; `fieldcraft-cli mcp`'s `batch` tool returns them.
+* **It reads gmsh's MSH 4.1** (`mesh.import.orphan`), each physical group a set -- so PartCAD's port-to-face
+  machinery carries over untouched. Its own meshers work on STEP it imports through SolidCraft, but name
+  faces opaquely and report no per-face centroid or area, so a PartCAD port cannot yet be matched to one.
+* **It judges nothing** structural: no allowable, no safety factor (only the flow solver compares a solid's
+  temperature with a limit). Every threshold is the caller's.
+
+### What was built
+
+[`partcad-cae-fieldcraft`](partcad-cae-fieldcraft/README.md): all four of PartCAD's analyses, plus linear
+buckling as an option of `fea`, on the same contract as `partcad-cae-calculix` and the others. PartCAD
+imprints the ports and gmsh meshes the part as for every other implementation; the mesh is written as MSH 4.1
+and handed to `fieldcraft-cli mcp --headless`, confined to the case directory, with one `batch` of engine
+commands; the fields come back as VTU and are drawn by `cae_support.write_glb()`. The flow analysis poses the
+part to the lattice Boltzmann solver inside out -- its bounding box, with everything that is not the part as an
+obstacle -- which is exact for ports on the faces of that box and refused, with the reason, anywhere else.
+
+It is the first CAE package that needs **no container and no installation**: without a `fieldcraft-cli` on
+the machine it fetches the release it pins and checks the SHA-256 the release states. Unlike the other
+directories here it already carries what its repository needs: a `LICENSE.txt`, a `.gitignore`, a
+`Test` workflow running its `pytest` against the real release on all three platforms, and an `Image`
+workflow for the image a `dockerImage:` pin could name later.
+
+### Status
+
+Run end to end through PartCAD 0.10.37 -- `pc cae fea|dynamic|thermal|cfd` on the conformance cantilever and
+pipe of `examples/feature_cae`, with PartCAD's own sandbox, port imprint and gmsh -- against
+`fake_fieldcraft.py`, a stand-in that speaks FieldCraft's MCP protocol, holds the mesh to the rules of
+FieldCraft's MSH reader (ported from `crates/io/src/gmsh.rs`) and refuses definitions naming what does not
+exist. **Not yet run against a real `fieldcraft-cli`.** The tests that do are written and skip until one is
+there: `PARTCAD_FIELDCRAFT_TEST_DOWNLOAD=1 pytest` in the package fetches it, and their numbers belong in the
+table in `examples/feature_cae/README.md`. Of the four, the flow is the least certain.
+
+### What else FieldCraft could do for PartCAD
+
+Roughly in order of value for the effort. The first three are plugins and need nothing from PartCAD; the
+rest need PartCAD to grow a concept, and FieldCraft is what makes each of them worth growing.
+
+| | what | kind | effort |
+| --- | --- | --- | --- |
+| 1 | Hand an analysis to FieldCraft's desktop app, or to a commercial solver | `export:` and `open:` plugins | small |
+| 2 | Linear buckling as an analysis of its own | `cae:` + a fifth analysis in core | small |
+| 3 | Cooling of an electronics enclosure | an assembly-level analysis | large, and the most valuable |
+| 4 | Assemblies analysed as assemblies, joined where their interfaces connect | core: `cae` on assemblies | large |
+| 5 | Drop tests, snap fits and seals as qualification | `qual: sim:` plugin on explicit and nonlinear solves | medium |
+| 6 | Numbers, not sentences: an analysis's measurements as data | core: the `cae` result contract | small |
+| 7 | Design studies over a part's parameters | core: `pc cae study` | medium |
+
+**1. `export:` and `open:` for an analysis.** The same batch the plugin sends, ending in `file.save_as`
+instead of a solve, is a `.fieldcraft` model -- the mesh, the sets, the material, the conditions, the step --
+that the FieldCraft app opens ready to solve, refine and look at; ending in `deck.write` it is an Abaqus `.inp`,
+a Nastran bulk data file or an LS-DYNA keyword file. So: an `export:` file type per format
+(`pc export -t inp :bracket` writes the `fea` scenario as an Abaqus deck, with every condition where PartCAD
+put it), and an `open:` entry for FieldCraft (`pc ide open --with fieldcraft :bracket`) converting to
+`.fieldcraft` first, exactly as `open:` converts a script to STEP for FreeCAD. It is the way out of PartCAD for
+an analyst who needs a solver PartCAD has no implementation for, and the way into a GUI when a result looks
+wrong. The export needs a request carrying the scenario's conditions, which the `cae:` path already builds --
+a small generalisation in `wrapper_export`.
+
+**2. Buckling as an analysis.** It is an option of `fea` here because PartCAD's analyses are a fixed four.
+Buckling answers a different question with a different pass criterion (a load factor, not a stress) and
+belongs beside them as `pc cae buckle` with `min_load_factor`; CalculiX and Code_Aster, behind two of the six
+existing packages, solve it too.
+
+**3. Cooling of an electronics enclosure** -- the case FieldCraft's flow solver was built around (its
+`cooling-enclosure`, `cooling-aio` and heat-sink samples). Its flow domain takes **conducting solids with a
+power and a temperature limit**, **fans with a pressure-flow curve**, and **porous vents with a loss
+coefficient**, solves the air and the solids together, and reports each solid's peak against its limit. An
+enclosure is a PartCAD assembly, and everything that question needs is a property of its parts: a board's
+dissipation and a chip's junction limit, a fan's
+curve from its datasheet, a grille's open area. So: `power`, `maxTemperature`, a fan curve and a loss
+coefficient as part properties (in `physics:` or the material), and a `cooling:` analysis of an assembly
+whose implementation builds one domain from every part in it -- `pc cae cooling :enclosure`, failing the
+assembly when a component runs hotter than it may. Nothing else in PartCAD's ecosystem can answer it.
+
+**4. Assemblies as assemblies.** PartCAD analyses one part at a time; the `/pc:sim-assembly-fea` skill
+carries the loads a simulation measured on each part into that part's `fea:`. FieldCraft has **ties** (dual
+mortar, between non-matching meshes) and **contact**, and PartCAD already knows where every part of an
+assembly touches the next: its interfaces and the connections between their ports. So an `fea:` on an
+assembly could mesh each part on its own, tie each pair of connected port faces (or put a contact pair there,
+for a joint that may open), and solve the whole -- bolted joints, brackets on frames -- with no hand-made
+interface definition. It needs `cae` on assemblies in core, and a way for an implementation to receive several
+meshes and the pairs of face groups between them.
+
+**5. Drop tests, snap fits and seals as qualification.** PartCAD's `qual: sim:` runs MuJoCo and Gazebo:
+rigid bodies. FieldCraft's explicit solver drops a deformable part on a rigid wall (with plasticity, damage
+and erosion), and its nonlinear static solver presses a rubber seal or bends a snap-fit hook through contact.
+Both fit the simulation contract (a file in, `before` and `after` out): a `partcad-sim-fieldcraft` whose
+`after` reports peak stress, plastic strain and eroded elements lets a validation read
+`after['max_plastic_strain'] < 0.02` -- "survives a 1 m drop" as a test. It needs a scene format FieldCraft
+reads, which is the open part: MSH per body, or STEP through SolidCraft once faces can be matched (see the
+asks below).
+
+**6. Measurements as data.** Every implementation says what it measured in a warning string -- "Peak von Mises
+stress 60.43 MPa ..." -- and tests, the conformance table and any requirement on a number have to parse it.
+A `metrics` key beside `findings` in the `cae:` result (`{"max_von_mises": {"value": 6.043e7, "unit": "Pa"},
+...}`, one vocabulary across implementations, as `qual: sim:` already has for `before` and `after`) would let
+`pc cae --json` report them, a requirement bind to one ("tip deflection under 0.3 mm"), and the conformance
+suite carry its closed forms as `expected:` with a tolerance -- FieldCraft's own oracle (`tests/oracle/*/
+expected.json`: a command, a JSON pointer, a value and a tolerance) is the pattern -- so that `pc qual test`
+in `examples/feature_cae` checks every implementation against the arithmetic and the README table is
+generated rather than typed.
+
+**7. Design studies.** A PartCAD part is parametric and FieldCraft is fast and free to run many times:
+`pc cae study -p thickness=2:6:0.5 :bracket` running a scenario over a parameter range and reporting mass
+against safety factor, or searching for the lightest one with no findings, is a loop in the client over
+machinery that exists. FieldCraft has design studies on its own roadmap; PartCAD's parameters are where the
+geometry side of one lives.
+
+### What PartCAD itself could do better, found on the way
+
+* **`cae_support.mesh()` writes MSH 2.2 only**, which FieldCraft refuses; the package writes 4.1 itself from the
+  `Mesh` object. An `msh_version` argument (gmsh writes 4.1 natively) would remove ~80 lines from it and from
+  the next such package.
+* **A plugin that fetches a pinned tool** has nowhere shared to keep it: this package uses
+  `~/.partcad/tools/`, which nothing else in PartCAD knows about or cleans up. A `plugin_tools.fetch(url, sha256)` in
+  PartCAD's wrappers -- one cache, one checksum rule, pruned with the rest -- would serve every plugin whose
+  tool is a downloadable binary (FieldCraft, and command-line slicers, KiCad CLI builds, OpenSCAD AppImages).
+* **The `excused only without a container runtime` rule** assumes that a plugin either names an image or
+  needs nothing native. A plugin that can fetch its tool is a third case: it can run anywhere its platform
+  list covers, and on an unlisted platform (Linux arm64 here) it fails where a skip would be truer. A
+  declared `platforms:` on a file type would let `pc qual test` say "not on this platform" the way the
+  feature_cae example's `unless: [aarch64]` does by hand.
+
+### What to ask FieldCraft for
+
+All small, all in its interest too, and each one widens what the package can do:
+
+* **Pressure and velocity conditions on obstacle faces** in the flow solver. Today only the box's faces let
+  fluid in and out, which is why a port must lie on the part's bounding box; with this, any port of any part
+  could be an inlet.
+* **A face's centroid, area and normal in `geometry.bodies`**, or reading a STEP's face names through. Either
+  would let PartCAD match its port faces to FieldCraft's, and so use FieldCraft's own meshers -- its swept and
+  octree hexahedra are its strength, and far more accurate per degree of freedom on thin parts than tetrahedra.
+* **`results.export.vtu` for fluid steps** ("not supported yet"), so the model drawn for a flow is the field
+  itself rather than a probe of it at the walls.
+* **A Linux arm64 release**, which its Nix flake already builds.
+* **`fieldcraft-cli run --replies`**, printing each command's reply as JSON lines: the simplest possible
+  machine interface, and one a plugin could use without speaking MCP.
+
+### Next
+
+1. Run the package's tests with `PARTCAD_FIELDCRAFT_TEST_DOWNLOAD=1` against the real release, fix what the
+   real solver disagrees with (most likely in the flow), and put its numbers in `examples/feature_cae/README.md`.
+2. Move it out: `git subtree split --prefix incubator/partcad-cae-fieldcraft -b fieldcraft` and push to
+   `partcad/partcad-cae-fieldcraft`; then the index (below), and the solver tables in
+   `docs/source/digital_thread/lifecycle/analysis.rst`, `docs/source/plugins/analyses.rst` and
+   `examples/feature_cae/README.md`.
+3. The `export:`/`open:` pair (1 above), which needs nothing from PartCAD.
+4. Propose `metrics` (6) and `msh_version` in PartCAD, then buckling (2) and cooling (3).
+
 ## Into the index
 
 Once a package has a repository, `svc/commerce/partcad.yaml` in `partcad/partcad-index`
@@ -178,15 +348,30 @@ pins it beside the other stores:
 and the same for `octopart`, `mcmaster` (whose repository's name still has a typo to fix
 first: `partcad-svc-commerce-mscmaster-carr`) and `mouser`.
 
+`partcad-cae-fieldcraft` goes beside the other solvers in the index's `feature/cae/partcad.yaml`, as
+`//pub/feature/cae/fieldcraft`, the name its `partcad.yaml` already gives itself:
+
+```yaml
+  # FieldCraft: stress and buckling, modes, heat and lattice Boltzmann flow, by
+  # its own solvers. Needs no container: it fetches a checksum-pinned release.
+  fieldcraft:
+    desc: Static stress and buckling, modal, heat transfer and flow analysis by FieldCraft.
+    type: git
+    url: https://github.com/partcad/partcad-cae-fieldcraft
+    track: main
+    revision: <commit>
+```
+
 ## Testing
 
 Each package's tests run in its own repository's CI, and by hand there with `pytest`; they need
 PartCAD's `plugin_models`, which `conftest.py` finds in an installed `partcad` (`pip install
 --no-deps partcad` is enough), in `$PARTCAD_WRAPPERS`, or in a PartCAD checkout beside the
-package's own. The toolkit's own tests run here:
+package's own. The toolkit's own tests, and the FieldCraft package's, run here:
 
 ```shell
 cd incubator/_shared && pytest -c /dev/null --rootdir . .
+cd incubator/partcad-cae-fieldcraft && pytest -c /dev/null --rootdir . .
 ```
 
 `-c /dev/null` keeps this repository's own pytest configuration, which is PartCAD's, out of

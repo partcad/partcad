@@ -1,0 +1,53 @@
+# The analyses against the FieldCraft release this package pins, solved for real.
+#
+# The tests that need FieldCraft fetch it (PARTCAD_FIELDCRAFT_TEST_DOWNLOAD=1),
+# exactly as an analysis would on a user's machine, so this is also the test of
+# the fetch and of the pinned checksums -- on each platform FieldCraft
+# publishes a command line for.
+name: Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    # PartCAD moves and FieldCraft does not (it is pinned): a nightly run is
+    # what turns "a PartCAD release broke this package" into a red run here.
+    - cron: "0 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: "pytest (${{ matrix.os }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        # The platforms FieldCraft publishes a command line for.
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install PartCAD and what the scripts import
+        run: python -m pip install partcad gmsh numpy build123d pytest pyyaml
+      - name: The release answers its own oracle case
+        if: runner.os == 'Linux'
+        run: |
+          WRAPPERS=$(python -c "import os, partcad; print(os.path.join(os.path.dirname(partcad.__file__), 'wrappers'))")
+          CLI=$(PYTHONPATH="${WRAPPERS}:." python -c "import fieldcraft_common as fc; print(fc.download())")
+          python verify_image.py "${CLI}"
+      - name: pytest
+        run: python -m pytest -c /dev/null --rootdir . . -v -rs
+        env:
+          PARTCAD_FIELDCRAFT_TEST_DOWNLOAD: "1"
+          FIELDCRAFT_GPU: cpu

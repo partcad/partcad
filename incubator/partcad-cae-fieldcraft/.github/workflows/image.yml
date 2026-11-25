@@ -1,0 +1,69 @@
+# The runtime image, built and checked on every change to what it is built from.
+#
+# Published only from `main`, under the content tag `image-tag.sh` gives. Until
+# `partcad.yaml` pins it with `dockerImage:`, nothing asks for it -- this
+# package runs without a container -- so a missing pin is said, not failed.
+name: Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths: ["Dockerfile", "verify_image.py", "image-tag.sh", ".github/workflows/image.yml"]
+  pull_request:
+    branches: ["main"]
+    paths: ["Dockerfile", "verify_image.py", "image-tag.sh", ".github/workflows/image.yml"]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/partcad/partcad-cae-fieldcraft
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build:
+    name: "Build the runtime image"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: The tag this is published under
+        id: tag
+        run: echo "TAG=$(./image-tag.sh)" >> "${GITHUB_OUTPUT}"
+
+      - name: The pin, if there is one, matches what is about to be built
+        env:
+          TAG: ${{ steps.tag.outputs.TAG }}
+        run: |
+          PINS=$(grep -o 'dockerImage: [^ ]*' partcad.yaml | sed 's/.*://' || true)
+          if [ -z "${PINS}" ]; then
+            echo "::notice::partcad.yaml pins no image yet; this builds ${TAG} for when it does."
+            exit 0
+          fi
+          for PINNED in ${PINS}; do
+            if [ "${PINNED}" != "${TAG}" ]; then
+              echo "partcad.yaml pins '${PINNED}' but this builds '${TAG}'." >&2
+              exit 1
+            fi
+          done
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          build-args: |
+            PYTHON_VERSION=${{ env.PYTHON_VERSION }}
+            ARCH=amd64
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.TAG }}-amd64

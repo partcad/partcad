@@ -1,0 +1,161 @@
+# The FieldCraft implementations of PartCAD's four analyses.
+#
+# The structure is identical to `//builtin/export` and `//builtin/render` -- see
+# `docs/source/config_output.rst` in the `partcad` repository for what each field
+# means. What makes these analyses is the section they are declared in: `cae:`.
+# Each writes binary glTF, the result being a 3D field the Digital Thread turns
+# and zooms, and answers with `findings` beside it: an empty list is a pass, and
+# is what `pc qual test` requires.
+#
+# FieldCraft (https://github.com/tangency-labs/fieldcraft) is a clean-room CAE
+# application in Rust with solvers of its own: linear static, buckling, modal
+# and heat conduction on finite elements, and lattice Boltzmann flow. It ships
+# as one self-contained executable per platform, so -- unlike every other
+# solver PartCAD drives -- it needs neither a container nor an installation:
+# when no `fieldcraft-cli` is found on this machine, the release this package
+# pins is fetched once and its checksum checked (see `fieldcraft_common.py`).
+
+name: //pub/feature/cae/fieldcraft
+desc: |
+  Static stress and buckling, modal, steady heat transfer and lattice Boltzmann
+  flow analysis, by [FieldCraft](https://github.com/tangency-labs/fieldcraft).
+
+  Each finite element analysis meshes the part with gmsh -- the faces each port
+  covers named -- and hands the mesh to FieldCraft over its MCP interface, which
+  solves it and writes the fields back. The flow analysis poses the part to
+  FieldCraft's lattice Boltzmann solver inside out: the part's bounding box, with
+  everything that is not the part as an obstacle. The answer is a coloured model
+  and measurements, and findings when a threshold is crossed.
+
+# What the scripts import. FieldCraft itself is a native executable, not a
+# Python package: on PATH, named by PARTCAD_FIELDCRAFT_BIN, or fetched (see
+# 'download' below). There is no image yet: `Dockerfile` builds one, for the
+# day this package is published with a `dockerImage:` pin -- and until then
+# nothing needs it, because both FieldCraft and gmsh run on the host.
+pythonRequirements:
+  - gmsh; platform_machine != "aarch64"
+  - numpy
+
+cae:
+  fea:
+    desc: A linear static stress analysis (and, optionally, linear buckling), as a glTF coloured by von Mises stress plus findings.
+    path: fea_fieldcraft.py
+    extension: glb
+    # What this implementation reads of a part's 'fea:' beyond where each
+    # condition lands and how big it is: a load's direction ('force', a load
+    # written as [x, y, z] in the part's frame) and the part's own 'gravity:'.
+    reads: [force, gravity]
+
+    # The mesh: the largest tetrahedron as a fraction of the part's largest
+    # dimension, and quadratic elements -- linear ones are far too stiff in
+    # bending, which is the loading almost every bracket sees.
+    mesh_size: 0.05
+    mesh_order: 2
+
+    # The material, when the package says nothing else: steel. Pascals, and
+    # kg/m^3. Note the signed exponents: YAML 1.1 reads `2.1e11` as a string.
+    # A part whose `material` names one PartCAD can resolve is analysed as
+    # that material instead: PartCAD hands this script the material's
+    # `youngsModulus`, `poissonsRatio`, `yieldStrength` and `density` for each
+    # of these that neither the package, the part nor the run re-tunes.
+    youngs_modulus: 2.1e+11
+    poissons_ratio: 0.30
+    yield_strength: 2.5e+8
+    density: 7850
+
+    # What counts as a finding: a stress past the yield strength divided by
+    # `safety_factor`, and a displacement past `max_displacement` (mm).
+    # FieldCraft judges no allowable itself; these are PartCAD's.
+    safety_factor: 1.5
+    max_displacement: 1.0
+
+    # Off, blue is no stress and red is this run's own peak; on, red is the
+    # allowable stress, and anything past it stays red.
+    scale_to_allowable: false
+
+    # Whether the part's own weight acts on it too: 9.81 m/s^2 along -Z, unless
+    # the part states 'gravity:' in its 'fea:', which replaces this.
+    self_weight: true
+
+    # Linear buckling under the same loads (FieldCraft's `solve.buckle`): the
+    # lowest load factor is how many times this load the part carries before
+    # it buckles. Under 1 is an error; under `min_buckling_factor` a warning.
+    # Off by default, since it costs a second eigensolve.
+    buckling: false
+    buckling_modes: 3
+    min_buckling_factor: 3.0
+
+    # Whether FieldCraft may be fetched from its GitHub releases when this
+    # machine has none (checked against the SHA-256 pinned in
+    # fieldcraft_common.py), and how long one solve may be silent (s).
+    download: true
+    solve_timeout: 3600
+
+  dynamic:
+    desc: The natural frequencies of the part as it is held, as a glTF of its first mode shape plus findings.
+    path: dynamic_fieldcraft.py
+    extension: glb
+    mesh_size: 0.05
+    mesh_order: 2
+    youngs_modulus: 2.1e+11
+    poissons_ratio: 0.30
+    density: 7850
+    # How many of the lowest modes to find (block Lanczos).
+    modes: 6
+    # A first natural frequency under this (Hz) is a finding. Unset by
+    # default -- what is too low depends on what the part is bolted to.
+    # min_frequency: 100
+    download: true
+    solve_timeout: 3600
+
+  thermal:
+    desc: Steady heat conduction through the part, as a glTF coloured by temperature plus findings.
+    path: thermal_fieldcraft.py
+    extension: glb
+    mesh_size: 0.05
+    mesh_order: 2
+    # W/(m*K) -- steel -- and the temperature (Celsius) `convection:` cools
+    # towards. A part whose `material` states a `thermalConductivity` is solved
+    # with that instead, unless the package, the part or the run re-tunes it.
+    conductivity: 50.0
+    ambient_temperature: 20.0
+    # A part hotter than this anywhere (Celsius) is a finding. Unset by default.
+    # max_temperature: 85
+    download: true
+    solve_timeout: 3600
+
+  cfd:
+    desc: Incompressible flow through the part by the lattice Boltzmann method, as a glTF of its walls coloured by pressure plus findings.
+    path: cfd_fieldcraft.py
+    extension: glb
+    # How long a solve may be silent before PartCAD's client gives up on it, in
+    # seconds: a flow is the slowest analysis there is, and the client's default
+    # is five minutes. PartCAD announces this window while the analysis runs.
+    timeout: 1800
+    solve_timeout: 1800
+    # The cells: cubes whose edge is this fraction of the part's largest
+    # dimension, or finer, so that the narrowest inlet or outlet is at least
+    # `cells_across` cells wide. A run of more than `max_cells` is refused.
+    mesh_size: 0.02
+    cells_across: 8
+    max_cells: 4000000
+    # The fluid: air at 20 degrees. kg/m^3, and the dynamic viscosity in Pa*s.
+    # A part made of a fluid material is solved as that fluid instead.
+    density: 1.204
+    viscosity: 1.82e-5
+    # How the walls meet the lattice: 'interpolated' (second order on curved
+    # walls, Bouzidi et al.) or 'halfway' (a staircase, mass conserving).
+    walls: interpolated
+    # The run stops once the flow and the outlets' flow rate change by less than
+    # this (relative, per window), or after 'end_time' seconds of flow time --
+    # by default ten times the time the flow is estimated to settle in.
+    steady_tolerance: 1.0e-3
+    # end_time: 2.0
+    # A turbulence model, for a flow past laminar: smagorinsky, vreman or
+    # spalart_allmaras, or a map of FieldCraft's own settings. Unset: laminar.
+    # turbulence: smagorinsky
+    # What counts as a finding: a speed past this (m/s), and, when set, a flow
+    # rate short of `min_flow_rate` (m^3/s).
+    max_velocity: 50.0
+    # min_flow_rate: 1.0e-6
+    download: true
