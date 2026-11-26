@@ -13,6 +13,7 @@ be brought back.
 """
 
 import json
+import os
 
 import pytest
 
@@ -428,6 +429,25 @@ def test_the_folder_the_editor_advertises_is_the_folder_when_the_package_is_in_i
     # Above the repository, and inside it: whatever the editor opened.
     assert launch_config.choose_editor_folder(str(hw), advertised=str(projects)) == str(projects)
     assert launch_config.choose_editor_folder(str(hw), advertised=str(hw)) == str(hw)
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink") or os.name == "nt", reason="needs symbolic links")
+def test_the_folder_the_editor_advertises_through_a_link_is_the_folder(tmp_path):
+    """On macOS `/tmp` is `/private/tmp`: the editor says one, the working directory is the other."""
+    real = tmp_path / "private"
+    (real / "robot" / ".git").mkdir(parents=True)
+    hw = package(real / "robot" / "hw")
+    link = tmp_path / "tmp"
+    link.symlink_to(real, target_is_directory=True)
+
+    # Spelled the way the package is, so that the package is relative to it.
+    folder = launch_config.choose_editor_folder(str(hw), advertised=str(link))
+    assert folder == str(real)
+    assert launch_config.relative_to(str(hw), folder) == "robot/hw"
+    assert launch_config.choose_editor_folder(str(hw), advertised=str(link / "robot")) == str(real / "robot")
+    # And the other way round.
+    linked_hw = link / "robot" / "hw"
+    assert launch_config.choose_editor_folder(str(linked_hw), advertised=str(real)) == str(link)
 
 
 def test_a_folder_the_package_is_not_in_is_not_written_into(tmp_path, monkeypatch):

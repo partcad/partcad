@@ -112,6 +112,31 @@ def _is_inside(path: str, folder: str) -> bool:
         return False
 
 
+def _spelled_like(package_dir: str, folder: str) -> Optional[str]:
+    """`folder`, spelled through the same symbolic links as `package_dir`, if the package is inside it at all.
+
+    The editor names the folder it has open the way it was opened, and a
+    process's working directory is the resolved one: on macOS `/tmp` is
+    `/private/tmp`, and a folder opened through a link to another disk is that
+    disk. Both name one directory, but every path written for the editor is
+    `package_dir` relative to the folder, which only comes out right when the
+    two are spelled alike -- so this returns the ancestor of `package_dir` that
+    *is* `folder`, rather than `folder` as it was given.
+    """
+    real_package, real_folder = os.path.realpath(package_dir), os.path.realpath(folder)
+    if not _is_inside(real_package, real_folder):
+        return None
+    candidate = os.path.abspath(package_dir)
+    relative = os.path.relpath(real_package, real_folder)
+    if relative != os.curdir:
+        for _ in relative.split(os.sep):
+            candidate = os.path.dirname(candidate)
+    try:
+        return candidate if os.path.samefile(candidate, folder) else None
+    except OSError:
+        return None
+
+
 def choose_editor_folder(package_dir: str, explicit: Optional[str] = None, advertised: Optional[str] = None) -> str:
     """The folder `pc init` writes the editor's files into, for the package in `package_dir`.
 
@@ -134,8 +159,12 @@ def choose_editor_folder(package_dir: str, explicit: Optional[str] = None, adver
     if explicit:
         return os.path.abspath(explicit)
     if advertised:
-        if os.path.isdir(advertised) and _is_inside(package_dir, advertised):
-            return os.path.abspath(advertised)
+        if os.path.isdir(advertised):
+            if _is_inside(package_dir, advertised):
+                return os.path.abspath(advertised)
+            same = _spelled_like(package_dir, advertised)
+            if same:
+                return same
         pc_logging.info(
             "Not writing the editor's files into '%s', the folder the editor has open: '%s' is not inside it"
             % (advertised, os.path.abspath(package_dir))
