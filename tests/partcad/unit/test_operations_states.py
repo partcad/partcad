@@ -396,7 +396,7 @@ def test_a_package_lists_what_it_uses_without_declaring_it_and_its_sub_packages(
     root = usage.package_dependencies(ctx, ctx.root)
 
     assert app["undeclared"] == [
-        {"package": "//lib", "users": [{"name": "long_bolt", "object": "//app:long_bolt", "count": 1}]}
+        {"package": "//lib", "users": [{"name": "long_bolt", "object": "//app:long_bolt", "kind": "part", "count": 1}]}
     ]
     assert sorted(row["name"] for row in root["subpackages"]) == ["app", "lib"]
 

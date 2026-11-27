@@ -360,12 +360,13 @@ def test_deps_add_remove_and_update_ask_the_daemon(monkeypatch):
 
 
 def test_the_old_names_say_the_new_ones_and_do_what_they_do(monkeypatch):
-    recorder = _record(monkeypatch, "add.dep", {"package": "//", "added": True})
+    # Each alias calls the daemon from the module of the command it is now, so that is where it is recorded.
+    recorder = _record(monkeypatch, "ops.deps.add", {"package": "//", "added": True})
     result = _invoke("add", "dep", "std", "../std")
     assert recorder.calls[0][0] == "ops.deps.add" and recorder.calls[0][1]["location"] == "../std"
     assert "'pc add dep' is 'pc ops deps add' now" in result.output
 
-    recorder = _record(monkeypatch, "update", {"count": 7})
+    recorder = _record(monkeypatch, "ops.deps.update", {"count": 7})
     result = _invoke("update")
     assert recorder.calls[0][:2] == ("ops.deps.update", {"all": True})
     assert "Successfully updated 7 packages" in result.output
