@@ -314,8 +314,14 @@ env:
   # here rather than left to the "Install" job's smoke test. One suite rather
   # than the two the arm64 macOS gets: the runner bills at 10x, and "PartCAD" is
   # the suite that tests this repository rather than the public index.
+  #
+  # "timeout" is that leg's "timeout-minutes", for the one leg that needs more
+  # than the job's 60: the Intel runner is the slowest here by far, took about
+  # 52 minutes while it still passed, and ran out at 60 on every bump from
+  # 0.10.36 on -- "pc qual test" alone took 44 of them on 0.10.37, so the
+  # renders after it never finished.
   EXAMPLES_DEEP: >-
-    [{"os": "macos-15-intel", "platform": "macos-15-x86_64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true}]
+    [{"os": "macos-15-intel", "platform": "macos-15-x86_64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true, "timeout": 90}]
 
 jobs:
   set-matrix:
@@ -940,8 +946,9 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.examples) }}
     runs-on: ${{ matrix.os }}
     # No conda cache and a sandbox built from scratch (cadquery-ocp is ~150MB),
-    # so this is slower than the cached wheel-based jobs in test.yml.
-    timeout-minutes: 60
+    # so this is slower than the cached wheel-based jobs in test.yml. A leg may
+    # say otherwise with "timeout" (see EXAMPLES_DEEP).
+    timeout-minutes: ${{ matrix.timeout || 60 }}
 
     steps:
       - uses: actions/checkout@v7
