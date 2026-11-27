@@ -77,8 +77,12 @@ An ASSY part link SHALL accept a `route:` section whose `ends` list exactly two 
 - **THEN** schema validation and `pc lint` report it, saying that ports passed through go in `through`, and the build reports it and leaves the link out
 
 #### Scenario: Fields that make no sense for an end
-- **WHEN** an end's or a `through` entry's section gives `how`, `motion`, `physics`, `joint`, `exploded` or `interferes`
+- **WHEN** an end's or a `through` entry's section gives `motion`, `physics`, `joint`, `exploded` or `interferes`
 - **THEN** schema validation and `pc lint` report the field, and the build ignores it
+
+#### Scenario: How an end goes in
+- **WHEN** an end or a `through` entry gives `how`, such as `{stage: plumbing, pushForceMax: 20}`
+- **THEN** it is valid, and the instruction book's step for the routed link reads it as it reads a connection's `how`
 
 #### Scenario: Placement stated twice
 - **WHEN** a link has both `route:` and `connectPorts:`

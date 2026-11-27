@@ -282,6 +282,13 @@ target into `(target location, ports, interfaces, params)` and calls
 child and its location explicitly, so that D3 can hand it a nested one. A link
 calls it as today. A route end calls it with the routed part as the child,
 discards the joint, and takes the composition at its defaults. A route end
+or `through` entry may give `how`, read as on any connection: it is merged
+field by field with the mating's `how` for the routed link's step in the
+instruction book, and its `snapIn` or `selfScrew` count for D13 as they do
+anywhere. `via` and `lead` stay beside it, not in it: `how` never changes
+the model, and they set the path. In the schema, the entries are built from
+the `connect` and `connectPorts` definitions themselves, less the fields that
+make a joint, so the two cannot drift apart. A route end
 without `with` passes an identity source port (a port at the origin, unturned)
 instead of looking one up. That skips the "peer port auto-detection" path, which
 an ordinary link with a port-less child still takes.

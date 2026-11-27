@@ -130,8 +130,8 @@ The following syntax is used to create a node that places a part in the assembly
       physics: <(optional) what moving it costs, see "Joints" below>
       joint: <(optional) the name of the joint it makes, see "Joints" below>
     route: # alternative to the three above, for a routed part, see "Routes" below
-      ends: <the two ends: each a connection ("connectPorts" or "connect") or a free end ("location"); each may give "lead", and the second "via">
-      through: <(optional) the ports passed through between the ends, in order: each a connection, which may give "lead" and "via">
+      ends: <the two ends: each a connection ("connectPorts" or "connect") or a free end ("location"); each may give "lead" and "how", and the second "via">
+      through: <(optional) the ports passed through between the ends, in order: each a connection, which may give "lead", "via" and "how">
       via: <(optional, without "through" only) points the path passes through, in this list's frame; the same as "via" on the second end>
       comment: <(optional) free form text, see "Comment" below>
 
@@ -304,8 +304,11 @@ plain tube gives no `with`: its end face is what is plugged in, as if it were a
 port at the origin of the end frame (see :ref:`routed`). A cable whose ends
 differ names one of the ports or interfaces it declares in `with`. So the cable
 leaves a port the way a part put in it would, and the matings and interface
-checks that apply to that part apply to the cable's end too. The fields that
-describe a step or a joint (`how`, `motion`, `physics`, `joint`, `exploded`,
+checks that apply to that part apply to the cable's end too. An end or a
+`through` entry may give `how`, which says how that end goes in - pushed onto
+a barb, clipped into a grommet - as it does for any connection (see "How"
+below). `via` and `lead` set the path, so they sit next to `how`, not in it.
+The fields that describe a joint (`motion`, `physics`, `joint`, `exploded`,
 `interferes`) do not apply to an end. A connection that would keep a degree of
 freedom is taken where it starts, and makes no joint.
 
