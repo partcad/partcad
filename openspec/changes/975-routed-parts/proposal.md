@@ -76,7 +76,7 @@ with their ports by Jinja variables shared between the route and the ports.
 - **Schemas:** `assy.json` (`route` node section, exclusive with the other
   placements), `partcad.json` (the `routed` part type).
 - **Tooling:** `pc lint` and schema validation; the part-type lists that are kept
-  complete by tests (`partcad_client.object_types`, and `ide/vscode/src/partTypes.ts`).
+  complete by tests (`partcad_client.object_types`).
 - **Docs and examples:** `config_parts.rst`, `assy.rst`, and a new
   `examples/feature_routed_parts` package with a behave feature.
 - **No breaking changes:** files that use none of this build exactly as before.

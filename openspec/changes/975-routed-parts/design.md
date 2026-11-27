@@ -252,11 +252,15 @@ against the part fetched *without* `route`, which is why the spec forbids ports
 that depend on it.
 
 ### D6. A wrapper of its own; the factory-side sketch handling is shared with `sweep`
-`PartFactoryRouted` runs a new `wrapper_route.py` (`GeomAPI_PointsToBSpline`
-through the samples, the profile placed in the first end frame,
-`BRepOffsetAPI_MakePipeShell` with an auxiliary spine through each sample offset
-along its frame's X, so that the profile follows the D4 frames and their roll
-rather than OCCT's own, then `finish_request`).
+`PartFactoryRouted` runs a new `wrapper_route.py`: a spine interpolated
+(`GeomAPI_Interpolate`) through the samples with the end directions pinned, the
+profile placed in the first end frame, and `BRepOffsetAPI_MakePipeShell` with an
+auxiliary spine through each sample offset along its frame's X, so that the
+profile follows the D4 frames and their roll rather than OCCT's own, then
+`finish_request`. The auxiliary spine is matched by length along the path
+(`CurvilinearEquivalence`), not by plane intersection, which failed on these
+curves. An approximated spine (`GeomAPI_PointsToBSpline`) was tried and
+dropped: it turned the end faces by up to 1.7 mrad.
 The sketch resolution and sketch cache-key folding of `PartFactorySweep` move into
 a helper that both factories use.
 
@@ -356,6 +360,13 @@ After the sweep, `wrapper_route.py` refuses anything that is not exactly one
 solid, has non-positive volume, or fails `BRepCheck_Analyzer`. For a generic
 part the `validity` check only reports these. For a route, though, an invalid
 solid always means the path could not carry the profile.
+
+`BRepCheck_Analyzer` does not see a sweep that crosses itself: such a solid
+passes it. That case is refused before the sweep, by the checks above, run with
+the profile's outer radius (half the diameter, or the farthest corner of the
+sketch's bounding box from its origin). `BOPAlgo_ArgumentAnalyzer` would see it,
+but took 8-12 s per part and also flagged a flat strip that does not cross
+itself.
 
 Any refusal leaves the link out of the assembly. The log message names the link,
 the reason, the path position (as a point in the list frame) and the values.

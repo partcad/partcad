@@ -35,14 +35,14 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
 
 ## 3. Routed part type and its ends
 
-- [ ] 3.1 Add `routed` to `partcad.json` (`diameter`, `innerDiameter`, `sketch`, `length`, `minBendRadius`; exactly one of `diameter` or `sketch`). Verify that schema tests accept valid declarations, and reject both-or-neither and `innerDiameter >= diameter`.
+- [ ] 3.1 Add `routed` to `partcad.json` (`diameter`, `innerDiameter`, `sketch`, `length`, `minBendRadius`; exactly one of `diameter` or `sketch`). Verify that schema tests accept valid declarations, and reject both-or-neither. `innerDiameter >= diameter` is refused by the part, not the schema, which cannot compare two fields; 3.2's tests cover it.
 - [ ] 3.2 Make routed parts expose exactly the ports and interfaces they declare (none by default), and reject ports or interface parameters that refer to `route`. Verify with unit tests: a plain routed part has empty `with_ports.get_ports()`; declared ports appear as declared; the `route` reference is reported as invalid.
-- [ ] 3.3 Extract the sketch resolution and sketch cache-key folding from `PartFactorySweep` into a shared helper (D6), with `sweep` and its `CACHE_VERSION` unchanged. Verify that the sweep cache keys in `test_cache_key_collisions.py` are identical before and after, and that `examples/produce_part_sweep` still passes `pc test`.
-- [ ] 3.4 Add `src/partcad/wrappers/wrapper_route.py` (D6, plus the D9 post-sweep checks) and `src/partcad/part_factory_routed.py`. Register the type in the part-type registry, `partcad_client.object_types` and `ide/vscode/src/partTypes.ts`. Verify that the completeness tests pass, plus these *(sandbox)* tests in `tests/partcad/unit/test_part_routed.py`:
+- [ ] 3.3 Extract the sketch resolution and sketch cache-key folding from `PartFactorySweep` into a shared helper (D6), with `sweep` and its `CACHE_VERSION` unchanged. Verify that the sweep cache keys in `test_cache_key_collisions.py` are identical before and after, and that `examples/produce_part_sweep` still passes `pc qual test`.
+- [ ] 3.4 Add `src/partcad/wrappers/wrapper_route.py` (D6, plus the D9 post-sweep checks) and `src/partcad/part_factory_routed.py`. Register the type in the part-type registry and `partcad_client.object_types` (`ide/vscode/src/partTypes.ts` is the picker of file-based part types, which lists no `sweep` either, so `routed` stays out of it). Verify that the completeness tests pass, plus these *(sandbox)* tests in `tests/partcad/unit/test_part_routed.py`:
   - a 6/4 mm tube on a sampled arc is one valid solid, with volume within 1 % of π(3²−2²)·L;
   - both end faces are centred on the end origins (to 1e-6 mm) and normal to their Z axes (to 1e-6 rad);
   - a flat rectangular sketch has its long side along each end's X at both end faces (to 1e-6 rad), i.e. the solid follows the rolled frames (D4);
-  - a sketch whose sweep self-intersects is refused with the defect named, and no shape is returned;
+  - a sketch too wide for a bend is refused before the sweep, with the bend and the profile's radius named, and no shape is returned (D9: `BRepCheck_Analyzer` does not see a sweep that crosses itself); a result that is not one valid solid is refused;
   - a missing `route` param is a clear error.
 - [x] 3.5 Document the `routed` type in `docs/source/config_parts.rst`: its fields, the profile rule, the end frame and when to declare ports, a pointer to `route:`, and a short "routed or sweep?" note. Use `sweep` for a fixed shape drawn in the part's own frame, and `routed` for anything that joins two placed parts and has to follow them. Cross-link the two sections. Verify that the docs build has no warnings.
 
