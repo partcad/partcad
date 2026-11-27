@@ -1216,3 +1216,71 @@ def test_what_is_staged_while_git_commits_stays_staged_and_out_of_the_revision(w
     assert str(repo[sha].tree.id) == approved
     repo.index.read(True)
     assert "lib/late.py" in repo.index and "lib/late.py" not in repo[sha].tree
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_head_moved_while_git_commits_is_found_and_said_with_the_revision_made(workspace, monkeypatch):
+    root, first = workspace
+    monkeypatch.setattr(working_copy, "_git_executable", lambda: shutil.which("git"))
+    _git(root, "config", "user.name", "Test")
+    _git(root, "config", "user.email", "test@example.com")
+    _lib(root, desc="Second")
+    second = _commit(root, "second")
+    _lib(root, desc="Approved")
+    _stage(root, "lib/partcad.yaml")
+    repository = package_versions.repository_of(str(root))
+    approved = package_versions.index_tree(repository)
+    branch = working_copy._head_ref(pygit2.Repository(str(root)))
+    real_git = working_copy._git
+
+    def git_after_a_soft_reset(git, workdir, env, *args, **kwargs):
+        if args and args[0] == "commit":
+            # Somebody else moves the branch back, after the check and before git reads HEAD.
+            _git(root, "update-ref", branch, first)
+        return real_git(git, workdir, env, *args, **kwargs)
+
+    monkeypatch.setattr(working_copy, "_git", git_after_a_soft_reset)
+
+    with pytest.raises(working_copy.Refused) as refused:
+        working_copy.commit(
+            repository, "Approved\n", {"name": "Ann", "email": "ann@example.com"}, approved, second, branch
+        )
+
+    assert refused.value.code == "head-moved" and "made" in str(refused.value)
+
+
+def test_another_branch_at_the_same_commit_is_not_where_the_revision_was_agreed_to_go(workspace):
+    root, first = workspace
+    repo = pygit2.Repository(str(root))
+    branch = working_copy._head_ref(repo)
+    repo.branches.local.create("elsewhere", repo[first].peel(pygit2.Commit))
+    repo.set_head("refs/heads/elsewhere")
+    _lib(root, desc="Staged")
+    _stage(root, "lib/partcad.yaml")
+    repository = package_versions.repository_of(str(root))
+
+    with pytest.raises(working_copy.Refused) as refused:
+        working_copy.commit(
+            repository,
+            "x\n",
+            {"name": "A", "email": "a@example.com"},
+            package_versions.index_tree(repository),
+            first,
+            branch,
+        )
+
+    assert refused.value.code == "head-moved"
+    assert str(repo.references[branch].target) == first
+
+
+def test_pygit2_commits_on_the_branch_it_was_agreed_to_go_on(workspace, ctx):
+    root, first = workspace
+    _lib(root, desc="On the branch")
+    _stage(root, "lib/partcad.yaml")
+
+    made = working_copy.new_revision(
+        ctx, ctx.get_project("//lib"), "On the branch", author={"name": "Ann", "email": "ann@example.com"}, accept=True
+    )
+
+    repo = pygit2.Repository(str(root))
+    assert str(repo.head.target) == made["sha"] and [str(p) for p in repo[made["sha"]].parent_ids] == [first]

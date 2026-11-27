@@ -265,6 +265,7 @@ def _status(ctx, project, kind: typing.Optional[str] = None, name: typing.Option
         "kind": kind,
         "repository": _workdir(repository),
         "branch": branch,
+        "head_ref": _head_ref(repo),
         "head": head,
         "detached": bool(repo.head_is_detached),
         "index": index,
@@ -660,6 +661,16 @@ def check(result: dict, expect_index: typing.Optional[str], include_others: bool
         raise Refused("; ".join(pending), "warnings", result)
 
 
+def _head_ref(repo) -> typing.Optional[str]:
+    """The branch HEAD is on, as a reference name ('refs/heads/main'); None while it is detached."""
+    try:
+        if repo.head_is_detached:
+            return None
+        return repo.references["HEAD"].target
+    except Exception:  # pylint: disable=broad-except
+        return None
+
+
 def _move_index(repository, expected: str, tree: str) -> bool:
     """Make the index hold 'tree' where it still holds 'expected', as git writes one: under its lock.
 
@@ -735,6 +746,7 @@ def commit(
     author: typing.Optional[dict] = None,
     tree: typing.Optional[str] = None,
     parent=_ANY,
+    branch=_ANY,
 ) -> str:
     """Commit what the index holds, with 'message', as 'author' ({'name', 'email'}); the new commit's id.
 
@@ -744,9 +756,12 @@ def commit(
     tree the commit is of, whatever is staged while it is made -- git commits
     an index of its own holding it -- and refused, with 'index-changed', where
     the index already holds another. 'parent' is the commit it goes on top of
-    (None: the first), refused with 'head-moved' where HEAD is elsewhere: what
-    was agreed to was agreed to against it. A hook may still change what git
-    commits; the caller is told ('new_revision').
+    (None: the first), and 'branch' the branch it goes on ('refs/heads/...';
+    None: HEAD detached), each refused with 'head-moved' where HEAD is
+    elsewhere: what was agreed to was agreed to against them -- and found and
+    said after the fact where HEAD moves while git commits, which git gives no
+    way to prevent. A hook may still change what git commits; the caller is
+    told ('new_revision').
     """
     author = {key: value for key, value in (author or {}).items() if value}
     workdir = _workdir(repository)
@@ -754,6 +769,10 @@ def commit(
         raise Refused("What is staged changed while it was being checked: look again", "index-changed", {})
     if parent is not _ANY and repository.head() != parent:
         raise Refused("HEAD moved while the revision was being checked: look again", "head-moved", {})
+    if branch is not _ANY and _head_ref(repository.repo) != branch:
+        raise Refused(
+            "Another branch was checked out while the revision was being checked: look again", "head-moved", {}
+        )
     git = _git_executable()
     if git is not None:
         env = dict(os.environ)
@@ -777,6 +796,19 @@ def commit(
         import pygit2
 
         repo = repository.repo
+        made = str(repo.head.target)
+        # git has no way to be told which commit to go on top of: HEAD moved
+        # between the check above and git reading it is found here, and said,
+        # with the revision it made.
+        parents = [str(each) for each in repo[made].peel(pygit2.Commit).parent_ids]
+        moved = parent is not _ANY and parents != ([parent] if parent else [])
+        if moved or (branch is not _ANY and _head_ref(repo) != branch):
+            raise Refused(
+                "HEAD moved while git was making the revision: it made %s on top of %s"
+                % (package_versions.short(made), package_versions.short(parents[0]) if parents else "nothing"),
+                "head-moved",
+                {"made": made},
+            )
         if tree is not None:
             # The index the user stages into still holds what was committed
             # unless something was staged meanwhile: it is then the new
@@ -812,7 +844,9 @@ def commit(
         parents = [pygit2.Oid(hex=parent)] if parent else []
     else:
         parents = [] if repo.head_is_unborn else [repo.head.target]
-    reference = "HEAD"
+    # The branch itself, where one is named: libgit2 moves it only from the
+    # first parent, which is the compare-and-swap git commit does not offer.
+    reference = branch if branch not in (_ANY, None) else "HEAD"
     return str(repo.create_commit(reference, signature, signature, message, tree, parents))
 
 
@@ -871,7 +905,14 @@ def new_revision(
             raise refused
     repository = _repository(project)
     try:
-        sha = commit(repository, message.strip() + "\n", author, tree=tree, parent=result.get("head"))
+        sha = commit(
+            repository,
+            message.strip() + "\n",
+            author,
+            tree=tree,
+            parent=result.get("head"),
+            branch=result.get("head_ref"),
+        )
     except Refused as refused:
         refused.status = result
         raise
