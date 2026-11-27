@@ -440,6 +440,8 @@ change, the way `/pc:gen-sketch` §8 reads it: in proportion is a scale, a
 common offset is a datum, one dimension is its constant. Correct it from the
 error rather than by eye.
 
+An error in PartCAD itself rather than in the script is `/pc:report-issue`.
+
 Fix any error or mismatch, then re-test, re-render and measure again. Iterate
 until every view matches and every dimension is in tolerance — no fixed retry
 count. `/pc:describe` renders a dimensioned drawing of the finished part, for a

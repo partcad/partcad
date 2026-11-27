@@ -117,8 +117,9 @@ a CAD addon, documentation, or a PartCAD package incubated here until it has a r
   it (`daemon`, `client`), replacing this installation of PartCAD (`selfupdate`), opening a file in a
   third-party CAD application on this machine (`external`), putting the PartCAD extension into an editor
   on this machine and opening a workspace in it, in the PartCAD workbench (`ide`: `pc ide install`,
-  `pc ide workspace <directory>`), and serving the Model Context Protocol to an AI agent on this machine
-  (`mcp_server`: `pc mcp`).
+  `pc ide workspace <directory>`), serving the Model Context Protocol to an AI agent on this machine
+  (`mcp_server`: `pc mcp`), and finding PartCAD's own issues on GitHub for that agent with this user's access
+  (`issues`: `pc system issue`).
 
   `mcp_server` is a client like `pc` is: an MCP client starts it as a subprocess, it speaks MCP on stdio (the
   official `mcp` SDK, which is why the wheel and the bundle carry pydantic) and framed JSON-RPC to the

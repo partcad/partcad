@@ -111,7 +111,8 @@ error: could not determine the latest release
 ```
 
 — the release list could not be reached at all, which is a network or rate-limit
-problem rather than a missing build.
+problem rather than a missing build. Any other failure of the installer itself is
+`/pc:report-issue`.
 
 ## `python-module` — into the active Python environment
 

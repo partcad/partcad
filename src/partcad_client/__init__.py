@@ -25,6 +25,8 @@ machine and its own installation**, from the process running out of it.
 * :mod:`~partcad_client.mcp_server` -- `pc mcp`, the Model Context Protocol
   server an AI agent on this machine starts on stdio and drives the workspace's
   daemon through.
+* :mod:`~partcad_client.issues` -- PartCAD's own issues on GitHub, for that
+  agent, with this user's access (`pc system issue`).
 
 None of it belongs to a daemon. A daemon can be remote, where "update PartCAD"
 would mean updating somebody else's installation and "stop the local daemons"

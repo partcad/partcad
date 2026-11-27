@@ -340,3 +340,8 @@ Checking and analysing
   runs ``pc cae fea`` on it and shows the result where there is somewhere to
   show it. The step that matters is the third: a force on a welded body is not a
   force on the part until somebody decides which of it the part carries.
+
+``/pc:report-issue``
+  When PartCAD itself fails, finds the defect's issue on GitHub, upvotes it or files it, and applies the
+  workaround PartCAD's maintainers give there. ``agentIssues`` in the user configuration (``PC_AGENT_ISSUES``)
+  is ``auto`` (the default: no asking), ``ask``, or ``off``.

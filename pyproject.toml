@@ -164,6 +164,8 @@ aws = {file = ["requirements-aws.txt"]}
 # skills above, for the same reason: one copy, so the wheel cannot carry an
 # extension other than the one the stores publish.
 "partcad_client" = ["browsers/chromium/**/*", "browsers/firefox/**/*"]
+"partcad_client.issues" = ["*.json", "*.md"]
+"partcad_utils" = ["agent_issues.md"]
 # The schemas `partcad_utils.assy_lint` validates against: the ASSY one and the
 # `partcad.yaml` one. Both live in `partcad_utils` because both ends check both
 # kinds of file -- the daemon over a package, every client over the one file

@@ -370,6 +370,16 @@ its compound, rather than as the tree of what it places (see :ref:`part-compound
    * - ``execute``
      -
      - Runs any daemon method: CAE, CAM, simulations, ``add``, ``import``, ``convert``, ``install`` and the rest.
+   * - ``known_issues``
+     - ``pc system issue search``
+     - PartCAD's GitHub issues for a defect. Titles and descriptions are marked untrusted; of the comments, only
+       PartCAD's maintainers' are returned.
+   * - ``draft_issue``
+     - ``pc system issue draft``
+     - A new issue for a defect, without the user's paths or credentials.
+   * - ``record_issue``
+     - ``pc system issue record``
+     - Remembers which issue a defect was filed or upvoted as.
 
 ``execute`` takes a method name and its parameters as ``pc`` sends them; the workspace's context is added for
 it. It refuses the few methods that act on something that is not the agent's: resetting, stopping or
@@ -433,7 +443,8 @@ by logging -- ``pc list`` prints a table -- so for ``list_objects``, ``info``, `
 
 A failure is a result with ``ok`` false and the error in it, never a protocol error: an object that does not
 build, a qualification test that fails, a daemon that cannot be reached, a path outside the workspace. Only a malformed tool
-call is refused by the protocol. When the connection to the daemon is lost in the middle of a call, the result
+call is refused by the protocol. An exception PartCAD did not expect also carries ``partcad_defect``: its signature,
+for ``known_issues`` (see ``/pc:report-issue`` in :doc:`/ai_agents/skills`). When the connection to the daemon is lost in the middle of a call, the result
 says the call may or may not have finished -- the server never sends it again on its own -- and the next call
 reconnects.
 

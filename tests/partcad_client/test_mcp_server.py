@@ -133,6 +133,9 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
             "list_methods",
             "execute",
             "skill",
+            "known_issues",
+            "draft_issue",
+            "record_issue",
         ]
     )
     for tool in tools:
@@ -159,6 +162,8 @@ def test_the_annotations_do_not_claim_less_than_the_truth(tmp_path):
         "diff",
         "revision_uses",
         "used_by",
+        "known_issues",
+        "draft_issue",
     ):
         assert tools[name].read_only_hint is True, name
     assert tools["export"].read_only_hint is False
@@ -1218,3 +1223,70 @@ def test_execute_signs_a_comment_as_comment_add_does(tmp_path, monkeypatch):
     signed, named = requests(daemon, "comment.add")
     assert signed["name"] == "Ada Lovelace"
     assert named["name"] == "Grace Hopper"
+
+
+# --- PartCAD's own defects ---------------------------------------------------
+
+_TRACEBACK = """Traceback (most recent call last):
+  File "/x/partcad/shape.py", line 3, in render_png
+KeyError: 'width'
+"""
+
+
+def test_an_exception_partcad_did_not_expect_points_at_its_issue(tmp_path):
+    def crashing(params, emit):
+        raise DaemonError({"code": -32603, "message": "'width'", "data": {"traceback": _TRACEBACK}})
+
+    _, server = serve(tmp_path, {"bom": crashing})
+    defect = body(call(server, "bom", {"object": "box"}))["partcad_defect"]
+    assert defect["signature"] == mcp_server.issues.signature("'width'", _TRACEBACK)
+    assert defect["method"] == "bom" and "known_issues" in defect["next"]
+
+
+def test_an_error_the_package_caused_is_not_partcads_defect(tmp_path):
+    def refusing(params, emit):
+        raise DaemonError({"code": -32002, "message": "Part //pkg:nope is not found"})
+
+    _, server = serve(tmp_path, {"bom": refusing})
+    assert "partcad_defect" not in body(call(server, "bom", {"object": "nope"}))
+
+
+def test_known_issues_is_the_search_and_a_refusal_is_a_result(tmp_path, monkeypatch):
+    asked = []
+    monkeypatch.setattr(mcp_server.issues, "search", lambda *args: asked.append(args) or {"issues": []})
+    _, server = serve(tmp_path)
+    assert body(call(server, "known_issues", {"signature": "pc-sig:000000000000"})) == {"issues": []}
+    assert asked == [("pc-sig:000000000000", None, str(tmp_path))]
+
+    def unavailable(*args):
+        raise mcp_server.issues.Unavailable("PartCAD is offline")
+
+    monkeypatch.setattr(mcp_server.issues, "search", unavailable)
+    result = call(server, "known_issues", {"error": "x"})
+    assert result.is_error and body(result)["error"] == "PartCAD is offline"
+
+
+def test_a_draft_names_the_daemons_version_and_the_agent(tmp_path, monkeypatch):
+    drafted = []
+    monkeypatch.setattr(mcp_server.issues, "draft", lambda *args, **kwargs: drafted.append(kwargs) or {"ok": 1})
+    _, server = serve(tmp_path, {"version": lambda params, emit: {"partcad": "9.9.9"}})
+    assert body(call(server, "draft_issue", {"error": "KeyError: 'w'"})) == {"ok": 1}
+    assert drafted[0]["daemon"] == "9.9.9" and drafted[0]["workspace"] == str(tmp_path)
+
+
+def test_record_issue_remembers_on_this_machine(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    _, server = serve(tmp_path)
+    reply = body(call(server, "record_issue", {"signature": "pc-sig:0123456789ab", "issue": 5}))
+    assert reply["issue"] == 5 and mcp_server.issues.recorded("pc-sig:0123456789ab")["action"] == "filed"
+
+
+def test_the_instructions_say_nothing_of_issues_when_the_user_said_off(tmp_path, monkeypatch):
+    from partcad_utils.user_config import user_config
+
+    workspace = (Bridge(str(tmp_path)), PathScope([str(tmp_path)]))
+    monkeypatch.setattr(user_config, "agent_issues", "auto")
+    assert "known_issues" in mcp_server.instructions(*workspace)
+    monkeypatch.setattr(user_config, "agent_issues", "off")
+    assert "known_issues" not in mcp_server.instructions(*workspace)
+    assert mcp_server._defect("bom", mcp_server.CallFailed("x", None, -32603, None)) is None

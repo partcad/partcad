@@ -341,6 +341,19 @@ def _positive_seconds(value):
     return value if math.isfinite(value) and value > 0 else None
 
 
+AGENT_ISSUES_POLICIES = ("auto", "ask", "off")
+
+
+def agent_issues_policy(value) -> str:
+    """'agentIssues' as one of AGENT_ISSUES_POLICIES. YAML reads a bare 'off' as False."""
+    if value is False:
+        return "off"
+    text = str(value).strip().lower() if value is not None else ""
+    if text in ("false", "no", "0"):
+        return "off"
+    return text if text in AGENT_ISSUES_POLICIES else "auto"
+
+
 def _length_or(value, default):
     """'value' as a finite, non-negative length in millimetres, or 'default' if it is not one.
 
@@ -1517,6 +1530,15 @@ class UserConfig(vyper.Vyper):
         self.set_default("offline", False)
         self.bind_env("offline", "PC_OFFLINE")
         self.offline = self.get_bool("offline")
+
+        # option: agentIssues
+        # description: whether an AI agent may search, upvote and file PartCAD issues on GitHub under the
+        #              user's account (partcad_client.issues); 'ask' has it ask first
+        # values: [auto | ask | off]
+        # default: auto
+        self.set_default("agentIssues", "auto")
+        self.bind_env("agentIssues", "PC_AGENT_ISSUES")
+        self.agent_issues = agent_issues_policy(self.get("agentIssues"))
 
         # option: useDocker
         # description: whether PartCAD may use Docker at all. The master switch

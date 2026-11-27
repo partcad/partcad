@@ -404,6 +404,10 @@ The plugin folder is named `claude`, but the command namespace comes from
   scenario (`pc cae fea -f <scenario>`), and in an IDE opens the result on the
   Digital Thread's FEA tab (`pc ide view --analysis-fea --scenario
   <scenario>`). `examples/feature_simulate_fea` is one, end to end.
+- **`/pc:report-issue`** — when PartCAD itself fails: finds the defect's issue
+  on GitHub (`pc system issue`, or `pc mcp`'s `known_issues`), upvotes or files
+  it, and applies the maintainers' workaround. `agentIssues` in the user
+  configuration: `auto` (default), `ask`, `off`.
 - **`/pc:search <query>`** — finds existing parts and assemblies in the catalog
   whose name, description, or source matches the query (`pc search parts` /
   `pc search assemblies`), lists the matches, and can inspect or render a chosen

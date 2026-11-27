@@ -55,6 +55,7 @@ import re
 import shutil
 import sys
 import tarfile
+import textwrap
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 SKILLS_DIR = os.path.join(ROOT, "ai-agents", "common", "skills")
@@ -89,6 +90,7 @@ CONTEXT = """# PartCAD
   as `pc --no-ansi <command>` and capture both streams (`2>&1`), or its progress bars corrupt the output.
 - Check every change: `pc qual test <object>` proves an object builds and meets its declared requirements, not
   that it is the shape that was asked for -- render it from more than one angle and look.
+{issues}
 - Before generating, validating, rendering, exporting or converting, follow PartCAD's skill for that kind of
   work. `/pc:<skill>` and `pc-<skill>` name the same skill. The skills are:
 
@@ -151,7 +153,14 @@ def write(out_dir: str) -> list:
         json.dump(manifest(version), f, indent=2)
         f.write("\n")
     with open(os.path.join(out_dir, "GEMINI.md"), "w", encoding="utf-8", newline="\n") as f:
-        f.write(CONTEXT.format(skills="\n".join("  - `%s`" % name for name in names)))
+        issues = textwrap.fill(
+            agent_skills.issues_instruction(),
+            width=114,
+            initial_indent="- ",
+            subsequent_indent="  ",
+            break_on_hyphens=False,
+        )
+        f.write(CONTEXT.format(issues=issues, skills="\n".join("  - `%s`" % name for name in names)))
     return names
 
 

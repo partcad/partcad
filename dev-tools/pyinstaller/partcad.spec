@@ -170,6 +170,9 @@ datas += [
     # check both kinds of file: the daemon over a package, `pc lint --file` in
     # the client over one file.
     (str(SRC / "partcad_utils" / "schema"), "partcad_utils/schema"),
+    (str(SRC / "partcad_utils" / "agent_issues.md"), "partcad_utils"),
+    (str(SRC / "partcad_client" / "issues" / "config.json"), "partcad_client/issues"),
+    (str(SRC / "partcad_client" / "issues" / "report.md"), "partcad_client/issues"),
     # The loader lists this directory to enumerate the available subcommands.
     (str(SRC / "partcad_cli" / "click" / "commands"), "partcad_cli/click/commands"),
     # Redistributing a binary bundle means redistributing its dependencies.
