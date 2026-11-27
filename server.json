@@ -8,13 +8,13 @@
     "url": "https://github.com/partcad/partcad",
     "source": "github"
   },
-  "version": "0.10.38",
+  "version": "0.10.39",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "partcad",
-      "version": "0.10.38",
+      "version": "0.10.39",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -36,7 +36,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/partcad/partcad:0.10.38",
+      "identifier": "ghcr.io/partcad/partcad:0.10.39",
       "runtimeHint": "docker",
       "transport": {
         "type": "stdio"

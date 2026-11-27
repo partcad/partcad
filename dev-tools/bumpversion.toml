@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "0.10.38"
+current_version = "0.10.39"
 commit = "true"
 commit_args = "--no-verify"
 tag = "true"
