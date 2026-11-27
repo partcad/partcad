@@ -40,7 +40,9 @@ Feature: `pc install` command
   # TODO: Investigate SSH-related hangs in Windows runners
   # @requires-network: this clones from github.com; before_scenario in
   # features/environment.py skips it when the network is unreachable.
-  @success @pc-init @pc-install @pc-ansi @skip-windows @requires-network
+  # @requires-ssh-key: the clone is over SSH, which GitHub refuses without a key
+  # even for a public repository; skipped where CI says it has none to give.
+  @success @pc-init @pc-install @pc-ansi @skip-windows @requires-network @requires-ssh-key
   Scenario: Install packages with ssh
     Given environment variable "PC_NO_ANSI" is set to "1"
     And a file named "partcad.yaml" with content:

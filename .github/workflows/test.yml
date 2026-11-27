@@ -198,7 +198,7 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.10.37
+  VERSION: 0.10.38
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -1500,6 +1500,13 @@ jobs:
     env:
       PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
       PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
+      # Non-empty where "preflight" found no SSH_PRIVATE_KEY_RO, which is every
+      # pull request from a fork: the @requires-ssh-key scenarios clone over
+      # SSH, and "features/environment.py" skips them here rather than letting
+      # "Install packages with ssh" fail the shard it lands in. Empty wherever
+      # the key is, so they still run on this repository's own pull requests,
+      # in the merge queue and on "devel".
+      PARTCAD_TEST_NO_SSH_KEY: ${{ needs.preflight.outputs.ssh-key != 'true' && '1' || '' }}
 
     steps:
       - uses: actions/checkout@v7
