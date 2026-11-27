@@ -667,6 +667,9 @@ def commit(repository, message: str, author: typing.Optional[dict] = None, tree:
             cwd=workdir,
             input=message,
             text=True,
+            # git reads and writes a commit message as UTF-8 unless configured otherwise.
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             env=env,
             check=False,
