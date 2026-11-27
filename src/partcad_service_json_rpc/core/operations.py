@@ -2989,7 +2989,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.10.35"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.10.40"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -5455,6 +5455,36 @@ def cam_settings(session, params):
     return cam_view.settings(ctx, part)
 
 
+def _restore_cam_config(project, config_path: str, before: bytes, saved: bytes) -> None:
+    """Restore an unchanged saved declaration as complete bytes, under its edit lock."""
+    import contextlib
+    import shutil
+    import tempfile
+
+    with project._editing():
+        if os.path.realpath(project.config_path) != config_path:
+            raise ValueError("partcad.yaml changed its target since the settings were saved")
+        try:
+            current = Path(config_path).read_bytes()
+        except FileNotFoundError:
+            raise ValueError("partcad.yaml changed since the settings were saved: the file no longer exists") from None
+        if current != saved:
+            raise ValueError("partcad.yaml changed since the settings were saved")
+        temporary = None
+        try:
+            # Binary output preserves the snapshot's line endings and encoding.
+            # Close the temporary file before replacing it, including on Windows.
+            with tempfile.NamedTemporaryFile(mode="wb", dir=os.path.dirname(config_path), delete=False) as f:
+                temporary = f.name
+                f.write(before)
+            shutil.copymode(config_path, temporary)
+            os.replace(temporary, config_path)
+        finally:
+            if temporary is not None:
+                with contextlib.suppress(OSError):
+                    os.remove(temporary)
+
+
 def cam_save(session, params):
     """Write the CAM tab's settings into a part's declaration, and its product again where it was materialized.
 
@@ -5475,9 +5505,10 @@ def cam_save(session, params):
     file cannot come to disagree.
 
     Where the product cannot be made again, the declaration is put back as it was
-    and the Save refused, saying why: the file still holds what the earlier
-    settings made, and a declaration that file does not match is the disagreement
-    this is here to prevent.
+    only if it still holds what this Save wrote. A later edit is kept instead,
+    and the Save refused with why the settings were not restored: the declaration
+    and the materialized file can now disagree. Snapshot, save and comparison
+    use the package's edit lock; the rebuild holds no edit lock.
 
     Answers ``{object, config, materialized, stats}``: the file written, where the
     product went (or null), and what it came to.
@@ -5503,11 +5534,14 @@ def cam_save(session, params):
     project = ctx.get_project(part.project_name)
     config_path = getattr(project, "config_path", None)
     before = None
-    if config_path and os.path.isfile(config_path):
-        with open(config_path, "rb") as f:
-            before = f.read()
     try:
-        written = cam_view.save_settings(ctx, part, machine=checked.get("machine"), values=checked["settings"])
+        with project._editing():
+            if config_path and os.path.isfile(config_path):
+                config_path = os.path.realpath(config_path)
+                before = Path(config_path).read_bytes()
+            written = cam_view.save_settings(ctx, part, machine=checked.get("machine"), values=checked["settings"])
+            if before is not None:
+                saved = Path(config_path).read_bytes()
     except pc.cam.CamConfigError as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
     except ValueError as e:
@@ -5524,13 +5558,28 @@ def cam_save(session, params):
     try:
         made = asyncio.run(cam_view.rematerialize_async(ctx, fresh, machine=checked.get("machine")))
     except Exception as e:  # pylint: disable=broad-except
-        # Whatever went wrong, the materialized file is what the old settings
-        # made: so the old settings are what the declaration says again.
+        # A rebuild can take minutes. Another writer must not lose its edit
+        # because this Save's earlier snapshot predates it.
         if before is not None:
-            with open(config_path, "wb") as f:
-                f.write(before)
-            ctx.reload_packages([part.project_name])
-            cam_view.forget_products()
+            restore_failure = None
+            try:
+                _restore_cam_config(project, config_path, before, saved)
+            except (OSError, ValueError) as restore_error:
+                restore_failure = str(restore_error)
+            try:
+                ctx.reload_packages([part.project_name])
+            except Exception as reload_error:  # pylint: disable=broad-except
+                # An intervening edit can itself be unreadable. It must not
+                # hide why Save failed or leave the old preview cached.
+                pc.logging.warning("Could not reload %s after the failed Save: %s" % (config_path, reload_error))
+            finally:
+                cam_view.forget_products()
+            if restore_failure is not None:
+                raise JsonRpcError(
+                    USAGE_ERROR,
+                    "The part's file could not be rebuilt (%s). Settings were not restored: %s."
+                    " The declaration and the materialized file may disagree." % (e, restore_failure),
+                ) from e
             pc.logging.info("Put the settings of %s back as they were in %s" % (path, config_path))
         if isinstance(e, (pc.cam.CamConfigError, pc.cam.CamFailed)):
             raise JsonRpcError(

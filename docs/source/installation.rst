@@ -705,7 +705,8 @@ Your files, and PartCAD's
 ``-v "$PWD:$PWD" -w "$PWD"`` mounts the directory you are in at the same path inside the container and works
 there. The same path is deliberate: every path PartCAD prints -- in its log, in the result of an MCP tool, in a
 file it writes -- is then a path on your machine as well. PartCAD runs as the user who owns that directory, so
-what it writes there is yours; ``-e PC_UID=<uid> -e PC_GID=<gid>`` says otherwise, and ``--user`` is honoured.
+what it writes there is yours -- or, given ``-p <directory>`` outside the working directory, as the user who owns
+that package. ``-e PC_UID=<uid> -e PC_GID=<gid>`` says otherwise, and ``--user`` is honoured.
 
 ``-v partcad-home:/home/pc/.partcad`` keeps what PartCAD keeps between runs -- its sandboxes, its conda
 package cache, its caches -- in a named volume. Without it every run builds a CAD sandbox from nothing, which
@@ -780,8 +781,12 @@ Claude Desktop starts servers from no particular directory, so write the package
 ``${workspaceFolder}``.
 
 ``pc init`` run in the image writes such an entry into the ``.mcp.json`` and ``.cursor/mcp.json`` of the
-repository it sets up, because there is no ``pc`` outside the container to name; ``pc init --mcp-via docker``
-does the same anywhere, and ``--mcp-via pc`` the opposite. None of these passes the Docker socket: add it to the
+folder it sets up, because there is no ``pc`` outside the container to name; ``pc init --mcp-via docker``
+does the same anywhere, and ``--mcp-via pc`` the opposite. It mounts that whole folder, which holds the
+repository the revision tools read, and names the PartCAD root inside it. Cursor's ``${workspaceFolder}`` is
+that folder wherever Cursor is started; ``.mcp.json`` has no variable for it, so its entry mounts ``${PWD}``, the
+directory Claude Code was started in -- start Claude Code in that folder, and the server says so when it was
+started somewhere else. None of these passes the Docker socket: add it to the
 arguments yourself, knowing what it gives away. The other agents ``pc init`` configures (Codex, Gemini CLI, Zed,
 Kiro, Devin Desktop, OpenCode) have no way to name the project's directory in their configuration, which Docker has
 to mount, so for them ``pc init`` says so rather than writing an entry that cannot start; add the server by hand
