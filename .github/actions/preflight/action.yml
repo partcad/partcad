@@ -280,7 +280,12 @@ runs:
         elif [ "${ssh_key}" = "true" ]; then
           row "SSH_PRIVATE_KEY_RO" "available" "a private dependency can be cloned over SSH"
         else
-          row "SSH_PRIVATE_KEY_RO" "not needed" "this repository is public, and a public dependency clones over https"
+          # "Not needed" to install this repository's packages, which is what
+          # the row is about. The suite still has a scenario that clones over
+          # SSH on purpose, and the behave jobs skip it on this same answer
+          # ("@requires-ssh-key", "features/environment.py") -- said here so
+          # that a skipped scenario is not news to whoever reads the summary.
+          row "SSH_PRIVATE_KEY_RO" "not needed" "this repository is public, and a public dependency clones over https; the @requires-ssh-key behave scenarios are skipped"
         fi
 
         echo "ghcr-write=${ghcr_write}" >> "${GITHUB_OUTPUT}"

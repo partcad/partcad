@@ -543,7 +543,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.10.37)
+  Installing the current project: partcad (0.10.40)
 
 .. warning::
 
@@ -977,7 +977,10 @@ Running CI in your own fork
 A pull request **against this repository whose branch lives in your fork** runs with a read-only token and no
 repository secrets. That is GitHub's rule, not a setting either side can change, and it holds whether or not you have
 write access here -- what decides it is that the head is somewhere else. Most of CI does not care: the tests, the
-linters, the extension and the bundles all run on a fork exactly as they run here.
+linters, the extension and the bundles all run on a fork exactly as they run here. (*CI-Dev*'s ``Build: Dev Container``
+builds its image and does not push it, which costs nothing: the jobs after it run in the release's image that
+``.devcontainer/devcontainer.json`` pins, and the branch's tag is only a cache hint to them. Pushing it anyway is what
+used to fail every fork's pull request, a collaborator's included.)
 
 A pull request **inside your fork** -- branch to branch, both in your copy -- is a different thing and gets the full
 run: a writable token, your own secrets, your own container images. Nothing is held back there, because nothing about
@@ -1033,6 +1036,15 @@ the behave jobs start no agent where there is no key -- unconditional, the agent
 fails the whole job with "The ssh-private-key argument is empty". The privacy of the repository is a heuristic for
 "its dependencies are private too", not a fact: if your fork is private but everything it installs is public, set
 ``needs-ssh: "false"`` on the ``Prerequisites`` job in your copy of ``test.yml`` and ``test-dev.yml``.
+
+The behave suite has one scenario of its own that clones over SSH on purpose, ``Install packages with ssh``, and GitHub
+refuses an SSH clone without a key even of a public repository. It is tagged ``@requires-ssh-key``: where
+``Prerequisites`` finds no key, the behave jobs set ``PARTCAD_TEST_NO_SSH_KEY`` and ``features/environment.py`` skips
+it, and *CI-Dev* leaves git's clones on https instead of rewriting them to SSH. On a pull request from a fork, which is
+given no secrets, it used to fail the shard it landed in and nothing else. It still runs before such a change lands:
+the merge queue runs in this repository, with its token and its secrets, once a maintainer has read the change and
+queued it -- which is also why a reviewer reads a fork's changes to ``.github/``, ``.devcontainer/`` and the test
+harness before queuing it, since the queued run executes them.
 
 A push to ``devel`` **in this repository** is the exception to all three: it runs no matrix at all unless its head
 commit message starts with ``Version updated``, which is the release commit. (A fork is exempt -- see `Running CI in
