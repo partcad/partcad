@@ -405,9 +405,9 @@ def test_a_devcontainer_change_counts_as_needing_the_registry():
 
     A change to ".devcontainer" alone leaves `image-push` and `image-degraded`
     both false, and the `devcontainer` job still runs -- its only condition is
-    `scope.outputs.devcontainer` -- and still pushes, with `push: always`. Read
-    only the image outputs, and a fork's pull request changing that one
-    directory is told nothing about the publish it cannot do.
+    `scope.outputs.devcontainer` -- and still pushes wherever it can. Read only
+    the image outputs, and a fork's pull request changing that one directory is
+    told nothing about the publish it cannot do.
     """
     jobs = _jobs("test-dev.yml")
     (step,) = [s for s in jobs["preflight"]["steps"] if s.get("uses") == USES]
@@ -418,10 +418,46 @@ def test_a_devcontainer_change_counts_as_needing_the_registry():
     # The premise: that job publishes, and is gated on that output alone.
     devcontainer = jobs["devcontainer"]
     assert "scope.outputs.devcontainer" in str(devcontainer.get("if")), devcontainer.get("if")
-    assert any(
-        "push: always" in str(s.get("with", {})) or s.get("with", {}).get("push") == "always"
-        for s in devcontainer["steps"]
-    ), "the dev container job no longer pushes"
+    assert "'always'" in _dev_container_push(), "the dev container job no longer pushes"
+
+
+def _dev_container_push():
+    """The `push:` of the step in `Build: Dev Container` that builds the image."""
+    devcontainer = _jobs("test-dev.yml")["devcontainer"]
+    (step,) = [s for s in devcontainer["steps"] if str(s.get("uses", "")).startswith("devcontainers/ci")]
+    return " ".join(str(step["with"]["push"]).split())
+
+
+def test_the_dev_container_is_pushed_only_where_the_token_can_write():
+    """A fork's pull request builds the dev container image and does not push it.
+
+    GitHub hands such a run `packages: read` whatever the job asks for, so
+    `push: always` failed every one of them at the push -- #691, #913, #968
+    and #988, a collaborator's among them -- with "denied: installation not
+    allowed to Write organization package", and skipped every test job after
+    it. `preflight` had already said `ghcr-write=false`; the job did not ask.
+
+    Not pushing costs nothing there: the test jobs run in the release's image
+    that ".devcontainer/devcontainer.json" pins and name this tag only as a
+    cache hint. And `preflight` never answers `false` for this repository's
+    own runs -- see `test_a_withheld_push_does_not_stop_the_run` -- so the
+    version bump still publishes the release's dev container.
+    """
+    devcontainer = _jobs("test-dev.yml")["devcontainer"]
+
+    assert "preflight" in devcontainer["needs"], devcontainer["needs"]
+    assert _dev_container_push() == "${{ needs.preflight.outputs.ghcr-write == 'true' && 'always' || 'never' }}"
+
+
+@pytest.mark.parametrize("fork, push", [("true", "false"), ("false", "true")])
+def test_a_fork_is_the_one_case_answered_read_only(tmp_path, fork, push):
+    """What the expression above reads, for the two cases it has to tell apart:
+    a fork's pull request (no write, whatever the registry says) and this
+    repository's own run (write, even where the registry withholds `push`)."""
+    outputs, rc, _, _ = preflight(tmp_path, fork=fork, granted=["pull"])
+
+    assert rc == 0
+    assert outputs["ghcr-write"] == push
 
 
 @pytest.mark.parametrize("workflow", ["test.yml", "test-dev.yml"])
@@ -464,3 +500,57 @@ def test_the_ssh_agent_starts_only_where_there_is_a_key(workflow):
             if "webfactory/ssh-agent" in str(step.get("uses", "")):
                 assert "needs.preflight.outputs.ssh-key" in str(step.get("if", "")), workflow
                 break
+
+
+# Non-empty exactly where `preflight` found no key.
+NO_KEY = "${{ needs.preflight.outputs.ssh-key != 'true' && '1' || '' }}"
+
+
+def test_the_behave_suites_are_told_when_there_is_no_key():
+    """`PARTCAD_TEST_NO_SSH_KEY`, from the same answer that starts the agent.
+
+    "Install packages with ssh" clones over SSH, which GitHub refuses without a
+    key even for a public repository, so on a fork's pull request -- no secrets
+    -- it failed the behave shard it landed in and nothing else (#913, #988).
+    `features/environment.py` skips the `@requires-ssh-key` scenarios where
+    this is set, so it has to be set in both suites, and only from `preflight`:
+    left empty where the key is, they still run here, in the merge queue and on
+    `devel`.
+
+    "Run: behave" also rewrites every https clone from github.com to SSH, which
+    without a key can only turn a clone that works into one that is refused --
+    so that rewrite is behind the same variable.
+    """
+    behave = _jobs("test.yml")["test-behave"]
+    assert behave["env"]["PARTCAD_TEST_NO_SSH_KEY"] == NO_KEY
+
+    dev = _jobs("test-dev.yml")["behave"]
+    (step,) = [s for s in dev["steps"] if s.get("name") == "Run Behave"]
+    assert "PARTCAD_TEST_NO_SSH_KEY=" + NO_KEY in step["with"]["env"].splitlines()
+    run = step["with"]["runCmd"]
+    guard = run.index('if [ -z "${PARTCAD_TEST_NO_SSH_KEY:-}" ]; then')
+    rewrite = run.index('git config --global url."git@github.com:".insteadOf')
+    assert guard < rewrite < run.index("fi", guard), run
+
+
+def test_every_scenario_cloning_over_ssh_says_so():
+    """A scenario that names `git@github.com:` is tagged `@requires-ssh-key`.
+
+    Otherwise the next one fails every fork's pull request the way "Install
+    packages with ssh" did, for the reason the test above gives. `@wip`
+    scenarios are left out, as `behave.ini` leaves them out of every run.
+    """
+    from behave.parser import parse_file
+
+    untagged = []
+    for path in sorted((REPO_ROOT / "features").glob("*.feature")):
+        feature = parse_file(str(path))
+        for scenario in feature.walk_scenarios():
+            tags = set(scenario.effective_tags)
+            if "wip" in tags:
+                continue
+            text = " ".join("%s %s" % (step.name, step.text or "") for step in scenario.all_steps)
+            if "git@github.com:" in text and "requires-ssh-key" not in tags:
+                untagged.append("%s:%s %s" % (path.name, scenario.line, scenario.name))
+
+    assert not untagged, untagged
