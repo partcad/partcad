@@ -71,6 +71,7 @@ The route pass is the first to build a part there, so:
 - Keep-out, collision avoidance with other parts, solving to a given length, and
   automatic rerouting of a path that cannot be built.
 - Branching routes (a Y-splitter).
+- Closed loops with no ends (a belt or a chain around pulleys); see D14.
 - Links placed against a routed part, and joints at route ends.
 - Ends that reach up out of the assembly being built.
 
@@ -617,6 +618,7 @@ exception for the middle ones.
 | b. `start` / `through` / `end` | Three keys | Reads in travel order | Implies a direction a route does not have: the path is the same either way round, and the roll is matched at both ends |
 | c. One list under another name | `attach:` or `anchors:` | One ordered list | First and last are still special by position, so every rule keeps its exception |
 | d. Keep `ends`, fix the prose | Middle "ends" called pass-through ports | No change | The key still says "end" for things that are not |
+| e. Lists in `connect` / `connectPorts` on the link | `connectPorts: [a, g1, b]`, no `route:` | No new key; the joints are written as anywhere else | What a list means depends on the part's type, declared in another file: "the first places it, the rest are checked" for a part of fixed shape, "all of them shape it" for a routed one, and neither the reader nor the schema can tell which. First and last are ends by position, as in c. Every reader of `connect` (exploded view, instruction book, joint export) has to ask the part's type. Overlaps `alsoConnectPorts` |
 
 A route has no direction: the path through the same knots is the same curve
 either way round, the checks are symmetric, and with the roll matched at every
@@ -627,6 +629,17 @@ is a fact about the profile, not a direction of the cable, so the keys stay
 `ends`, and the rule is stated as "the first end listed". Flow direction (a pump's outlet to a reservoir) is not
 modelled; if it is ever needed, it is a field of its own rather than something
 read from which end is listed first.
+
+The entries stay `connect` and `connectPorts` blocks (D8): a route adds no new
+way of joining, only which joints are ends, which are passed through, and the
+path between them.
+
+**Follow-up: closed loops (noted 2026-11-28).** A route is a part whose shape
+comes from its joints. A spring or a bellows between two parts already fits,
+as a script part with two ends. A belt or a chain around pulleys does not: it
+is a closed loop of `through` entries, with no ends. If it is needed, it is a
+generalisation of `route` (a loop of `through` entries and no `ends`, with the
+roll matched all the way round), not of `connect*`. A change of its own.
 
 ### D15. A routed part does not move in an exploded view (decided 2026-11-28)
 An exploded view backs each item out of what it is joined to
