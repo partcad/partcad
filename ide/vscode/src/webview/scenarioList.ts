@@ -35,7 +35,14 @@ export interface Verdict {
 
 /** One row: what the section declares it under, what it says it is, and how its last run went. */
 export interface ScenarioRow {
+    /** What the row is selected and focused by, and what 'onSelect' is handed. */
     name: string;
+    /**
+     * What the row says, where that is not its name: a revision by the first
+     * eight characters of its commit id, on the Revisions tab, which two
+     * commits can share - the full id is the name.
+     */
+    label?: string;
     desc?: string | null;
     verdict: Verdict;
     /**
@@ -87,14 +94,15 @@ export class ScenarioList {
             const mark = el('span', `${this.prefix}-mark ${this.prefix}-${entry.verdict.state}`, entry.verdict.mark);
             mark.title = entry.verdict.label;
             row.appendChild(mark);
-            row.appendChild(el('span', 'build-title', entry.name));
+            const label = entry.label ?? entry.name;
+            row.appendChild(el('span', 'build-title', label));
             if (entry.chips !== undefined && entry.chips.length > 0) {
                 const chips = row.appendChild(el('span', `scenario-chips ${this.prefix}-chips`));
                 for (const word of entry.chips) {
                     chips.appendChild(el('span', 'scenario-chip', word));
                 }
             }
-            row.title = entry.desc?.trim() ? `${entry.name}: ${entry.desc.trim()}` : entry.name;
+            row.title = entry.desc?.trim() ? `${label}: ${entry.desc.trim()}` : label;
             row.addEventListener('click', () => this.onSelect(entry.name));
             row.addEventListener('keydown', (event: KeyboardEvent) => this.onKey(event, entry.name));
             this.items.appendChild(row);

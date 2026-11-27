@@ -46,6 +46,7 @@ What a revision cannot reach is a relative reference *out of* the package
 revision is of this package's repository, and a sibling may be in another one.
 """
 
+import hashlib
 import os
 import re
 import threading
@@ -412,19 +413,56 @@ def resolve(repository: Repository, revision: str, fetch: bool = False, user_con
     return str(commit.id)
 
 
+def _index_identity(path: str) -> typing.Optional[tuple]:
+    """What the index file holds, cheaply: its size and the checksum git ends it with; None when it cannot be read.
+
+    Not its time and size, which a restored copy of another index can share.
+    An index written with 'index.skipHash' ends in zeros instead, and is then
+    told apart by a digest of all of it.
+    """
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 32))
+            trailer = f.read()
+            if trailer[-20:].strip(b"\0"):
+                return (size, trailer)
+            f.seek(0)
+            digest = hashlib.sha256()
+            for piece in iter(lambda: f.read(1 << 20), b""):
+                digest.update(piece)
+            return (size, digest.hexdigest())
+    except OSError:
+        return None
+
+
+# The parent of a commit, written the way 'git' writes it: '<rev>~', '<rev>~1', '<rev>^', '<rev>^1'.
+_PARENT = re.compile(r"^(?P<base>.+?)(?:~1?|\^1?)$")
+
+
+def before_history(repository: Repository, revision: typing.Optional[str]) -> bool:
+    """Whether 'revision' is the parent of a commit that has none ('<first commit>~1'): before the history, and empty.
+
+    What a first commit is compared against -- nothing -- rather than a
+    revision that is not there.
+    """
+    found = _PARENT.match(revision or "")
+    if found is None:
+        return False
+    commit = _local_commit(repository.repo, found.group("base"))
+    return commit is not None and not commit.parent_ids
+
+
 def index_tree(repository: Repository) -> str:
     """The id of the tree the git index holds: what 'git write-tree' prints, and a new revision would be made of.
 
     Raises ValueError while the index has conflicts, which no tree can hold.
-    Read again only when the index file has changed since.
+    Read again only when what the index file holds has changed since.
     """
     repo = repository.repo
     path = os.path.join(repo.path, "index")
-    try:
-        stat = os.stat(path)
-        seen = (stat.st_mtime_ns, stat.st_size)
-    except OSError:
-        seen = None
+    seen = _index_identity(path)
     with _index_trees_lock:
         cached = _index_trees.get(path)
         if seen is not None and cached is not None and cached[0] == seen:
@@ -588,7 +626,19 @@ def _subtree_id(commit: pygit2.Commit, relpath: str):
         return None
 
 
-def revisions(repository: Repository, limit: int = REVISIONS_LIMIT, after: typing.Optional[str] = None) -> list:
+class Revisions(list):
+    """The rows 'revisions' found, and where the walk stopped.
+
+    'scanned' is the commit the walk looked at last; 'truncated' that it
+    stopped there because it had looked at 'REVISIONS_SCAN_LIMIT' commits, and
+    not because the history ended -- so there may be more, after 'scanned'.
+    """
+
+    scanned: typing.Optional[str] = None
+    truncated: bool = False
+
+
+def revisions(repository: Repository, limit: int = REVISIONS_LIMIT, after: typing.Optional[str] = None) -> "Revisions":
     """The commits that changed the package, newest first, from the one checked out.
 
     A commit is listed when what it has at the package's directory differs from
@@ -596,27 +646,39 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT, after: typin
     package that shares its repository with others lists its own history and
     nobody else's, the commit that deleted its directory included. A package at
     the repository's root lists every commit. At most 'REVISIONS_SCAN_LIMIT'
-    commits are looked at.
+    commits are looked at, which the answer says ('Revisions.truncated').
 
     Each is {'sha', 'short', 'summary', 'author', 'time'}: the time as seconds
     since the epoch, which is what a reader formats in its own time zone.
 
-    'after' is the commit a page ended at: the listing goes on from the one
-    after it, which is how a reader asks for every revision a page at a time.
+    'after' is the commit a page ended at -- one the checked out commit has on
+    its first-parent line: the walk goes on from the one before it, with all of
+    its budget, which is how a reader asks for every revision a page at a time.
+    Refused, with ValueError, for a commit that is not on that line.
     """
+    found = Revisions()
     head = repository.head()
     if head is None:
-        return []
-    found = []
+        return found
+    start = head
+    if after is not None:
+        start = _first_parent_cursor(repository, head, after)
     try:
-        walker = repository.repo.walk(head, pygit2.enums.SortMode.TOPOLOGICAL | pygit2.enums.SortMode.TIME)
+        walker = repository.repo.walk(start, pygit2.enums.SortMode.TOPOLOGICAL | pygit2.enums.SortMode.TIME)
         walker.simplify_first_parent()
     except (pygit2.GitError, ValueError, KeyError):
-        return []
+        return found
     relpath = repository.relpath
-    for scanned, commit in enumerate(walker):
+    scanned = 0
+    for commit in walker:
+        if after is not None and str(commit.id) == start:
+            # The cursor itself was on the last page.
+            continue
         if scanned >= REVISIONS_SCAN_LIMIT:
+            found.truncated = True
             break
+        scanned += 1
+        found.scanned = str(commit.id)
         here = _subtree_id(commit, relpath)
         parents = commit.parent_ids
         before = None
@@ -632,10 +694,6 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT, after: typin
             # side, which a directory deleted and made again later is, between
             # the two: the walk goes on past it, to the commits before.
             continue
-        if after is not None:
-            if str(commit.id) == after:
-                after = None
-            continue
         found.append(
             {
                 "sha": str(commit.id),
@@ -648,3 +706,24 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT, after: typin
         if len(found) >= limit:
             break
     return found
+
+
+def _first_parent_cursor(repository: Repository, head: str, after: str) -> str:
+    """'after' as a full commit id, refused unless 'head' has it on its first-parent line, which a page ends on."""
+    try:
+        cursor = str(repository.repo.revparse_single(after).peel(pygit2.Commit).id)
+    except (KeyError, ValueError, pygit2.GitError) as e:
+        raise ValueError("There is no commit '%s' to go on from" % after) from e
+    if cursor == head:
+        return cursor
+    commit = repository.repo[head]
+    for _ in range(REVISIONS_SCAN_LIMIT * 10):
+        if not commit.parent_ids:
+            break
+        try:
+            commit = repository.repo[commit.parent_ids[0]]
+        except (KeyError, ValueError):
+            break
+        if str(commit.id) == cursor:
+            return cursor
+    raise ValueError("'%s' is not a commit this history goes back through" % after)

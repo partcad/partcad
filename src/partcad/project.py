@@ -3524,19 +3524,21 @@ class Project(project_config.Configuration):
             pc_logging.error("Not removing the dependency '%s' from '%s': %s" % (alias, self.name, why))
             return False
         with self._editing():
-            yaml = ruamel.yaml.YAML()
-            yaml.preserve_quotes = True
-            with open(self.config_path, encoding="utf-8") as fp:
-                config = yaml.load(fp)
-            dependencies = config.get("dependencies") if config is not None else None
+            # A template is refused before anything is read as YAML, and the
+            # file is replaced only once the new one is written in full.
+            try:
+                config, yaml = self._load_to_edit("the removal of the dependency '%s'" % alias)
+            except ValueError as e:
+                pc_logging.error("Not removing the dependency '%s' from '%s': %s" % (alias, self.name, e))
+                return False
+            dependencies = config.get("dependencies")
             if not dependencies or alias not in dependencies:
                 pc_logging.error("%s declares no dependency '%s'" % (self.name, alias))
                 return False
             del dependencies[alias]
             if not dependencies:
                 del config["dependencies"]
-            with open(self.config_path, "w", encoding="utf-8") as fp:
-                yaml.dump(config, fp)
+            self._write_edited(config, yaml)
         return True
 
     def rel_path(self, path) -> str:

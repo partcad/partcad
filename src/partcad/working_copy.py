@@ -26,7 +26,6 @@ holds, which a new revision is made of; and WORKTREE, the files on disk.
   whose git identity is not the user's.
 """
 
-import difflib
 import os
 import shutil
 import subprocess
@@ -54,16 +53,41 @@ def _workdir(repository) -> str:
 
 
 def _package_dir_of(repository, path: str) -> str:
-    """The directory, inside the repository, of the package a repository path belongs to: the nearest above it with a 'partcad.yaml'."""
+    """The directory, inside the repository, of the package a repository path belongs to: the nearest above it with a 'partcad.yaml'.
+
+    A path deleted from the working tree belongs to the package it was in: a
+    'partcad.yaml' deleted with it is still in the index or at HEAD, so that
+    deleting a sub-package is a change of that sub-package and not of the
+    package above it.
+    """
     workdir = _workdir(repository)
     parts = path.split("/")[:-1]
+    deleted = not os.path.lexists(os.path.join(workdir, *path.split("/")))
     while True:
         candidate = "/".join(parts)
         if os.path.isfile(os.path.join(workdir, *parts, pc_changes.PACKAGE_FILE)):
             return candidate
+        if deleted and _manifest_was_there(repository, "/".join(parts + [pc_changes.PACKAGE_FILE])):
+            return candidate
         if not parts:
             return None
         parts = parts[:-1]
+
+
+def _manifest_was_there(repository, path: str) -> bool:
+    """Whether the index or HEAD holds 'path'."""
+    import pygit2
+
+    repo = repository.repo
+    try:
+        if path in repo.index:
+            return True
+    except (KeyError, ValueError, pygit2.GitError):
+        pass
+    try:
+        return not repo.head_is_unborn and path in repo.head.peel(pygit2.Commit).tree
+    except (KeyError, ValueError, pygit2.GitError):
+        return False
 
 
 def _inside(path: str, directory: str) -> bool:
@@ -109,19 +133,27 @@ def _head_state(repository) -> typing.Optional[str]:
 
 def _object_rows(ctx, package: str, before: typing.Optional[str], after: typing.Optional[str]) -> list:
     """The objects of 'package' that changed from 'before' to 'after'; with no 'before' -- no commit yet -- every object, added."""
+    return _compared(ctx, package, before, after)[0]
+
+
+def _compared(ctx, package: str, before: typing.Optional[str], after: typing.Optional[str]) -> tuple:
+    """'_object_rows', and whether the package's own declaration changed too."""
     if before is None:
         from partcad_utils.object_names import NAMED_KINDS
 
         after_project = pc_changes.package_at(ctx, package, after)
-        return [
+        rows = [
             {"kind": kind, "name": name, "object": pc_changes.qualified(package, name), "how": [pc_changes.ADDED]}
             for kind in NAMED_KINDS
             for name in sorted(pc_changes._configs(after_project, kind))
         ]
+        declared = pc_changes._package_declaration(after_project) if after_project is not None else {}
+        return rows, bool(declared)
     try:
-        return pc_changes.changes(ctx, package, before, after)["objects"]
+        compared = pc_changes.changes(ctx, package, before, after)
     except ValueError:
-        return []
+        return [], False
+    return compared["objects"], compared["package_changed"]
 
 
 def _relative_to(path: str, directory: str) -> str:
@@ -162,7 +194,9 @@ def status(ctx, project, kind: typing.Optional[str] = None, name: typing.Optiona
 
     relpath = repository.relpath
     package = project.name
-    staged = _object_rows(ctx, package, _head_state(repository), package_versions.STAGED) if index else []
+    staged, package_staged = (
+        _compared(ctx, package, _head_state(repository), package_versions.STAGED) if index else ([], False)
+    )
     unstaged = _object_rows(ctx, package, package_versions.STAGED, None) if index else []
     own = None
     if name is not None:
@@ -225,6 +259,7 @@ def status(ctx, project, kind: typing.Optional[str] = None, name: typing.Optiona
         "object_paths": sorted(object_paths),
         "partial": partial,
         "others_staged": others_staged,
+        "package_staged": package_staged,
         "elsewhere": sorted(elsewhere.values(), key=lambda entry: entry["directory"]),
     }
     result["advice"] = advice(result)
@@ -296,8 +331,13 @@ def advice(result: dict) -> typing.Optional[str]:
 # ---- stage ------------------------------------------------------------------
 
 
-def _declaration_lines(text: str, kind: str, name: str) -> typing.Optional[tuple]:
-    """The lines [start, end) 'partcad.yaml' declares '<kind> <name>' on; None where it does not, or cannot be read."""
+def _section(text: str, kind: str) -> typing.Optional[tuple]:
+    """Where 'partcad.yaml' declares its '<kind>'s: (the line of the section's key, [(name, start, end), ...]).
+
+    Lines [start, end) of each declaration, in the order written; (None, [])
+    for a file with no such section, None for one that cannot be read without
+    rendering it.
+    """
     import yaml
 
     from partcad_utils.object_names import SECTIONS
@@ -306,49 +346,123 @@ def _declaration_lines(text: str, kind: str, name: str) -> typing.Optional[tuple
         root = yaml.compose(text)
     except yaml.YAMLError:
         return None
+    if root is None:
+        return None, []
     if not isinstance(root, yaml.MappingNode):
         return None
     for key, value in root.value:
-        if getattr(key, "value", None) != SECTIONS.get(kind) or not isinstance(value, yaml.MappingNode):
+        if getattr(key, "value", None) != SECTIONS.get(kind):
             continue
-        for entry_key, entry_value in value.value:
-            if getattr(entry_key, "value", None) == name:
+        if not isinstance(value, yaml.MappingNode):
+            return key.start_mark.line, []
+        entries = []
+        pairs = list(value.value)
+        for position, (entry_key, entry_value) in enumerate(pairs):
+            if position + 1 < len(pairs):
+                # Up to the next one: where a value ends is where the next
+                # key starts, which is indented, so not the end of a line.
+                end = pairs[position + 1][0].start_mark.line
+            else:
                 end = entry_value.end_mark.line + (1 if entry_value.end_mark.column > 0 else 0)
-                return entry_key.start_mark.line, max(end, entry_key.start_mark.line + 1)
+            entries.append((entry_key.value, entry_key.start_mark.line, max(end, entry_key.start_mark.line + 1)))
+        return key.start_mark.line, entries
+    return None, []
+
+
+def _declaration_lines(text: str, kind: str, name: str) -> typing.Optional[tuple]:
+    """The lines [start, end) 'partcad.yaml' declares '<kind> <name>' on; None where it does not, or cannot be read."""
+    found = _section(text, kind)
+    for entry, start, end in (found[1] if found else []):
+        if entry == name:
+            return start, end
     return None
-
-
-def _overlaps(start: int, end: int, span: typing.Optional[tuple]) -> bool:
-    if span is None:
-        return False
-    if start == end:
-        # An insertion between lines: inside the span, or at its end.
-        return span[0] <= start <= span[1]
-    return start < span[1] and span[0] < end
 
 
 def stage_declaration(index_text: str, work_text: str, kind: str, name: str) -> typing.Optional[str]:
     """'index_text' with the lines of '<kind> <name>' taken from 'work_text' and every other line left as it was.
 
-    None where neither side declares it in a form that can be read without
-    rendering ('partcad.yaml' may be a Jinja2 template), which is when the
-    whole file is staged instead.
+    Its lines in the index are replaced by its lines in the working tree, or
+    taken out where it is gone; a new one goes in after the declaration it
+    follows in the working tree, under the section's key, which goes in too
+    where the index has no such section. Refused, with ValueError, where what
+    that makes is anything but the index's file with this one declaration
+    changed. None where neither side can be read without rendering it
+    ('partcad.yaml' may be a Jinja2 template), which is when the whole file is
+    staged instead.
     """
     a = index_text.splitlines(keepends=True)
     b = work_text.splitlines(keepends=True)
-    in_index = _declaration_lines(index_text, kind, name)
-    in_work = _declaration_lines(work_text, kind, name)
+    in_index_section = _section(index_text, kind)
+    in_work_section = _section(work_text, kind)
+    if in_index_section is None and in_work_section is None:
+        return None
+    if in_index_section is None or in_work_section is None:
+        raise ValueError(
+            "%s cannot be read without rendering it, so %s %s cannot be staged alone: stage the file"
+            % (pc_changes.PACKAGE_FILE, kind, name)
+        )
+    in_index = next(((start, end) for entry, start, end in in_index_section[1] if entry == name), None)
+    in_work = next(((start, end) for entry, start, end in in_work_section[1] if entry == name), None)
     if in_index is None and in_work is None:
         return None
-    merged = []
-    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(a=a, b=b, autojunk=False).get_opcodes():
-        if tag == "equal":
-            merged.extend(a[i1:i2])
-        elif _overlaps(j1, j2, in_work) or _overlaps(i1, i2, in_index):
-            merged.extend(b[j1:j2])
-        else:
-            merged.extend(a[i1:i2])
-    return "".join(merged)
+    if in_work is not None and b[in_work[1] - 1 : in_work[1]] and not b[in_work[1] - 1].endswith("\n"):
+        b[in_work[1] - 1] += "\n"
+    lines = b[in_work[0] : in_work[1]] if in_work is not None else []
+    if in_index is not None:
+        merged = a[: in_index[0]] + lines + a[in_index[1] :]
+    elif in_index_section[0] is None:
+        # No such section in the index: it goes in with its key, at the end.
+        tail = a[:]
+        if tail and not tail[-1].endswith("\n"):
+            tail[-1] += "\n"
+        merged = tail + [b[in_work_section[0]]] + lines
+    else:
+        # After the one before it in the working tree, where the index has it;
+        # otherwise first in the section.
+        order = [entry for entry, _start, _end in in_work_section[1]]
+        before = order[: order.index(name)]
+        ends = {entry: end for entry, _start, end in in_index_section[1]}
+        at = next((ends[entry] for entry in reversed(before) if entry in ends), None)
+        if at is None:
+            at = in_index_section[1][0][1] if in_index_section[1] else in_index_section[0] + 1
+        merged = a[:at] + lines + a[at:]
+    text = "".join(merged)
+    if not _only_declaration_changed(text, index_text, work_text, kind, name):
+        raise ValueError(
+            "The lines of %s %s in %s cannot be staged alone without changing what else it declares: stage the"
+            " file, or its lines by hand ('git add -p')" % (kind, name, pc_changes.PACKAGE_FILE)
+        )
+    return text
+
+
+def _only_declaration_changed(merged: str, index_text: str, work_text: str, kind: str, name: str) -> bool:
+    """Whether 'merged' reads as the index's 'partcad.yaml' with '<kind> <name>' as the working tree has it, and nothing else."""
+    import yaml
+
+    from partcad_utils.object_names import SECTIONS
+
+    try:
+        found = yaml.safe_load(merged) or {}
+        expected = yaml.safe_load(index_text) or {}
+        wanted = yaml.safe_load(work_text) or {}
+    except yaml.YAMLError:
+        return False
+    if not all(isinstance(document, dict) for document in (found, expected, wanted)):
+        return False
+    section = SECTIONS.get(kind)
+    declarations = dict(expected.get(section) or {})
+    declarations.pop(name, None)
+    if name in (wanted.get(section) or {}):
+        declarations[name] = wanted[section][name]
+    expected[section] = declarations
+
+    def normal(document):
+        # An empty section and none at all say the same.
+        return {
+            key: value for key, value in document.items() if value not in (None, {}) or key not in SECTIONS.values()
+        }
+
+    return normal(found) == normal(expected)
 
 
 def _stage_path(repository, index, path: str) -> None:
@@ -487,6 +601,10 @@ def others(result: dict) -> list:
             and entry["path"] != pc_changes.PACKAGE_FILE
             and entry["path"] not in own
         )
+    if result.get("object") and result.get("package_staged"):
+        # The package's own declaration -- its dependencies, its settings --
+        # is in the same file as the object's, and is no part of the object.
+        found.append("the package's own declaration in %s" % pc_changes.PACKAGE_FILE)
     for entry in result.get("elsewhere") or []:
         if entry["staged"]:
             found.append(entry["package"] or (entry["directory"] or "files in no package"))
@@ -524,15 +642,19 @@ def _git_executable() -> typing.Optional[str]:
     return shutil.which("git")
 
 
-def commit(repository, message: str, author: typing.Optional[dict] = None) -> str:
+def commit(repository, message: str, author: typing.Optional[dict] = None, tree: typing.Optional[str] = None) -> str:
     """Commit what the index holds, with 'message', as 'author' ({'name', 'email'}); the new commit's id.
 
     By git itself where it is installed, so that the repository's hooks and
     signing apply as they would to the user's own commit; otherwise with
-    pygit2, which refuses a repository that signs its commits.
+    pygit2, which refuses a repository that signs its commits. 'tree' is the
+    tree the commit has to be of: refused, with 'index-changed', where the
+    index holds another.
     """
     author = {key: value for key, value in (author or {}).items() if value}
     workdir = _workdir(repository)
+    if tree is not None and package_versions.index_tree(repository) != tree:
+        raise Refused("What is staged changed while it was being checked: look again", "index-changed", {})
     git = _git_executable()
     if git is not None:
         env = dict(os.environ)
@@ -574,7 +696,7 @@ def commit(repository, message: str, author: typing.Optional[dict] = None) -> st
     if not name or not email:
         raise ValueError("Who the author is is not known: set git's user.name and user.email")
     signature = pygit2.Signature(name, email)
-    tree = repo.index.write_tree()
+    tree = pygit2.Oid(hex=tree) if tree is not None else repo.index.write_tree()
     parents = [] if repo.head_is_unborn else [repo.head.target]
     reference = "HEAD"
     return str(repo.create_commit(reference, signature, signature, message, tree, parents))
@@ -591,11 +713,15 @@ def new_revision(
     include_others: bool = False,
     accept: bool = False,
     checks: typing.Optional[typing.Callable[[dict], list]] = None,
+    author_required: bool = False,
 ) -> dict:
     """Commit what is staged as a new revision of the subject, once 'check' allows it and 'checks' pass.
 
     'checks(status)' runs what has to pass on the staged state -- lint and the
     qualification tests -- and returns the failures, which refuse the revision.
+    With 'author_required', an 'author' without both a name and an email is
+    refused rather than completed from this machine's git configuration: a
+    daemon may be on somebody else's machine.
     Returns {'sha', 'short', 'summary', 'checks'}; raises 'Refused'.
     """
     if not isinstance(message, str) or not message.strip():
@@ -605,9 +731,19 @@ def new_revision(
         raise ValueError("%s: no revision of it can be made: %s" % (project.name, why))
     result = status(ctx, project, kind, name)
     check(result, expect_index, include_others, accept)
+    if author_required and not (isinstance(author, dict) and author.get("name") and author.get("email")):
+        raise ValueError(
+            "Who the author is is not known: set git's user.name and user.email where the revision is asked for"
+        )
+    # The tree the status was read from, and the checks run on: the one the
+    # revision is made of, or none is made.
+    tree = result.get("index")
     ran = []
     if checks is not None:
         ran = checks(result) or []
+        tested = ctx.projects.get(package_versions.versioned_name(project.name, package_versions.STAGED))
+        if tested is not None and getattr(tested, "revision_tree", tree) != tree:
+            raise Refused("What is staged changed while it was being checked: look again", "index-changed", result)
         failed = [entry for entry in ran if not entry.get("passed")]
         if failed:
             refused = Refused(
@@ -619,7 +755,11 @@ def new_revision(
             refused.status["checks"] = ran
             raise refused
     repository = _repository(project)
-    sha = commit(repository, message.strip() + "\n", author)
+    try:
+        sha = commit(repository, message.strip() + "\n", author, tree=tree)
+    except Refused as refused:
+        refused.status = result
+        raise
     pc_logging.info("Made the revision %s of %s" % (package_versions.short(sha), result.get("object") or project.name))
     return {
         "package": project.name,

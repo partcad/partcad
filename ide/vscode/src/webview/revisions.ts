@@ -53,6 +53,7 @@ import {
     CompareRow,
     DepsData,
     DiffData,
+    FileChange,
     ImpactData,
     OpsQuery,
     OpsReadMethod,
@@ -77,6 +78,7 @@ import {
     grid,
     isPackage,
     objectCell,
+    sameSubject,
     thisSubject,
     when,
 } from './operations';
@@ -173,7 +175,7 @@ function stateSummary(status: RevStatusData, row: RowId): string {
 }
 
 /**
- * A comparison, once it is in: the daemon's answer - or, for the first commit
+ * A comparison, once it is in: the daemon's answer - and, for the first commit
  * of a repository, which has no parent, its own side drawn as all added.
  */
 type Compared = { data: DiffData; first?: boolean } | { error: string } | 'pending';
@@ -196,6 +198,8 @@ export class RevisionsView {
     private readonly main: HTMLElement;
     private readonly header: HTMLElement;
     private readonly content: HTMLElement;
+    /** Where the comparison is drawn in 'content', under what is said over it; redrawn alone when an answer arrives. */
+    private comparison: HTMLElement | undefined;
     private readonly details: HTMLElement;
     private subject: OpsSubject | undefined;
     /** The revisions listed so far, every page of them; undefined until the daemon has said. */
@@ -227,7 +231,8 @@ export class RevisionsView {
         private readonly callbacks: OpsCallbacks,
     ) {
         this.pane.classList.add('revisions');
-        this.list = new ScenarioList('revisions', (name) => this.select(this.rowOf(name)));
+        // A row is named by its full commit id, and shows the first eight characters.
+        this.list = new ScenarioList('revisions', (name) => this.select(name));
         this.listFooter = el('div', 'revisions-footer');
         this.list.element.appendChild(this.listFooter);
         this.main = el('div', 'revisions-main');
@@ -257,6 +262,7 @@ export class RevisionsView {
         empty(this.header);
         empty(this.details);
         empty(this.content);
+        this.comparison = undefined;
         this.content.appendChild(placeholder(text));
     }
 
@@ -276,7 +282,7 @@ export class RevisionsView {
 
     /** The rows on offer, top to bottom - WORKTREE and STAGED by those names - for 'pc ide state' and the tests. */
     public get offered(): string[] {
-        return this.rows().map((row) => this.nameOf(row));
+        return [...this.rows().filter(isState), ...this.revisions().map((entry) => entry.short)];
     }
 
     /** The row on screen: a commit's full id, or WORKTREE or STAGED. */
@@ -299,8 +305,8 @@ export class RevisionsView {
         if (row === undefined || !this.rows().includes(row)) {
             return;
         }
-        if (row !== this.selected && this.form !== undefined && !this.form.sending) {
-            // A form is for the row it was opened on.
+        if (row !== STAGED && this.form !== undefined && !this.form.sending) {
+            // A form is for the row it was opened on, which is STAGED.
             this.form = undefined;
         }
         this.selected = row;
@@ -370,10 +376,6 @@ export class RevisionsView {
         return isState(row) ? row : (this.entryOf(row)?.short ?? row.slice(0, 8));
     }
 
-    private rowOf(name: string): RowId | undefined {
-        return isState(name) ? name : this.revisions().find((entry) => entry.short === name)?.sha;
-    }
-
     /** What a row is called in a sentence. */
     private labelOf(row: RowId): string {
         return row === WORKTREE ? 'the files on disk' : row === STAGED ? 'what is staged' : this.nameOf(row);
@@ -426,6 +428,7 @@ export class RevisionsView {
                     data: {
                         ...this.history.data,
                         more: page.more,
+                        next: page.next,
                         revisions: [
                             ...this.revisions(),
                             ...(page.revisions ?? []).filter((entry) => !known.has(entry.sha)),
@@ -437,7 +440,8 @@ export class RevisionsView {
         });
     }
 
-    private askStatus(): void {
+    /** Ask what is staged and what is not; 'then' runs once it is in, before a row is selected by it. */
+    private askStatus(then?: () => void): void {
         // Read again after a change, the status on screen stays until the new
         // one is in: the rows it decides would otherwise blink out and back.
         if (this.statusData() === undefined) {
@@ -450,6 +454,7 @@ export class RevisionsView {
                     : data
                       ? { data: data as RevStatusData }
                       : { error: 'PartCAD had nothing to say about what is staged.' };
+            then?.();
             this.answered();
         });
     }
@@ -470,7 +475,9 @@ export class RevisionsView {
             this.selected = undefined;
         }
         if (this.selected === undefined && settled && this.rows().length > 0) {
-            this.select(this.rows()[0]);
+            // A New revision form open is STAGED's: the tab started over on the
+            // same object while it was being sent, and what came of it is said there.
+            this.select(this.form !== undefined && this.rows().includes(STAGED) ? STAGED : this.rows()[0]);
             return;
         }
         this.draw();
@@ -491,21 +498,17 @@ export class RevisionsView {
         }
         this.compared.set(key, 'pending');
         this.ask({ method: 'ops.rev.diff', params: states }, (data, error) => {
-            if (error !== undefined && states.from === `${row}~1` && this.isFirstCommit(row)) {
-                // The first commit of the repository has no parent to be
-                // compared with: everything in it is what it added. Asked as
-                // itself on both sides, and drawn as its right side alone.
-                this.ask({ method: 'ops.rev.diff', params: { from: row, to: row } }, (itself, failed) => {
-                    this.compared.set(
-                        key,
-                        failed !== undefined ? { error: failed } : { data: asAdded(itself as DiffData), first: true },
-                    );
-                    this.drawComparison();
-                });
-                return;
+            if (error !== undefined) {
+                this.compared.set(key, { error });
+            } else {
+                // The first commit of the repository is compared with its
+                // parent, which the daemon answers as nothing: an empty left
+                // side, everything on the right added.
+                const answer = data as DiffData;
+                const first = states.from === `${row}~1` && answer.left?.missing === true && this.isFirstCommit(row);
+                this.compared.set(key, { data: answer, first });
             }
-            this.compared.set(key, error !== undefined ? { error } : { data: data as DiffData });
-            this.drawComparison();
+            this.drawCompared();
         });
     }
 
@@ -544,6 +547,16 @@ export class RevisionsView {
 
     // ---- Changing ----------------------------------------------------------
 
+    /** The row on screen compared afresh, and its open view asked again, if it is still listed: what it holds moved. */
+    private refreshSelected(): void {
+        if (this.selected !== undefined && this.rows().includes(this.selected)) {
+            this.askComparison();
+            if (this.detail !== undefined) {
+                this.ensure(this.detail, this.selected);
+            }
+        }
+    }
+
     /** What is staged, and the files on disk, have changed: every comparison and view of them is stale. */
     private forgetStates(): void {
         for (const key of [...this.compared.keys()]) {
@@ -568,7 +581,7 @@ export class RevisionsView {
         this.note = undefined;
         this.draw();
         this.callbacks.write({ method: 'ops.rev.stage' }, ({ data, error }) => {
-            if (this.subject !== subject) {
+            if (!sameSubject(this.subject, subject)) {
                 return;
             }
             this.staging = false;
@@ -583,17 +596,11 @@ export class RevisionsView {
             this.note = { text: [said, ...(staged.notes ?? [])].join(' '), error: false };
             this.forgetStates();
             if (!staged.status) {
-                this.askStatus();
+                this.askStatus(() => this.refreshSelected());
                 return;
             }
             this.status = { data: staged.status };
-            if (this.selected !== undefined && this.rows().includes(this.selected)) {
-                // Still on screen, and compared afresh: what it holds moved.
-                this.askComparison();
-                if (this.detail !== undefined) {
-                    this.ensure(this.detail, this.selected);
-                }
-            }
+            this.refreshSelected();
             // A WORKTREE with nothing left in it is gone, and the first row is
             // selected in its place.
             this.answered();
@@ -631,21 +638,36 @@ export class RevisionsView {
                 },
             },
             ({ data, error, refusal }) => {
-                if (this.subject !== subject || this.form !== form) {
+                // Shown again while it was being made - a save, say - the tab
+                // has started over on the same object, and has no form: this
+                // one is where what came of it is said. One opened since is the
+                // user's, and newer.
+                const restored = this.form === undefined;
+                if (!sameSubject(this.subject, subject) || (this.form !== form && !restored)) {
                     return;
                 }
+                this.form = form;
                 form.sending = false;
                 if (error !== undefined) {
                     if (refusal !== undefined) {
                         form.refused = { message: error, refusal };
                         if (refusal.code === 'index-changed') {
                             // What is staged moved under the form: read it
-                            // again, and the next attempt expects that.
+                            // again, and the next attempt expects that. What
+                            // the user agreed to was what was staged before,
+                            // and is asked again; the message is kept.
+                            form.includeOthers = false;
+                            form.yes = false;
                             this.forgetStates();
-                            this.askStatus();
+                            this.askStatus(() => this.refreshSelected());
                         }
                     } else {
                         form.error = error;
+                    }
+                    if (restored && this.selected !== STAGED && this.rows().includes(STAGED)) {
+                        // Started over on another row meanwhile: the form is STAGED's.
+                        this.select(STAGED);
+                        return;
                     }
                     this.draw();
                     return;
@@ -687,66 +709,66 @@ export class RevisionsView {
     }
 
     private drawList(): void {
-        const rows = this.rows();
-        this.list.element.hidden = rows.length === 0;
-        const head =
-            this.history !== undefined && this.history !== 'pending' && 'data' in this.history
-                ? this.history.data.head
-                : null;
+        const history = this.history;
+        const listedHistory =
+            history !== undefined && history !== 'pending' && 'data' in history ? history.data : undefined;
+        const head = listedHistory?.head ?? null;
         const status = this.statusData();
         const object = !isPackage(this.subject);
-        const listed: ScenarioRow[] = rows.map((row) => {
-            if (row === WORKTREE) {
-                return {
-                    name: WORKTREE,
-                    desc: `What is on disk and not staged: ${status ? stateSummary(status, row) : ''}`,
-                    // The list's marks say how a run went on the other tabs; here,
-                    // which state a row is (see 'revisions-running' in the CSS).
-                    verdict: { state: 'running', mark: '✎', label: 'Changed on disk, not staged' },
-                    chips: status ? [stateSummary(status, row)].filter(Boolean) : [],
-                };
-            }
-            if (row === STAGED) {
-                return {
-                    name: STAGED,
-                    desc: `What a new revision would commit: ${status ? stateSummary(status, row) : ''}`,
-                    verdict: { state: 'passed', mark: '+', label: 'Staged: what a new revision would commit' },
-                    chips: status ? [stateSummary(status, row)].filter(Boolean) : [],
-                };
-            }
-            const entry = this.entryOf(row) as RevisionEntry;
-            return {
-                name: entry.short,
+        const listed: ScenarioRow[] = [];
+        if (status !== undefined && hasUnstaged(status)) {
+            listed.push({
+                name: WORKTREE,
+                desc: `What is on disk and not staged: ${stateSummary(status, WORKTREE)}`,
+                // The list's marks say how a run went on the other tabs; here,
+                // which state a row is (see 'revisions-running' in the CSS).
+                verdict: { state: 'running', mark: '✎', label: 'Changed on disk, not staged' },
+                chips: [stateSummary(status, WORKTREE)].filter(Boolean),
+            });
+        }
+        if (status !== undefined && hasStaged(status)) {
+            listed.push({
+                name: STAGED,
+                desc: `What a new revision would commit: ${stateSummary(status, STAGED)}`,
+                verdict: { state: 'passed', mark: '+', label: 'Staged: what a new revision would commit' },
+                chips: [stateSummary(status, STAGED)].filter(Boolean),
+            });
+        }
+        // Each revision drawn from its entry as it is listed: looking it up
+        // again by its id would walk every page loaded, for every row.
+        for (const entry of this.revisions()) {
+            listed.push({
+                // Two commits can share the first eight characters of their ids.
+                name: entry.sha,
+                label: entry.short,
                 desc: describe(entry),
                 verdict:
                     entry.sha === head
                         ? { state: 'ran', mark: '●', label: 'Checked out: what the files on disk are, before any edit' }
                         : { state: 'unrun', mark: '', label: '' },
                 chips: object ? entry.how : entry.in?.map((directory) => `in ${directory}`),
-            };
-        });
-        this.list.draw(listed, this.selected === undefined ? undefined : this.nameOf(this.selected));
+            });
+        }
+        // Kept while there is more to load, though nothing is listed yet: a
+        // page can hold no row of an object's, and Load more is in the list.
+        this.list.element.hidden = listed.length === 0 && !listedHistory?.more;
+        this.list.draw(listed, this.selected);
         empty(this.listFooter);
-        const history = this.history;
-        if (history !== undefined && history !== 'pending' && 'data' in history) {
-            if (!history.data.published || history.data.revisions.length === 0) {
+        if (listedHistory !== undefined) {
+            if (!listedHistory.published || (listedHistory.revisions.length === 0 && !listedHistory.more)) {
                 this.listFooter.appendChild(
                     placeholder(
-                        history.data.published
+                        listedHistory.published
                             ? `No revision has changed ${thisSubject(this.subject)} yet.`
                             : 'No revisions yet.',
                     ),
                 );
             }
-            if (history.data.more) {
+            if (listedHistory.more) {
                 const more = this.listFooter.appendChild(
-                    button('Load more', 'small secondary revisions-more', 'List the revisions before these', () => {
-                        const last = this.revisions()[this.revisions().length - 1];
-                        if (last !== undefined && !this.listing) {
-                            this.askList(last.sha);
-                            this.drawList();
-                        }
-                    }),
+                    button('Load more', 'small secondary revisions-more', 'List the revisions before these', () =>
+                        this.loadMore(),
+                    ),
                 );
                 more.disabled = this.listing;
             }
@@ -761,6 +783,23 @@ export class RevisionsView {
         if (this.status !== undefined && this.status !== 'pending' && 'error' in this.status) {
             // No repository, say: why there is no WORKTREE or STAGED row.
             this.listFooter.appendChild(el('p', 'placeholder revisions-status-error', this.status.error));
+        }
+    }
+
+    /**
+     * Load more: the page after this one - after the commit the daemon says to
+     * go on from, which is not always one listed, or after the last row where
+     * it says none.
+     */
+    private loadMore(): void {
+        const history = this.history;
+        if (this.listing || history === undefined || history === 'pending' || !('data' in history)) {
+            return;
+        }
+        const after = history.data.next || this.revisions()[this.revisions().length - 1]?.sha;
+        if (after) {
+            this.askList(after);
+            this.drawList();
         }
     }
 
@@ -869,6 +908,7 @@ export class RevisionsView {
 
     private drawComparison(): void {
         empty(this.content);
+        this.comparison = undefined;
         if (this.note !== undefined) {
             this.content.appendChild(
                 el('p', `requirements-note revisions-note${this.note.error ? ' error' : ''}`, this.note.text),
@@ -876,7 +916,7 @@ export class RevisionsView {
         }
         const row = this.selected;
         if (row === undefined) {
-            this.content.appendChild(this.emptyPage());
+            this.content.append(...this.emptyPage());
             return;
         }
         const status = this.statusData();
@@ -891,10 +931,26 @@ export class RevisionsView {
                 this.content.appendChild(this.formOf(this.form, status));
             }
         }
+        this.comparison = this.content.appendChild(el('div', 'revisions-comparison'));
+        this.drawCompared();
+    }
+
+    /**
+     * The comparison of the row on screen, under what is said over it. An
+     * answer arriving redraws this alone: the New revision form above it is
+     * left as it is, and whoever is typing a message in it keeps the caret.
+     */
+    private drawCompared(): void {
+        const host = this.comparison;
+        const row = this.selected;
+        if (host === undefined || row === undefined) {
+            return;
+        }
+        empty(host);
         const states = comparedStates(row, this.mode);
         const answer = states === undefined ? undefined : this.compared.get(`${states.from}..${states.to}`);
         if (answer === undefined || answer === 'pending') {
-            this.content.appendChild(
+            host.appendChild(
                 placeholder(
                     `Comparing ${this.labelOf(row)} with ${this.mode === 'change' ? 'what came before it' : 'the files on disk'}…`,
                 ),
@@ -902,27 +958,36 @@ export class RevisionsView {
             return;
         }
         if ('error' in answer) {
-            this.content.appendChild(el('p', 'error', answer.error));
+            host.appendChild(el('p', 'error', answer.error));
             return;
         }
-        this.content.appendChild(renderComparison(answer.data, this.callbacks, answer.first === true));
+        host.appendChild(renderComparison(answer.data, this.callbacks, answer.first === true));
     }
 
     /** What the page says where no row is selected: still asking, nothing to list, or why not. */
-    private emptyPage(): HTMLElement {
+    private emptyPage(): HTMLElement[] {
         const history = this.history;
+        const what = thisSubject(this.subject);
         if (history === undefined || history === 'pending' || this.status === 'pending') {
-            return placeholder(`Asking PartCAD for the revisions of ${thisSubject(this.subject)}…`);
+            return [placeholder(`Asking PartCAD for the revisions of ${what}…`)];
         }
         if ('error' in history) {
-            return el('p', 'error', history.error);
+            return [el('p', 'error', history.error)];
         }
         if (!history.data.published) {
-            return placeholder(NOT_PUBLISHED);
+            return [placeholder(NOT_PUBLISHED)];
         }
-        return placeholder(
-            `No revision has changed ${thisSubject(this.subject)}, and nothing of it is changed on disk.`,
-        );
+        const looked = history.data.more ? 'No revision looked at so far has changed' : 'No revision has changed';
+        if (this.status !== undefined && 'error' in this.status) {
+            // What is on disk could not be read, which is not "nothing changed";
+            // and with no row listed, the list's footer saying so is not shown.
+            return [placeholder(`${looked} ${what}.`), el('p', 'error', this.status.error)];
+        }
+        return [
+            placeholder(
+                `${looked} ${what}, and nothing of it is changed on disk.${history.data.more ? ' Load more looks further back.' : ''}`,
+            ),
+        ];
     }
 
     /** The sentence to hand an agent that would stage the changes instead, and a button that copies it. */
@@ -1174,23 +1239,6 @@ function stagedWarnings(status: RevStatusData): string[] {
     return found;
 }
 
-/**
- * The first commit of a repository as what it added: its side, asked as itself,
- * drawn on the right with nothing on the left.
- */
-export function asAdded(data: DiffData): DiffData {
-    return {
-        ...data,
-        left: { label: '', missing: true },
-        same: false,
-        rows: (data.rows ?? []).map((row) => {
-            const text = row.right ?? row.left;
-            const line = row.rightLine ?? row.leftLine;
-            return { tag: 'insert', left: null, right: text, leftLine: null, rightLine: line } as CompareRow;
-        }),
-    };
-}
-
 /** What changed in a package, object by object and file by file, over the comparison of its 'partcad.yaml'. */
 function changesOf(changes: PackageChanges, callbacks: Pick<OpsCallbacks, 'showObject'> | undefined): HTMLElement {
     const host = el('div', 'revisions-changes');
@@ -1230,6 +1278,19 @@ function changesOf(changes: PackageChanges, callbacks: Pick<OpsCallbacks, 'showO
     return host;
 }
 
+/** What changed of the files an object is built from, under its comparison: its declaration does not say. */
+function sourcesOf(sources: FileChange[]): HTMLElement {
+    const host = el('div', 'revisions-changes');
+    const { table, body } = grid(['Built from', 'How'], 'revisions-changed-sources');
+    for (const file of sources) {
+        const tr = body.appendChild(el('tr'));
+        tr.appendChild(el('td', 'name', file.path));
+        tr.appendChild(el('td')).appendChild(chips([file.how]));
+    }
+    host.appendChild(table);
+    return host;
+}
+
 /**
  * Two states side by side: the earlier on the left and the later on the right,
  * a line of each per row with its number, a line that changed, went or came
@@ -1255,12 +1316,17 @@ export function renderComparison(
         note = `Not there any more at ${right}: this is what it was at ${left}.`;
     } else if (data.same) {
         note = `No change between ${left} and ${right}.`;
+    } else if ((data.sources ?? []).length > 0 && (data.rows ?? []).every((row) => row.tag === 'equal')) {
+        note = `Declared the same at ${left} and ${right}: what changed is the files it is built from.`;
     }
     if (note !== undefined) {
         page.appendChild(placeholder(note));
     }
     if (data.changes !== undefined) {
         page.appendChild(changesOf(data.changes, callbacks));
+    }
+    if ((data.sources ?? []).length > 0) {
+        page.appendChild(sourcesOf(data.sources ?? []));
     }
     const table = el('table', 'revisions-diff');
     const colgroup = table.appendChild(el('colgroup'));

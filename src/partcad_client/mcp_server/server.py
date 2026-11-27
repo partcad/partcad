@@ -923,7 +923,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
 
         `pc ops rev list --json`, newest first: each commit's id, its first eight characters, its summary, author
         and time, and which one is checked out ('head'); for an object, how each changed it ('added', 'removed',
-        'declaration', 'source'). 'more' says there is another page. A package in no git repository is not
+        'declaration', 'source'). 'more' says there is another page: ask again with 'after' set to 'next'. A
+        package in no git repository is not
         published ('published': false). Any of them is a state the other ops_ tools take.
         """
         request = {**_subject(package, object, kind), "limit": limit, "params": _assignments(params)}
@@ -954,8 +955,9 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         rendered, normalized, defaults left out -- so a comment or a reformatted line is no change; for a package,
         what changed in it object by object ('changes'), then its partcad.yaml as rendered at each. HEAD to
         WORKTREE when no state is given -- what is not committed; HEAD to STAGED is what is staged, STAGED to
-        WORKTREE what is not ('from_state' and 'to_state' are '--from' and '--to'). The diff follows the result as text of its own ("No change ..." when nothing
-        changed, 'same': true). 'missing' on a side says the object is not declared there.
+        WORKTREE what is not ('from_state' and 'to_state' are '--from' and '--to'). The diff follows the result as text of its own, after
+        the objects and files that changed ('sources': the files an object is built from); "No change ..." when
+        nothing did, 'same': true. 'missing' on a side says the object is not declared there.
         """
         request = {**_subject(package, object, kind), "params": _assignments(params), "lines": lines}
         if from_state:
@@ -971,7 +973,23 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         # The rows are the IDE's side-by-side view of the same comparison: the
         # diff after the result says it once, the way an agent reads one.
         outcome.result = {key: value for key, value in answer.items() if key not in ("rows", "unified")}
-        text = unified if unified else "No change from %s to %s." % (answer.get("from"), answer.get("to"))
+        if answer.get("same"):
+            text = "No change from %s to %s." % (answer.get("from"), answer.get("to"))
+        else:
+            # What the declaration's diff does not show: the files an object is
+            # built from, and what of a package changed besides its partcad.yaml.
+            listed = [
+                "%s %s" % (entry.get("how"), entry.get("path"))
+                for entry in (answer.get("sources") or []) + ((answer.get("changes") or {}).get("files") or [])
+            ]
+            listed += [
+                "%s %s" % ("/".join(row.get("how") or []), row.get("object"))
+                for row in (answer.get("changes") or {}).get("objects") or []
+            ]
+            text = "\n".join(part for part in ("\n".join(listed), unified) if part) or "Changed from %s to %s." % (
+                answer.get("from"),
+                answer.get("to"),
+            )
         return report(outcome, content=[TextContent(type="text", text=text)])
 
     @server.tool(title="What is staged and what is not", annotations=_READS)
@@ -1122,6 +1140,10 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         Each git dependency with 'track:' gets its 'revision:' rewritten to the commit its branch is at now, and
         every import is fetched again.
         """
+        if all and (package or names):
+            # The workspace, or one package: an 'all' beside a narrower scope
+            # would widen what is written without anybody having asked for it.
+            return _refusal("'all' updates every package of the workspace: give it without 'package' and 'names'")
         request = {"all": True} if all else {"package": package or "."}
         if names:
             request["names"] = list(names)

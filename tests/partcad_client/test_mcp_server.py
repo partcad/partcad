@@ -1136,6 +1136,31 @@ def test_ops_rev_diff_of_nothing_changed_says_so(tmp_path):
     assert result.content[1].text == "No change from HEAD to WORKTREE."
 
 
+def test_ops_rev_diff_of_a_change_its_declaration_does_not_show_lists_what_changed(tmp_path):
+    answer = {
+        "from": "HEAD",
+        "to": "STAGED",
+        "same": False,
+        "rows": [],
+        "unified": "",
+        "sources": [{"path": "cube.py", "how": "modified"}],
+    }
+    daemon, server = serve(tmp_path, {"ops.rev.diff": lambda params, emit: answer})
+
+    result = call(server, "ops_rev_diff", {"object": "cube", "to_state": "STAGED"})
+
+    assert result.content[1].text == "modified cube.py"
+
+
+def test_ops_deps_update_of_everything_takes_no_narrower_scope(tmp_path):
+    daemon, server = serve(tmp_path, {"ops.deps.update": lambda params, emit: {}})
+
+    result = call(server, "ops_deps_update", {"all": True, "package": "//lib"})
+
+    assert result.is_error and "'all'" in body(result)["error"]
+    assert requests(daemon, "ops.deps.update") == []
+
+
 def test_ops_rev_status_and_stage_ask_about_the_subject(tmp_path):
     daemon, server = serve(
         tmp_path,

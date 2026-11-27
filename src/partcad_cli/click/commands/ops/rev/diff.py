@@ -18,6 +18,7 @@ import rich_click as click
 from ....operations_args import (
     echo_json,
     print_changes,
+    print_sources,
     print_unified,
     run_subject,
     state_options,
@@ -75,6 +76,7 @@ def cli(
         echo_json(result)
     else:
         print_changes(result.get("changes"))
+        print_sources(result.get("sources"))
         print_unified(result.get("unified") or "")
     if exit_code and not result.get("same"):
         raise SystemExit(1)

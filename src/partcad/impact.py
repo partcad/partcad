@@ -59,10 +59,8 @@ ANALYZERS = {
 # exported files checked in beside the package.
 _OUTPUT_EXTENSIONS = (".png", ".svg", ".jpg", ".jpeg", ".gif", ".pdf", ".dxf", ".stl", ".step", ".3mf", ".glb", ".gltf")
 
+
 # How deep the closure of what uses what is followed.
-_DEPTH = 16
-
-
 def _key(package: str, name: str) -> str:
     return pc_changes.qualified(package, name)
 
@@ -180,7 +178,9 @@ def _references(ctx, row: dict, before, after, users: list) -> list:
                         users=passing,
                     )
                 )
-    if after is not None and pc_changes.DECLARATION in row.get("how", []):
+    # What a declaration names, where it is new or newly written: a reference
+    # that does not resolve breaks the object whichever way it came to be.
+    if after is not None and {pc_changes.DECLARATION, pc_changes.ADDED} & set(row.get("how", [])):
         raw = (getattr(after, "_object_configs", {}) or {}).get(row["kind"], {}).get(row["name"])
         for package, name, how in usage.references_how(after, row["kind"], raw if raw is not None else {}):
             target = ctx.get_project(package)
@@ -240,8 +240,10 @@ def _analyze(ctx, row: dict, before, after, users: list, direct: bool, measure, 
         findings.append(finding)
     elif direct and row.get("prose"):
         findings.append(_finding(INFO, "prose", "only its description, comments or other prose changed"))
+    elif not direct:
+        findings.append(_finding(INFO, "prose", "reached through a change of prose alone in %s" % row["via"][0]))
     config = _config(after, row["kind"], row["name"])
-    if row.get("geometry") or not direct:
+    if row.get("geometry"):
         if config.get("requirements") or config.get("qual"):
             finding = _finding(VERIFY, "requirements", "its requirements and tests need running again")
             if test is not None:
@@ -258,71 +260,200 @@ def _analyze(ctx, row: dict, before, after, users: list, direct: bool, measure, 
     return findings
 
 
-def _users(ctx, package: str, name: str) -> list:
-    try:
-        return usage.object_used_by(ctx, package, name)
-    except Exception as e:  # pylint: disable=broad-except
-        pc_logging.debug("%s:%s: could not tell what uses it: %s" % (package, name, e))
-        return []
+class _Graph:
+    """Where Impact reads what uses what, and what each package is compared at.
+
+    The packages of the subject's repository ('inside') are compared at the
+    two states, and at the state the change is made of what uses what is read
+    from them as they are at it -- a staged alias of a removed part is a user
+    of it in a report of what is staged, whatever the file on disk says now.
+    Every other package loaded (another repository's, one PartCAD downloaded)
+    is as it is loaded, at both: it has no such states.
+    """
+
+    def __init__(self, ctx, project, before: str, after: str):
+        self.ctx = ctx
+        self.before = before
+        self.after = after
+        self.inside = {package.name for package in repository_packages(ctx, project)}
+        self.after_root = None
+        self.marker = None
+        if after != package_versions.WORKTREE:
+            self.after_root = pc_changes.package_at(ctx, project.name, after)
+            self.marker = (
+                package_versions.STAGED
+                if after == package_versions.STAGED
+                else getattr(self.after_root, "revision_sha", None)
+            )
+
+    def states(self, package: str) -> dict:
+        if package in self.inside:
+            return {"from": self.before, "to": self.after}
+        return {"from": package_versions.WORKTREE, "to": package_versions.WORKTREE, "outside": True}
+
+    def before_of(self, package: str):
+        return pc_changes.package_at(self.ctx, package, self.before if package in self.inside else None)
+
+    def after_of(self, package: str):
+        return pc_changes.package_at(self.ctx, package, self.after if package in self.inside else None)
+
+    def plain(self, package: str) -> str:
+        """A package name read at the compared state, as the name of the package it is that state of.
+
+        Only the state's own marker is taken off ('//lib@STAGED', '//@STAGED/lib'):
+        a revision a declaration names itself ('//lib@v1') is that revision.
+        """
+        if self.marker is None or not package_versions.is_versioned(package):
+            return package
+        from partcad_utils.utils import get_child_project_path
+
+        base, selector = package_versions.split(package)
+        for revision, rest in package_versions.selector_candidates(selector):
+            if revision == self.marker:
+                return self.plain(get_child_project_path(base, rest) if rest else base)
+        return package
+
+    def users(self, package: str, name: str) -> list:
+        """What uses '<package>:<name>': inside, at the compared state; elsewhere, as loaded."""
+        try:
+            live = usage.object_used_by(self.ctx, package, name)
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.debug("%s:%s: could not tell what uses it: %s" % (package, name, e))
+            live = []
+        if self.marker is None:
+            return live
+        rows = [row for row in live if row["package"] not in self.inside]
+        for base in sorted(self.inside):
+            rows.extend(self._users_at(base, package, name))
+        rows.sort(key=lambda row: (row["package"], row["name"]))
+        return rows
+
+    def _users_at(self, base: str, package: str, name: str) -> list:
+        """The objects of 'base', as declared at the compared state, that name '<package>:<name>'."""
+        try:
+            at = self.after_of(base)
+        except ValueError:
+            return []
+        if at is None:
+            return []
+        rows = []
+        for kind in usage.REFERRING_KINDS:
+            for other, config in list((at._object_configs.get(kind) or {}).items()):
+                if base == package and other == name:
+                    continue
+                try:
+                    named = usage.references_how(at, kind, config)
+                except Exception:  # pylint: disable=broad-except
+                    continue
+                hows = [
+                    how for found, object_name, how in named if self.plain(found) == package and object_name == name
+                ]
+                if hows:
+                    rows.append(
+                        {
+                            "object": _key(base, other),
+                            "package": base,
+                            "name": other,
+                            "kind": kind,
+                            "count": len(hows),
+                            "how": sorted(set(hows)),
+                        }
+                    )
+        return rows
 
 
-def _affects(ctx, starts: list, changed: dict, before_of, after_of, measure, test) -> list:
-    """The objects 'starts' (changed rows) reach through what uses them, each with how and its findings."""
+def _affects(graph: _Graph, starts: list, changed: dict, measure, test) -> list:
+    """The objects 'starts' (changed rows) reach through what uses them, each with how and its findings.
+
+    What reaches an object through a change of prose alone does not change its
+    shape; one path that changes the shape is enough for it to have changed.
+    """
+    ctx = graph.ctx
     rows = {}
     queue = []
-    for row in starts:
-        users = _users(ctx, row["package"], row["name"])
-        entry = {**row, "reached": "changed", "via": [], "users": [user["object"] for user in users]}
+
+    def analyze(entry, users, direct):
         entry["findings"] = _analyze(
-            ctx, entry, before_of(row["package"]), after_of(row["package"]), users, True, measure, test
+            ctx,
+            entry,
+            graph.before_of(entry["package"]),
+            graph.after_of(entry["package"]),
+            users,
+            direct,
+            measure,
+            test,
         )
+
+    for row in starts:
+        users = graph.users(row["package"], row["name"])
+        entry = {
+            **row,
+            "reached": "changed",
+            "via": [],
+            "users": [user["object"] for user in users],
+            "states": graph.states(row["package"]),
+        }
+        analyze(entry, users, True)
         rows[row["object"]] = entry
-        queue.append((row["object"], users, [row["object"]], 0))
+        queue.append((row["object"], users, [row["object"]], bool(row.get("geometry"))))
+    # Every object is reached once, or once more when a path that changes its
+    # shape comes after one that did not: what is visited ends the walk, so it
+    # needs no other bound.
     while queue:
-        source, users, path, depth = queue.pop(0)
-        if depth >= _DEPTH:
-            continue
+        source, users, path, geometry = queue.pop(0)
         for user in users:
             key = user["object"]
-            if key in rows:
+            known = rows.get(key)
+            if known is not None:
+                if geometry and not known["geometry"] and known["reached"] == "via":
+                    known["geometry"] = True
+                    known["via"] = path
+                    analyze(known, known["_further"], False)
+                    queue.append((key, known["_further"], path + [key], True))
                 continue
             reached = changed.get(key)
-            further = _users(ctx, user["package"], user["name"])
+            further = graph.users(user["package"], user["name"])
             entry = {
                 "kind": user["kind"],
                 "name": user["name"],
                 "package": user["package"],
                 "object": key,
                 "how": (reached or {}).get("how", []),
-                "geometry": True,
+                "geometry": geometry,
                 "reached": "via",
                 "via": path,
                 "users": [other["object"] for other in further],
+                "states": graph.states(user["package"]),
+                "_further": further,
             }
-            entry["findings"] = _analyze(
-                ctx, entry, before_of(user["package"]), after_of(user["package"]), further, False, measure, test
-            )
+            analyze(entry, further, False)
             rows[key] = entry
-            queue.append((key, further, path + [key], depth + 1))
+            queue.append((key, further, path + [key], geometry))
+    for entry in rows.values():
+        entry.pop("_further", None)
     return list(rows.values())
 
 
-def _affected_by(ctx, project, kind: str, name: str, changed: dict) -> list:
-    """What '<kind> <name>' uses, transitively, that changed: each with the path it is used through."""
+def _affected_by(graph: _Graph, project, kind: str, name: str, changed: dict) -> list:
+    """What '<kind> <name>' uses, transitively, that changed: each with the path it is used through.
+
+    Read at the state the change is made of, so that what it uses there is
+    what is followed; a revision it names itself stays that revision.
+    """
+    ctx = graph.ctx
+    start = graph.after_root if graph.after_root is not None else project
     found = []
     seen = set()
-    queue = [(project, kind, name, [])]
+    queue = [(start, kind, name, [])]
     while queue:
         owner, owner_kind, owner_name, path = queue.pop(0)
-        if len(path) >= _DEPTH:
-            continue
         try:
             dependencies = usage.object_dependencies(ctx, owner, owner_kind, owner_name)
         except Exception as e:  # pylint: disable=broad-except
             pc_logging.debug("%s:%s: could not tell what it uses: %s" % (owner.name, owner_name, e))
             continue
         for row in dependencies:
-            key = row["object"]
+            key = _key(graph.plain(row["package"]), row["name"])
             if key in seen:
                 continue
             seen.add(key)
@@ -387,27 +518,24 @@ def impact(
     """
     after = after or package_versions.WORKTREE
     changed = changed_objects(ctx, project, before, after)
-
-    def before_of(package):
-        return pc_changes.package_at(ctx, package, before)
-
-    def after_of(package):
-        return pc_changes.package_at(ctx, package, after)
+    graph = _Graph(ctx, project, before, after)
 
     if name is not None:
         name = name.partition(";")[0]
         subject = _key(project.name, name)
         starts = [changed[subject]] if subject in changed else []
-        affected_by = _affected_by(ctx, project, kind, name, changed) if kind in NAMED_KINDS else []
+        affected_by = _affected_by(graph, project, kind, name, changed) if kind in NAMED_KINDS else []
     else:
         starts = [row for row in changed.values() if row["package"] == project.name]
         affected_by = [row for row in changed.values() if row["package"] != project.name]
-    affects = _affects(ctx, starts, changed, before_of, after_of, measure, test)
+    affects = _affects(graph, starts, changed, measure, test)
     summary = {severity: 0 for severity in SEVERITIES}
     for row in affects:
         for finding in row["findings"]:
             summary[finding["severity"]] = summary.get(finding["severity"], 0) + 1
-    pinned = [row for row in usage.package_dependents(ctx, project) if row.get("type") == "git"]
+    # Held back only by a commit its declaration names: one that follows a
+    # branch, or names no revision, gets the change once it is pushed.
+    pinned = [row for row in usage.package_dependents(ctx, project) if row.get("type") == "git" and row.get("pinned")]
     return {
         "package": project.name,
         "object": _key(project.name, name) if name else None,

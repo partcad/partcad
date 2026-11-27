@@ -1823,8 +1823,15 @@ export interface RevisionsData {
     published: boolean;
     /** The commit checked out, where the package is in a repository. */
     head: string | null;
-    /** Whether there are older revisions than this page holds: asked for 'after' the last one. */
+    /** Whether there are older revisions than this page holds: asked for 'after' 'next'. */
     more?: boolean;
+    /**
+     * The commit the next page is asked 'after': the last row's, as a rule, but
+     * one no row is where the walk stopped short of a full page - which can then
+     * hold no rows at all. Absent from a daemon from before it, which pages
+     * after the last row.
+     */
+    next?: string | null;
     /** Newest first. */
     revisions: RevisionEntry[];
 }
@@ -1890,6 +1897,12 @@ export interface DiffData {
     unified?: string;
     /** For a package: what changed in it, object by object, which its 'partcad.yaml' says only part of. */
     changes?: PackageChanges;
+    /**
+     * For an object: the files it is built from that differ between the two
+     * states - a change, though its declaration may read the same ('same' is
+     * false then).
+     */
+    sources?: FileChange[];
 }
 
 /** A file of the package, and the sections git puts it in: 'staged', 'unstaged', 'untracked', 'conflicted'. */

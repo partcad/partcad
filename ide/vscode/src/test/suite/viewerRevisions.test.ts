@@ -228,8 +228,9 @@ function pane(subject: OpsSubject = PACKAGE) {
     };
     const diffs = () => asked.filter((each) => each.query.method === 'ops.rev.diff').map((each) => each.query.params);
     const rows = () => root.find('revisions-item');
+    /** A row by what it says: WORKTREE, STAGED, or a commit's first eight characters. */
     const row = (name: string) => {
-        const found = rows().find((each) => each.dataset.name === name);
+        const found = rows().find((each) => each.find('build-title')[0]?.textContent === name);
         assert.ok(found, `no row '${name}'`);
         return found;
     };
@@ -296,12 +297,37 @@ suite('Digital Thread Operations: Revisions', () => {
         reply('ops.rev.status', CLEAN);
 
         assert.deepStrictEqual(
-            rows().map((row) => row.dataset.name),
+            rows().map((row) => row.find('build-title')[0].textContent),
             ['a06a1728', '9627b728'],
+        );
+        // Each is told apart by its full id, which two commits never share.
+        assert.deepStrictEqual(
+            rows().map((row) => row.dataset.name),
+            [NEWEST, OLDEST],
         );
         assert.ok(rows()[0].className.includes('selected'));
         assert.strictEqual(view.current, NEWEST);
         assert.deepStrictEqual(diffs(), [{ from: `${NEWEST}~1`, to: NEWEST }]);
+    });
+
+    test('two commits that share their first eight characters are two rows, each opening its own', () => {
+        const twin = `${NEWEST.slice(0, 8)}${'0'.repeat(32)}`;
+        const { view, reply, rows, diffs } = pane();
+        reply('ops.rev.list', {
+            ...HISTORY,
+            revisions: [HISTORY.revisions[0], { ...HISTORY.revisions[1], sha: twin, short: twin.slice(0, 8) }],
+        });
+        reply('ops.rev.status', CLEAN);
+
+        assert.strictEqual(rows().filter((row) => row.className.includes('selected')).length, 1);
+        rows()[1].fire('click');
+
+        assert.strictEqual(view.current, twin);
+        assert.deepStrictEqual(diffs().pop(), { from: `${twin}~1`, to: twin });
+        assert.deepStrictEqual(
+            rows().map((row) => row.className.includes('selected')),
+            [false, true],
+        );
     });
 
     test("a package's revision that changed only sub-packages says which; an object's, how it changed it", () => {
@@ -451,13 +477,75 @@ suite('Digital Thread Operations: Revisions', () => {
         reply('ops.rev.status', CLEAN);
         row('9627b728').fire('click');
 
-        reply('ops.rev.diff', undefined, `Unknown revision '${OLDEST}~1'`);
-
-        assert.deepStrictEqual(diffs().pop(), { from: OLDEST, to: OLDEST });
-        reply('ops.rev.diff', { ...diff(OLDEST, OLDEST), same: true });
+        assert.deepStrictEqual(diffs().pop(), { from: `${OLDEST}~1`, to: OLDEST });
+        // What the daemon answers for the parent of a first commit: nothing on
+        // the left, every line added, and every object of the package added.
+        reply('ops.rev.diff', {
+            ...diff(`${OLDEST}~1`, OLDEST),
+            left: { label: `${OLDEST.slice(0, 8)}~1`, missing: true },
+            same: false,
+            rows: [
+                { tag: 'insert', left: null, right: 'cube:', leftLine: null, rightLine: 1 },
+                { tag: 'insert', left: null, right: '  length: 30', leftLine: null, rightLine: 2 },
+                { tag: 'insert', left: null, right: '  desc: new', leftLine: null, rightLine: 3 },
+            ],
+            changes: {
+                package: '//',
+                from: `${OLDEST}~1`,
+                to: OLDEST,
+                objects: [{ kind: 'part', name: 'cube', object: '//:cube', how: ['added'] }],
+                files: [],
+            },
+        });
         assert.ok(root.text().includes('The first revision of the repository'));
         assert.strictEqual(root.find('diff-removed').length, 0);
         assert.strictEqual(root.find('diff-insert').length, 3);
+        // No second question about the commit against itself.
+        assert.ok(!diffs().some((each) => each?.from === OLDEST && each?.to === OLDEST));
+    });
+
+    test('an error comparing a commit with its parent is shown as the error, not taken for a first commit', () => {
+        const { root, reply, row } = pane();
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', CLEAN);
+        row('9627b728').fire('click');
+
+        reply('ops.rev.diff', undefined, 'The daemon could not read the repository');
+
+        assert.ok(root.text().includes('The daemon could not read the repository'));
+        assert.ok(!root.text().includes('The first revision of the repository'));
+    });
+
+    test("an object's comparison lists the files it is built from that changed, though it is declared the same", () => {
+        const page = renderComparison({
+            ...diff(`${NEWEST}~1`, NEWEST),
+            object: '//:bracket',
+            rows: [{ tag: 'equal', left: 'bracket:', right: 'bracket:', leftLine: 1, rightLine: 1 }],
+            sources: [{ path: 'bracket.py', how: 'modified' }],
+        }) as unknown as FakeElement;
+
+        assert.ok(page.text().includes('what changed is the files it is built from'));
+        assert.ok(page.text().includes('No change') === false);
+        const sources = only(page, 'revisions-changed-sources');
+        assert.ok(sources.text().includes('bracket.py'));
+        assert.ok(sources.text().includes('modified'));
+    });
+
+    test('Load more goes on from where the daemon says, which a page may hold no row of', () => {
+        const { root, view, reply, asked } = pane(PART);
+        const stop = 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00';
+        reply('ops.rev.list', { ...HISTORY, more: true, next: stop, revisions: [] });
+        reply('ops.rev.status', OBJECT_CLEAN);
+
+        // Nothing listed yet, and the list is still there to load more from.
+        assert.strictEqual(view.offered.length, 0);
+        assert.ok(!root.text().includes('No revision has changed this part yet'));
+        only(root, 'revisions-more').fire('click');
+
+        assert.deepStrictEqual(asked[asked.length - 1].query, { method: 'ops.rev.list', params: { after: stop } });
+        reply('ops.rev.list', { ...HISTORY, more: true, next: OLDEST, revisions: [HISTORY.revisions[0]] });
+        only(root, 'revisions-more').fire('click');
+        assert.deepStrictEqual(asked[asked.length - 1].query, { method: 'ops.rev.list', params: { after: OLDEST } });
     });
 
     test('Load more asks for the page after the last revision, and lists it under the first', () => {
@@ -681,6 +769,99 @@ suite('Digital Thread Operations: Revisions', () => {
         assert.strictEqual(root.find('revisions-form').length, 1);
     });
 
+    test('what is staged moved: it is compared again once read, and what the user agreed to is asked again', () => {
+        const { root, view, written, asked, reply, diffs } = pane();
+        const impacts = () => asked.filter((each) => each.query.method === 'ops.impact').length;
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', CHANGED);
+        view.select(STAGED);
+        reply('ops.rev.diff', diff('HEAD', STAGED));
+        title(root, 'impact').fire('click');
+        only(root, 'revisions-new').fire('click');
+        const message = only(root, 'revisions-message');
+        message.value = 'Longer bracket';
+        message.fire('input');
+        only(root, 'revisions-make').fire('click');
+        written[0].answer({ error: 'Also staged: //sub', refusal: { code: 'others-staged', status: CHANGED } });
+        const include = only(root, 'revisions-include-others').children[0];
+        include.checked = true;
+        include.fire('change');
+        only(root, 'revisions-make').fire('click');
+        assert.strictEqual(written[1].query.params?.includeOthers, true);
+
+        written[1].answer({
+            error: 'What is staged changed since it was looked at: look again',
+            refusal: { code: 'index-changed', status: CHANGED },
+        });
+        const compared = diffs().length;
+        const reached = impacts();
+        reply('ops.rev.status', { ...CHANGED, index: 'b'.repeat(40) });
+
+        // STAGED is still listed: compared again, and its open view asked again.
+        assert.strictEqual(view.current, STAGED);
+        assert.deepStrictEqual(diffs().slice(compared), [{ from: 'HEAD', to: STAGED }]);
+        assert.strictEqual(impacts(), reached + 1);
+        reply('ops.rev.diff', diff('HEAD', STAGED));
+        assert.ok(!root.text().includes('Comparing'));
+        // Agreed to for what was staged before: not sent with what is staged now.
+        only(root, 'revisions-make').fire('click');
+        assert.deepStrictEqual(written[2].query.params, {
+            message: 'Longer bracket',
+            expectIndex: 'b'.repeat(40),
+            includeOthers: undefined,
+            yes: undefined,
+            skipChecks: undefined,
+        });
+    });
+
+    test('the message being typed keeps its box when the comparison under it arrives', () => {
+        const { root, view, reply } = pane();
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', CHANGED);
+        view.select(STAGED);
+        only(root, 'revisions-new').fire('click');
+        const typing = only(root, 'revisions-message');
+
+        reply('ops.rev.diff', diff('HEAD', STAGED));
+
+        assert.strictEqual(only(root, 'revisions-message'), typing);
+        assert.strictEqual(root.find('revisions-diff').length, 1);
+    });
+
+    test('a revision being made when the object is shown again is answered on the tab started over', () => {
+        const { root, view, written, reply } = pane();
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', CHANGED);
+        view.select(STAGED);
+        only(root, 'revisions-new').fire('click');
+        only(root, 'revisions-make').fire('click');
+
+        // Saved meanwhile: the same object shown again, and the tab started over.
+        view.setBusy('Select this tab to see the revisions of this package.');
+        view.start({ ...PACKAGE });
+        written[0].answer({
+            error: 'Changes of // are not staged, and will not be in this revision',
+            refusal: { code: 'warnings', status: CHANGED },
+        });
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', CHANGED);
+
+        // On the row the form is for, saying why, and ready to be agreed to.
+        assert.strictEqual(view.current, STAGED);
+        assert.ok(root.text().includes('Changes of // are not staged'));
+        assert.strictEqual(root.find('revisions-yes').length, 1);
+
+        // And for another object, nothing.
+        only(root, 'revisions-make').fire('click');
+        view.setBusy('');
+        view.start(PART);
+        written[1].answer({ error: 'Checks failed', refusal: { code: 'checks-failed', status: CHANGED } });
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', { ...CHANGED, object: '//:bracket' });
+        assert.strictEqual(view.current, WORKTREE);
+        assert.strictEqual(root.find('revisions-form').length, 0);
+    });
+
     test('a revision made is said, with who made it, and the list and the status are read again', () => {
         const { root, view, written, asked, reply } = pane();
         reply('ops.rev.list', HISTORY);
@@ -727,6 +908,15 @@ suite('Digital Thread Operations: Revisions', () => {
             draftMessage({ ...CLEAN, files: [{ path: 'README.md', sections: ['staged'] }] }),
             'Update README.md',
         );
+    });
+
+    test('an object with no revision, whose status could not be read, says so rather than that nothing changed', () => {
+        const { root, reply } = pane(PART);
+        reply('ops.rev.list', { ...HISTORY, object: '//:bracket', revisions: [] });
+        reply('ops.rev.status', undefined, 'The index of /work/repo has conflicts');
+
+        assert.ok(root.text().includes('The index of /work/repo has conflicts'));
+        assert.ok(!root.text().includes('nothing of it is changed on disk'));
     });
 
     test('a side missing, or both the same, is said over the comparison', () => {

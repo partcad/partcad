@@ -1363,8 +1363,8 @@ Object commands
   A package lists every commit that changed its directory, the one that deleted it included; a commit that changed
   only sub-packages of it says which (``in``). An object lists only the commits that changed it -- its declaration
   or a file it is built from -- each with how: ``added``, ``removed``, ``declaration``, ``source``. A page is 100
-  revisions (``--limit``); ``--after <sha>`` goes on from where a page ended. A package in no git repository, or
-  with nothing of it committed, is *not published yet*.
+  revisions (``--limit``); a page that is not the last ends with the ``--after <sha>`` that goes on from where it
+  ended. A package in no git repository, or with nothing of it committed, is *not published yet*.
 
 ``pc ops rev diff``
   Show what changed in the subject between two states, as a unified diff -- what the Revisions tab draws side by
@@ -1374,8 +1374,10 @@ Object commands
 
   Everything not committed by default (``HEAD`` to ``WORKTREE``). Both sides are ``OBJECT`` written out as
   ``pc copy`` writes one -- rendered, normalized, defaults left out -- so what differs is what the object
-  *means*, and a comment or a reformatted line is no difference. For a package, what changed in it object by
-  object comes first, then its ``partcad.yaml`` as rendered at each. Nothing is printed when nothing changed;
+  *means*, and a comment or a reformatted line is no difference. For an object, the files it is built from that
+  changed come first, which its declaration does not show; for a package, what changed in it object by object,
+  then its ``partcad.yaml`` as rendered at each. The first commit is compared with nothing before it
+  (``--from <sha>~1``). Nothing is printed when nothing changed;
   ``--exit-code`` exits with 1 when something did, as ``git diff --exit-code`` does, and ``-U``/``--context`` sets
   how many unchanged lines surround each change.
 
@@ -1409,8 +1411,11 @@ Object commands
   something of the subject is staged, asks before committing anything else that is staged (``--include-others``
   agrees up front) and while changes of the subject are not staged or changed again since they were
   (``--yes``), and runs lint and the qualification tests of what is staged (``--skip-checks`` commits without
-  them). A merge in progress, conflicts, or an index that changed since it was looked at refuse it. Where git is
-  installed the commit is made by it, so the repository's hooks and signing apply.
+  them). A merge in progress, conflicts, or an index that changed since it was looked at -- or while it was being
+  checked -- refuse it: the revision is of the tree that was checked. Asked about the package's own declaration
+  staged beside an object's, in the same ``partcad.yaml``, as about anything else staged. Without both
+  ``user.name`` and ``user.email`` in git here, it is refused rather than signed by whoever runs the daemon. Where
+  git is installed the commit is made by it, so the repository's hooks and signing apply.
 
 ``pc ops deps list``
   List what the subject depends on -- the Dependencies tab::

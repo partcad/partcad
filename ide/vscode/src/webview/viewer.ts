@@ -377,8 +377,13 @@ function isOpsTab(tab: TabId): tab is OpsTabId {
 
 /** The questions the Operations tabs have in flight, by token, each with what to do with its answer. */
 const opsAnswers = new Map<number, OpsAnswer>();
-/** The changes they asked for and have not heard back about, by token. */
-const opsWrites = new Map<number, OpsWritten>();
+/**
+ * The changes they asked for and have not heard back about, by token, each
+ * with the object it was asked on ('identify'). Unlike a question, a change is
+ * kept when the tabs start over: shown again - a save, say - the object is the
+ * same, and its tab is where what came of the change is said.
+ */
+const opsWrites = new Map<number, { target: string; answer: OpsWritten }>();
 
 function opsCallbacks(tab: OpsTabId): OpsCallbacks {
     return {
@@ -411,7 +416,7 @@ function writeOpsChange(
         return;
     }
     lastToken += 1;
-    opsWrites.set(lastToken, answer);
+    opsWrites.set(lastToken, { target: identify(shown), answer });
     writeOps({
         type: 'opsWrite',
         token: lastToken,
@@ -424,13 +429,14 @@ function writeOpsChange(
 
 /** A change has been made, or was not: to whichever tab asked for it, if the object it asked on is still on screen. */
 function onOpsWritten(message: OpsWrittenMessage): void {
-    const answer = opsWrites.get(message.token);
-    if (answer === undefined) {
-        // Sent for an object no longer on screen: it was made all the same.
+    const written = opsWrites.get(message.token);
+    opsWrites.delete(message.token);
+    if (written === undefined || shown === undefined || written.target !== identify(shown)) {
+        // Sent for an object no longer on screen: it was made all the same,
+        // and is nothing to the pane of the one that is.
         return;
     }
-    opsWrites.delete(message.token);
-    answer({ data: message.data, error: message.error, refusal: message.refusal });
+    written.answer({ data: message.data, error: message.error, refusal: message.refusal });
 }
 
 /** What an Operations tab is about: the object on screen, or the package. */
@@ -441,10 +447,13 @@ function opsSubject(): OpsSubject | undefined {
     return { package: shown.package, name: shown.name, kind: shown.kind ?? 'part' };
 }
 
-/** Every Operations tab back to waiting for its first look, saying 'text' (or, for Revisions, 'revisions'). */
+/**
+ * Every Operations tab back to waiting for its first look, saying 'text' (or,
+ * for Revisions, 'revisions'). The changes in flight are kept: each is answered
+ * only while the object it was asked on is on screen ('onOpsWritten').
+ */
 function resetOperations(text: (tab: OpsTabId) => string): void {
     opsAnswers.clear();
-    opsWrites.clear();
     revisionsView.setBusy(text('revisions'));
     dependenciesView.setBusy(text('dependencies'));
     usedByView.setBusy(text('usedby'));
@@ -2289,21 +2298,29 @@ function operationsGroup(message: ShowMessage | undefined): TabSpec {
         label: 'Operations',
         pane: panes.operations,
         disabled: !Tabs.anyEnabled(operationsTabsFor(message)),
-        hint: 'PartCAD did not say which package this belongs to',
+        hint: operationsUnknown(message),
     };
+}
+
+/** Why the Operations tabs are not offered for what is shown: what 'opsSubject' needs and the show does not say. */
+function operationsUnknown(message: ShowMessage | undefined): string {
+    return message?.package
+        ? 'PartCAD did not say which object of its package this is'
+        : 'PartCAD did not say which package this belongs to';
 }
 
 /**
  * Operations: Revisions, Dependencies, Used By and Impact (see
  * 'partcad_utils.ops_views', which says the same for the daemon). All four are
  * questions about '<package>:<name>' - or, for a package, about the package -
- * so an object whose package is not known gets none. A software object names
+ * so an object whose package or name is not known gets none. A software object names
  * nothing of its own, so it has no Dependencies and no Impact: those two are
  * shown disabled for it, as a strip shows what does not apply.
  */
 function operationsTabsFor(message: ShowMessage | undefined): TabSpec[] {
-    const known = Boolean(message?.package) && !isDeclaration(message?.kind);
-    const unknown = 'PartCAD did not say which package this belongs to';
+    // What 'opsSubject' asks about: a tab offered without it would ask nothing.
+    const known = Boolean(message?.package) && Boolean(message?.name) && !isDeclaration(message?.kind);
+    const unknown = operationsUnknown(message);
     const software = message?.kind === 'software';
     const refers = known && !software;
     const names = software ? 'A software object names nothing of its own to depend on or to reach' : unknown;

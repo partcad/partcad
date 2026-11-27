@@ -216,6 +216,7 @@ def test_a_package_in_no_repository_has_no_revisions(tmp_path, monkeypatch):
         "head": None,
         "revisions": [],
         "more": False,
+        "next": None,
     }
 
 

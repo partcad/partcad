@@ -159,8 +159,9 @@ def print_revisions(result: dict) -> None:
                 "  (%s)" % "; ".join(notes) if notes else "",
             )
         )
-    if result.get("more") and rows:
-        click.echo("... more: --after %s" % rows[-1].get("sha"))
+    following = result.get("next") or (rows[-1].get("sha") if rows else None)
+    if result.get("more") and following:
+        click.echo("... more: --after %s" % following)
 
 
 def wants_color() -> bool:
@@ -208,6 +209,14 @@ def print_changes(changes: dict) -> None:
             click.echo("  %-9s  %s" % (entry.get("how"), entry.get("path")))
     if changes.get("package_changed"):
         click.echo("The package's own declaration changed")
+
+
+def print_sources(sources: list) -> None:
+    """The files an object is built from that changed, which its declaration's diff does not show."""
+    if sources:
+        click.echo("Files it is built from:")
+        for entry in sources:
+            click.echo("  %-9s  %s" % (entry.get("how"), entry.get("path")))
 
 
 def print_status(result: dict) -> None:

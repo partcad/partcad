@@ -25,6 +25,7 @@ import {
     OpsCallbacks,
     OpsSubject,
     chips,
+    focusSection,
     grid,
     isPackage,
     loadedNote,
@@ -108,8 +109,12 @@ export function renderUsedBy(
 export class UsedByView {
     private subject: OpsSubject | undefined;
     private answer: Answer<UsedByData> | undefined;
-    /** Whether the workspace was loaded for the answer on screen, or is being. */
+    /** Whether the workspace was loaded for the answer on screen. */
     private loaded = false;
+    /** Whether it is being loaded for the answer asked for. */
+    private loading = false;
+    /** Why it could not be loaded, said under the answer from before, which stands. */
+    private loadError: string | undefined;
     /** The sections folded away, by id, kept from one object to the next. */
     private readonly folded = new Set<string>();
 
@@ -125,6 +130,8 @@ export class UsedByView {
         this.subject = undefined;
         this.answer = undefined;
         this.loaded = false;
+        this.loading = false;
+        this.loadError = undefined;
         empty(this.pane);
         this.pane.appendChild(placeholder(text));
     }
@@ -141,14 +148,26 @@ export class UsedByView {
         if (subject === undefined) {
             return;
         }
-        this.loaded = this.loaded || load;
+        const before = this.answer;
+        this.loading = load;
+        this.loadError = undefined;
         this.answer = 'pending';
         this.draw();
         this.callbacks.ask({ method: 'ops.used_by', params: load ? { load: true } : undefined }, (data, error) => {
             if (this.subject !== subject) {
                 return;
             }
-            this.answer = error !== undefined ? { error } : { data: (data as UsedByData) ?? { objects: [] } };
+            this.loading = false;
+            if (error !== undefined && load && before !== undefined && before !== 'pending' && 'data' in before) {
+                // The workspace could not be loaded: what was found among what
+                // is loaded still stands, and Load workspace is there to try again.
+                this.answer = before;
+                this.loadError = error;
+            } else {
+                this.answer = error !== undefined ? { error } : { data: (data as UsedByData) ?? { objects: [] } };
+                // Of the whole workspace only once it has been loaded.
+                this.loaded = this.loaded || (load && error === undefined);
+            }
             this.draw();
         });
     }
@@ -160,7 +179,7 @@ export class UsedByView {
         if (answer === undefined || answer === 'pending') {
             this.pane.appendChild(
                 placeholder(
-                    this.loaded
+                    this.loading
                         ? `Loading every package of the workspace, then asking PartCAD what uses ${what}…`
                         : `Asking PartCAD what uses ${what}…`,
                 ),
@@ -199,6 +218,9 @@ export class UsedByView {
             this.pane.appendChild(placeholder(`Nothing PartCAD has loaded uses ${what}.`));
         }
         this.pane.appendChild(loadedNote(this.loaded, () => this.ask(true)));
+        if (this.loadError !== undefined) {
+            this.pane.appendChild(el('p', 'error usedby-load-error', this.loadError));
+        }
     }
 
     private section(id: string, title: string, fill: (body: HTMLElement) => void): HTMLElement {
@@ -211,6 +233,7 @@ export class UsedByView {
                     this.folded.add(which);
                 }
                 this.draw();
+                focusSection(this.pane, which);
             },
             fill,
         );

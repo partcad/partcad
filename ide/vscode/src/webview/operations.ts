@@ -65,6 +65,16 @@ export function isPackage(subject: OpsSubject | undefined): boolean {
     return subject?.kind === 'package';
 }
 
+/**
+ * Whether two subjects are the same object. A show of the object on screen
+ * again - a save, say - starts a tab over with a subject equal to the last one
+ * and not the same value, and a change asked before it is still about it: what
+ * came of the change is said on the tab started over, not dropped.
+ */
+export function sameSubject(a: OpsSubject | undefined, b: OpsSubject | undefined): boolean {
+    return a !== undefined && b !== undefined && a.package === b.package && a.name === b.name && a.kind === b.kind;
+}
+
 /** What the subject is called in a sentence: "this package", "this part". */
 export function thisSubject(subject: OpsSubject | undefined): string {
     return `this ${subject?.kind ?? 'object'}`;
@@ -193,6 +203,18 @@ export function section(
         fill(body);
     }
     return host;
+}
+
+/**
+ * The focus back on a section's title once 'pane', which the sections are drawn
+ * straight into, is drawn again: folding one replaces the title the keyboard was
+ * on, and the user would be dropped onto the page.
+ */
+export function focusSection(pane: HTMLElement, id: string): void {
+    const host = Array.from(pane.children as HTMLCollectionOf<HTMLElement>).find(
+        (child) => child.dataset?.section === id,
+    );
+    (host?.children[0] as HTMLElement | undefined)?.focus?.();
 }
 
 /**

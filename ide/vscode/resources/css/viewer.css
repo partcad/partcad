@@ -3381,7 +3381,9 @@ body.busy * {
 }
 
 .revisions-content > .placeholder,
-.revisions-content > .error {
+.revisions-content > .error,
+.revisions-comparison > .placeholder,
+.revisions-comparison > .error {
     padding: 1rem;
 }
 

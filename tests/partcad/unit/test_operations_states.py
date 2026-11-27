@@ -471,3 +471,376 @@ def test_a_moved_pin_is_said_with_where_it_was_and_where_it_is(workspace, ctx):
     assert impact.moved_pins(ctx, ctx.get_project("//app"), "HEAD", None) == [
         {"name": "std", "how": "pin moved", "from": "a" * 40, "to": "b" * 40}
     ]
+
+
+# ---- what a review of the above found -------------------------------------------
+
+
+def _git(root, *args):
+    subprocess.run(["git", *args], cwd=str(root), check=True, capture_output=True, text=True)
+
+
+def test_an_object_built_from_a_file_it_names_has_a_revision_where_only_that_file_changed(workspace, ctx):
+    root, _ = workspace
+    config = yaml.safe_load((root / "lib" / "partcad.yaml").read_text())
+    config["parts"]["bolt"]["dependencies"] = ["helpers.py"]
+    _write(root / "lib" / "partcad.yaml", config)
+    (root / "lib" / "helpers.py").write_text("h = 1\n")
+    _commit(root, "helpers")
+    (root / "lib" / "helpers.py").write_text("h = 2\n")
+    changed = _commit(root, "only the helper")
+    ctx.reload_packages(["//lib"])
+
+    listed = revisions.object_history(ctx, ctx.get_project("//lib"), "part", "bolt")
+
+    assert listed["revisions"][0]["sha"] == changed and listed["revisions"][0]["how"] == ["source"]
+
+
+def test_a_name_with_directories_in_it_is_built_from_the_file_in_them(workspace, ctx):
+    root, _ = workspace
+    (root / "lib" / "brackets").mkdir()
+    (root / "lib" / "brackets" / "left.py").write_text("z = 1\n")
+    config = yaml.safe_load((root / "lib" / "partcad.yaml").read_text())
+    config["parts"]["brackets/left"] = {"type": "cadquery"}
+    _write(root / "lib" / "partcad.yaml", config)
+    ctx.reload_packages(["//lib"])
+
+    assert changes.object_files(ctx.get_project("//lib"), "part", "brackets/left") == ["brackets/left.py"]
+
+
+def test_what_cannot_be_known_about_a_commit_is_not_kept(workspace, ctx, monkeypatch):
+    root, _ = workspace
+    _lib(root, desc="Changed")
+    _commit(root, "second")
+    monkeypatch.setattr(revisions, "changed_paths", lambda repository, sha: None)
+
+    assert revisions.object_history(ctx, ctx.get_project("//lib"), "part", "bolt")["revisions"] == []
+    monkeypatch.undo()
+    monkeypatch.setattr(working_copy, "_git_executable", lambda: None)
+
+    # Not remembered as "no change": asked again, it is found.
+    assert [row["how"] for row in revisions.object_history(ctx, ctx.get_project("//lib"), "part", "bolt")["revisions"]]
+
+
+def test_what_is_kept_about_a_commit_is_kept_for_the_tags_it_was_found_under(workspace, ctx):
+    repository = package_versions.repository_of(ctx.get_project("//lib").config_dir)
+    key = revisions._cache_key(ctx, repository, "part", "bolt", "a" * 40)
+    ctx.tags = set(ctx.tags) | {"elsewhere"}
+
+    assert revisions._cache_key(ctx, repository, "part", "bolt", "a" * 40) != key
+
+
+def test_the_cache_of_revisions_going_unwritten_loses_nothing(tmp_path, monkeypatch):
+    def refuse(*args, **kwargs):
+        raise OSError("read-only")
+
+    monkeypatch.setattr(revisions.os, "makedirs", refuse)
+
+    revisions._write_cache(str(tmp_path / "ro" / "object-revisions.json"), {"k": []})
+
+
+def test_comparing_an_object_whose_file_alone_changed_is_a_change(workspace, ctx):
+    root, _ = workspace
+    (root / "lib" / "bolt.py").write_text("x = 2\n")
+    _stage(root, "lib/bolt.py")
+
+    compared = revisions.compare_states(ctx, ctx.get_project("//lib"), "part", "bolt", "HEAD", package_versions.STAGED)
+
+    assert compared["same"] is False and compared["unified"] == ""
+    assert compared["sources"] == [{"path": "bolt.py", "how": "modified"}]
+
+
+def test_a_first_commit_is_compared_with_nothing(workspace, ctx):
+    _, first = workspace
+
+    compared = revisions.compare_states(ctx, ctx.get_project("//lib"), "part", "bolt", first + "~1", first)
+
+    assert compared["left"]["missing"] is True and compared["right"]["missing"] is False
+    assert {row["tag"] for row in compared["rows"]} == {"insert"}
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git to make a conflict")
+def test_a_conflicted_index_is_said_and_is_not_an_empty_package(workspace, ctx):
+    root, _ = workspace
+    _git(root, "config", "user.name", "Test")
+    _git(root, "config", "user.email", "test@example.com")
+    _git(root, "checkout", "-q", "-b", "other")
+    (root / "lib" / "bolt.py").write_text("x = 'theirs'\n")
+    _git(root, "commit", "-q", "-am", "theirs")
+    _git(root, "checkout", "-q", "-")
+    (root / "lib" / "bolt.py").write_text("x = 'ours'\n")
+    _git(root, "commit", "-q", "-am", "ours")
+    subprocess.run(["git", "merge", "-q", "other"], cwd=str(root), capture_output=True, check=False)
+
+    with pytest.raises(ValueError, match="conflicts"):
+        changes.changes(ctx, "//lib", "HEAD", package_versions.STAGED)
+
+
+def test_a_symbolic_link_is_what_it_says_and_a_file_is_read_a_piece_at_a_time(tmp_path):
+    import hashlib
+
+    data = b"x" * (3 << 20)
+    (tmp_path / "big").write_bytes(data)
+    (tmp_path / "link").symlink_to("/somewhere/else")
+
+    assert changes._digest(str(tmp_path / "big")) == hashlib.sha256(data).hexdigest()
+    assert changes._digest(str(tmp_path / "link")) == hashlib.sha256(b"link:/somewhere/else").hexdigest()
+
+
+def test_a_package_of_too_many_files_compares_none_of_them_rather_than_all_as_removed(workspace, ctx, monkeypatch):
+    root, _ = workspace
+    monkeypatch.setattr(changes, "_FILES_LIMIT", 3)
+    (root / "lib" / "more.txt").write_text("more\n")
+
+    assert changes.package_files(ctx.get_project("//lib")) is None
+    assert changes.changes(ctx, "//lib", "HEAD", None)["files"] == []
+
+
+def test_a_tracked_dotfile_is_a_file_of_the_package_and_an_ignored_one_is_not(workspace, ctx):
+    root, _ = workspace
+    (root / "lib" / ".gitignore").write_text("*.log\n")
+    _commit(root, "ignore logs")
+    (root / "lib" / ".gitignore").write_text("*.log\n*.tmp\n")
+    (root / "lib" / "build.log").write_text("noise\n")
+
+    files = changes.changes(ctx, "//lib", "HEAD", None)["files"]
+
+    assert {"path": ".gitignore", "how": "modified"} in files
+    assert all(entry["path"] != "build.log" for entry in files)
+
+
+def test_a_package_at_worktree_is_its_saved_configuration(workspace, ctx):
+    root, _ = workspace
+    assert ctx.get_project("//lib@WORKTREE").object_config("part", "bolt")["desc"] == "A bolt"
+    _lib(root, desc="Saved since")
+
+    assert ctx.get_project("//lib@WORKTREE").object_config("part", "bolt")["desc"] == "Saved since"
+
+
+def test_revisions_page_on_from_where_the_last_page_ended_whatever_the_history_s_length(workspace, ctx, monkeypatch):
+    root, first = workspace
+    made = [first]
+    for number in range(4):
+        _lib(root, desc="Change %d" % number)
+        made.append(_commit(root, "change %d" % number))
+    lib = ctx.get_project("//lib")
+
+    page = revisions.history(ctx, lib, limit=2)
+    assert [row["sha"] for row in page["revisions"]] == made[:-3:-1] and page["next"] == made[-2]
+    rest = revisions.history(ctx, lib, limit=10, after=page["next"])
+    assert [row["sha"] for row in rest["revisions"]] == made[-3::-1] and rest["more"] is False
+
+    # A walk that looks at fewer commits than there are says so, and goes on from where it stopped.
+    monkeypatch.setattr(package_versions, "REVISIONS_SCAN_LIMIT", 2)
+    stopped = revisions.history(ctx, lib, limit=10)
+    assert stopped["more"] is True and stopped["next"] == made[-2]
+    with pytest.raises(ValueError):
+        revisions.history(ctx, lib, after="f" * 40)
+
+
+def test_the_index_is_told_apart_by_what_it_holds_and_not_by_its_size_and_time(workspace, ctx):
+    import os
+
+    root, _ = workspace
+    repository = package_versions.repository_of(str(root))
+    index = root / ".git" / "index"
+    (root / "lib" / "bolt.py").write_text("x = 2\n")
+    _stage(root, "lib/bolt.py")
+    one = index.read_bytes()
+    tree_one = package_versions.index_tree(repository)
+    (root / "lib" / "bolt.py").write_text("x = 3\n")
+    _stage(root, "lib/bolt.py")
+    two = index.read_bytes()
+    assert len(one) == len(two)
+    stat = os.stat(index)
+    index.write_bytes(one)
+    os.utime(index, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    assert package_versions.index_tree(repository) == tree_one
+    index.write_bytes(two)
+    os.utime(index, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+
+    assert package_versions.index_tree(repository) != tree_one
+
+
+def test_the_interfaces_an_interface_takes_in_are_what_it_depends_on_however_they_are_written(workspace, ctx):
+    lib = ctx.get_project("//lib")
+
+    mapping = usage.references_how(lib, "interface", {"inherits": {":base": None, "other": {"at": [0, 0, 0]}}})
+    scalar = usage.references_how(lib, "interface", {"inherits": ":base"})
+
+    assert sorted(mapping) == [("//lib", "base", "inherits"), ("//lib", "other", "inherits")]
+    assert scalar == [("//lib", "base", "inherits")]
+
+
+def test_a_pin_on_a_commit_that_changed_something_else_is_behind_by_what_changed_the_package_since(workspace):
+    root, _ = workspace
+    (root / "app" / "notes.txt").write_text("app only\n")
+    pinned = _commit(root, "app only")
+    _lib(root, desc="Later")
+    _commit(root, "lib")
+
+    assert usage._behind(package_versions.repository_of(str(root / "lib")), pinned) == 1
+
+
+def test_a_commit_deleting_a_sub_package_alone_is_a_revision_in_it(workspace, ctx):
+    root, _ = workspace
+    shutil.rmtree(root / "app")
+    repo = pygit2.Repository(str(root))
+    repo.index.read(True)
+    repo.index.remove_all(["app/*"])
+    repo.index.write()
+    signature = pygit2.Signature("Test", "test@example.com", 1_700_000_000, 0)
+    gone = str(repo.create_commit("HEAD", signature, signature, "gone", repo.index.write_tree(), [repo.head.target]))
+
+    row = revisions.history(ctx, ctx.root)["revisions"][0]
+
+    assert row["sha"] == gone and row["in"] == ["app"]
+
+
+def test_removing_a_dependency_from_a_template_is_refused_and_writes_nothing(workspace, ctx):
+    root, _ = workspace
+    text = "{% set where = 'lib' %}\ndependencies:\n  near:\n    type: local\n    path: {{ where }}\n"
+    (root / "app" / "partcad.yaml").write_text(text)
+
+    assert ctx.get_project("//app").remove_import("near") is False
+    assert (root / "app" / "partcad.yaml").read_text() == text
+
+
+def test_staging_one_declaration_takes_its_lines_alone_or_refuses(workspace):
+    index = "parts:\n  a:\n    desc: A\n  b:\n    desc: B\n"
+    work = "parts:\n  a:\n    desc: A2\n  b:\n    desc: B2\n  c:\n    desc: C\n"
+    assert working_copy.stage_declaration(index, work, "part", "b") == "parts:\n  a:\n    desc: A\n  b:\n    desc: B2\n"
+    assert (
+        working_copy.stage_declaration(index, work, "part", "c")
+        == "parts:\n  a:\n    desc: A\n  b:\n    desc: B\n  c:\n    desc: C\n"
+    )
+    side_by_side = "parts:\n  a: {cuboid: 1}\n  b: {cuboid: 1}\n"
+    assert (
+        working_copy.stage_declaration(side_by_side, "parts:\n  a: {cuboid: 2}\n  b: {cuboid: 2}\n", "part", "a")
+        == "parts:\n  a: {cuboid: 2}\n  b: {cuboid: 1}\n"
+    )
+    assert working_copy.stage_declaration("name: //x\n", "name: //x\nparts:\n  a: {}\n", "part", "a") == (
+        "name: //x\nparts:\n  a: {}\n"
+    )
+    # Two declarations on one line cannot be told apart.
+    with pytest.raises(ValueError, match="cannot be staged alone"):
+        working_copy.stage_declaration("parts: {a: 1, b: 1}\n", "parts: {a: 2, b: 2}\n", "part", "a")
+
+
+def test_the_files_a_deleted_sub_package_had_are_still_its_own(workspace):
+    root, _ = workspace
+    (root / "lib" / "partcad.yaml").unlink()
+    (root / "lib" / "bolt.py").unlink()
+    repository = package_versions.repository_of(str(root))
+
+    assert working_copy._package_dir_of(repository, "lib/bolt.py") == "lib"
+    assert working_copy._package_dir_of(repository, "lib/nut.py") == ""
+
+
+def test_a_revision_of_an_object_asks_before_taking_the_package_s_own_declaration_with_it(workspace, ctx):
+    root, _ = workspace
+    config = yaml.safe_load((root / "lib" / "partcad.yaml").read_text())
+    config["parts"]["bolt"]["desc"] = "Staged"
+    config["desc"] = "A library"
+    _write(root / "lib" / "partcad.yaml", config)
+    _stage(root, "lib/partcad.yaml")
+
+    with pytest.raises(working_copy.Refused) as refused:
+        working_copy.new_revision(ctx, ctx.get_project("//lib"), "Bolt", "part", "bolt")
+
+    assert refused.value.code == "others-staged" and "the package's own declaration" in str(refused.value)
+
+
+def test_a_revision_is_of_the_tree_its_checks_ran_on(workspace, ctx):
+    root, _ = workspace
+    _lib(root, desc="Staged")
+    _stage(root, "lib/partcad.yaml")
+
+    def checks(result):
+        # Something else is staged while the checks run.
+        (root / "lib" / "nut.py").write_text("y = 3\n")
+        _stage(root, "lib/nut.py")
+        return []
+
+    with pytest.raises(working_copy.Refused) as refused:
+        working_copy.new_revision(ctx, ctx.get_project("//lib"), "Bolt", accept=True, checks=checks)
+
+    assert refused.value.code == "index-changed"
+    assert pygit2.Repository(str(root)).head.peel(pygit2.Commit).message.strip() == "first"
+
+
+def test_a_revision_a_client_asks_for_names_its_author_whole(workspace, ctx):
+    root, _ = workspace
+    _lib(root, desc="Staged")
+    _stage(root, "lib/partcad.yaml")
+
+    with pytest.raises(ValueError, match="author"):
+        working_copy.new_revision(
+            ctx, ctx.get_project("//lib"), "Bolt", author={"name": "Ann"}, accept=True, author_required=True
+        )
+
+
+def test_impact_checks_what_a_new_declaration_names(workspace, ctx):
+    root, _ = workspace
+    config = yaml.safe_load((root / "app" / "partcad.yaml").read_text())
+    config["parts"]["stub"] = {"type": "alias", "source": "//lib:washer"}
+    _write(root / "app" / "partcad.yaml", config)
+    ctx.reload_packages(["//app"])
+
+    found = impact.impact(ctx, ctx.get_project("//app"), "part", "stub")
+
+    (row,) = found["affects"]
+    assert any(finding["severity"] == impact.BREAKING and "washer" in finding["summary"] for finding in row["findings"])
+
+
+def test_impact_of_what_is_staged_reaches_what_uses_it_as_staged(workspace, ctx):
+    root, _ = workspace
+    _write(root / "lib" / "partcad.yaml", {"parts": {"nut": {"type": "cadquery", "desc": "A nut"}}})
+    _stage(root, "lib/partcad.yaml")
+    # On disk only, not staged: the enrich no longer uses the bolt.
+    config = yaml.safe_load((root / "app" / "partcad.yaml").read_text())
+    config["parts"]["long_bolt"]["source"] = "//lib:nut"
+    _write(root / "app" / "partcad.yaml", config)
+    ctx.reload_packages(["//app", "//lib"])
+    usage.load_workspace(ctx)
+
+    found = impact.impact(ctx, ctx.get_project("//lib"), before="HEAD", after=package_versions.STAGED)
+
+    bolt = next(row for row in found["affects"] if row["object"] == "//lib:bolt")
+    assert bolt["users"] == ["//app:long_bolt"]
+    assert any(finding["severity"] == impact.BREAKING for finding in bolt["findings"])
+
+
+def test_a_change_of_prose_does_not_change_the_shape_of_what_uses_it(workspace, ctx):
+    root, _ = workspace
+    _lib(root, desc="Reworded")
+    ctx.reload_packages(["//lib"])
+    usage.load_workspace(ctx)
+
+    found = impact.impact(ctx, ctx.get_project("//lib"), "part", "bolt")
+
+    via = next(row for row in found["affects"] if row["object"] == "//app:long_bolt")
+    assert via["geometry"] is False
+    assert [finding["severity"] for finding in via["findings"]] == [impact.INFO]
+
+
+def test_only_a_dependent_pinned_to_a_commit_is_held_back(workspace, ctx, monkeypatch):
+    rows = [
+        {"package": "//held", "type": "git", "pinned": "a" * 40},
+        {"package": "//follows", "type": "git", "pinned": None, "track": "main"},
+        {"package": "//near", "type": "local"},
+    ]
+    monkeypatch.setattr(usage, "package_dependents", lambda ctx, project: rows)
+
+    found = impact.impact(ctx, ctx.get_project("//lib"))
+
+    assert [row["package"] for row in found["pinned"]] == ["//held"]
+
+
+def test_a_package_of_another_repository_is_compared_as_loaded(workspace, ctx):
+    graph = impact._Graph(ctx, ctx.get_project("//lib"), "HEAD", package_versions.STAGED)
+
+    assert graph.states("//lib") == {"from": "HEAD", "to": package_versions.STAGED}
+    assert graph.states("//elsewhere")["outside"] is True
+    assert graph.plain("//lib@STAGED") == "//lib" and graph.plain("//@STAGED/lib") == "//lib"
+    assert graph.plain("//lib@" + "a" * 40) == "//lib@" + "a" * 40

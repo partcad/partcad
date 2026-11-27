@@ -245,3 +245,39 @@ def test_impact_of_what_is_staged_and_of_a_revision_nobody_has_is_refused(sessio
     assert staged["affects"][0]["reached"] == "changed"
     with pytest.raises(JsonRpcError):
         ops.impact(session, {"package": "//lib", "from": "no-such-tag"})
+
+
+def test_a_new_revision_is_refused_without_the_client_s_author_whole(session):
+    _write(session.root / "partcad.yaml", {"parts": {"cube": {"type": "basic", "cuboid": 3}}})
+    _stage(session.root, "partcad.yaml")
+
+    with pytest.raises(JsonRpcError) as refused:
+        ops.rev_new(session, {"package": "//", "message": "Change", "skip_checks": True, "author": {"name": "Ann"}})
+
+    assert "author" in str(refused.value)
+    assert str(pygit2.Repository(str(session.root)).head.target) == session.first
+
+
+def test_the_pins_of_an_imported_package_are_not_moved_from_here(session, monkeypatch):
+    import importlib
+
+    update = importlib.import_module("partcad.actions.package.update")
+    # As if '//lib' had come through a git import: not one of the workspace's own packages.
+    monkeypatch.setattr(update, "workspace_packages", lambda ctx: [ctx.get_project("//")])
+
+    with pytest.raises(JsonRpcError) as refused:
+        ops.deps_update(session, {"package": "//lib"})
+
+    assert "imported" in str(refused.value)
+
+
+def test_a_first_commit_is_compared_with_the_nothing_before_it(session):
+    answer = ops.rev_diff(session, {"package": "//", "from": session.first + "~1", "to": session.first})
+
+    assert answer["left"]["missing"] is True and answer["same"] is False
+    assert [row["object"] for row in answer["changes"]["objects"]] == ["//:cube"]
+
+
+def test_a_page_of_revisions_after_a_commit_not_in_the_history_is_refused(session):
+    with pytest.raises(JsonRpcError):
+        ops.rev_list(session, {"package": "//", "after": "f" * 40})

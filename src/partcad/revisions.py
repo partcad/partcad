@@ -25,6 +25,7 @@ no business shipping one.
 """
 
 import difflib
+import hashlib
 import json
 import os
 import threading
@@ -54,22 +55,31 @@ PAGE = 100
 
 
 def history(ctx, project, limit: int = PAGE, after: typing.Optional[str] = None) -> dict:
-    """{'package', 'published', 'head', 'revisions', 'more'} of the package 'project' is (or is a revision of).
+    """{'package', 'published', 'head', 'revisions', 'more', 'next'} of the package 'project' is (or is a revision of).
 
     Every commit that changed the package's directory, newest first, a page of
-    'limit' at a time from after the commit 'after'. A commit that changed only
-    sub-packages of it says which ('in'): the package's directory holds them,
-    and they are packages of their own.
+    'limit' at a time from after the commit 'after' -- the 'next' of the page
+    before, which 'more' says there is. A commit that changed only sub-packages
+    of it says which ('in'): the package's directory holds them, and they are
+    packages of their own.
     """
+    limit = max(1, int(limit))
     current = current_project(ctx, project)
     repository = package_versions.repository_of(current.config_dir) if current is not None else None
-    rows = (
-        package_versions.revisions(repository, limit=max(1, int(limit)) + 1, after=after)
+    found = (
+        package_versions.revisions(repository, limit=limit + 1, after=after)
         if repository is not None
-        else []
+        else package_versions.Revisions()
     )
-    more = len(rows) > limit
-    rows = rows[:limit]
+    rows = list(found[:limit])
+    if len(found) > limit:
+        following = rows[-1]["sha"]
+    elif found.truncated:
+        # The walk looked at as many commits as it may: the next page goes on
+        # from where it stopped, whether or not it found anything here.
+        following = found.scanned
+    else:
+        following = None
     if repository is not None:
         for row in rows:
             within = _sub_packages_touched(repository, row["sha"])
@@ -80,7 +90,8 @@ def history(ctx, project, limit: int = PAGE, after: typing.Optional[str] = None)
         "published": bool(rows) or after is not None,
         "head": repository.head() if repository is not None else None,
         "revisions": rows,
-        "more": more,
+        "more": following is not None,
+        "next": following,
     }
 
 
@@ -139,25 +150,33 @@ def _sub_packages_touched(repository, sha: str) -> list:
         return []
     try:
         commit = repository.repo[sha].peel(pygit2.Commit)
+        parent = repository.repo[commit.parent_ids[0]] if commit.parent_ids else None
     except (KeyError, ValueError, pygit2.GitError):
         return []
-    top = _tree_at(commit, repository.relpath)
+    # A sub-package the commit added is in its tree, and one it deleted in its parent's.
+    tops = [top for top in (_tree_at(commit, repository.relpath), _tree_at(parent, repository.relpath)) if top]
     within = set()
     for path in paths:
         parts = path.split("/")
         owner = None
         for depth in range(1, len(parts)):
             candidate = "/".join(parts[:depth])
-            try:
-                if isinstance(top, pygit2.Tree) and (candidate + "/partcad.yaml") in top:
-                    owner = candidate
-                    break
-            except (KeyError, ValueError):
-                continue
+            if any(_has(top, candidate + "/partcad.yaml") for top in tops):
+                owner = candidate
+                break
         if owner is None:
             return []
         within.add(owner)
     return sorted(within)
+
+
+def _has(tree, path: str) -> bool:
+    import pygit2
+
+    try:
+        return isinstance(tree, pygit2.Tree) and path in tree
+    except (KeyError, ValueError):
+        return False
 
 
 def object_text(project, kind: str, name: typing.Optional[str]) -> typing.Optional[str]:
@@ -298,8 +317,11 @@ def _cache_path(ctx) -> str:
     return os.path.join(ctx.user_config.internal_state_dir, "ops", "object-revisions.json")
 
 
-def _cache_key(repository, kind: str, name: str, sha: str) -> str:
-    return "%s|%s|%s|%s|%s" % (repository.identity, repository.relpath, kind, name, sha)
+def _cache_key(ctx, repository, kind: str, name: str, sha: str) -> str:
+    # The tags of the context are in the key: an object an 'unless' skips here
+    # is not there to have changed, and a context with other tags may see it.
+    tags = hashlib.sha256("\n".join(sorted(getattr(ctx, "tags", None) or ())).encode()).hexdigest()[:12]
+    return "%s|%s|%s|%s|%s|%s" % (repository.identity, repository.relpath, kind, name, sha, tags)
 
 
 def _read_cache(path: str) -> dict:
@@ -312,9 +334,9 @@ def _read_cache(path: str) -> dict:
 
 
 def _write_cache(path: str, cache: dict) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     temporary = "%s.tmp-%d" % (path, os.getpid())
     try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(temporary, "w", encoding="utf-8") as f:
             json.dump(cache, f)
         os.replace(temporary, path)
@@ -322,8 +344,12 @@ def _write_cache(path: str, cache: dict) -> None:
         pc_logging.debug("Could not keep what was found about revisions in %s: %s" % (path, e))
 
 
-def _declared_path_at(repository, sha: str, kind: str, name: str) -> typing.Optional[str]:
-    """The 'path:' the object's declaration names in the commit's 'partcad.yaml', read without rendering it."""
+_UNKNOWN = object()
+
+
+def _declared_files_at(repository, sha: str, kind: str, name: str):
+    """The files the object's declaration in the commit's 'partcad.yaml' names -- 'path:' and 'dependencies:' --
+    read without rendering it; '_UNKNOWN' where the file cannot be read that way (a Jinja2 template, say)."""
     import pygit2
     import yaml
 
@@ -333,34 +359,61 @@ def _declared_path_at(repository, sha: str, kind: str, name: str) -> typing.Opti
         commit = repository.repo[sha].peel(pygit2.Commit)
         entry = commit.tree[(repository.relpath + "/" if repository.relpath else "") + "partcad.yaml"]
         config = yaml.safe_load(repository.repo[entry.id].data) or {}
-        declared = (config.get(SECTIONS.get(kind, "")) or {}).get(name) or {}
-        return declared.get("path") if isinstance(declared, dict) else None
+    except KeyError:
+        return set()
     except Exception:  # pylint: disable=broad-except
-        return None
+        return _UNKNOWN
+    if not isinstance(config, dict):
+        return _UNKNOWN
+    declared = (config.get(SECTIONS.get(kind, "")) or {}).get(name)
+    if not isinstance(declared, dict):
+        return set()
+    from .changes import _relative
+
+    dependencies = declared.get("dependencies")
+    names = [declared.get("path")] + (list(dependencies) if isinstance(dependencies, list) else [])
+    return {rel for rel in (_relative(value) for value in names) if rel is not None}
 
 
 def _touches(repository, sha: str, kind: str, name: str, paths: list) -> bool:
-    """Whether a commit that changed 'paths' could have changed the object: its declaration, or a file of it."""
+    """Whether a commit that changed 'paths' could have changed the object: its declaration, or a file of it.
+
+    The same files 'changes.object_files' compares: the 'path:' and the
+    'dependencies:' its declaration names, and the files named after it beside
+    it ('<name>.<extension>', directories in the name included). Where the
+    declaration cannot be read without rendering, the commit is compared in
+    full rather than passed over.
+    """
     if "partcad.yaml" in paths:
         return True
     stem = name.partition(";")[0]
-    declared = _declared_path_at(repository, sha, kind, stem)
+    declared = _declared_files_at(repository, sha, kind, stem)
+    if declared is _UNKNOWN:
+        return True
+    directory, _, base = stem.rpartition("/")
     for path in paths:
-        if declared and path == declared:
+        if path in declared:
             return True
-        if "/" not in path and path.startswith(stem + "."):
+        within, _, entry = path.rpartition("/")
+        if within == directory and entry.startswith(base + "."):
             return True
     return False
 
 
-def _how_at(ctx, current, repository, kind: str, name: str, sha: str) -> list:
-    """How the commit 'sha' changed the object against its first parent: [] when it did not."""
+def _how_at(ctx, current, repository, kind: str, name: str, sha: str) -> typing.Optional[list]:
+    """How the commit 'sha' changed the object against its first parent: [] when it did not, None when unknown.
+
+    Unknown is a commit whose parent is not here -- a shallow clone -- and is
+    never kept: fetching the parent later is what answers it.
+    """
     import pygit2
 
     from . import changes
 
     paths = changed_paths(repository, sha)
-    if paths is None or not _touches(repository, sha, kind, name, paths):
+    if paths is None:
+        return None
+    if not _touches(repository, sha, kind, name, paths):
         return []
     commit = repository.repo[sha].peel(pygit2.Commit)
     after = changes.package_at(ctx, current.name, sha)
@@ -373,7 +426,7 @@ def _how_at(ctx, current, repository, kind: str, name: str, sha: str) -> list:
 
 
 def object_history(ctx, project, kind: str, name: str, limit: int = PAGE, after: typing.Optional[str] = None) -> dict:
-    """The revisions that changed '<kind> <name>' itself, newest first: {'package', 'object', 'published', 'head', 'revisions', 'more'}.
+    """The revisions that changed '<kind> <name>' itself, newest first: {'package', 'object', 'published', 'head', 'revisions', 'more', 'next'}.
 
     Of the commits that changed its package (see 'history'), the ones where its
     declaration or a file it is built from changed -- each with how
@@ -382,7 +435,8 @@ def object_history(ctx, project, kind: str, name: str, limit: int = PAGE, after:
     touched neither 'partcad.yaml' nor a file of the object is passed over
     without loading anything; the rest are loaded at the commit and its parent
     and compared. What is found is kept in '~/.partcad', since a commit never
-    changes.
+    changes. A page looks at up to 'package_versions.REVISIONS_LIMIT' commits
+    of the package; 'next' is where the next one goes on from ('after').
     """
     current = current_project(ctx, project)
     name = name.partition(";")[0]
@@ -395,9 +449,11 @@ def object_history(ctx, project, kind: str, name: str, limit: int = PAGE, after:
         "head": repository.head() if repository is not None else None,
         "revisions": [],
         "more": False,
+        "next": None,
     }
     if repository is None:
         return result
+    limit = max(1, int(limit))
     commits = package_versions.revisions(repository, after=after)
     result["published"] = bool(commits) or after is not None
     path = _cache_path(ctx)
@@ -405,28 +461,37 @@ def object_history(ctx, project, kind: str, name: str, limit: int = PAGE, after:
         cache = _read_cache(path)
     dirty = False
     found = []
+    following = None
     for row in commits:
-        key = _cache_key(repository, kind, name, row["sha"])
+        key = _cache_key(ctx, repository, kind, name, row["sha"])
         how = cache.get(key)
         if how is None:
             try:
                 how = _how_at(ctx, current, repository, kind, name, row["sha"])
             except Exception as e:  # pylint: disable=broad-except
                 pc_logging.debug("%s: could not tell what %s did to it: %s" % (result["object"], row["short"], e))
-                how = []
-            cache[key] = how
-            dirty = True
+                how = None
+            if how is not None:
+                cache[key] = how
+                dirty = True
         if how:
             if len(found) == limit:
-                result["more"] = True
+                following = found[-1]["sha"]
                 break
             found.append({**row, "how": how})
+    else:
+        # Every commit of the package this page could look at was looked at:
+        # where there are more, the next page goes on from the last of them.
+        if len(commits) >= package_versions.REVISIONS_LIMIT or commits.truncated:
+            following = commits[-1]["sha"] if len(commits) >= package_versions.REVISIONS_LIMIT else commits.scanned
     if dirty:
         with _history_lock:
             merged = _read_cache(path)
             merged.update(cache)
             _write_cache(path, merged)
     result["revisions"] = found
+    result["more"] = following is not None
+    result["next"] = following
     return result
 
 
@@ -453,7 +518,9 @@ def compare_states(
     What 'compare' answers for a revision and the working tree, for any two
     states: a commit-ish, 'STAGED' or 'WORKTREE' on either side. For a package
     the answer also lists what changed in it object by object
-    ('partcad.changes'), since its 'partcad.yaml' says only part of it.
+    ('partcad.changes'), since its 'partcad.yaml' says only part of it; for an
+    object, the files it is built from that changed ('sources'). 'same' is
+    true only where none of that changed either.
     """
     from . import changes
 
@@ -499,7 +566,35 @@ def compare_states(
     }
     if kind == PACKAGE:
         try:
-            answer["changes"] = changes.changes(ctx, current.name, before, after)
+            found = changes.changes(ctx, current.name, before, after)
         except ValueError as e:
             pc_logging.debug("%s: %s" % (current.name, e))
+        else:
+            answer["changes"] = found
+            if found["objects"] or found["files"] or found["package_changed"]:
+                answer["same"] = False
+    else:
+        # The files it is built from are part of what it is: a change to its
+        # script alone is a change, though its declaration reads the same.
+        sources = source_changes(
+            changes.object_state(left_project, kind, name), changes.object_state(right_project, kind, name)
+        )
+        answer["sources"] = sources
+        if sources:
+            answer["same"] = False
     return answer
+
+
+def source_changes(before: typing.Optional[dict], after: typing.Optional[dict]) -> list:
+    """The files an object is built from that differ between two of its 'changes.object_state's: [{'path', 'how'}]."""
+    old = (before or {}).get("files") or {}
+    new = (after or {}).get("files") or {}
+    rows = []
+    for path in sorted(set(old) | set(new)):
+        if path not in old:
+            rows.append({"path": path, "how": "added"})
+        elif path not in new:
+            rows.append({"path": path, "how": "removed"})
+        elif old[path] != new[path]:
+            rows.append({"path": path, "how": "modified"})
+    return rows

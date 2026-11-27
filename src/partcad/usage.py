@@ -132,6 +132,15 @@ def _walk(project, config, found: list, depth: int = 0, how: typing.Optional[str
             if key in PROSE_KEYS or key in _SOURCE_KEYS:
                 continue
             said = _HOW.get(key, how or key)
+            if key in _INTERFACE_KEYS and isinstance(value, (dict, str)):
+                # The interfaces themselves are the keys ('inherits: {":base": null}'),
+                # or the one value ('inherits: ":base"'); what is under a key is
+                # how they are taken in.
+                named = value if isinstance(value, dict) else {value: None}
+                for interface, inner in named.items():
+                    _interface_reference(project, interface, found, said)
+                    _walk(project, inner, found, depth + 1, said)
+                continue
             if key in REFERENCE_KEYS and isinstance(value, str) and value and ":" not in value:
                 # A bare name where only an object can be: one of this package's.
                 found.append((project.name, _strip_parameters(value), _HOW.get(key, key)))
@@ -146,6 +155,25 @@ def _walk(project, config, found: list, depth: int = 0, how: typing.Optional[str
         except Exception:  # pylint: disable=broad-except
             return
         found.append((package, _strip_parameters(name), how or "reference"))
+
+
+# The keys whose mapping is keyed by the interfaces an object takes in.
+_INTERFACE_KEYS = frozenset({"inherits", "implements"})
+
+
+def _interface_reference(project, interface, found: list, how: str) -> None:
+    """The interface 'interface' names -- one of this package's where it is a bare name -- into 'found'."""
+    if not isinstance(interface, str) or not interface or "%" in interface:
+        # Empty, or an expression over parameters that only the interface resolves.
+        return
+    if ":" not in interface.partition(";")[0]:
+        found.append((project.name, _strip_parameters(interface), how))
+        return
+    try:
+        package, name = project.resolve(interface)
+    except Exception:  # pylint: disable=broad-except
+        return
+    found.append((package, _strip_parameters(name), how))
 
 
 def references_how(project, kind: str, config) -> list:
@@ -475,11 +503,28 @@ def _identity(project) -> typing.Optional[tuple]:
 
 def _behind(repository, pinned: typing.Optional[str]) -> typing.Optional[int]:
     """How many revisions of the package are newer than the commit 'pinned', in its own repository; None when unknown."""
+    import pygit2
+
     if not pinned:
         return None
+    repo = repository.repo
+    try:
+        pin = repo.revparse_single(str(pinned)).peel(pygit2.Commit).id
+    except (KeyError, ValueError, pygit2.GitError):
+        return None
+    # The pin need not be a revision of the package: a commit that changed
+    # something else beside it is pinned as well. What counts is how many of
+    # the package's revisions came after it -- the ones that are not the pin
+    # and not behind it.
     for count, row in enumerate(package_versions.revisions(repository)):
-        if row["sha"].startswith(str(pinned).lower()):
+        sha = pygit2.Oid(hex=row["sha"])
+        if sha == pin:
             return count
+        try:
+            if repo.descendant_of(pin, sha):
+                return count
+        except (KeyError, ValueError, pygit2.GitError):
+            return None
     return None
 
 
@@ -567,7 +612,10 @@ def package_dependents(ctx, project) -> list:
     repository = package_versions.repository_of(project.config_dir)
     rows = []
     for other in _loaded_projects(ctx):
-        if other.name == target or _is_within(other.name, target):
+        # Only the package itself is passed over: a name under it is no proof
+        # of being part of it -- under '//' is every package, an imported one
+        # pinning a copy of this one included.
+        if other.name == target:
             continue
         for name, config in (other.dependencies() or {}).items():
             loaded_as = _dependency_package_name(other.name, name, config)

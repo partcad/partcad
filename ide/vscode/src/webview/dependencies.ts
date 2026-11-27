@@ -41,10 +41,12 @@ import {
     button,
     capitalized,
     chips,
+    focusSection,
     grid,
     isPackage,
     objectCell,
     packageButton,
+    sameSubject,
     section,
     shortRevision,
     thisSubject,
@@ -155,12 +157,15 @@ function actionsCell(row: DeclaredDependency, actions: DependencyActions): HTMLE
 
 /**
  * The packages the package's objects reach without declaring them, each with
- * the objects that do - and, on the tab, a Declare that fills the form in.
+ * the objects that do - and, on the tab, a Declare that fills the form in,
+ * which waits for a change in flight ('busy') rather than replace the form it
+ * may have sent.
  */
 export function undeclaredTable(
     rows: UndeclaredDependency[],
     callbacks: Pick<OpsCallbacks, 'openPackage' | 'showObject'>,
     declare?: (row: UndeclaredDependency) => void,
+    busy = false,
 ): HTMLElement {
     const { table, body } = grid(declare ? ['Package', 'Used by', ''] : ['Package', 'Used by'], 'deps-undeclared');
     for (const row of rows) {
@@ -178,11 +183,12 @@ export function undeclaredTable(
         }
         if (declare) {
             const cell = tr.appendChild(el('td', 'actions'));
-            cell.appendChild(
+            const declaring = cell.appendChild(
                 button('Declare…', 'small secondary deps-declare', `Declare ${row.package} as a dependency`, () =>
                     declare(row),
                 ),
             );
+            declaring.disabled = busy;
         }
     }
     return table;
@@ -223,7 +229,9 @@ export function objectDependenciesTable(
             from.appendChild(
                 packageButton(
                     row.short,
-                    `${row.package}@${row.revision}`,
+                    // A package named at a revision is loaded under that name,
+                    // which is the commit this is already: it takes no second.
+                    row.package.includes('@') ? row.package : `${row.package}@${row.revision}`,
                     callbacks,
                     'deps-sha name',
                     `Open ${row.package} at ${row.short} - the commit it is at - in the Package Explorer`,
@@ -340,8 +348,14 @@ export class DependenciesView {
         });
     }
 
-    /** Change something, say what came of it, and ask again: what the package declares is what the daemon says now. */
-    private change(method: OpsWriteMethod, params: OpsParams, done: (data: unknown) => string): void {
+    /**
+     * Change something, say what came of it, and ask again: what the package
+     * declares is what the daemon says now - after a failure too, which may
+     * have come after some of it was written (an update pins one dependency
+     * after another). 'form' is the Add form that sent it, the one draft a
+     * success takes away: Update all leaves a draft as it is.
+     */
+    private change(method: OpsWriteMethod, params: OpsParams, done: (data: unknown) => string, form?: AddForm): void {
         const subject = this.subject;
         if (subject === undefined || this.busy) {
             return;
@@ -350,18 +364,21 @@ export class DependenciesView {
         this.note = undefined;
         this.draw();
         this.callbacks.write({ method, whole: true, params }, ({ data, error }) => {
-            if (this.subject !== subject) {
+            if (!sameSubject(this.subject, subject)) {
                 return;
             }
             this.busy = false;
             this.removing = undefined;
             if (error !== undefined) {
+                // Said over the list asked again, which keeps it.
                 this.note = { text: error, error: true };
-                this.draw();
+                this.ask();
                 return;
             }
             this.note = { text: done(data), error: false };
-            this.form = undefined;
+            if (form !== undefined && this.form === form) {
+                this.form = undefined;
+            }
             this.ask();
         });
     }
@@ -426,7 +443,7 @@ export class DependenciesView {
             this.section('undeclared', `Used, not declared (${undeclared.length})`, (body) =>
                 body.appendChild(
                     undeclared.length > 0
-                        ? undeclaredTable(undeclared, this.callbacks, (row) => this.declare(row))
+                        ? undeclaredTable(undeclared, this.callbacks, (row) => this.declare(row), this.busy)
                         : placeholder('Every package its objects use is declared, or is one of its own.'),
                 ),
             ),
@@ -474,6 +491,9 @@ export class DependenciesView {
 
     /** "Declare…" on a package used but not declared: the form, with what can be told of it filled in. */
     private declare(row: UndeclaredDependency): void {
+        if (this.busy) {
+            return;
+        }
         const name = row.package.split('/').filter(Boolean).pop() ?? '';
         this.form = { name, location: '', track: '' };
         this.note = undefined;
@@ -512,7 +532,12 @@ export class DependenciesView {
                     return;
                 }
                 const track = form.track.trim();
-                this.change('ops.deps.add', { name, location, track: track || undefined }, () => `Declared ${name}.`);
+                this.change(
+                    'ops.deps.add',
+                    { name, location, track: track || undefined },
+                    () => `Declared ${name}.`,
+                    form,
+                );
             }),
         );
         add.disabled = this.busy;
@@ -535,6 +560,7 @@ export class DependenciesView {
                     this.folded.add(which);
                 }
                 this.draw();
+                focusSection(this.pane, which);
             },
             fill,
         );

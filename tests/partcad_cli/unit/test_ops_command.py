@@ -303,6 +303,8 @@ def test_new_asks_on_a_terminal_and_sends_again_once_agreed(monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert [call[1]["yes"] for call in recorder.calls] == [False, True]
+    # What was agreed to is the index the refusal showed: staged on top of it meanwhile, it is refused.
+    assert "expect_index" not in recorder.calls[0][1] and recorder.calls[1][1]["expect_index"] == STATUS["index"]
 
 
 # ---- deps ------------------------------------------------------------------------

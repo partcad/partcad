@@ -81,6 +81,11 @@ def cli(
             if not click.confirm("Make the revision all the same?", default=False):
                 raise click.Abort()
             request[flag] = True
+            # What was agreed to is what the refusal showed: staged on top of it
+            # while the question was open, it is refused as 'index-changed'.
+            looked = (data.get("status") or {}).get("index")
+            if looked and not request.get("expect_index"):
+                request["expect_index"] = looked
     if result is None:
         raise click.ClickException("No revision was made")
     if as_json:

@@ -17,6 +17,10 @@ import typing
 
 
 def _config(key: str, directory: typing.Optional[str]) -> typing.Optional[str]:
+    # A package may be named by its 'partcad.yaml' ('pc -p .../partcad.yaml'):
+    # its repository is the one the file's directory is in.
+    if directory and os.path.isfile(directory):
+        directory = os.path.dirname(os.path.abspath(directory))
     cwd = directory if directory and os.path.isdir(directory) else None
     try:
         found = subprocess.run(

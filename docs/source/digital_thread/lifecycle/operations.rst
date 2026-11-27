@@ -54,8 +54,9 @@ Above the commits, two rows that are not commits, shown only when they differ fr
 Selecting a row shows the comparison side by side: **This change** (a commit against its parent, STAGED against
 HEAD, WORKTREE against STAGED) or **Since then** (the row against the files on disk). Both sides are the object
 written out as ``pc copy`` writes one -- rendered, normalized, defaults left out -- so what differs is what the
-object *means*; a comment or a reformatted line is no difference. A package lists the objects that changed, each
-with how, and the files that are no object's, above its ``partcad.yaml`` as Jinja2 rendered it at each. Along the
+object *means*; a comment or a reformatted line is no difference. An object lists the files it is built from that
+changed, which its declaration does not show. A package lists the objects that changed, each with how, and the
+files that are no object's, above its ``partcad.yaml`` as Jinja2 rendered it at each. Along the
 bottom, three folds about the subject at the selected row, each asked the first time it is opened:
 **Dependencies at it**, **Used By at it**, and **Impact since it**.
 
@@ -93,13 +94,17 @@ with findings:
 
 * **breaking** -- an object removed or a parameter removed while something uses it, a reference that no longer
   resolves, a port removed while mated;
-* **changed** -- a shape that moved (**Measure** says by how much: volume and mass, as ``pc compare`` reads them);
+* **changed** -- a shape that moved (**Measure** says by how much: volume and mass, as ``pc compare`` reads
+  them); what is reached through a change of prose alone has not moved;
 * **verify** -- requirements and qualification tests to run again (**Test** runs them), drawings made from it now
   out of date;
 * **info** -- nothing but prose changed.
 
-An object also lists what it uses that changed. A package that pins this one by git commit is listed apart: the
-change does not reach it until it moves its pin. Impact looks where Used By looks.
+An object also lists what it uses that changed. A package that pins this one to a git commit is listed apart: the
+change does not reach it until it moves its pin. Impact looks where Used By looks. In the subject's repository,
+what uses what is read at the state the change is made of -- in what is staged, a staged alias of a removed part
+uses it, whatever the file on disk says now; a package of another repository is as it is loaded, has no earlier
+state to measure its shape against, and is tested as it is.
 
 On the command line
 ===================

@@ -37,6 +37,9 @@ import {
 import { OpsAnswer, OpsCallbacks, OpsSubject, OpsWritten } from '../../webview/operations';
 import { UsedByView, behind, renderUsedBy } from '../../webview/usedBy';
 
+/** The element last given the focus. */
+let focused: FakeElement | undefined;
+
 class FakeElement {
     public readonly children: FakeElement[] = [];
     public className = '';
@@ -92,6 +95,10 @@ class FakeElement {
 
     public fire(name: string): void {
         (this.listeners[name] ?? []).forEach((handler) => handler());
+    }
+
+    public focus(): void {
+        focused = this;
     }
 
     /** Everything under this element with this class, in the order it is drawn, hidden or not. */
@@ -298,6 +305,69 @@ suite('Digital Thread Operations: Dependencies, Used By and Impact', () => {
         assert.strictEqual(asked.length, 2);
     });
 
+    test('a draft of Add dependency outlives Update all, and Declare waits for a change in flight', () => {
+        const root = new FakeElement('div');
+        const { ops, asked, written } = callbacks();
+        const view = new DependenciesView(root as unknown as HTMLElement, ops);
+        view.start(PACKAGE);
+        asked[0].answer(DEPS);
+        only(root, 'deps-add').fire('click');
+        const location = root.find('requirements-input').find((input) => input.dataset.field === 'location');
+        assert.ok(location);
+        location.value = '../metric';
+        location.fire('input');
+
+        only(root, 'deps-update-all').fire('click');
+        assert.strictEqual(only(root, 'deps-declare').disabled, true);
+        written[0].answer({ data: { pinned: 1, current: 0, failed: 0 } });
+        asked[asked.length - 1].answer(DEPS);
+
+        const kept = root.find('requirements-input').find((input) => input.dataset.field === 'location');
+        assert.strictEqual(kept?.value, '../metric');
+        assert.strictEqual(only(root, 'deps-declare').disabled, false);
+    });
+
+    test('a change that failed reads the declaration again, which it may have changed, and keeps saying why', () => {
+        const root = new FakeElement('div');
+        const { ops, asked, written } = callbacks();
+        const view = new DependenciesView(root as unknown as HTMLElement, ops);
+        view.start(PACKAGE);
+        asked[0].answer(DEPS);
+
+        only(root, 'deps-update-all').fire('click');
+        written[0].answer({ error: 'Could not fetch //std' });
+
+        assert.deepStrictEqual(asked[1].query, { method: 'ops.deps.list' });
+        asked[1].answer(DEPS);
+        assert.ok(root.text().includes('Could not fetch //std'));
+        assert.strictEqual(root.find('deps-declared').length, 1);
+    });
+
+    test('a change made when the package is shown again is said on the tab started over, and not on another', () => {
+        const root = new FakeElement('div');
+        const { ops, asked, written } = callbacks();
+        const view = new DependenciesView(root as unknown as HTMLElement, ops);
+        view.start(PACKAGE);
+        asked[0].answer(DEPS);
+        rowOf(root, 'std').find('deps-update')[0].fire('click');
+
+        // Saved meanwhile: the same package shown again, and the tab started over.
+        view.setBusy('Select this tab to see what this package depends on.');
+        view.start({ ...PACKAGE });
+        asked[1].answer(DEPS);
+        written[0].answer({ data: { pinned: 1, current: 0, failed: 0 } });
+        asked[asked.length - 1].answer(DEPS);
+        assert.ok(root.text().includes('Updated std: pinned 1 to the tip of its branch.'));
+
+        rowOf(root, 'std').find('deps-update')[0].fire('click');
+        view.setBusy('');
+        view.start({ ...PACKAGE, package: '//other', name: '//other' });
+        const before = asked.length;
+        written[1].answer({ data: { pinned: 1, current: 0, failed: 0 } });
+        assert.strictEqual(asked.length, before);
+        assert.ok(!root.text().includes('Updated std'));
+    });
+
     test("an object's dependencies are the objects it names, how, and the commit each comes from", () => {
         const root = new FakeElement('div');
         const { ops, asked, opened, shown } = callbacks();
@@ -329,6 +399,34 @@ suite('Digital Thread Operations: Dependencies, Used By and Impact', () => {
         assert.deepStrictEqual(opened, [`//std@${PIN}`]);
         // Nothing to change on an object: no toolbar, no form.
         assert.strictEqual(root.find('deps-add').length, 0);
+    });
+
+    test('an object of a package named at a revision opens that package as it is named, with no second revision', () => {
+        const root = new FakeElement('div');
+        const { ops, asked, opened } = callbacks();
+        const view = new DependenciesView(root as unknown as HTMLElement, ops);
+        view.start(PART);
+
+        asked[0].answer({
+            package: '//',
+            object: '//:bracket',
+            kind: 'part',
+            dependencies: [
+                {
+                    object: `//std@${PIN}:bolt`,
+                    package: `//std@${PIN}`,
+                    name: 'bolt',
+                    kind: 'part',
+                    how: ['source'],
+                    count: 1,
+                    revision: PIN,
+                    short: 'f00dfeed',
+                },
+            ],
+        });
+
+        only(root, 'deps-sha').fire('click');
+        assert.deepStrictEqual(opened, [`//std@${PIN}`]);
     });
 
     test('what uses a package is two sections: the packages that pin it, and how far behind; and the objects', () => {
@@ -367,6 +465,45 @@ suite('Digital Thread Operations: Dependencies, Used By and Impact', () => {
         assert.deepStrictEqual(asked[1].query, { method: 'ops.used_by', params: { load: true } });
         asked[1].answer({ objects: [] });
         assert.strictEqual(root.find('ops-load').length, 0);
+    });
+
+    test('a workspace that could not be loaded leaves what was found, and Load workspace to try again', () => {
+        const root = new FakeElement('div');
+        const { ops, asked } = callbacks();
+        const view = new UsedByView(root as unknown as HTMLElement, ops);
+        view.start(PART);
+        asked[0].answer({
+            objects: [
+                { object: '//:frame', package: '//', name: 'frame', kind: 'assembly', count: 1, how: ['placed'] },
+            ],
+        });
+
+        only(root, 'ops-load').fire('click');
+        assert.ok(root.text().includes('Loading every package of the workspace'));
+        asked[1].answer(undefined, 'Could not fetch //pub');
+
+        assert.ok(only(root, 'usedby-table').text().includes('//:frame'));
+        assert.ok(root.text().includes('Could not fetch //pub'));
+        assert.ok(root.text().includes('Of what PartCAD has loaded'));
+        only(root, 'ops-load').fire('click');
+        assert.deepStrictEqual(asked[2].query, { method: 'ops.used_by', params: { load: true } });
+    });
+
+    test('a section folded from the keyboard keeps the focus on its title', () => {
+        const root = new FakeElement('div');
+        const { ops, asked } = callbacks();
+        const view = new UsedByView(root as unknown as HTMLElement, ops);
+        view.start(PACKAGE);
+        asked[0].answer({ packages: [], objects: [] } as unknown as UsedByData);
+        const heading = () =>
+            root.find('ops-section-title').find((title) => title.dataset.section === 'packages') as FakeElement;
+
+        const before = heading();
+        before.fire('click');
+
+        assert.notStrictEqual(heading(), before);
+        assert.strictEqual(focused, heading());
+        assert.strictEqual(heading().attributes['aria-expanded'], 'false');
     });
 
     test('Used By opens the object a row names, and says how far behind a pin is', () => {
@@ -434,6 +571,53 @@ suite('Digital Thread Operations: Dependencies, Used By and Impact', () => {
         // Another change is measured and tested afresh, if asked.
         view.choose('staged');
         assert.deepStrictEqual([params()?.measure, params()?.test], [undefined, undefined]);
+    });
+
+    test('another revision typed is another change: measured and tested afresh, if asked', () => {
+        const root = new FakeElement('div');
+        const { ops, asked } = callbacks();
+        const view = new ImpactView(root as unknown as HTMLElement, ops);
+        view.start(PART);
+        const params = () => asked[asked.length - 1].query.params;
+        view.choose('since');
+        const revision = only(root, 'impact-revision');
+        revision.value = 'v1.2';
+        revision.fire('change');
+        only(root, 'impact-measure').fire('click');
+        only(root, 'impact-test').fire('click');
+        assert.deepStrictEqual([params()?.from, params()?.measure, params()?.test], ['v1.2', true, true]);
+
+        revision.value = 'v2.0';
+        revision.fire('change');
+
+        assert.deepStrictEqual([params()?.from, params()?.measure, params()?.test], ['v2.0', undefined, undefined]);
+        only(root, 'impact-measure').fire('click');
+        assert.deepStrictEqual([params()?.from, params()?.measure, params()?.test], ['v2.0', true, undefined]);
+    });
+
+    test('an answer for a change no longer chosen is not drawn over the field asking for a revision', () => {
+        const root = new FakeElement('div');
+        const { ops, asked } = callbacks();
+        const view = new ImpactView(root as unknown as HTMLElement, ops);
+        view.start(PART);
+
+        view.choose('since');
+        asked[0].answer({
+            package: '//',
+            object: '//:bracket',
+            from: 'HEAD',
+            to: WORKTREE,
+            changed: [],
+            affects: [],
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            affected_by: [],
+            pins: [],
+            pinned: [],
+            summary: {},
+        } as ImpactData);
+
+        assert.strictEqual(root.find('impact-summary').length, 0);
+        assert.ok(root.text().includes('Type the revision'));
     });
 
     test('Impact draws the counts by severity, what is reached and how, and the pins', () => {

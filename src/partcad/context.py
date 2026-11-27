@@ -1048,7 +1048,11 @@ class Context:
         if current is None:
             raise ValueError("there is no package %s" % base)
         if revision == package_versions.WORKTREE:
-            # The files on disk: the package without a revision, by another name.
+            # The files on disk: the package without a revision, by another
+            # name -- read again if its 'partcad.yaml' changed since (a stat
+            # when it did not), as 'changes.package_at' reads it.
+            if self.reload_changed_packages([base]):
+                current = self.get_project(base)
             return current
         repository = package_versions.repository_of(current.config_dir)
         if repository is None and package_versions.exported_sha(current.config_dir) is not None:

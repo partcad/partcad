@@ -276,6 +276,10 @@ export class ImpactView {
     private range: ImpactRange = 'all';
     /** What 'measure', 'test' and 'load' were asked with for the change on screen; a new change starts without the first two. */
     private readonly flags = { measure: false, test: false, load: false };
+    /** The change 'measure' and 'test' were asked of, '<from>..<to>': a revision typed into the field is another. */
+    private flagged: string | undefined;
+    /** The question asked last: an answer to any other is for a change no longer chosen. */
+    private asking = 0;
     private readonly toolbar: HTMLElement;
     private readonly select: HTMLSelectElement;
     private readonly revision: HTMLInputElement;
@@ -322,10 +326,7 @@ export class ImpactView {
                 'Measure',
                 'small secondary impact-measure',
                 'Ask again, measuring how much each changed part and assembly moved (builds both states)',
-                () => {
-                    this.flags.measure = true;
-                    this.ask();
-                },
+                () => this.ask({ measure: true }),
             ),
         );
         this.test = this.toolbar.appendChild(
@@ -333,10 +334,7 @@ export class ImpactView {
                 'Test',
                 'small secondary impact-test',
                 'Ask again, running the tests of every object the change reaches',
-                () => {
-                    this.flags.test = true;
-                    this.ask();
-                },
+                () => this.ask({ test: true }),
             ),
         );
         this.content = el('div', 'impact-content');
@@ -351,6 +349,8 @@ export class ImpactView {
         this.flags.measure = false;
         this.flags.test = false;
         this.flags.load = false;
+        this.flagged = undefined;
+        this.asking += 1;
         this.toolbar.hidden = true;
         empty(this.content);
         this.content.appendChild(placeholder(text));
@@ -378,11 +378,15 @@ export class ImpactView {
         this.ask();
     }
 
-    private ask(): void {
+    /** Ask what the change chosen reaches, measuring or testing it too where 'add' says, and where it was already. */
+    private ask(add: { measure?: boolean; test?: boolean } = {}): void {
         const subject = this.subject;
         if (subject === undefined) {
             return;
         }
+        // Whatever is in flight is for the change chosen before, even when this
+        // asks nothing: "Since a revision" with no revision typed yet.
+        const mine = (this.asking += 1);
         const states = rangeStates(this.range, this.revision.value);
         this.measure.disabled = states === undefined;
         this.test.disabled = states === undefined;
@@ -395,6 +399,16 @@ export class ImpactView {
             this.revision.focus?.();
             return;
         }
+        const range = `${states.from}..${states.to}`;
+        if (range !== this.flagged) {
+            // Another change - a revision typed into the field never passes
+            // through 'choose' - is measured and tested afresh, if asked.
+            this.flags.measure = false;
+            this.flags.test = false;
+        }
+        this.flagged = range;
+        this.flags.measure = this.flags.measure || add.measure === true;
+        this.flags.test = this.flags.test || add.test === true;
         this.answer = 'pending';
         this.draw();
         this.callbacks.ask(
@@ -408,7 +422,7 @@ export class ImpactView {
                 },
             },
             (data, error) => {
-                if (this.subject !== subject) {
+                if (this.subject !== subject || this.asking !== mine) {
                     return;
                 }
                 this.answer =

@@ -727,25 +727,27 @@ Revisions and Used By; the other two are shown disabled for it). Each is a daemo
 names its subject the way the daemon reads one: the package, an object of it, or the package at a state --
 `<package>@<sha>`, `<package>@STAGED` -- which the host puts together from what the tab asked (`at`, `whole`).
 
-**Revisions** lists the revisions of what is on screen, newest first, a page at a time (`ops.rev.list`; "Load
-more" asks for the page after the last one): every commit of a package -- one that changed only sub-packages of it
-says which -- and only the commits that changed an object, each with how (`added`, `removed`, `declaration`,
-`source`). The checked-out one is marked. Above them, when `ops.rev.status` says they apply, **WORKTREE** (what of
-it is on disk and not staged) and **STAGED** (what a new revision would commit). Selecting a row asks
-`ops.rev.diff` for it against another state -- **This change** (a commit against its parent, STAGED against HEAD,
-WORKTREE against STAGED) or **Since then** (the row against the files on disk) -- and the daemon writes both sides
-out as `pc copy` would (for a package, takes its `partcad.yaml` as rendered, and lists what changed in it object by
-object and file by file) and answers with the rows of a side-by-side view; the webview only colours them. The first
-commit of a repository has no parent, and is drawn as everything it added. WORKTREE has **Stage all**
-(`ops.rev.stage`) and, while anything is unstaged, the sentence the daemon writes for an agent with **Copy for
-your agent**; STAGED has **New revision…**: a message drafted from what is staged, "Skip lint and tests", and the
-author -- `git config user.name` and `user.email` in the package's repository on this machine, read by the host and
-never by the daemon. The daemon refuses a revision whose terms the user has not agreed to (something else staged,
-changes not staged, the checks failing, the index moved since it was read), and the form says why and lets the user
-agree and send it again. The folded views along the bottom are the Simulation tab's: **Dependencies at it**
-(`ops.deps.list` of the package or object at that revision), **Used By at it** (`ops.used_by` of the package at it)
-and **Impact since it** (`ops.impact` from it to the files on disk), each asked for the first time it is opened, for
-the row on screen.
+**Revisions** lists the revisions of what is on screen, newest first, a page at a time (`ops.rev.list`; "Load more"
+asks for the page after the commit the daemon says the last one stopped at, `next`): every commit of a package --
+one that changed only sub-packages of it says which -- and only the commits that changed an object, each with how
+(`added`, `removed`, `declaration`, `source`). The checked-out one is marked. Above them, when `ops.rev.status` says
+they apply, **WORKTREE** (what of it is on disk and not staged) and **STAGED** (what a new revision would commit).
+Selecting a row asks `ops.rev.diff` for it against another state -- **This change** (a commit against its parent,
+STAGED against HEAD, WORKTREE against STAGED) or **Since then** (the row against the files on disk) -- and the
+daemon writes both sides out as `pc copy` would (for a package, takes its `partcad.yaml` as rendered, and lists what
+changed in it object by object and file by file; for an object, lists the files it is built from that changed) and
+answers with the rows of a side-by-side view; the webview only colours them. The first commit of a repository has no
+parent: the daemon answers `<sha>~1` as nothing, and the commit is drawn as everything it added. WORKTREE has **Stage all** (`ops.rev.stage`) and, while anything is
+unstaged, the sentence the daemon writes for an agent with **Copy for your agent**; STAGED has **New revision…**: a
+message drafted from what is staged, "Skip lint and tests", and the author -- `git config user.name` and
+`user.email` in the package's repository on this machine, read by the host and never by the daemon. The daemon
+refuses a revision whose terms the user has not agreed to (something else staged, changes not staged, the checks
+failing, the index moved since it was read), and the form says why and lets the user agree and send it again -- once
+more after the index moved, since what was agreed to was what was staged before. A revision still being made when
+the object is shown again (a save, say) is answered on the tab started over. The folded views along the bottom are
+the Simulation tab's: **Dependencies at it** (`ops.deps.list` of the package or object at that revision), **Used By
+at it** (`ops.used_by` of the package at it) and **Impact since it** (`ops.impact` from it to the files on disk),
+each asked for the first time it is opened, for the row on screen.
 
 **Dependencies** is `ops.deps.list`. For a package: what it declares -- name, type, location, the branch tracked,
 the revision it is pinned to and the commit it is at -- with **Update** (`ops.deps.update`, moving the pin of one
@@ -757,14 +759,16 @@ each comes from. A package opens in the Package Explorer, at its commit too; an 
 **Used By** is `ops.used_by`: for an object, the objects the daemon has loaded that refer to it, each with how and
 how many times -- a built assembly counts each placement; for a package, the packages that declare it as a
 dependency, with the revision each pins and how many revisions behind that is, and the objects that use anything in
-it. Only what is loaded is looked at, and the tab says so, with **Load workspace** to load every package first.
+it. Only what is loaded is looked at, and the tab says so, with **Load workspace** to load every package first; a
+load that fails leaves the answer it was to replace, with the button to try again.
 
 **Impact** is `ops.impact`: what a change reaches -- **All uncommitted** (HEAD to the files on disk), **Staged**,
 **Not staged** or **Since a revision** -- with the findings counted by severity (breaking, changed, to verify, for
 information), every object reached (changed itself, or through what it uses) with what each now risks, for an object
 what it uses that changed, the dependencies whose declaration changed, and the packages that pin it by commit and
 so are not affected until they update. **Measure** and **Test** ask again, measuring how much each changed shape
-moved and running the tests of what is reached; **Load workspace** as on Used By.
+moved and running the tests of what is reached, for the change chosen: another one -- another revision typed
+included -- starts without them. **Load workspace** as on Used By.
 
 **Bill of Materials** is `Assembly.get_bom_detailed_async()` — the tree flattened and counted, with the store
 data that says what to order — in the columns `pc bom` prints it in.

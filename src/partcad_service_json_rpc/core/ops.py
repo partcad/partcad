@@ -72,7 +72,10 @@ def _kind_elsewhen(ctx, project, name: str, params):
     for state in (params.get("from"), params.get("to"), "HEAD"):
         if not isinstance(state, str) or not state or state == package_versions.WORKTREE:
             continue
-        found = changes.package_at(ctx, project.name, state)
+        try:
+            found = changes.package_at(ctx, project.name, state)
+        except ValueError:
+            continue
         kind = found.object_kind(name) if found is not None else None
         if kind is not None:
             return kind
@@ -97,7 +100,10 @@ def _state(params, key: str, default):
 
 
 def _named(ctx, project, state: str) -> str:
-    """'state', refused unless the package's repository has such a revision (a state is always there)."""
+    """'state', refused unless the package's repository has such a revision (a state is always there).
+
+    The parent of a first commit ('<sha>~1') is taken: it is nothing, an empty side.
+    """
     from partcad import package_versions, revisions
 
     if package_versions.is_state(state):
@@ -108,6 +114,9 @@ def _named(ctx, project, state: str) -> str:
         raise JsonRpcError(
             USAGE_ERROR, "%s is not in a git repository, so it has no revision '%s'" % (current.name, state)
         )
+    if package_versions.before_history(repository, state):
+        # The parent of a first commit: nothing, which a comparison takes as an empty side.
+        return state
     try:
         package_versions.resolve(repository, state, fetch=ctx.is_downloaded(current), user_config=ctx.user_config)
     except ValueError as e:
@@ -199,7 +208,7 @@ def rev_list(session, params):
     A package lists every commit that changed its directory; an object, only
     the commits that changed it -- its declaration or a file it is built from --
     each with how ('partcad.revisions.object_history'). 'limit' is the size of
-    a page (100), 'after' the commit the last page ended at.
+    a page (100), 'after' the 'next' of the page before.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -210,11 +219,15 @@ def rev_list(session, params):
 
     limit = _int(params, "limit", revisions.PAGE)
     after = params.get("after") or None
-    if name is None:
-        answer = revisions.history(ctx, project, limit=limit, after=after)
-    else:
-        with pc.logging.Process("Revisions", project.name, name):
-            answer = revisions.object_history(ctx, project, kind, name, limit=limit, after=after)
+    try:
+        if name is None:
+            answer = revisions.history(ctx, project, limit=limit, after=after)
+        else:
+            with pc.logging.Process("Revisions", project.name, name):
+                answer = revisions.object_history(ctx, project, kind, name, limit=limit, after=after)
+    except ValueError as e:
+        # An 'after' this history does not go back through.
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
     answer["kind"] = kind
     return answer
 
@@ -395,7 +408,8 @@ def rev_new(session, params):
     index is not the one 'expect_index' names ('index-changed'), and when lint
     or the qualification tests of what is staged fail ('checks-failed'), which
     'skip_checks' does not run. 'author' ({'name', 'email'}) is who the client
-    says the user is.
+    says the user is, and is required whole: the daemon's own git identity is
+    not the user's.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -420,6 +434,7 @@ def rev_new(session, params):
                 include_others=bool(params.get("include_others")),
                 accept=bool(params.get("yes")),
                 checks=checks,
+                author_required=True,
             )
         except working_copy.Refused as e:
             raise JsonRpcError(USAGE_ERROR, str(e), data={"code": e.code, "status": e.status}) from e
@@ -541,6 +556,14 @@ def deps_update(session, params):
     if not params.get("all"):
         project, _kind, _name = _subject(ctx, pc, params, "ops.deps.update")
         _writable(project)
+        from partcad.actions.package.update import workspace_packages
+
+        if project.name not in {each.name for each in workspace_packages(ctx)}:
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "%s is imported, not a package of this workspace: its pins are moved by its own maintainers, not"
+                " from here" % project.name,
+            )
         package = project.name
     with pc.logging.Process("Update", package or "this"):
         stats = pc.actions.package.update(ctx, package=package, names=names)
@@ -600,25 +623,34 @@ def used_by(session, params):
     return answer
 
 
-def _measure(ctx, before: str, after: str):
-    """How much a changed part or assembly moved: 'pc compare' of it at 'before' against it at 'after'."""
-    from partcad import compare as pc_compare
+def _at(ctx, getter, row, state: str):
+    """The object of a reached row at 'state' -- as loaded for 'WORKTREE'."""
     from partcad import package_versions
 
-    def at(row, state):
-        package = (
-            row["package"]
-            if state == package_versions.WORKTREE
-            else package_versions.versioned_name(row["package"], state)
-        )
-        getter = ctx.get_part if row["kind"] == "part" else ctx.get_assembly
-        return getter(_qualified(package, row["name"]))
+    package = (
+        row["package"] if state == package_versions.WORKTREE else package_versions.versioned_name(row["package"], state)
+    )
+    return getter(_qualified(package, row["name"]))
+
+
+def _measure(ctx, before: str, after: str):
+    """How much a changed part or assembly moved: 'pc compare' of it at 'before' against it at 'after'.
+
+    Each row says the states its own package is compared at: a package of
+    another repository has none of the subject's, and no earlier shape of it
+    is there to measure against.
+    """
+    from partcad import compare as pc_compare
 
     def measure(row):
-        reference = at(row, before)
-        current = at(row, after)
+        states = row.get("states") or {"from": before, "to": after}
+        if states.get("outside"):
+            return {"skipped": "not in the repository compared: there is no earlier state of it to measure against"}
+        getter = ctx.get_part if row["kind"] == "part" else ctx.get_assembly
+        reference = _at(ctx, getter, row, states["from"])
+        current = _at(ctx, getter, row, states["to"])
         if reference is None or current is None:
-            return {"error": "not there at %s" % (before if reference is None else after)}
+            return {"error": "not there at %s" % (states["from"] if reference is None else states["to"])}
         report = asyncio.run(pc_compare.compare_async(ctx, reference, current, limits={}, worst=0))
         return {key: report.get(key) for key in ("volume", "mass", "passed") if key in report}
 
@@ -626,20 +658,19 @@ def _measure(ctx, before: str, after: str):
 
 
 def _test(ctx, after: str):
-    """The qualification tests of a reached object, run at the state 'after'."""
-    from partcad import package_versions
+    """The qualification tests of a reached object, run at the state its row says -- 'after' in the subject's repository.
+
+    An object of another repository is tested as it is loaded: the subject's
+    states are not states of its repository.
+    """
     from partcad.qual import report
 
     def test(row):
-        package = (
-            row["package"]
-            if after == package_versions.WORKTREE
-            else package_versions.versioned_name(row["package"], after)
-        )
         getters = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene, "sketch": ctx.get_sketch}
         if row["kind"] not in getters:
             return {"skipped": "not tested"}
-        shape = getters[row["kind"]](_qualified(package, row["name"]))
+        states = row.get("states") or {"to": after}
+        shape = _at(ctx, getters[row["kind"]], row, states["to"])
         if shape is None:
             return {"error": "could not be loaded"}
         results = asyncio.run(report.run_async(ctx, shape, verify=True))

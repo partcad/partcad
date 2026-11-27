@@ -58,7 +58,11 @@ def _non_geometric_keys() -> frozenset:
 
 
 def package_at(ctx, package: str, state: typing.Optional[str]):
-    """'package' at 'state' -- None or 'WORKTREE' for the files on disk -- or None where it is not there."""
+    """'package' at 'state' -- None or 'WORKTREE' for the files on disk -- or None where it is not there.
+
+    Raises ValueError for 'STAGED' while the index has conflicts. The parent
+    of a first commit ('<sha>~1') is before the history: nothing is there.
+    """
     if not state or state == package_versions.WORKTREE:
         # As the files are now: a 'partcad.yaml' edited since the package was
         # loaded is read again (a stat, when nothing changed).
@@ -69,6 +73,18 @@ def package_at(ctx, package: str, state: typing.Optional[str]):
             except Exception as e:  # pylint: disable=broad-except
                 pc_logging.debug("%s: could not tell whether it changed on disk: %s" % (package, e))
         return ctx.get_project(package)
+    if state == package_versions.STAGED:
+        # An index with conflicts holds no tree: that is an answer of its own,
+        # and not a package with nothing in it.
+        current = ctx.get_project(package)
+        repository = package_versions.repository_of(current.config_dir) if current is not None else None
+        if repository is not None:
+            package_versions.index_tree(repository)
+    if package_versions._PARENT.match(state):
+        current = ctx.get_project(package)
+        repository = package_versions.repository_of(current.config_dir) if current is not None else None
+        if repository is not None and package_versions.before_history(repository, state):
+            return None
     try:
         return ctx.get_project(package_versions.versioned_name(package, state))
     except Exception as e:  # pylint: disable=broad-except
@@ -147,17 +163,20 @@ def object_files(project, kind: str, name: str) -> list:
         found.append(declared)
     elif kind_type not in _NO_FILE and kind not in ("interface", "scene"):
         stem = config.get("orig_name") or name.partition(";")[0]
+        # A name may have directories in it ('brackets/left'), and its file is in them.
+        within, _, base = stem.rpartition("/")
+        directory = os.path.join(project.config_dir, *within.split("/")) if within else project.config_dir
         extensions = _EXTENSIONS.get(kind_type)
         try:
-            entries = sorted(os.listdir(project.config_dir))
+            entries = sorted(os.listdir(directory))
         except OSError:
             entries = []
         for entry in entries:
-            if not entry.startswith(stem + ".") or not os.path.isfile(os.path.join(project.config_dir, entry)):
+            if not entry.startswith(base + ".") or not os.path.isfile(os.path.join(directory, entry)):
                 continue
-            extension = entry[len(stem) :].lower()
+            extension = entry[len(base) :].lower()
             if (extension in extensions) if extensions else (extension not in _OUTPUTS):
-                found.append(entry)
+                found.append(within + "/" + entry if within else entry)
     for dependency in config.get("dependencies") or []:
         rel = _relative(dependency) if isinstance(dependency, str) else None
         if rel is not None and rel not in found:
@@ -166,9 +185,21 @@ def object_files(project, kind: str, name: str) -> list:
 
 
 def _digest(path: str) -> typing.Optional[str]:
+    """What a file holds, as a digest: read a piece at a time, and a symbolic link by what it says.
+
+    A link is what git keeps of it -- its target, as text -- and not what it
+    points at, which may be outside the package and change without any
+    revision of it changing.
+    """
+    digest = hashlib.sha256()
     try:
+        if os.path.islink(path):
+            digest.update(b"link:" + os.fsencode(os.readlink(path)))
+            return digest.hexdigest()
         with open(path, "rb") as f:
-            return hashlib.sha256(f.read()).hexdigest()
+            for piece in iter(lambda: f.read(1 << 20), b""):
+                digest.update(piece)
+        return digest.hexdigest()
     except OSError:
         return None
 
@@ -226,37 +257,57 @@ def _sub_packages(directory: str) -> set:
     return found
 
 
-def package_files(project) -> dict:
-    """Every file of 'project' itself -- none of its sub-packages' -- by path inside it, with its digest."""
+def package_files(project) -> typing.Optional[dict]:
+    """Every file of 'project' itself -- none of its sub-packages' -- by path inside it, with its digest.
+
+    {} for no package; None for one with more files than are compared
+    ('_FILES_LIMIT'), which is not the same as having none of them.
+    """
     if project is None or not os.path.isdir(getattr(project, "config_dir", "") or ""):
         return {}
     top = project.config_dir
-    # The files on disk are a working tree's: what git ignores there is not in
-    # any revision or in the index, so it is no difference from them either.
+    # The files on disk are a working tree's: what git ignores there, and does
+    # not track, is not in any revision or in the index, so it is no
+    # difference from them either. A file git tracks is one whatever an ignore
+    # rule says, dotfiles included. A snapshot of a revision or of the index
+    # is in no repository, and is all tracked.
     repository = package_versions.repository_of(top)
+    tracked = _tracked(repository)
     found = {}
     for root, dirs, files in os.walk(top):
         dirs[:] = sorted(
             d
             for d in dirs
-            if not d.startswith(".") and d != "__pycache__" and not os.path.isfile(os.path.join(root, d, PACKAGE_FILE))
+            if d not in (".git", "__pycache__") and not os.path.isfile(os.path.join(root, d, PACKAGE_FILE))
         )
         for name in sorted(files):
-            if name.startswith(".") or name == package_versions.GUARD:
+            if name == package_versions.GUARD:
                 continue
             rel = os.path.relpath(os.path.join(root, name), top).replace(os.sep, "/")
-            if repository is not None and _ignored(repository, rel):
+            if repository is not None and _ignored(repository, rel, tracked):
                 continue
             found[rel] = None
             if len(found) > _FILES_LIMIT:
-                return {}
+                return None
     for rel in found:
         found[rel] = _digest(os.path.join(top, *rel.split("/")))
     return found
 
 
-def _ignored(repository, rel: str) -> bool:
+def _tracked(repository) -> frozenset:
+    if repository is None:
+        return frozenset()
+    try:
+        repository.repo.index.read(False)
+        return frozenset(entry.path for entry in repository.repo.index)
+    except Exception:  # pylint: disable=broad-except
+        return frozenset()
+
+
+def _ignored(repository, rel: str, tracked=frozenset()) -> bool:
     path = "/".join(part for part in (repository.relpath, rel) if part)
+    if path in tracked:
+        return False
     try:
         return bool(repository.repo.path_is_ignored(path))
     except Exception:  # pylint: disable=broad-except
@@ -312,6 +363,10 @@ def changes(
     if not only:
         old = package_files(left)
         new = package_files(right)
+        if old is None or new is None:
+            # Too many files to compare one by one: say nothing of them rather
+            # than call the ones not listed added or removed.
+            old = new = {}
         for rel in sorted(set(old) | set(new)):
             if rel in named:
                 continue
