@@ -257,3 +257,22 @@ def test_a_solid_that_is_not_one_valid_solid_is_refused():
     builder.Add(compound, BRepPrimAPI_MakeBox(gp_Pnt(5, 0, 0), 1, 1, 1).Shape())
     assert wrapper_route._defects(compound) == "the sweep made 2 solids, not one"
     assert wrapper_route._defects(BRepPrimAPI_MakeBox(1, 1, 1).Shape()) is None
+
+
+def _section(shape, origin, normal):
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Section
+    from OCP.gp import gp_Dir, gp_Pln
+
+    return BRepAlgoAPI_Section(shape, gp_Pln(gp_Pnt(*origin), gp_Dir(*normal))).Shape()
+
+
+def test_a_flat_profile_meets_a_through_entry_turned_as_its_x_axis():
+    """Rolled nearly 180 degrees within a quarter of the route and not after: the
+    auxiliary spine is longer there, which matching by share of length must not show."""
+    first = EndFrame((0, 0, 0), (0, 0, 1), (1, 0, 0))
+    grommet = EndFrame((0, 0, 50), (0, 0, 1), (-0.999, 0.0447, 0))
+    second = EndFrame((0, 0, 200), (0, 0, -1), (1, 0, 0))
+    shape = wrapper_route.process({"route": canonical_json([first, grommet, second]), "sketch": _rect(8, 2)})
+    long_side = _longest_edge_direction(_section(shape, grommet.origin, grommet.z))
+    alignment = abs(sum(a * b for a, b in zip(long_side, grommet.x)))
+    assert math.acos(min(1.0, alignment)) == pytest.approx(0.0, abs=1e-5)

@@ -35,12 +35,15 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
-# How far the auxiliary spine runs beside the path, in millimetres. Small next to
-# any bend the route may have (D9 refuses bends tighter than the profile), and
-# large next to the modeling tolerance.
-AUX_OFFSET = 1.0
+# How far the auxiliary spine runs beside the path, in millimetres. Where the
+# profile rolls, the auxiliary spine winds round the path and is longer there,
+# so matching the two by share of length ('CurvilinearEquivalence') is off
+# between the ends by about the square of this: 5.65 mrad at a 'through' entry
+# rolled 180 degrees at 1 mm, 0.6 urad at 0.01 mm. Still well above the
+# modeling tolerance (1e-7 mm).
+AUX_OFFSET = 0.01
 
 # The most samples the spine is interpolated through. The route's samples are
 # dense for measuring; the B-spline needs far fewer, and every knot is kept.
@@ -138,7 +141,7 @@ def _sweep(spine, aux, wire):
     # towards the point the same share of the way along the auxiliary spine
     # ('CurvilinearEquivalence'). Exact at both ends, where the share is 0 and 1,
     # and as near as the two lengths are elsewhere: the auxiliary spine runs only
-    # AUX_OFFSET beside the path. Finding that point instead where the plane
+    # AUX_OFFSET beside the path (see there). Finding that point instead where the plane
     # square to the path meets the auxiliary spine fails on interpolated curves.
     maker.SetMode(aux, True, BRepFill_TypeOfContact.BRepFill_NoContact)
     maker.Add(wire, False, False)

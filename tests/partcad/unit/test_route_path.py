@@ -403,3 +403,23 @@ def test_the_stops_are_read_back_from_the_json():
     again = stops_from_json(canonical_json(stops))
     assert canonical_json(again) == canonical_json(stops)
     assert [isinstance(stop, EndFrame) for stop in again] == [True, False, True, False, False, True]
+
+
+def test_a_route_listed_the_other_way_round_passes_each_port_the_other_way():
+    """D14: no direction. Two 'through' entries in a row, the second with a lead,
+    the path coming at the first nearly square to its axis (CodeRabbit's case)."""
+    first, second = EndFrame((-1, -10, 0), (0, 1, 0)), EndFrame((3, 20, 0), (0, -1, 0))
+    t1, t2 = EndFrame((0, 0, 0), (1, 0, 0)), EndFrame((1, 10, 0), (0.8, 0.6, 0), lead=3)
+
+    def directions(stops):
+        return {
+            knot.point: knot.direction
+            for knot in build_knots(stops)
+            if knot.source[0] == "through" and len(knot.source) == 2
+        }
+
+    forward = directions([first, t1, t2, second])
+    reverse = directions([second, t2, t1, first])
+    assert forward.keys() == reverse.keys()
+    for point, direction in forward.items():
+        assert reverse[point] == pytest.approx(tuple(-c for c in direction))

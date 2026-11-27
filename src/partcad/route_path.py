@@ -188,6 +188,11 @@ def build_knots(stops: Sequence[Stop]) -> List[Knot]:
     knots: List[Knot] = []
     last = len(stops) - 1
     pending_via = []
+    # The point the path comes from, as a 'through' entry decides its way: the
+    # last 'via' point, the first end's lead point (or origin), or the origin of
+    # the 'through' entry before - never that entry's lead point, which the
+    # entry after it would not see the other way round (D14: no direction).
+    came_from = None
     for i, stop in enumerate(stops):
         if not isinstance(stop, EndFrame):
             pending_via.append((i, stop))
@@ -196,22 +201,24 @@ def build_knots(stops: Sequence[Stop]) -> List[Knot]:
         # The 'via' points just passed belong to this entry: the one they lead to.
         for n, (_, point) in enumerate(pending_via):
             knots.append(Knot(point, None, ("via", source, n)))
+            came_from = point
         pending_via = []
         lead = _mul(stop.z, stop.lead)
         if i == 0:
             knots.append(Knot(stop.origin, stop.z, source))
             if stop.lead > 0:
                 knots.append(Knot(_add(stop.origin, lead), stop.z, source + ("lead",)))
+            came_from = knots[-1].point
         elif i == last:
             arrive = _mul(stop.z, -1.0)
             if stop.lead > 0:
                 knots.append(Knot(_add(stop.origin, lead), arrive, source + ("lead",)))
             knots.append(Knot(stop.origin, arrive, source))
         else:
-            # Which way along its axis the path passes: from the knot it really
-            # comes from (the last one placed: a 'via' point, or the entry
-            # before, or that entry's lead point) towards the knot it goes to.
-            onwards = _sub(_arrival_point(stops[i + 1], i + 1 == last), knots[-1].point)
+            # Which way along its axis the path passes: from the point it comes
+            # from towards the one it goes to, each a 'via' point, an end's lead
+            # point (or origin), or the origin of the 'through' entry next to it.
+            onwards = _sub(_arrival_point(stops[i + 1], i + 1 == last), came_from)
             along = _dot(stop.z, onwards)
             if abs(along) <= 1e-9 * max(_norm(onwards), 1.0):
                 raise AmbiguousDirection(source, stop.origin)
@@ -221,6 +228,7 @@ def build_knots(stops: Sequence[Stop]) -> List[Knot]:
             knots.append(Knot(stop.origin, direction, source))
             if stop.lead > 0:
                 knots.append(Knot(_add(stop.origin, _mul(direction, stop.lead)), direction, source + ("lead",)))
+            came_from = stop.origin
     return knots
 
 
