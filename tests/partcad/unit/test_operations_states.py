@@ -1186,3 +1186,33 @@ def test_what_a_hook_adds_to_a_revision_is_said_and_the_index_follows_it(workspa
     assert made["hooks_changed"] == ["lib/generated.txt"]
     repository = package_versions.repository_of(str(root))
     assert package_versions.index_tree(repository) == str(pygit2.Repository(str(root)).head.peel(pygit2.Commit).tree.id)
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_what_is_staged_while_git_commits_stays_staged_and_out_of_the_revision(workspace, monkeypatch):
+    root, _ = workspace
+    monkeypatch.setattr(working_copy, "_git_executable", lambda: shutil.which("git"))
+    _git(root, "config", "user.name", "Test")
+    _git(root, "config", "user.email", "test@example.com")
+    _lib(root, desc="Approved")
+    _stage(root, "lib/partcad.yaml")
+    repository = package_versions.repository_of(str(root))
+    approved = package_versions.index_tree(repository)
+    real_git = working_copy._git
+
+    def git_with_a_stage_meanwhile(git, workdir, env, *args, **kwargs):
+        if args and args[0] == "commit":
+            # Somebody else stages a file into the user's index, after the
+            # check and before git commits.
+            (root / "lib" / "late.py").write_text("late = 1\n")
+            _stage(root, "lib/late.py")
+        return real_git(git, workdir, env, *args, **kwargs)
+
+    monkeypatch.setattr(working_copy, "_git", git_with_a_stage_meanwhile)
+
+    sha = working_copy.commit(repository, "Approved\n", {"name": "Ann", "email": "ann@example.com"}, tree=approved)
+
+    repo = pygit2.Repository(str(root))
+    assert str(repo[sha].tree.id) == approved
+    repo.index.read(True)
+    assert "lib/late.py" in repo.index and "lib/late.py" not in repo[sha].tree
