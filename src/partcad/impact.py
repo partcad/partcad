@@ -36,7 +36,7 @@ from partcad_utils.object_names import NAMED_KINDS
 
 from . import changes as pc_changes
 from . import logging as pc_logging
-from . import package_versions, usage
+from . import package_versions, privacy, usage
 
 BREAKING = "breaking"
 CHANGED = "changed"
@@ -210,6 +210,13 @@ def _references(ctx, row: dict, before, after, users: list) -> list:
                         "names %s:%s (%s), which is %s, not %s" % (package, name, how, _a(kind), _a(needed)),
                     )
                 )
+            else:
+                # Refused where it is resolved, as the lookup refuses it: an
+                # object private to another package than the one that wrote it.
+                config = target.object_config(kind, name)
+                why = privacy.refusal(kind, target.name, name, after.name) if privacy.is_private(config) else None
+                if why:
+                    found.append(_finding(BREAKING, "references", why))
     return found
 
 
@@ -457,11 +464,21 @@ def _affects(graph: _Graph, starts: list, changed: dict, measure, test) -> list:
                         analyze(known, known["_further"], False)
                     else:
                         # Changed itself in prose alone, and in shape through
-                        # what it uses: it says how it changed, and passes the
-                        # shape on.
-                        known["findings"].append(
-                            _finding(CHANGED, "geometry", "shape changed through %s" % path[-1], via=path)
+                        # what it uses: it says how it changed, gets what a
+                        # changed shape gets -- measured, its tests and its
+                        # drawings -- and passes the shape on.
+                        shape = {**known, "geometry": True, "via": path}
+                        extra = _analyze(
+                            ctx,
+                            shape,
+                            graph.before_of(known["package"]),
+                            graph.after_of(known["package"]),
+                            known["_further"],
+                            False,
+                            measure,
+                            test,
                         )
+                        known["findings"].extend(finding for finding in extra if finding["analyzer"] != "prose")
                     queue.append((key, known["_further"], path + [key], True))
                 continue
             reached = changed.get(key)
@@ -526,19 +543,30 @@ def _affected_by(graph: _Graph, project, kind: str, name: str, changed: dict) ->
     return found
 
 
-def _pins_a_commit(project, row: dict) -> bool:
-    """Whether a dependent's declaration holds it at one commit of the package: a revision by id, not a branch or a tag."""
+def _pins_a_commit(project, row: dict) -> typing.Optional[str]:
+    """The commit of the package a dependent's declaration holds it at -- a revision by id, not a branch or a tag -- or None."""
     revision = row.get("pinned")
     if row.get("type") != "git" or not isinstance(revision, str) or not revision:
-        return False
+        return None
     repository = package_versions.repository_of(project.config_dir)
     if repository is None:
-        return False
+        return None
     try:
         sha = package_versions.resolve(repository, revision)
     except ValueError:
-        return False
-    return package_versions.names_a_commit(repository, revision, sha)
+        return None
+    return sha if package_versions.names_a_commit(repository, revision, sha) else None
+
+
+def _commit_of(project, state: str) -> typing.Optional[str]:
+    """The commit 'state' is, where it is one rather than STAGED or WORKTREE."""
+    repository = package_versions.repository_of(project.config_dir)
+    if repository is None or package_versions.is_state(state):
+        return None
+    try:
+        return package_versions.resolve(repository, state)
+    except ValueError:
+        return None
 
 
 def moved_pins(ctx, project, before: str, after: typing.Optional[str]) -> list:
@@ -610,7 +638,11 @@ def impact(
             summary[finding["severity"]] = summary.get(finding["severity"], 0) + 1
     # Held back only by a commit its declaration names: one that follows a
     # branch, or names no revision, gets the change once it is pushed.
-    pinned = [row for row in usage.package_dependents(ctx, project) if _pins_a_commit(project, row)]
+    # Not one pinned to where the change goes: that one has it already.
+    destination = _commit_of(project, after)
+    pinned = [
+        row for row in usage.package_dependents(ctx, project) if _pins_a_commit(project, row) not in (None, destination)
+    ]
     return {
         "package": project.name,
         "object": _key(project.name, name) if name else None,

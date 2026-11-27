@@ -1019,22 +1019,23 @@ class Context:
         for depth in range(len(parts) - 1, -1, -1):
             ancestor_name = "//" + "/".join(parts[:depth])
             ancestor = self.get_project(ancestor_name) if depth else self.get_project("//")
-            if ancestor is None:
+            if ancestor is None or package_versions.repository_of(ancestor.config_dir) is None:
                 continue
-            if package_versions.repository_of(ancestor.config_dir) is None:
-                return None
             # Its revision -- the longest that names one, as a branch may hold
             # a '/' -- and then the path below it, 'base' and what follows.
+            # Not found below this one, it may be below one further up: a
+            # dependency can point elsewhere on disk than it did then.
             for revision, rest in package_versions.selector_candidates(selector):
                 try:
                     loaded = self._load_revision(ancestor.name, revision)
                 except ValueError:
                     continue
-                if loaded is None:
-                    return None
-                below = "/".join(parts[depth:]) + ("/" + rest if rest else "")
-                return self._below(asked, loaded, below)
-            return None
+                if loaded is not None:
+                    below = "/".join(parts[depth:]) + ("/" + rest if rest else "")
+                    found = self._below(asked, loaded, below)
+                    if found is not None:
+                        return found
+                break
         return None
 
     def _at_revision(self, asked: str, project: Project, selector: str) -> Optional[Project]:

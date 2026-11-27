@@ -544,7 +544,9 @@ def compare_states(
         if package_versions.is_state(state) or repository is None:
             continue
         if not package_versions.before_history(repository, state):
-            package_versions.resolve(repository, state)
+            # Fetched where loading it would fetch it: a dependency PartCAD
+            # downloaded holds the commit it is pinned to and little else.
+            package_versions.resolve(repository, state, fetch=ctx.is_downloaded(current), user_config=ctx.user_config)
     left_project = changes.package_at(ctx, current.name, before)
     right_project = changes.package_at(ctx, current.name, after)
     if left_project is None and right_project is None:

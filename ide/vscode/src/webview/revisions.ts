@@ -221,8 +221,8 @@ export class RevisionsView {
     /** The folded views' answers, by view and row: '<detail>:<row>'. */
     private readonly folded = new Map<string, Answer<unknown>>();
     private form: RevisionForm | undefined;
-    /** A Stage all in flight, and the object it was asked on: kept when the tab starts over, as a change is. */
-    private stagingFor: { subject: OpsSubject } | undefined;
+    /** Each Stage all in flight, with the object it was asked on: kept when the tab starts over, as a change is. */
+    private readonly stagingFor = new Set<{ subject: OpsSubject }>();
     /** What the last change did, said over the page until the next one. */
     private note: { text: string; error: boolean } | undefined;
 
@@ -281,7 +281,7 @@ export class RevisionsView {
 
     /** Whether a Stage all is in flight for the object on screen. */
     private get staging(): boolean {
-        return this.stagingFor !== undefined && sameSubject(this.stagingFor.subject, this.subject);
+        return [...this.stagingFor].some((stage) => sameSubject(stage.subject, this.subject));
     }
 
     /** The rows on offer, top to bottom - WORKTREE and STAGED by those names - for 'pc ide state' and the tests. */
@@ -582,13 +582,11 @@ export class RevisionsView {
             return;
         }
         const mine = { subject };
-        this.stagingFor = mine;
+        this.stagingFor.add(mine);
         this.note = undefined;
         this.draw();
         this.callbacks.write({ method: 'ops.rev.stage' }, ({ data, error }) => {
-            if (this.stagingFor === mine) {
-                this.stagingFor = undefined;
-            }
+            this.stagingFor.delete(mine);
             if (!sameSubject(this.subject, subject)) {
                 return;
             }

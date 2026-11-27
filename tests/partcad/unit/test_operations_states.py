@@ -10,6 +10,7 @@ a package ('partcad.usage'), and what a change reaches ('partcad.impact').
 
 import shutil
 import subprocess
+import sys
 
 import pygit2
 import pytest
@@ -1027,3 +1028,161 @@ def test_git_commits_the_tree_it_is_given_and_the_index_follows(workspace, ctx, 
     repo = pygit2.Repository(str(root))
     assert str(repo[sha].tree.id) == tree and repo[sha].author.name == "Ann"
     assert package_versions.index_tree(repository) == tree
+
+
+# ---- what a third review found --------------------------------------------------
+
+
+def test_a_state_that_holds_the_package_but_will_not_load_is_an_error_not_a_deletion(workspace, ctx, monkeypatch):
+    real = ctx.get_project
+    monkeypatch.setattr(ctx, "get_project", lambda name: None if "@" in name else real(name))
+
+    with pytest.raises(ValueError, match="could not be loaded"):
+        changes.package_at(ctx, "//lib", "HEAD")
+
+
+def test_a_link_to_a_directory_is_a_file_of_the_package(workspace, ctx):
+    root, _ = workspace
+    (root / "lib" / "real").mkdir()
+    try:
+        (root / "lib" / "assets").symlink_to("real", target_is_directory=True)
+    except OSError as e:
+        pytest.skip("this host makes no symbolic links: %s" % e)
+
+    assert "assets" in changes.package_files(ctx.get_project("//lib"))
+
+
+def test_a_reference_to_another_package_s_private_object_is_breaking(workspace, ctx):
+    root, _ = workspace
+    lib = yaml.safe_load((root / "lib" / "partcad.yaml").read_text())
+    lib["parts"]["nut"]["private"] = True
+    _write(root / "lib" / "partcad.yaml", lib)
+    app = yaml.safe_load((root / "app" / "partcad.yaml").read_text())
+    app["parts"]["nut_alias"] = {"type": "alias", "source": "//lib:nut"}
+    _write(root / "app" / "partcad.yaml", app)
+    ctx.reload_packages(["//app", "//lib"])
+
+    found = impact.impact(ctx, ctx.get_project("//app"), "part", "nut_alias")
+
+    (row,) = found["affects"]
+    assert any("private" in finding["summary"] for finding in row["findings"])
+
+
+def test_an_object_changed_in_prose_and_reached_by_a_shape_gets_its_tests_asked_for(workspace, ctx):
+    root, _ = workspace
+    config = yaml.safe_load((root / "lib" / "partcad.yaml").read_text())
+    config["parts"]["longer"] = {
+        "type": "enrich",
+        "source": ":bolt",
+        "with": {"length": 30},
+        "desc": "Longer",
+        "requirements": [{"name": "Long"}],
+    }
+    _write(root / "lib" / "partcad.yaml", config)
+    _commit(root, "an enrich with requirements")
+    config["parts"]["bolt"]["parameters"]["length"]["default"] = 12
+    config["parts"]["longer"]["desc"] = "Reworded"
+    _write(root / "lib" / "partcad.yaml", config)
+    ctx.reload_packages(["//lib"])
+
+    found = impact.impact(ctx, ctx.get_project("//lib"))
+
+    longer = next(row for row in found["affects"] if row["object"] == "//lib:longer")
+    assert {finding["analyzer"] for finding in longer["findings"]} >= {"prose", "geometry", "requirements"}
+
+
+def test_a_dependent_pinned_to_where_the_change_goes_is_not_held_back(workspace, ctx, monkeypatch):
+    root, first = workspace
+    _lib(root, desc="Second")
+    second = _commit(root, "second")
+    rows = [
+        {"package": "//at_first", "type": "git", "pinned": first},
+        {"package": "//at_second", "type": "git", "pinned": second},
+    ]
+    monkeypatch.setattr(usage, "package_dependents", lambda ctx, project: rows)
+
+    found = impact.impact(ctx, ctx.get_project("//lib"), before=first, after=second)
+
+    assert [row["package"] for row in found["pinned"]] == ["//at_first"]
+
+
+def test_the_index_is_read_from_the_repository_when_no_copy_of_it_can_be_made(workspace, monkeypatch):
+    import tempfile
+
+    root, _ = workspace
+    repository = package_versions.repository_of(str(root))
+    expected = str(pygit2.Repository(str(root)).index.write_tree())
+
+    def refuse(*args, **kwargs):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(tempfile, "mkdtemp", refuse)
+    package_versions._index_trees.clear()
+
+    assert package_versions.index_tree(repository) == expected
+
+
+def test_a_package_read_out_of_the_index_is_at_no_commit():
+    class Loaded:
+        name = "//lib@STAGED"
+
+    assert usage._commit_of(Loaded()) is None
+    assert usage._commit_of(None) is None
+
+
+def test_a_package_of_exactly_as_many_revisions_as_are_counted_is_counted_whole(workspace, monkeypatch):
+    root, first = workspace
+    _write(root / "late" / "partcad.yaml", {"parts": {"peg": {"type": "basic", "cuboid": 1}}})
+    _commit(root, "late package")
+    _write(root / "late" / "partcad.yaml", {"parts": {"peg": {"type": "basic", "cuboid": 2}}})
+    _commit(root, "late package changed")
+    monkeypatch.setattr(package_versions, "REVISIONS_LIMIT", 2)
+
+    assert usage._behind(package_versions.repository_of(str(root / "late")), first) == 2
+
+
+def test_a_revision_is_not_made_on_top_of_a_head_that_moved(workspace):
+    root, _ = workspace
+    _lib(root, desc="Staged")
+    _stage(root, "lib/partcad.yaml")
+    repository = package_versions.repository_of(str(root))
+    tree = package_versions.index_tree(repository)
+
+    with pytest.raises(working_copy.Refused) as refused:
+        working_copy.commit(repository, "x\n", {"name": "A", "email": "a@example.com"}, tree=tree, parent="0" * 40)
+
+    assert refused.value.code == "head-moved"
+
+
+def test_the_index_is_not_written_over_while_git_holds_its_lock(workspace):
+    root, first = workspace
+    repository = package_versions.repository_of(str(root))
+    lock = root / ".git" / "index.lock"
+    lock.write_text("somebody staging\n")
+    tree = package_versions.index_tree(repository)
+    other = str(pygit2.Repository(str(root))[first].peel(pygit2.Commit).tree.id)
+
+    assert working_copy._move_index(repository, tree, other) is False
+    assert lock.read_text() == "somebody staging\n"
+
+
+@pytest.mark.skipif(shutil.which("git") is None or sys.platform == "win32", reason="needs git and a POSIX hook")
+def test_what_a_hook_adds_to_a_revision_is_said_and_the_index_follows_it(workspace, ctx, monkeypatch):
+    root, _ = workspace
+    monkeypatch.setattr(working_copy, "_git_executable", lambda: shutil.which("git"))
+    _git(root, "config", "user.name", "Test")
+    _git(root, "config", "user.email", "test@example.com")
+    hook = root / ".git" / "hooks" / "pre-commit"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/bin/sh\necho generated > lib/generated.txt\ngit add lib/generated.txt\n")
+    hook.chmod(0o755)
+    _lib(root, desc="Hooked")
+    _stage(root, "lib/partcad.yaml")
+
+    made = working_copy.new_revision(
+        ctx, ctx.get_project("//lib"), "Hooked", author={"name": "Ann", "email": "ann@example.com"}, accept=True
+    )
+
+    assert made["hooks_changed"] == ["lib/generated.txt"]
+    repository = package_versions.repository_of(str(root))
+    assert package_versions.index_tree(repository) == str(pygit2.Repository(str(root)).head.peel(pygit2.Commit).tree.id)

@@ -413,7 +413,7 @@ def dependencies(ctx, project) -> list:
     for dependency, config in (project.dependencies() or {}).items():
         package = _dependency_package_name(project.name, dependency, config)
         loaded = ctx.get_project(package)
-        sha = pc_revision.package_revision(loaded) if loaded is not None else None
+        sha = _commit_of(loaded)
         if sha is None and isinstance(config, dict):
             pinned = config.get("revision")
             from .project_factory_git import looks_like_commit_id
@@ -494,12 +494,19 @@ def object_dependencies(ctx, project, kind: str, name: str, canonical: bool = Tr
     for row in found.values():
         row["kind"] = _kind_of(ctx, row["package"], row["name"])
         loaded = ctx.get_project(row["package"]) if row["kind"] is not None else None
-        sha = pc_revision.package_revision(loaded) if loaded is not None else None
+        sha = _commit_of(loaded)
         row["revision"] = sha
         row["short"] = package_versions.short(sha)
         rows.append(row)
     rows.sort(key=lambda row: (row["package"], row["name"]))
     return rows
+
+
+def _commit_of(loaded) -> typing.Optional[str]:
+    """The commit a loaded package is at; None for none, and for one read out of the index, which is at no commit."""
+    if loaded is None or package_versions.names_staged(loaded.name) or getattr(loaded, "revision_tree", None):
+        return None
+    return pc_revision.package_revision(loaded)
 
 
 def _identity(project) -> typing.Optional[tuple]:
@@ -529,7 +536,10 @@ def _behind(repository, pinned: typing.Optional[str]) -> typing.Optional[int]:
     # something else beside it is pinned as well. What counts is how many of
     # the package's revisions came after it -- the ones that are not the pin
     # and not behind it.
-    listed = package_versions.revisions(repository)
+    # One more than are counted: a list of exactly that many is the whole history.
+    listed = package_versions.revisions(repository, limit=package_versions.REVISIONS_LIMIT + 1)
+    complete = not listed.truncated and len(listed) <= package_versions.REVISIONS_LIMIT
+    listed = listed[: package_versions.REVISIONS_LIMIT]
     for count, row in enumerate(listed):
         sha = pygit2.Oid(hex=row["sha"])
         if sha == pin:
@@ -541,7 +551,7 @@ def _behind(repository, pinned: typing.Optional[str]) -> typing.Optional[int]:
             return None
     # Pinned before the package's first revision: every revision of it is
     # newer -- where the list is the whole history, and the pin is behind it.
-    if listed and not listed.truncated and len(listed) < package_versions.REVISIONS_LIMIT:
+    if listed and complete:
         try:
             if repo.descendant_of(pygit2.Oid(hex=listed[-1]["sha"]), pin):
                 return len(listed)

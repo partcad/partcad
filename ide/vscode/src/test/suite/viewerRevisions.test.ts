@@ -685,6 +685,37 @@ suite('Digital Thread Operations: Revisions', () => {
         assert.strictEqual(only(root, 'revisions-stage').disabled, false);
     });
 
+    test("a Stage all still in flight for an object is waited for on going back to it, after another's", () => {
+        const { root, view, written, reply } = pane();
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', CHANGED);
+        only(root, 'revisions-stage').fire('click');
+
+        // On to an object, and a Stage all of its own sent there.
+        view.setBusy('');
+        view.start(PART);
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', { ...CHANGED, object: '//:bracket' });
+        only(root, 'revisions-stage').fire('click');
+        assert.strictEqual(written.length, 2);
+
+        // Back to the package, whose Stage all is still out: it waits, and sends no second.
+        view.setBusy('');
+        view.start({ ...PACKAGE });
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', CHANGED);
+        assert.strictEqual(only(root, 'revisions-stage').disabled, true);
+        only(root, 'revisions-stage').fire('click');
+        assert.strictEqual(written.length, 2);
+
+        // The object's answer does not end the wait - drawn again, it still waits; the package's own does.
+        written[1].answer({ data: { package: '//', object: '//:bracket', staged: [], notes: [], status: CHANGED } });
+        view.select(WORKTREE);
+        assert.strictEqual(only(root, 'revisions-stage').disabled, true);
+        written[0].answer({ data: { package: '//', object: null, staged: [], notes: [], status: CHANGED } });
+        assert.strictEqual(only(root, 'revisions-stage').disabled, false);
+    });
+
     test('a new revision is drafted from what is staged, and sent with the index and the repository it was looked at in', () => {
         const { root, view, written, reply } = pane();
         reply('ops.rev.list', HISTORY);

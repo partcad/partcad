@@ -60,8 +60,9 @@ def _non_geometric_keys() -> frozenset:
 def package_at(ctx, package: str, state: typing.Optional[str]):
     """'package' at 'state' -- None or 'WORKTREE' for the files on disk -- or None where it is not there.
 
-    Raises ValueError for 'STAGED' while the index has conflicts. The parent
-    of a first commit ('<sha>~1') is before the history: nothing is there.
+    Raises ValueError for 'STAGED' while the index has conflicts, and for a
+    state that holds the package but could not be loaded at it. The parent of
+    a first commit ('<sha>~1') is before the history: nothing is there.
     """
     if not state or state == package_versions.WORKTREE:
         # As the files are now: a 'partcad.yaml' edited since the package was
@@ -86,10 +87,18 @@ def package_at(ctx, package: str, state: typing.Optional[str]):
         if repository is not None and package_versions.before_history(repository, state):
             return None
     try:
-        return ctx.get_project(package_versions.versioned_name(package, state))
+        found = ctx.get_project(package_versions.versioned_name(package, state))
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("%s is not there at %s: %s" % (package, state, e))
-        return None
+        found = None
+    if found is None:
+        # Not there is an answer; there and not loaded is not, and would be
+        # read as every object of it removed.
+        current = ctx.get_project(package)
+        repository = package_versions.repository_of(current.config_dir) if current is not None else None
+        if repository is not None and package_versions.declares_package_at(repository, state):
+            raise ValueError("%s is at %s, but could not be loaded there: see the log" % (package, state))
+    return found
 
 
 def _configs(project, kind: str) -> dict:
@@ -278,12 +287,17 @@ def package_files(project) -> typing.Optional[dict]:
     tracked = _tracked(repository)
     found = {}
     for root, dirs, files in os.walk(top):
+        # A link to a directory is a file to git -- the link, not what it
+        # points at -- and is compared as one ('_digest'), not walked into.
+        links = [d for d in dirs if os.path.islink(os.path.join(root, d))]
         dirs[:] = sorted(
             d
             for d in dirs
-            if d not in (".git", "__pycache__") and not os.path.isfile(os.path.join(root, d, PACKAGE_FILE))
+            if d not in links
+            and d not in (".git", "__pycache__")
+            and not os.path.isfile(os.path.join(root, d, PACKAGE_FILE))
         )
-        for name in sorted(files):
+        for name in sorted(files + links):
             if name == package_versions.GUARD:
                 continue
             rel = os.path.relpath(os.path.join(root, name), top).replace(os.sep, "/")

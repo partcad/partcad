@@ -660,6 +660,51 @@ def check(result: dict, expect_index: typing.Optional[str], include_others: bool
         raise Refused("; ".join(pending), "warnings", result)
 
 
+def _move_index(repository, expected: str, tree: str) -> bool:
+    """Make the index hold 'tree' where it still holds 'expected', as git writes one: under its lock.
+
+    git takes 'index.lock' to stage anything; holding it while the index is
+    compared and replaced is what keeps a 'git add' finishing meanwhile from
+    being written over. Where the lock is taken, or the index moved, the index
+    is left as it is.
+    """
+    import pygit2
+
+    repo = repository.repo
+    path = os.path.join(repo.path, "index")
+    lock = path + ".lock"
+    try:
+        descriptor = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except OSError:
+        return False
+    moved = False
+    try:
+        if package_versions.index_tree(repository) == expected:
+            scratch = tempfile.mkdtemp(prefix="partcad-index-")
+            try:
+                written = os.path.join(scratch, "index")
+                index = pygit2.Index(written)
+                index.read_tree(repo[tree])
+                index.write()
+                with open(written, "rb") as f:
+                    os.write(descriptor, f.read())
+            finally:
+                shutil.rmtree(scratch, ignore_errors=True)
+            moved = True
+    except (OSError, KeyError, ValueError, pygit2.GitError) as e:
+        pc_logging.debug("Left the index as it was: %s" % e)
+    finally:
+        os.close(descriptor)
+        if moved:
+            os.replace(lock, path)
+        else:
+            try:
+                os.unlink(lock)
+            except OSError:
+                pass
+    return moved
+
+
 def _git_executable() -> typing.Optional[str]:
     return shutil.which("git")
 
@@ -681,7 +726,16 @@ def _git(git: str, workdir: str, env: dict, *args, input: typing.Optional[str] =
         raise ValueError("git %s failed: %s" % (args[0], done.stderr.strip() or done.stdout.strip()))
 
 
-def commit(repository, message: str, author: typing.Optional[dict] = None, tree: typing.Optional[str] = None) -> str:
+_ANY = object()
+
+
+def commit(
+    repository,
+    message: str,
+    author: typing.Optional[dict] = None,
+    tree: typing.Optional[str] = None,
+    parent=_ANY,
+) -> str:
     """Commit what the index holds, with 'message', as 'author' ({'name', 'email'}); the new commit's id.
 
     By git itself where it is installed, so that the repository's hooks and
@@ -689,12 +743,17 @@ def commit(repository, message: str, author: typing.Optional[dict] = None, tree:
     pygit2, which refuses a repository that signs its commits. 'tree' is the
     tree the commit is of, whatever is staged while it is made -- git commits
     an index of its own holding it -- and refused, with 'index-changed', where
-    the index already holds another.
+    the index already holds another. 'parent' is the commit it goes on top of
+    (None: the first), refused with 'head-moved' where HEAD is elsewhere: what
+    was agreed to was agreed to against it. A hook may still change what git
+    commits; the caller is told ('new_revision').
     """
     author = {key: value for key, value in (author or {}).items() if value}
     workdir = _workdir(repository)
     if tree is not None and package_versions.index_tree(repository) != tree:
         raise Refused("What is staged changed while it was being checked: look again", "index-changed", {})
+    if parent is not _ANY and repository.head() != parent:
+        raise Refused("HEAD moved while the revision was being checked: look again", "head-moved", {})
     git = _git_executable()
     if git is not None:
         env = dict(os.environ)
@@ -723,9 +782,8 @@ def commit(repository, message: str, author: typing.Optional[dict] = None, tree:
             # unless something was staged meanwhile: it is then the new
             # revision's, hooks' additions included; otherwise left as it is.
             committed = str(repo.head.peel(pygit2.Commit).tree.id)
-            if committed != tree and package_versions.index_tree(repository) == tree:
-                repo.index.read_tree(repo[committed])
-                repo.index.write()
+            if committed != tree:
+                _move_index(repository, tree, committed)
         repo.index.read(True)
         return str(repo.head.target)
 
@@ -750,7 +808,10 @@ def commit(repository, message: str, author: typing.Optional[dict] = None, tree:
         raise ValueError("Who the author is is not known: set git's user.name and user.email")
     signature = pygit2.Signature(name, email)
     tree = pygit2.Oid(hex=tree) if tree is not None else repo.index.write_tree()
-    parents = [] if repo.head_is_unborn else [repo.head.target]
+    if parent is not _ANY:
+        parents = [pygit2.Oid(hex=parent)] if parent else []
+    else:
+        parents = [] if repo.head_is_unborn else [repo.head.target]
     reference = "HEAD"
     return str(repo.create_commit(reference, signature, signature, message, tree, parents))
 
@@ -775,7 +836,8 @@ def new_revision(
     With 'author_required', an 'author' without both a name and an email is
     refused rather than completed from this machine's git configuration: a
     daemon may be on somebody else's machine.
-    Returns {'sha', 'short', 'summary', 'checks'}; raises 'Refused'.
+    Returns {'sha', 'short', 'summary', 'checks', 'hooks_changed'}, the last
+    the paths a hook of the repository changed in the commit; raises 'Refused'.
     """
     if not isinstance(message, str) or not message.strip():
         raise ValueError("A new revision needs a message")
@@ -809,10 +871,13 @@ def new_revision(
             raise refused
     repository = _repository(project)
     try:
-        sha = commit(repository, message.strip() + "\n", author, tree=tree)
+        sha = commit(repository, message.strip() + "\n", author, tree=tree, parent=result.get("head"))
     except Refused as refused:
         refused.status = result
         raise
+    # A hook of the repository may have changed what git committed: that is
+    # the repository's own rule, and it is said rather than undone.
+    changed_by_hooks = _changed_paths(repository, tree, sha) if tree is not None else []
     pc_logging.info("Made the revision %s of %s" % (package_versions.short(sha), result.get("object") or project.name))
     return {
         "package": project.name,
@@ -821,4 +886,20 @@ def new_revision(
         "short": package_versions.short(sha),
         "summary": message.strip().splitlines()[0],
         "checks": ran,
+        "hooks_changed": changed_by_hooks,
     }
+
+
+def _changed_paths(repository, tree: str, sha: str) -> list:
+    """The paths the commit 'sha' holds otherwise than 'tree' does: what a hook changed in it."""
+    import pygit2
+
+    repo = repository.repo
+    try:
+        committed = repo[sha].peel(pygit2.Commit).tree
+        if str(committed.id) == tree:
+            return []
+        diff = repo[tree].diff_to_tree(committed)
+    except (KeyError, ValueError, pygit2.GitError):
+        return []
+    return sorted({delta.new_file.path or delta.old_file.path for delta in diff.deltas})

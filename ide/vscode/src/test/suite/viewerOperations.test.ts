@@ -377,6 +377,41 @@ suite('Digital Thread Operations: Dependencies, Used By and Impact', () => {
         assert.strictEqual(only(root, 'deps-update-all').disabled, false);
     });
 
+    test("a change still in flight for a package is waited for on going back to it, after another package's", () => {
+        const root = new FakeElement('div');
+        const { ops, asked, written } = callbacks();
+        const view = new DependenciesView(root as unknown as HTMLElement, ops);
+        const other: OpsSubject = { package: '//other', name: '//other', kind: 'package' };
+        view.start(PACKAGE);
+        asked[0].answer(DEPS);
+        only(root, 'deps-update-all').fire('click');
+
+        // On to another package, and a change of its own sent there.
+        view.setBusy('');
+        view.start(other);
+        asked[asked.length - 1].answer(DEPS);
+        only(root, 'deps-update-all').fire('click');
+        assert.strictEqual(written.length, 2);
+
+        // Back to the first, whose change is still out: it waits, and sends no second.
+        view.setBusy('');
+        view.start({ ...PACKAGE });
+        asked[asked.length - 1].answer(DEPS);
+        assert.strictEqual(only(root, 'deps-update-all').disabled, true);
+        only(root, 'deps-update-all').fire('click');
+        assert.strictEqual(written.length, 2);
+
+        // The other's answer does not end the wait - drawn again, it still waits; its own does.
+        written[1].answer({ data: { pinned: 0, current: 1, failed: 0 } });
+        root.find('ops-section-title')
+            .find((title) => title.dataset.section === 'subpackages')
+            ?.fire('click');
+        assert.strictEqual(only(root, 'deps-update-all').disabled, true);
+        written[0].answer({ data: { pinned: 1, current: 0, failed: 0 } });
+        asked[asked.length - 1].answer(DEPS);
+        assert.strictEqual(only(root, 'deps-update-all').disabled, false);
+    });
+
     test('a change made when the package is shown again is said on the tab started over, and not on another', () => {
         const root = new FakeElement('div');
         const { ops, asked, written } = callbacks();

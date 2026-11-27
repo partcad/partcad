@@ -460,6 +460,23 @@ def before_history(repository: Repository, revision: typing.Optional[str]) -> bo
     return commit is not None and not commit.parent_ids
 
 
+def declares_package_at(repository: Repository, state: str) -> bool:
+    """Whether the package's 'partcad.yaml' is in the repository at 'state' -- a commit-ish or 'STAGED'; False when unknown."""
+    path = "/".join(part for part in (repository.relpath, "partcad.yaml") if part)
+    repo = repository.repo
+    try:
+        if state == STAGED:
+            tree = repo[index_tree(repository)]
+        else:
+            commit = _local_commit(repo, state)
+            if commit is None:
+                return False
+            tree = commit.tree
+        return path in tree
+    except (KeyError, ValueError, pygit2.GitError):
+        return False
+
+
 def index_tree(repository: Repository) -> str:
     """The id of the tree the git index holds: what 'git write-tree' prints, and a new revision would be made of.
 
@@ -499,7 +516,10 @@ def _index_of(data: bytes) -> typing.Optional[pygit2.Index]:
     """The index whose file holds 'data', read from a copy of it; None where a copy cannot be read on its own."""
     import tempfile
 
-    directory = tempfile.mkdtemp(prefix="partcad-index-")
+    try:
+        directory = tempfile.mkdtemp(prefix="partcad-index-")
+    except OSError:
+        return None
     try:
         copy = os.path.join(directory, "index")
         with open(copy, "wb") as f:

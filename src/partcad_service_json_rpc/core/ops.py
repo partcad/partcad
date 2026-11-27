@@ -405,7 +405,8 @@ def rev_new(session, params):
     else is staged and 'include_others' does not agree to it
     ('others-staged'), when changes of the subject are not staged or were
     changed again since and 'yes' does not agree to that ('warnings'), when the
-    index is not the one 'expect_index' names ('index-changed'), and when lint
+    index is not the one 'expect_index' names, or moved while the checks ran
+    ('index-changed'), when HEAD moved meanwhile ('head-moved'), and when lint
     or the qualification tests of what is staged fail ('checks-failed'), which
     'skip_checks' does not run. 'author' ({'name', 'email'}) is who the client
     says the user is, and is required whole: the daemon's own git identity is
@@ -443,6 +444,8 @@ def rev_new(session, params):
     for entry in made["checks"]:
         pc.logging.info(entry["summary"])
     pc.logging.info("Made the revision %s: %s" % (made["short"], made["summary"]))
+    if made.get("hooks_changed"):
+        pc.logging.warning("The repository's hooks changed what was committed: %s" % ", ".join(made["hooks_changed"]))
     return made
 
 

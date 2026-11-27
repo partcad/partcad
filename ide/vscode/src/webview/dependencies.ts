@@ -298,12 +298,13 @@ export class DependenciesView {
     /** The dependency whose Remove waits to be confirmed. */
     private removing: string | undefined;
     /**
-     * The change in flight, and the object it was asked on. Kept when the tab
-     * starts over - shown again, after a save, say - so that the tab started
-     * over on the same object waits for it as well, rather than send another
-     * whose answer this one's would be taken for.
+     * The changes in flight, each with the object it was asked on - one per
+     * object at most, and as many objects as the tab was moved between. Kept
+     * when the tab starts over - shown again, after a save, say - so that the
+     * tab started over on an object waits for its change as well, rather than
+     * send another whose answer this one's would be taken for.
      */
-    private pending: { subject: OpsSubject } | undefined;
+    private readonly pending = new Set<{ subject: OpsSubject }>();
     /** The sections folded away, by id: the sub-packages, until opened, since a root package can have dozens. */
     private readonly folded = new Set<string>(['subpackages']);
 
@@ -327,7 +328,7 @@ export class DependenciesView {
 
     /** Whether a change is in flight for the object on screen: every action waits for it. */
     private get busy(): boolean {
-        return this.pending !== undefined && sameSubject(this.pending.subject, this.subject);
+        return [...this.pending].some((change) => sameSubject(change.subject, this.subject));
     }
 
     /** The tab has been opened on 'subject': ask what it depends on. */
@@ -370,22 +371,16 @@ export class DependenciesView {
             return;
         }
         const mine = { subject };
-        this.pending = mine;
+        this.pending.add(mine);
         this.note = undefined;
         this.draw();
         this.callbacks.write({ method, whole: true, params }, ({ data, error }) => {
-            // Only the change in flight is what the tab waits for: another,
-            // sent since for another object, goes on being waited for.
-            const owned = this.pending === mine;
-            if (owned) {
-                this.pending = undefined;
-            }
+            // This change is answered; another object's goes on being waited for.
+            this.pending.delete(mine);
             if (!sameSubject(this.subject, subject)) {
                 return;
             }
-            if (owned) {
-                this.removing = undefined;
-            }
+            this.removing = undefined;
             if (error !== undefined) {
                 // Said over the list asked again, which keeps it.
                 this.note = { text: error, error: true };
