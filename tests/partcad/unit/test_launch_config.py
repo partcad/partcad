@@ -450,6 +450,22 @@ def test_the_folder_the_editor_advertises_through_a_link_is_the_folder(tmp_path)
     assert launch_config.choose_editor_folder(str(linked_hw), advertised=str(real)) == str(link)
 
 
+@pytest.mark.skipif(not hasattr(os, "symlink") or os.name == "nt", reason="needs symbolic links")
+def test_a_link_inside_the_package_path_does_not_change_which_ancestor_is_the_folder(tmp_path):
+    """`hw` -> `hardware/revA` resolves one level deeper than it is spelled."""
+    real = tmp_path / "private"
+    (real / "robot" / ".git").mkdir(parents=True)
+    package(real / "robot" / "hardware" / "revA")
+    hw = real / "robot" / "hw"
+    hw.symlink_to(real / "robot" / "hardware" / "revA", target_is_directory=True)
+    link = tmp_path / "tmp"
+    link.symlink_to(real, target_is_directory=True)
+
+    folder = launch_config.choose_editor_folder(str(hw), advertised=str(link))
+    assert folder == str(real)
+    assert launch_config.relative_to(str(hw), folder) == "robot/hw"
+
+
 def test_a_folder_the_package_is_not_in_is_not_written_into(tmp_path, monkeypatch):
     """A terminal keeps the folder it was opened in after it `cd`s out of it."""
     opened = tmp_path / "opened"

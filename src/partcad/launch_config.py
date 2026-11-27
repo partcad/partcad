@@ -122,19 +122,22 @@ def _spelled_like(package_dir: str, folder: str) -> Optional[str]:
     `package_dir` relative to the folder, which only comes out right when the
     two are spelled alike -- so this returns the ancestor of `package_dir` that
     *is* `folder`, rather than `folder` as it was given.
+
+    Found by asking each ancestor in turn rather than by counting levels: a link
+    inside the package's path (`hw` -> `hardware/revA`) makes its resolved path
+    deeper or shallower than the spelled one.
     """
-    real_package, real_folder = os.path.realpath(package_dir), os.path.realpath(folder)
-    if not _is_inside(real_package, real_folder):
-        return None
     candidate = os.path.abspath(package_dir)
-    relative = os.path.relpath(real_package, real_folder)
-    if relative != os.curdir:
-        for _ in relative.split(os.sep):
-            candidate = os.path.dirname(candidate)
-    try:
-        return candidate if os.path.samefile(candidate, folder) else None
-    except OSError:
-        return None
+    while True:
+        try:
+            if os.path.samefile(candidate, folder):
+                return candidate
+        except OSError:
+            pass
+        parent = os.path.dirname(candidate)
+        if parent == candidate:
+            return None
+        candidate = parent
 
 
 def choose_editor_folder(package_dir: str, explicit: Optional[str] = None, advertised: Optional[str] = None) -> str:
