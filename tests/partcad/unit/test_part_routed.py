@@ -266,13 +266,38 @@ def _section(shape, origin, normal):
     return BRepAlgoAPI_Section(shape, gp_Pln(gp_Pnt(*origin), gp_Dir(*normal))).Shape()
 
 
-def test_a_flat_profile_meets_a_through_entry_turned_as_its_x_axis():
-    """Rolled nearly 180 degrees within a quarter of the route and not after: the
-    auxiliary spine is longer there, which matching by share of length must not show."""
-    first = EndFrame((0, 0, 0), (0, 0, 1), (1, 0, 0))
-    grommet = EndFrame((0, 0, 50), (0, 0, 1), (-0.999, 0.0447, 0))
-    second = EndFrame((0, 0, 200), (0, 0, -1), (1, 0, 0))
+_C, _S = math.cos(0.7), math.sin(0.7)
+
+
+def _half_turn_at(distance):
+    return (
+        EndFrame((0, 0, 0), (0, 0, 1), (1, 0, 0)),
+        EndFrame((0, 0, distance), (0, 0, 1), (-0.999, 0.0447, 0)),
+        EndFrame((0, 0, 200), (0, 0, -1), (1, 0, 0)),
+    )
+
+
+@pytest.mark.parametrize(
+    "first, grommet, second, tolerance",
+    [
+        (*_half_turn_at(50), 1e-5),
+        (*_half_turn_at(25), 1e-5),
+        (*_half_turn_at(5), 1e-3),
+        (
+            EndFrame((50, 0, 0), (0, 1, 0), (0, 0, 1)),
+            EndFrame((50 * _C, 50 * _S, 0), (-_S, _C, 0), (0.0447 * _C, 0.0447 * _S, -0.999)),
+            EndFrame((0, 50, 0), (1, 0, 0), (0, 0, 1)),
+            1e-5,
+        ),
+    ],
+    ids=["half-turn-over-50mm", "half-turn-over-25mm", "half-turn-over-5mm", "arc"],
+)
+def test_a_flat_profile_meets_a_through_entry_turned_as_its_x_axis(first, grommet, second, tolerance):
+    """The bound D6 states at a 'through' entry: 1e-5 rad for a roll of up to half
+    a turn over 25 mm or more, straight or on an arc, and 1e-3 rad down to 5 mm."""
     shape = wrapper_route.process({"route": canonical_json([first, grommet, second]), "sketch": _rect(8, 2)})
     long_side = _longest_edge_direction(_section(shape, grommet.origin, grommet.z))
-    alignment = abs(sum(a * b for a, b in zip(long_side, grommet.x)))
-    assert math.acos(min(1.0, alignment)) == pytest.approx(0.0, abs=1e-5)
+    x = grommet.x
+    norm = math.sqrt(sum(c * c for c in x))
+    alignment = abs(sum(a * b / norm for a, b in zip(long_side, x)))
+    assert math.acos(min(1.0, alignment)) == pytest.approx(0.0, abs=tolerance)

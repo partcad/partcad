@@ -423,3 +423,9 @@ def test_a_route_listed_the_other_way_round_passes_each_port_the_other_way():
     assert forward.keys() == reverse.keys()
     for point, direction in forward.items():
         assert reverse[point] == pytest.approx(tuple(-c for c in direction))
+    # And the same curve, sample for sample, the other way round.
+    there, back = RoutePath([first, t1, t2, second]), RoutePath([second, t2, t1, first])
+    assert back.length == pytest.approx(there.length, rel=1e-9)
+    assert len(back.points) == len(there.points)
+    for a, b in zip(back.points, reversed(there.points)):
+        assert a == pytest.approx(b, abs=1e-9)

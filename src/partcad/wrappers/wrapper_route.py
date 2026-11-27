@@ -40,9 +40,11 @@ CACHE_VERSION = 2
 # How far the auxiliary spine runs beside the path, in millimetres. Where the
 # profile rolls, the auxiliary spine winds round the path and is longer there,
 # so matching the two by share of length ('CurvilinearEquivalence') is off
-# between the ends by about the square of this: 5.65 mrad at a 'through' entry
-# rolled 180 degrees at 1 mm, 0.6 urad at 0.01 mm. Still well above the
-# modeling tolerance (1e-7 mm).
+# between the ends by about the square of this, and more the faster it rolls.
+# At 0.01 mm a flat profile half a turn rolled at a 'through' entry is within
+# 1e-5 rad of its X over 25 mm or more, 1e-4 over 10 mm, 1e-3 over 5 mm (D6);
+# at 1 mm it was 5.65 mrad over 50 mm. Still well above the modeling
+# tolerance (1e-7 mm).
 AUX_OFFSET = 0.01
 
 # The most samples the spine is interpolated through. The route's samples are
