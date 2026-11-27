@@ -263,9 +263,26 @@ profile follows the D4 frames and their roll rather than OCCT's own, then
 (`CurvilinearEquivalence`), not by plane intersection, which failed on these
 curves. Matching by share of length is exact at the ends only: where the
 profile rolls, the auxiliary spine winds round the path and is longer there,
-so between the ends the profile is turned by about the square of the offset.
-At 1 mm a flat profile was 5.65 mrad off at a `through` entry rolled 180°; the
-auxiliary spine runs 0.01 mm off the path, which leaves 0.6 µrad. An approximated spine (`GeomAPI_PointsToBSpline`) was tried and
+so between the ends the profile is turned by about the square of the offset,
+and more the faster it rolls. At 1 mm a flat profile was 5.65 mrad off at a
+`through` entry rolled half a turn over 50 mm; the auxiliary spine runs
+0.01 mm off the path. Measured at a `through` entry rolled half a turn from the
+port before it:
+
+| Over | Off the entry's X |
+|---|---|
+| 50 mm | 0.6 µrad |
+| 25 mm | 6 µrad |
+| 10 mm | 0.1 mrad |
+| 5 mm | 0.8 mrad |
+| 3 mm | 4.4 mrad |
+
+A quarter turn is 20 to 40 times nearer, a round profile shows none of it, and
+the ends stay exact (1e-6 rad). The bound stated and tested is therefore 1e-5
+rad at a `through` entry for up to half a turn over 25 mm or more, and 1e-3 rad
+down to 5 mm. Splitting both spines into an edge per knot stretch made it worse,
+and pre-turning the auxiliary spine by the computed share-of-length drift, or
+tighter sweep tolerances, did not change it: the remainder is OCCT's own. An approximated spine (`GeomAPI_PointsToBSpline`) was tried and
 dropped: it turned the end faces by up to 1.7 mrad.
 The sketch resolution and sketch cache-key folding of `PartFactorySweep` move into
 a helper that both factories use.
