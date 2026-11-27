@@ -512,11 +512,9 @@ def test_what_cannot_be_known_about_a_commit_is_not_kept(workspace, ctx, monkeyp
     root, _ = workspace
     _lib(root, desc="Changed")
     _commit(root, "second")
-    monkeypatch.setattr(revisions, "changed_paths", lambda repository, sha: None)
-
-    assert revisions.object_history(ctx, ctx.get_project("//lib"), "part", "bolt")["revisions"] == []
-    monkeypatch.undo()
-    monkeypatch.setattr(working_copy, "_git_executable", lambda: None)
+    with monkeypatch.context() as unknown:
+        unknown.setattr(revisions, "changed_paths", lambda repository, sha: None)
+        assert revisions.object_history(ctx, ctx.get_project("//lib"), "part", "bolt")["revisions"] == []
 
     # Not remembered as "no change": asked again, it is found.
     assert [row["how"] for row in revisions.object_history(ctx, ctx.get_project("//lib"), "part", "bolt")["revisions"]]
@@ -576,14 +574,24 @@ def test_a_conflicted_index_is_said_and_is_not_an_empty_package(workspace, ctx):
         changes.changes(ctx, "//lib", "HEAD", package_versions.STAGED)
 
 
-def test_a_symbolic_link_is_what_it_says_and_a_file_is_read_a_piece_at_a_time(tmp_path):
+def test_a_file_is_read_a_piece_at_a_time(tmp_path):
     import hashlib
 
     data = b"x" * (3 << 20)
     (tmp_path / "big").write_bytes(data)
-    (tmp_path / "link").symlink_to("/somewhere/else")
 
     assert changes._digest(str(tmp_path / "big")) == hashlib.sha256(data).hexdigest()
+
+
+def test_a_symbolic_link_is_what_it_says(tmp_path):
+    import hashlib
+
+    try:
+        (tmp_path / "link").symlink_to("/somewhere/else")
+    except OSError as e:
+        # Windows without the privilege to make one.
+        pytest.skip("this host makes no symbolic links: %s" % e)
+
     assert changes._digest(str(tmp_path / "link")) == hashlib.sha256(b"link:/somewhere/else").hexdigest()
 
 
@@ -825,9 +833,13 @@ def test_a_change_of_prose_does_not_change_the_shape_of_what_uses_it(workspace, 
 
 
 def test_only_a_dependent_pinned_to_a_commit_is_held_back(workspace, ctx, monkeypatch):
+    root, first = workspace
+    branch = pygit2.Repository(str(root)).head.shorthand
     rows = [
-        {"package": "//held", "type": "git", "pinned": "a" * 40},
-        {"package": "//follows", "type": "git", "pinned": None, "track": "main"},
+        {"package": "//held", "type": "git", "pinned": first[:12], "track": branch},
+        {"package": "//on_a_branch", "type": "git", "pinned": branch},
+        {"package": "//follows", "type": "git", "pinned": None, "track": branch},
+        {"package": "//nowhere", "type": "git", "pinned": "f" * 40},
         {"package": "//near", "type": "local"},
     ]
     monkeypatch.setattr(usage, "package_dependents", lambda ctx, project: rows)
@@ -844,3 +856,174 @@ def test_a_package_of_another_repository_is_compared_as_loaded(workspace, ctx):
     assert graph.states("//elsewhere")["outside"] is True
     assert graph.plain("//lib@STAGED") == "//lib" and graph.plain("//@STAGED/lib") == "//lib"
     assert graph.plain("//lib@" + "a" * 40) == "//lib@" + "a" * 40
+
+
+# ---- what a second review found -------------------------------------------------
+
+
+def test_a_symbolic_link_an_object_is_built_from_is_its_file_wherever_it_points(workspace, ctx):
+    root, _ = workspace
+    (root / "lib" / "bolt.py").unlink()
+    try:
+        (root / "lib" / "bolt.py").symlink_to("missing.py")
+    except OSError as e:
+        pytest.skip("this host makes no symbolic links: %s" % e)
+
+    assert changes.object_files(ctx.get_project("//lib"), "part", "bolt") == ["bolt.py"]
+
+
+def test_a_package_of_too_many_files_is_not_said_to_be_the_same(workspace, ctx, monkeypatch):
+    monkeypatch.setattr(changes, "_FILES_LIMIT", 3)
+
+    compared = revisions.compare_states(ctx, ctx.get_project("//lib"), revisions.PACKAGE, None, "HEAD")
+
+    assert compared["changes"]["files_compared"] is False and compared["same"] is False
+
+
+def test_a_package_deleted_from_the_files_on_disk_is_still_there_at_a_revision(workspace, tmp_path, monkeypatch):
+    root, _ = workspace
+    shutil.rmtree(root / "lib")
+    context = pc.Context(str(root), search_root=False)
+    monkeypatch.setattr(context.user_config, "internal_state_dir", str(tmp_path / "state2"))
+
+    assert context.get_project("//lib") is None
+    assert context.get_project("//lib@HEAD").object_config("part", "bolt") is not None
+    found = changes.changes(context, "//lib", "HEAD", None)
+    assert {row["name"]: row["how"] for row in found["objects"]} == {"bolt": ["removed"], "nut": ["removed"]}
+
+
+def test_a_user_is_judged_by_the_declaration_it_was_found_by(ctx):
+    user = {"package": "//app", "kind": "part", "name": "long_bolt", "declaration": {"with": {"width": 4}}}
+
+    assert impact._passes(ctx, user, "width") is True
+    assert impact._passes(ctx, {**user, "declaration": {"with": {}}}, "width") is False
+
+
+def test_a_reference_to_an_object_of_the_wrong_kind_is_breaking(workspace, ctx):
+    root, _ = workspace
+    _write(
+        root / "app" / "partcad.yaml",
+        {
+            **yaml.safe_load((root / "app" / "partcad.yaml").read_text()),
+            **{"interfaces": {"mount": {"inherits": "//lib:bolt"}}},
+        },
+    )
+    ctx.reload_packages(["//app"])
+
+    found = impact.impact(ctx, ctx.get_project("//app"), "interface", "mount")
+
+    (row,) = found["affects"]
+    assert any("which is a part, not an interface" in finding["summary"] for finding in row["findings"])
+
+
+def test_a_shape_change_passes_through_an_object_whose_own_change_was_prose(workspace, ctx):
+    root, _ = workspace
+    config = yaml.safe_load((root / "lib" / "partcad.yaml").read_text())
+    config["parts"]["longer"] = {"type": "enrich", "source": ":bolt", "with": {"length": 30}, "desc": "Longer"}
+    config["parts"]["same"] = {"type": "alias", "source": ":longer"}
+    _write(root / "lib" / "partcad.yaml", config)
+    _commit(root, "an enrich and an alias of it")
+    config["parts"]["bolt"]["parameters"]["length"]["default"] = 12
+    config["parts"]["longer"]["desc"] = "Reworded"
+    _write(root / "lib" / "partcad.yaml", config)
+    ctx.reload_packages(["//lib"])
+
+    found = impact.impact(ctx, ctx.get_project("//lib"))
+
+    rows = {row["object"]: row for row in found["affects"]}
+    assert rows["//lib:longer"]["reached"] == "changed" and rows["//lib:longer"]["prose"] is True
+    assert any(finding["analyzer"] == "geometry" for finding in rows["//lib:longer"]["findings"])
+    assert rows["//lib:same"]["geometry"] is True
+
+
+def test_what_an_object_uses_at_a_state_it_is_not_at_is_nothing(ctx):
+    app = ctx.get_project("//app")
+    graph = impact._Graph(ctx, app, "HEAD", package_versions.STAGED)
+    graph.after_root = None
+
+    assert impact._affected_by(graph, app, "part", "long_bolt", {"//lib:bolt": {"object": "//lib:bolt"}}) == []
+
+
+def test_a_revision_a_declaration_names_itself_is_kept_as_written(workspace, ctx):
+    root, first = workspace
+    pygit2.Repository(str(root)).create_tag(
+        "v1", pygit2.Oid(hex=first), pygit2.enums.ObjectType.COMMIT, pygit2.Signature("T", "t@example.com"), "v1"
+    )
+    config = yaml.safe_load((root / "app" / "partcad.yaml").read_text())
+    config["parts"]["old_bolt"] = {"type": "alias", "source": "//lib@v1:bolt"}
+    _write(root / "app" / "partcad.yaml", config)
+    ctx.reload_packages(["//app"])
+    app = ctx.get_project("//app")
+
+    written = usage.object_dependencies(ctx, app, "part", "old_bolt", canonical=False)
+    loaded = usage.object_dependencies(ctx, app, "part", "old_bolt")
+
+    assert [row["package"] for row in written] == ["//lib@v1"]
+    assert [row["package"] for row in loaded] == ["//lib@" + first]
+
+
+def test_a_template_s_revisions_are_compared_in_full(workspace):
+    root, _ = workspace
+    (root / "lib" / "partcad.yaml").write_text(
+        "parts:\n  bolt:\n    type: cadquery\n    path: \"{{ 'bolt' }}.py\"\n  nut:\n    type: cadquery\n"
+    )
+    sha = _commit(root, "templated")
+    repository = package_versions.repository_of(str(root / "lib"))
+
+    assert revisions._declared_files_at(repository, sha, "part", "bolt") is revisions._UNKNOWN
+
+
+def test_comparing_with_a_revision_that_names_nothing_is_refused(ctx):
+    with pytest.raises(ValueError):
+        revisions.compare_states(ctx, ctx.get_project("//lib"), "part", "bolt", "HEAD", "no-such-branch")
+
+
+def test_an_interface_named_with_an_expression_in_its_arguments_is_still_named(ctx):
+    lib = ctx.get_project("//lib")
+
+    assert usage.references_how(lib, "interface", {"inherits": {":base;size=%size%": None}}) == [
+        ("//lib", "base", "inherits")
+    ]
+    assert usage.references_how(lib, "interface", {"inherits": {"%which%": None}}) == []
+
+
+def test_a_pin_from_before_the_package_was_made_is_behind_by_every_revision_of_it(workspace):
+    root, first = workspace
+    _write(root / "late" / "partcad.yaml", {"parts": {"peg": {"type": "basic", "cuboid": 1}}})
+    _commit(root, "late package")
+    _write(root / "late" / "partcad.yaml", {"parts": {"peg": {"type": "basic", "cuboid": 2}}})
+    _commit(root, "late package changed")
+
+    assert usage._behind(package_versions.repository_of(str(root / "late")), first) == 2
+
+
+def test_status_is_read_from_one_index_or_not_at_all(workspace, ctx, monkeypatch):
+    moves = iter(range(100))
+    monkeypatch.setattr(package_versions, "_index_identity", lambda path: next(moves))
+
+    with pytest.raises(ValueError, match="kept changing"):
+        working_copy.status(ctx, ctx.get_project("//lib"))
+
+
+def test_a_declaration_after_a_last_line_with_no_line_break_is_on_a_line_of_its_own():
+    assert working_copy.stage_declaration(
+        "parts:\n  a: {type: basic}", "parts:\n  a: {type: basic}\n  b: {type: basic}\n", "part", "b"
+    ) == ("parts:\n  a: {type: basic}\n  b: {type: basic}\n")
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_git_commits_the_tree_it_is_given_and_the_index_follows(workspace, ctx, monkeypatch):
+    root, _ = workspace
+    monkeypatch.setattr(working_copy, "_git_executable", lambda: shutil.which("git"))
+    _git(root, "config", "user.name", "Test")
+    _git(root, "config", "user.email", "test@example.com")
+    _lib(root, desc="Committed by git")
+    _stage(root, "lib/partcad.yaml")
+    repository = package_versions.repository_of(str(root))
+    tree = package_versions.index_tree(repository)
+
+    sha = working_copy.commit(repository, "By git\n", {"name": "Ann", "email": "ann@example.com"}, tree=tree)
+
+    repo = pygit2.Repository(str(root))
+    assert str(repo[sha].tree.id) == tree and repo[sha].author.name == "Ann"
+    assert package_versions.index_tree(repository) == tree

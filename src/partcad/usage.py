@@ -163,8 +163,10 @@ _INTERFACE_KEYS = frozenset({"inherits", "implements"})
 
 def _interface_reference(project, interface, found: list, how: str) -> None:
     """The interface 'interface' names -- one of this package's where it is a bare name -- into 'found'."""
-    if not isinstance(interface, str) or not interface or "%" in interface:
-        # Empty, or an expression over parameters that only the interface resolves.
+    if not isinstance(interface, str) or not interface or "%" in interface.partition(";")[0]:
+        # Empty, or naming an interface by an expression over parameters that
+        # only the interface resolves; an expression in its arguments alone
+        # names the interface all the same.
         return
     if ":" not in interface.partition(";")[0]:
         found.append((project.name, _strip_parameters(interface), how))
@@ -232,27 +234,42 @@ def _loaded_projects(ctx) -> list:
 def _uses(ctx, project, kind: str, name: str, config, wanted, hows: typing.Optional[list] = None) -> int:
     """How many times the object 'kind' 'name' of 'project' refers to what 'wanted' accepts; each 'how' into 'hows'."""
     count = 0
-    reference_type = isinstance(config, dict) and config.get("type") in pc_reference.REFERENCE_TYPES
-    if kind in ("assembly", "scene") and not reference_type:
-        # Built: what it places, each placement once. An alias or an enrich
-        # places nothing of its own; what it names is counted below.
-        built = project.objects(kind).get(name)
-        children = getattr(built, "children", None) if built is not None else None
-        if children:
-            for child in children:
-                item = getattr(child, "item", None)
-                package = getattr(item, "project_name", None)
-                placed = _strip_parameters(getattr(item, "name", "") or "")
-                if package is not None and wanted(_canonical(ctx, package), placed):
-                    count += 1
-                    if hows is not None:
-                        hows.append("placed")
+    for package, placed in placements(project, kind, name, config):
+        if wanted(_canonical(ctx, package), placed):
+            count += 1
+            if hows is not None:
+                hows.append("placed")
     for package, object_name, how in references_how(project, kind, config):
         if wanted(_canonical(ctx, package), object_name):
             count += 1
             if hows is not None:
                 hows.append(how)
     return count
+
+
+def placements(project, kind: str, name: str, config) -> list:
+    """What an assembly or a scene of 'project' places once built, as (package, name), each placement once.
+
+    An alias or an enrich places nothing of its own: what it names is what
+    'references_how' reads. Anything else places nothing.
+    """
+    reference_type = isinstance(config, dict) and config.get("type") in pc_reference.REFERENCE_TYPES
+    if kind not in ("assembly", "scene") or reference_type:
+        return []
+    try:
+        built = project.objects(kind).get(name)
+        children = getattr(built, "children", None) if built is not None else None
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("%s:%s: could not tell what it places: %s" % (project.name, name, e))
+        return []
+    found = []
+    for child in children or []:
+        item = getattr(child, "item", None)
+        package = getattr(item, "project_name", None)
+        placed = _strip_parameters(getattr(item, "name", "") or "")
+        if package is not None and placed:
+            found.append((package, placed))
+    return found
 
 
 def used_by(ctx, wanted: typing.Callable[[str, str], bool], exclude: typing.Callable[[str], bool] = None) -> list:
@@ -434,12 +451,14 @@ def _kind_of(ctx, package: str, name: str) -> typing.Optional[str]:
         return None
 
 
-def object_dependencies(ctx, project, kind: str, name: str) -> list:
+def object_dependencies(ctx, project, kind: str, name: str, canonical: bool = True) -> list:
     """What '<kind> <name>' of 'project' names, and once built places: one row per object, with how and how many times.
 
     {'object', 'package', 'name', 'kind', 'how', 'count', 'revision',
     'short'}, 'revision' being the commit the package it comes from is at.
-    Asking what kind each is may load the package it is in.
+    Asking what kind each is may load the package it is in. Without
+    'canonical', a package is named as the declaration names it -- a revision
+    by the tag or branch written there -- rather than as it is loaded.
     """
     name = _strip_parameters(name)
     config = project.object_config(kind, name)
@@ -448,7 +467,8 @@ def object_dependencies(ctx, project, kind: str, name: str) -> list:
     found = {}
 
     def note(package: str, object_name: str, how: str) -> None:
-        package = _canonical(ctx, package)
+        if canonical:
+            package = _canonical(ctx, package)
         row = found.setdefault(
             (package, object_name),
             {
@@ -464,15 +484,8 @@ def object_dependencies(ctx, project, kind: str, name: str) -> list:
             row["how"].append(how)
 
     raw = project._object_configs.get(kind, {}).get(name, config)
-    reference_type = isinstance(raw, dict) and raw.get("type") in pc_reference.REFERENCE_TYPES
-    if kind in ("assembly", "scene") and not reference_type:
-        built = project.objects(kind).get(name)
-        for child in getattr(built, "children", None) or []:
-            item = getattr(child, "item", None)
-            package = getattr(item, "project_name", None)
-            placed = _strip_parameters(getattr(item, "name", "") or "")
-            if package is not None and placed:
-                note(package, placed, "placed")
+    for package, placed in placements(project, kind, name, raw):
+        note(package, placed, "placed")
     for package, object_name, how in references_how(project, kind, raw):
         if package == project.name and object_name == name:
             continue
@@ -516,13 +529,22 @@ def _behind(repository, pinned: typing.Optional[str]) -> typing.Optional[int]:
     # something else beside it is pinned as well. What counts is how many of
     # the package's revisions came after it -- the ones that are not the pin
     # and not behind it.
-    for count, row in enumerate(package_versions.revisions(repository)):
+    listed = package_versions.revisions(repository)
+    for count, row in enumerate(listed):
         sha = pygit2.Oid(hex=row["sha"])
         if sha == pin:
             return count
         try:
             if repo.descendant_of(pin, sha):
                 return count
+        except (KeyError, ValueError, pygit2.GitError):
+            return None
+    # Pinned before the package's first revision: every revision of it is
+    # newer -- where the list is the whole history, and the pin is behind it.
+    if listed and not listed.truncated and len(listed) < package_versions.REVISIONS_LIMIT:
+        try:
+            if repo.descendant_of(pygit2.Oid(hex=listed[-1]["sha"]), pin):
+                return len(listed)
         except (KeyError, ValueError, pygit2.GitError):
             return None
     return None

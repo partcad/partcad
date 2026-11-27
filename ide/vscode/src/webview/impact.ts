@@ -280,6 +280,8 @@ export class ImpactView {
     private flagged: string | undefined;
     /** The question asked last: an answer to any other is for a change no longer chosen. */
     private asking = 0;
+    /** Why the workspace could not be loaded, said under the answer from before, which stands. */
+    private loadError: string | undefined;
     private readonly toolbar: HTMLElement;
     private readonly select: HTMLSelectElement;
     private readonly revision: HTMLInputElement;
@@ -350,6 +352,7 @@ export class ImpactView {
         this.flags.test = false;
         this.flags.load = false;
         this.flagged = undefined;
+        this.loadError = undefined;
         this.asking += 1;
         this.toolbar.hidden = true;
         empty(this.content);
@@ -378,12 +381,18 @@ export class ImpactView {
         this.ask();
     }
 
-    /** Ask what the change chosen reaches, measuring or testing it too where 'add' says, and where it was already. */
-    private ask(add: { measure?: boolean; test?: boolean } = {}): void {
+    /**
+     * Ask what the change chosen reaches, measuring or testing it too where
+     * 'add' says, and where it was already - and loading the workspace first,
+     * once 'add' has said so.
+     */
+    private ask(add: { measure?: boolean; test?: boolean; load?: boolean } = {}): void {
         const subject = this.subject;
         if (subject === undefined) {
             return;
         }
+        const before = this.answer;
+        this.loadError = undefined;
         // Whatever is in flight is for the change chosen before, even when this
         // asks nothing: "Since a revision" with no revision typed yet.
         const mine = (this.asking += 1);
@@ -409,6 +418,7 @@ export class ImpactView {
         this.flagged = range;
         this.flags.measure = this.flags.measure || add.measure === true;
         this.flags.test = this.flags.test || add.test === true;
+        this.flags.load = this.flags.load || add.load === true;
         this.answer = 'pending';
         this.draw();
         this.callbacks.ask(
@@ -425,12 +435,27 @@ export class ImpactView {
                 if (this.subject !== subject || this.asking !== mine) {
                     return;
                 }
-                this.answer =
-                    error !== undefined
-                        ? { error }
-                        : data
-                          ? { data: data as ImpactData }
-                          : { error: 'PartCAD had nothing to say about this change.' };
+                if (
+                    error !== undefined &&
+                    add.load &&
+                    before !== undefined &&
+                    before !== 'pending' &&
+                    'data' in before
+                ) {
+                    // The workspace could not be loaded: what was found among
+                    // what is loaded still stands, and Load workspace is there
+                    // to try again.
+                    this.flags.load = false;
+                    this.answer = before;
+                    this.loadError = error;
+                } else {
+                    this.answer =
+                        error !== undefined
+                            ? { error }
+                            : data
+                              ? { data: data as ImpactData }
+                              : { error: 'PartCAD had nothing to say about this change.' };
+                }
                 this.draw();
             },
         );
@@ -458,11 +483,9 @@ export class ImpactView {
         }
         const body = this.content.appendChild(el('div', 'impact-body'));
         renderImpact(body, answer.data, this.callbacks, this.subject);
-        this.content.appendChild(
-            loadedNote(this.flags.load, () => {
-                this.flags.load = true;
-                this.ask();
-            }),
-        );
+        this.content.appendChild(loadedNote(this.flags.load, () => this.ask({ load: true })));
+        if (this.loadError !== undefined) {
+            this.content.appendChild(el('p', 'error impact-load-error', this.loadError));
+        }
     }
 }

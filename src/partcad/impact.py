@@ -121,9 +121,16 @@ def _parameter_type(value) -> typing.Optional[str]:
 
 
 def _passes(ctx, user: dict, parameter: str) -> bool:
-    """Whether the declaration of a user of an object writes a value for 'parameter' into a name it gives it."""
-    loaded = ctx.get_project(user["package"])
-    raw = (getattr(loaded, "_object_configs", {}) or {}).get(user["kind"], {}).get(user["name"]) if loaded else None
+    """Whether the declaration of a user of an object writes a value for 'parameter' into a name it gives it.
+
+    The declaration it was found a user by: at the compared state for a user
+    in the subject's repository, as loaded for any other.
+    """
+    if "declaration" in user:
+        raw = user["declaration"]
+    else:
+        loaded = ctx.get_project(user["package"])
+        raw = (getattr(loaded, "_object_configs", {}) or {}).get(user["kind"], {}).get(user["name"]) if loaded else None
     if isinstance(raw, dict) and isinstance(raw.get("with"), dict) and parameter in raw["with"]:
         # An enrich sets its source's parameters under 'with:'.
         return True
@@ -136,7 +143,12 @@ def _finding(severity: str, analyzer: str, summary: str, **detail) -> dict:
 
 
 def _references(ctx, row: dict, before, after, users: list) -> list:
-    """Breaking: an object gone while used, a parameter gone or retyped while passed, a reference that no longer resolves."""
+    """Breaking: an object gone while used, a parameter gone or retyped while passed, a reference that no longer resolves.
+
+    A reference resolves to an object of the kind it needs: an interface for
+    'inherits:' and 'implements:', a sketch for 'sketch:', the object's own kind
+    for what an alias or an enrich is made from.
+    """
     found = []
     if pc_changes.REMOVED in row.get("how", []) and users:
         found.append(
@@ -184,11 +196,31 @@ def _references(ctx, row: dict, before, after, users: list) -> list:
         raw = (getattr(after, "_object_configs", {}) or {}).get(row["kind"], {}).get(row["name"])
         for package, name, how in usage.references_how(after, row["kind"], raw if raw is not None else {}):
             target = ctx.get_project(package)
-            if target is None or target.object_kind(name) is None:
+            kind = target.object_kind(name) if target is not None else None
+            needed = _NEEDS.get(how) or (row["kind"] if how.startswith("source (") else None)
+            if kind is None:
                 found.append(
                     _finding(BREAKING, "references", "names %s:%s (%s), which is not there" % (package, name, how))
                 )
+            elif needed is not None and kind != needed:
+                found.append(
+                    _finding(
+                        BREAKING,
+                        "references",
+                        "names %s:%s (%s), which is %s, not %s" % (package, name, how, _a(kind), _a(needed)),
+                    )
+                )
     return found
+
+
+def _a(kind: str) -> str:
+    return ("an " if kind[:1] in "aeiou" else "a ") + kind
+
+
+# The kind a reference written under a key has to be, where the key says
+# ('partcad.usage.references_how'); an alias or an enrich is made from one of
+# its own kind.
+_NEEDS = {"inherits": "interface", "implements": "interface", "sketch": "sketch"}
 
 
 def _interfaces(row: dict, before, after, users: list) -> list:
@@ -341,11 +373,18 @@ class _Graph:
             for other, config in list((at._object_configs.get(kind) or {}).items()):
                 if base == package and other == name:
                     continue
+                # What it places once built, as 'usage' counts it for what is
+                # loaded, and then what its declaration names.
+                hows = [
+                    "placed"
+                    for placed_package, placed in usage.placements(at, kind, other, config)
+                    if self.plain(placed_package) == package and placed == name
+                ]
                 try:
                     named = usage.references_how(at, kind, config)
                 except Exception:  # pylint: disable=broad-except
-                    continue
-                hows = [
+                    named = []
+                hows += [
                     how for found, object_name, how in named if self.plain(found) == package and object_name == name
                 ]
                 if hows:
@@ -357,6 +396,7 @@ class _Graph:
                             "kind": kind,
                             "count": len(hows),
                             "how": sorted(set(hows)),
+                            "declaration": config,
                         }
                     )
         return rows
@@ -384,6 +424,7 @@ def _affects(graph: _Graph, starts: list, changed: dict, measure, test) -> list:
             test,
         )
 
+    shaped = set()
     for row in starts:
         users = graph.users(row["package"], row["name"])
         entry = {
@@ -392,9 +433,12 @@ def _affects(graph: _Graph, starts: list, changed: dict, measure, test) -> list:
             "via": [],
             "users": [user["object"] for user in users],
             "states": graph.states(row["package"]),
+            "_further": users,
         }
         analyze(entry, users, True)
         rows[row["object"]] = entry
+        if row.get("geometry"):
+            shaped.add(row["object"])
         queue.append((row["object"], users, [row["object"]], bool(row.get("geometry"))))
     # Every object is reached once, or once more when a path that changes its
     # shape comes after one that did not: what is visited ends the walk, so it
@@ -405,10 +449,19 @@ def _affects(graph: _Graph, starts: list, changed: dict, measure, test) -> list:
             key = user["object"]
             known = rows.get(key)
             if known is not None:
-                if geometry and not known["geometry"] and known["reached"] == "via":
-                    known["geometry"] = True
-                    known["via"] = path
-                    analyze(known, known["_further"], False)
+                if geometry and key not in shaped:
+                    shaped.add(key)
+                    if known["reached"] == "via":
+                        known["geometry"] = True
+                        known["via"] = path
+                        analyze(known, known["_further"], False)
+                    else:
+                        # Changed itself in prose alone, and in shape through
+                        # what it uses: it says how it changed, and passes the
+                        # shape on.
+                        known["findings"].append(
+                            _finding(CHANGED, "geometry", "shape changed through %s" % path[-1], via=path)
+                        )
                     queue.append((key, known["_further"], path + [key], True))
                 continue
             reached = changed.get(key)
@@ -428,6 +481,8 @@ def _affects(graph: _Graph, starts: list, changed: dict, measure, test) -> list:
             }
             analyze(entry, further, False)
             rows[key] = entry
+            if geometry:
+                shaped.add(key)
             queue.append((key, further, path + [key], geometry))
     for entry in rows.values():
         entry.pop("_further", None)
@@ -441,6 +496,9 @@ def _affected_by(graph: _Graph, project, kind: str, name: str, changed: dict) ->
     what is followed; a revision it names itself stays that revision.
     """
     ctx = graph.ctx
+    if graph.after != package_versions.WORKTREE and graph.after_root is None:
+        # The package is not there at that state: it uses nothing there.
+        return []
     start = graph.after_root if graph.after_root is not None else project
     found = []
     seen = set()
@@ -448,7 +506,9 @@ def _affected_by(graph: _Graph, project, kind: str, name: str, changed: dict) ->
     while queue:
         owner, owner_kind, owner_name, path = queue.pop(0)
         try:
-            dependencies = usage.object_dependencies(ctx, owner, owner_kind, owner_name)
+            # Names as written ('canonical=False'): a revision a declaration
+            # names itself stays one, and only the state's own is taken off.
+            dependencies = usage.object_dependencies(ctx, owner, owner_kind, owner_name, canonical=False)
         except Exception as e:  # pylint: disable=broad-except
             pc_logging.debug("%s:%s: could not tell what it uses: %s" % (owner.name, owner_name, e))
             continue
@@ -464,6 +524,21 @@ def _affected_by(graph: _Graph, project, kind: str, name: str, changed: dict) ->
             if loaded is not None and row.get("kind"):
                 queue.append((loaded, row["kind"], row["name"], here))
     return found
+
+
+def _pins_a_commit(project, row: dict) -> bool:
+    """Whether a dependent's declaration holds it at one commit of the package: a revision by id, not a branch or a tag."""
+    revision = row.get("pinned")
+    if row.get("type") != "git" or not isinstance(revision, str) or not revision:
+        return False
+    repository = package_versions.repository_of(project.config_dir)
+    if repository is None:
+        return False
+    try:
+        sha = package_versions.resolve(repository, revision)
+    except ValueError:
+        return False
+    return package_versions.names_a_commit(repository, revision, sha)
 
 
 def moved_pins(ctx, project, before: str, after: typing.Optional[str]) -> list:
@@ -535,7 +610,7 @@ def impact(
             summary[finding["severity"]] = summary.get(finding["severity"], 0) + 1
     # Held back only by a commit its declaration names: one that follows a
     # branch, or names no revision, gets the change once it is pushed.
-    pinned = [row for row in usage.package_dependents(ctx, project) if row.get("type") == "git" and row.get("pinned")]
+    pinned = [row for row in usage.package_dependents(ctx, project) if _pins_a_commit(project, row)]
     return {
         "package": project.name,
         "object": _key(project.name, name) if name else None,

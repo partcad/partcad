@@ -1002,9 +1002,40 @@ class Context:
             base, revisions = package_versions.split(project_path)
             current = self.get_project(base)
             if current is None:
-                pc_logging.error("%s: there is no package %s" % (project_path, base))
-                return None
+                # Gone from the files on disk, as a package being deleted is:
+                # at a revision it is still there, below the nearest package
+                # that is ('//lib@HEAD' is '//@HEAD/lib').
+                found = self._below_an_ancestor(project_path, base, revisions)
+                if found is None:
+                    pc_logging.error("%s: there is no package %s" % (project_path, base))
+                return found
             return self._at_revision(project_path, current, revisions)
+
+    def _below_an_ancestor(self, asked: str, base: str, selector: str) -> Optional[Project]:
+        """'base' at the revision 'selector' names, read below the nearest package above it in a git repository."""
+        if not base.startswith("//") or base == "//":
+            return None
+        parts = base[2:].rstrip("/").split("/")
+        for depth in range(len(parts) - 1, -1, -1):
+            ancestor_name = "//" + "/".join(parts[:depth])
+            ancestor = self.get_project(ancestor_name) if depth else self.get_project("//")
+            if ancestor is None:
+                continue
+            if package_versions.repository_of(ancestor.config_dir) is None:
+                return None
+            # Its revision -- the longest that names one, as a branch may hold
+            # a '/' -- and then the path below it, 'base' and what follows.
+            for revision, rest in package_versions.selector_candidates(selector):
+                try:
+                    loaded = self._load_revision(ancestor.name, revision)
+                except ValueError:
+                    continue
+                if loaded is None:
+                    return None
+                below = "/".join(parts[depth:]) + ("/" + rest if rest else "")
+                return self._below(asked, loaded, below)
+            return None
+        return None
 
     def _at_revision(self, asked: str, project: Project, selector: str) -> Optional[Project]:
         """'project' at the revision 'selector' starts with, and the packages the rest of 'selector' names below it.

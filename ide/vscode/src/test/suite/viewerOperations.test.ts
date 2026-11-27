@@ -343,6 +343,40 @@ suite('Digital Thread Operations: Dependencies, Used By and Impact', () => {
         assert.strictEqual(root.find('deps-declared').length, 1);
     });
 
+    test('a change in flight is waited for by the tab started over, and only it ends the wait', () => {
+        const root = new FakeElement('div');
+        const { ops, asked, written } = callbacks();
+        const view = new DependenciesView(root as unknown as HTMLElement, ops);
+        view.start(PACKAGE);
+        asked[0].answer(DEPS);
+        only(root, 'deps-update-all').fire('click');
+
+        // Saved meanwhile: started over on the same package, which waits for it.
+        view.setBusy('Select this tab to see what this package depends on.');
+        view.start({ ...PACKAGE });
+        asked[1].answer(DEPS);
+        assert.strictEqual(only(root, 'deps-update-all').disabled, true);
+        only(root, 'deps-update-all').fire('click');
+        assert.strictEqual(written.length, 1);
+        written[0].answer({ data: { pinned: 1, current: 0, failed: 0 } });
+        asked[asked.length - 1].answer(DEPS);
+        assert.strictEqual(only(root, 'deps-update-all').disabled, false);
+
+        // One sent for another package meanwhile is not ended by the first's answer.
+        only(root, 'deps-update-all').fire('click');
+        const other: OpsSubject = { package: '//other', name: '//other', kind: 'package' };
+        view.setBusy('');
+        view.start(other);
+        asked[asked.length - 1].answer(DEPS);
+        only(root, 'deps-update-all').fire('click');
+        assert.strictEqual(written.length, 3);
+        written[1].answer({ data: { pinned: 1, current: 0, failed: 0 } });
+        assert.strictEqual(only(root, 'deps-update-all').disabled, true);
+        written[2].answer({ data: { pinned: 0, current: 1, failed: 0 } });
+        asked[asked.length - 1].answer(DEPS);
+        assert.strictEqual(only(root, 'deps-update-all').disabled, false);
+    });
+
     test('a change made when the package is shown again is said on the tab started over, and not on another', () => {
         const root = new FakeElement('div');
         const { ops, asked, written } = callbacks();
@@ -593,6 +627,41 @@ suite('Digital Thread Operations: Dependencies, Used By and Impact', () => {
         assert.deepStrictEqual([params()?.from, params()?.measure, params()?.test], ['v2.0', undefined, undefined]);
         only(root, 'impact-measure').fire('click');
         assert.deepStrictEqual([params()?.from, params()?.measure, params()?.test], ['v2.0', true, undefined]);
+    });
+
+    test('a workspace that could not be loaded leaves what was found, and Load workspace to try again, on Impact too', () => {
+        const root = new FakeElement('div');
+        const { ops, asked } = callbacks();
+        const view = new ImpactView(root as unknown as HTMLElement, ops);
+        view.start(PACKAGE);
+        asked[0].answer({
+            package: '//',
+            object: null,
+            from: 'HEAD',
+            to: WORKTREE,
+            changed: [],
+            affects: [],
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            affected_by: [],
+            pins: [],
+            pinned: [],
+            summary: { changed: 2 },
+        } as ImpactData);
+
+        only(root, 'ops-load').fire('click');
+        assert.strictEqual(asked[1].query.params?.load, true);
+        assert.ok(root.text().includes('loading the workspace'));
+        asked[1].answer(undefined, 'Could not fetch //pub');
+
+        assert.ok(only(root, 'impact-summary').text().includes('2 changed'));
+        assert.ok(root.text().includes('Could not fetch //pub'));
+        assert.ok(root.text().includes('Of what PartCAD has loaded'));
+        only(root, 'ops-load').fire('click');
+        assert.strictEqual(asked[2].query.params?.load, true);
+        // A change chosen afterwards is not asked with a load that failed.
+        asked[2].answer(undefined, 'Could not fetch //pub');
+        view.choose('staged');
+        assert.strictEqual(asked[3].query.params?.load, undefined);
     });
 
     test('an answer for a change no longer chosen is not drawn over the field asking for a revision', () => {

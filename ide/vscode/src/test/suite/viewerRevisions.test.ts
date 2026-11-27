@@ -667,6 +667,24 @@ suite('Digital Thread Operations: Revisions', () => {
         assert.ok(root.text().includes('Staged bracket.py, notes.md.'));
     });
 
+    test('a Stage all in flight is waited for by the tab started over on the same object', () => {
+        const { root, view, written, reply } = pane();
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', CHANGED);
+        only(root, 'revisions-stage').fire('click');
+
+        view.setBusy('Select this tab to see the revisions of this package.');
+        view.start({ ...PACKAGE });
+        reply('ops.rev.list', HISTORY);
+        reply('ops.rev.status', CHANGED);
+        assert.strictEqual(only(root, 'revisions-stage').disabled, true);
+        only(root, 'revisions-stage').fire('click');
+        assert.strictEqual(written.length, 1);
+
+        written[0].answer({ data: { package: '//', object: null, staged: [], notes: [], status: CHANGED } });
+        assert.strictEqual(only(root, 'revisions-stage').disabled, false);
+    });
+
     test('a new revision is drafted from what is staged, and sent with the index and the repository it was looked at in', () => {
         const { root, view, written, reply } = pane();
         reply('ops.rev.list', HISTORY);

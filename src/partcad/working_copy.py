@@ -29,6 +29,7 @@ holds, which a new revision is made of; and WORKTREE, the files on disk.
 import os
 import shutil
 import subprocess
+import tempfile
 import typing
 
 from . import changes as pc_changes
@@ -161,6 +162,24 @@ def _relative_to(path: str, directory: str) -> str:
 
 
 def status(ctx, project, kind: typing.Optional[str] = None, name: typing.Optional[str] = None) -> dict:
+    """What is staged and what is not -- see '_status' -- read from one index.
+
+    Each part of the answer reads the index on its own (git's status, the tree
+    it holds, the package as staged), so they are read again until the index
+    is the same before and after: what 'others' finds staged elsewhere and the
+    tree a new revision is made of ('index') are then of one index.
+    """
+    repository = _repository(project)
+    path = os.path.join(repository.repo.path, "index")
+    for _attempt in range(3):
+        before = package_versions._index_identity(path)
+        result = _status(ctx, project, kind, name)
+        if package_versions._index_identity(path) == before:
+            return result
+    raise ValueError("The index of %s kept changing while it was read: look again" % _workdir(repository))
+
+
+def _status(ctx, project, kind: typing.Optional[str] = None, name: typing.Optional[str] = None) -> dict:
     """What is staged and what is not, for a package or -- with 'kind' and 'name' -- one object of it.
 
     {'package', 'object', 'repository', 'branch', 'head', 'index', 'staged',
@@ -425,6 +444,9 @@ def stage_declaration(index_text: str, work_text: str, kind: str, name: str) -> 
         at = next((ends[entry] for entry in reversed(before) if entry in ends), None)
         if at is None:
             at = in_index_section[1][0][1] if in_index_section[1] else in_index_section[0] + 1
+        if at > 0 and at <= len(a) and not a[at - 1].endswith("\n"):
+            # After a last line with no line break: one first, or the two join.
+            a = a[: at - 1] + [a[at - 1] + "\n"] + a[at:]
         merged = a[:at] + lines + a[at:]
     text = "".join(merged)
     if not _only_declaration_changed(text, index_text, work_text, kind, name):
@@ -642,14 +664,32 @@ def _git_executable() -> typing.Optional[str]:
     return shutil.which("git")
 
 
+def _git(git: str, workdir: str, env: dict, *args, input: typing.Optional[str] = None) -> None:
+    done = subprocess.run(
+        [git, *args],
+        cwd=workdir,
+        input=input,
+        text=True,
+        # git reads and writes a commit message as UTF-8 unless configured otherwise.
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    if done.returncode != 0:
+        raise ValueError("git %s failed: %s" % (args[0], done.stderr.strip() or done.stdout.strip()))
+
+
 def commit(repository, message: str, author: typing.Optional[dict] = None, tree: typing.Optional[str] = None) -> str:
     """Commit what the index holds, with 'message', as 'author' ({'name', 'email'}); the new commit's id.
 
     By git itself where it is installed, so that the repository's hooks and
     signing apply as they would to the user's own commit; otherwise with
     pygit2, which refuses a repository that signs its commits. 'tree' is the
-    tree the commit has to be of: refused, with 'index-changed', where the
-    index holds another.
+    tree the commit is of, whatever is staged while it is made -- git commits
+    an index of its own holding it -- and refused, with 'index-changed', where
+    the index already holds another.
     """
     author = {key: value for key, value in (author or {}).items() if value}
     workdir = _workdir(repository)
@@ -662,22 +702,32 @@ def commit(repository, message: str, author: typing.Optional[dict] = None, tree:
             env["GIT_AUTHOR_NAME"] = env["GIT_COMMITTER_NAME"] = author["name"]
         if author.get("email"):
             env["GIT_AUTHOR_EMAIL"] = env["GIT_COMMITTER_EMAIL"] = author["email"]
-        done = subprocess.run(
-            [git, "commit", "--quiet", "--file", "-"],
-            cwd=workdir,
-            input=message,
-            text=True,
-            # git reads and writes a commit message as UTF-8 unless configured otherwise.
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            env=env,
-            check=False,
-        )
-        if done.returncode != 0:
-            raise ValueError("git commit failed: %s" % (done.stderr.strip() or done.stdout.strip()))
-        repository.repo.index.read(True)
-        return str(repository.repo.head.target)
+        scratch = None
+        if tree is not None:
+            # git commits an index of its own holding exactly 'tree', so that
+            # nothing staged meanwhile is in it -- hooks and signing as ever.
+            scratch = tempfile.mkdtemp(prefix="partcad-commit-")
+            env["GIT_INDEX_FILE"] = os.path.join(scratch, "index")
+        try:
+            if tree is not None:
+                _git(git, workdir, env, "read-tree", tree)
+            _git(git, workdir, env, "commit", "--quiet", "--file", "-", input=message)
+        finally:
+            if scratch is not None:
+                shutil.rmtree(scratch, ignore_errors=True)
+        import pygit2
+
+        repo = repository.repo
+        if tree is not None:
+            # The index the user stages into still holds what was committed
+            # unless something was staged meanwhile: it is then the new
+            # revision's, hooks' additions included; otherwise left as it is.
+            committed = str(repo.head.peel(pygit2.Commit).tree.id)
+            if committed != tree and package_versions.index_tree(repository) == tree:
+                repo.index.read_tree(repo[committed])
+                repo.index.write()
+        repo.index.read(True)
+        return str(repo.head.target)
 
     import pygit2
 

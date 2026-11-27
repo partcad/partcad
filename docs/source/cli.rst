@@ -1474,7 +1474,8 @@ Object commands
 
   The objects that changed between the two states -- everything not committed by default -- then everything that
   uses them, each reached as *changed* or *via* the objects in between, with findings: **breaking** (an object
-  removed or a parameter removed while used, a reference that no longer resolves), **changed** (a shape that
+  removed or a parameter removed while used, a reference that no longer resolves or names an object of another
+  kind), **changed** (a shape that
   moved), **verify** (requirements and tests to run again, drawings made from it out of date), **info** (prose
   alone). For an object, also what it uses that changed. Packages that pin this one at an older revision are
   listed apart: the change does not reach them until they update. It looks where ``pc ops used-by`` looks;

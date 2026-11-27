@@ -172,7 +172,10 @@ def object_files(project, kind: str, name: str) -> list:
         except OSError:
             entries = []
         for entry in entries:
-            if not entry.startswith(base + ".") or not os.path.isfile(os.path.join(directory, entry)):
+            path = os.path.join(directory, entry)
+            # A symbolic link is a file of it whether or not what it points at
+            # is there: it is compared by what it says ('_digest').
+            if not entry.startswith(base + ".") or not (os.path.islink(path) or os.path.isfile(path)):
                 continue
             extension = entry[len(base) :].lower()
             if (extension in extensions) if extensions else (extension not in _OUTPUTS):
@@ -324,7 +327,12 @@ def qualified(package: str, name: str) -> str:
 
 
 def changes(
-    ctx, package: str, before: typing.Optional[str] = "HEAD", after: typing.Optional[str] = None, only=None
+    ctx,
+    package: str,
+    before: typing.Optional[str] = "HEAD",
+    after: typing.Optional[str] = None,
+    only=None,
+    projects: typing.Optional[tuple] = None,
 ) -> dict:
     """What changed in 'package' from the state 'before' to the state 'after' (None: the working tree).
 
@@ -333,14 +341,20 @@ def changes(
     'geometry', 'prose'}; 'files' the files no object is built from that were
     added, removed or modified ({'path', 'how'}); 'package_changed' whether the
     package's own declaration -- its dependencies, its settings -- changed.
-    'only' is a (kind, name) to compare that object alone.
+    'only' is a (kind, name) to compare that object alone. 'projects' is the
+    package at the two states, where the caller has loaded it already: one
+    reading of each, for everything it says about them. 'files_compared' is
+    false for a package of more files than are compared one by one.
 
     A side the package is not at (a revision before it existed, an index it is
     not in) is compared as empty: everything on the other side was added, or
     removed.
     """
-    left = package_at(ctx, package, before)
-    right = package_at(ctx, package, after)
+    if projects is not None:
+        left, right = projects
+    else:
+        left = package_at(ctx, package, before)
+        right = package_at(ctx, package, after)
     if left is None and right is None:
         raise ValueError("%s is at neither %s nor %s" % (package, before, after or package_versions.WORKTREE))
     rows = []
@@ -360,13 +374,15 @@ def changes(
             rows.append({"kind": kind, "name": name, "package": package, "object": qualified(package, name), **changed})
     files = []
     package_changed = False
+    files_compared = True
     if not only:
         old = package_files(left)
         new = package_files(right)
         if old is None or new is None:
             # Too many files to compare one by one: say nothing of them rather
-            # than call the ones not listed added or removed.
+            # than call the ones not listed added or removed -- and say so.
             old = new = {}
+            files_compared = False
         for rel in sorted(set(old) | set(new)):
             if rel in named:
                 continue
@@ -383,5 +399,6 @@ def changes(
         "to": after or package_versions.WORKTREE,
         "objects": rows,
         "files": files,
+        "files_compared": files_compared,
         "package_changed": package_changed,
     }

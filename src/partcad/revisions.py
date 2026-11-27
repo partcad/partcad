@@ -321,7 +321,8 @@ def _cache_key(ctx, repository, kind: str, name: str, sha: str) -> str:
     # The tags of the context are in the key: an object an 'unless' skips here
     # is not there to have changed, and a context with other tags may see it.
     tags = hashlib.sha256("\n".join(sorted(getattr(ctx, "tags", None) or ())).encode()).hexdigest()[:12]
-    return "%s|%s|%s|%s|%s|%s" % (repository.identity, repository.relpath, kind, name, sha, tags)
+    # 'v2': what was kept before templates were compared in full is not kept on.
+    return "v2|%s|%s|%s|%s|%s|%s" % (repository.identity, repository.relpath, kind, name, sha, tags)
 
 
 def _read_cache(path: str) -> dict:
@@ -358,10 +359,18 @@ def _declared_files_at(repository, sha: str, kind: str, name: str):
     try:
         commit = repository.repo[sha].peel(pygit2.Commit)
         entry = commit.tree[(repository.relpath + "/" if repository.relpath else "") + "partcad.yaml"]
-        config = yaml.safe_load(repository.repo[entry.id].data) or {}
+        data = repository.repo[entry.id].data
     except KeyError:
         return set()
-    except Exception:  # pylint: disable=broad-except
+    except (ValueError, pygit2.GitError):
+        return _UNKNOWN
+    if any(opening in data for opening in (b"{{", b"{%", b"{#")):
+        # A Jinja2 template reads as YAML often enough, and names files as
+        # the template writes them, not as they are rendered.
+        return _UNKNOWN
+    try:
+        config = yaml.safe_load(data) or {}
+    except yaml.YAMLError:
         return _UNKNOWN
     if not isinstance(config, dict):
         return _UNKNOWN
@@ -528,6 +537,14 @@ def compare_states(
     if current is None:
         raise ValueError("The package is not loaded")
     after = after or package_versions.WORKTREE
+    # A revision that names nothing is refused, rather than taken for one the
+    # package is not at; a state, and the parent of a first commit, are there.
+    repository = package_versions.repository_of(current.config_dir)
+    for state in (before, after):
+        if package_versions.is_state(state) or repository is None:
+            continue
+        if not package_versions.before_history(repository, state):
+            package_versions.resolve(repository, state)
     left_project = changes.package_at(ctx, current.name, before)
     right_project = changes.package_at(ctx, current.name, after)
     if left_project is None and right_project is None:
@@ -566,12 +583,15 @@ def compare_states(
     }
     if kind == PACKAGE:
         try:
-            found = changes.changes(ctx, current.name, before, after)
+            # The very packages the text above was read from: one reading of each state.
+            found = changes.changes(ctx, current.name, before, after, projects=(left_project, right_project))
         except ValueError as e:
             pc_logging.debug("%s: %s" % (current.name, e))
         else:
             answer["changes"] = found
-            if found["objects"] or found["files"] or found["package_changed"]:
+            # Not 'same' unless everything was compared: a package of too many
+            # files to compare one by one is not known to be the same.
+            if found["objects"] or found["files"] or found["package_changed"] or not found["files_compared"]:
                 answer["same"] = False
     else:
         # The files it is built from are part of what it is: a change to its

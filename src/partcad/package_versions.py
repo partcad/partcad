@@ -49,6 +49,7 @@ revision is of this package's repository, and a sibling may be in another one.
 import hashlib
 import os
 import re
+import shutil
 import threading
 import typing
 import uuid
@@ -429,12 +430,17 @@ def _index_identity(path: str) -> typing.Optional[tuple]:
             if trailer[-20:].strip(b"\0"):
                 return (size, trailer)
             f.seek(0)
-            digest = hashlib.sha256()
-            for piece in iter(lambda: f.read(1 << 20), b""):
-                digest.update(piece)
-            return (size, digest.hexdigest())
+            return _identity_of(f.read())
     except OSError:
         return None
+
+
+def _identity_of(data: bytes) -> tuple:
+    """'_index_identity' of an index file's bytes."""
+    trailer = data[-32:]
+    if trailer[-20:].strip(b"\0"):
+        return (len(data), trailer)
+    return (len(data), hashlib.sha256(data).hexdigest())
 
 
 # The parent of a commit, written the way 'git' writes it: '<rev>~', '<rev>~1', '<rev>^', '<rev>^1'.
@@ -467,15 +473,42 @@ def index_tree(repository: Repository) -> str:
         cached = _index_trees.get(path)
         if seen is not None and cached is not None and cached[0] == seen:
             return cached[1]
-    index = repo.index
-    index.read(True)
+    # Read once: what it is kept under and the tree it holds come from the
+    # same bytes, whatever git writes over the file meanwhile.
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError:
+        data = None
+    index = _index_of(data) if data else None
+    if index is None:
+        # No index yet, or one that cannot be read apart from its repository
+        # (a split index): the repository's own, and nothing kept of it.
+        index, data = repo.index, None
+        index.read(True)
     if index.conflicts is not None:
         raise ValueError("The index of %s has conflicts: resolve them before asking for %s" % (repo.workdir, STAGED))
-    tree = str(index.write_tree())
-    if seen is not None:
+    tree = str(index.write_tree(repo))
+    if data is not None:
         with _index_trees_lock:
-            _index_trees[path] = (seen, tree)
+            _index_trees[path] = (_identity_of(data), tree)
     return tree
+
+
+def _index_of(data: bytes) -> typing.Optional[pygit2.Index]:
+    """The index whose file holds 'data', read from a copy of it; None where a copy cannot be read on its own."""
+    import tempfile
+
+    directory = tempfile.mkdtemp(prefix="partcad-index-")
+    try:
+        copy = os.path.join(directory, "index")
+        with open(copy, "wb") as f:
+            f.write(data)
+        return pygit2.Index(copy)
+    except (OSError, ValueError, pygit2.GitError):
+        return None
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def _lfs_object(repo: pygit2.Repository, data: bytes) -> typing.Optional[bytes]:
@@ -716,8 +749,10 @@ def _first_parent_cursor(repository: Repository, head: str, after: str) -> str:
         raise ValueError("There is no commit '%s' to go on from" % after) from e
     if cursor == head:
         return cursor
+    # As far back as it takes: a cursor this history handed out can be deeper
+    # than any one walk looks, a page at a time.
     commit = repository.repo[head]
-    for _ in range(REVISIONS_SCAN_LIMIT * 10):
+    while True:
         if not commit.parent_ids:
             break
         try:

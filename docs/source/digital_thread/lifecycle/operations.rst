@@ -93,7 +93,7 @@ everything since a revision. Each object reached is one row, reached as *changed
 with findings:
 
 * **breaking** -- an object removed or a parameter removed while something uses it, a reference that no longer
-  resolves, a port removed while mated;
+  resolves or names an object of another kind (an interface inheriting a part), a port removed while mated;
 * **changed** -- a shape that moved (**Measure** says by how much: volume and mass, as ``pc compare`` reads
   them); what is reached through a change of prose alone has not moved;
 * **verify** -- requirements and qualification tests to run again (**Test** runs them), drawings made from it now
