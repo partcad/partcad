@@ -30,15 +30,25 @@ runs:
     - name: The devcontainer needs to be rebuilt
       id: tag
       shell: bash -el {0}
+      # The branch name and the commit message are text somebody chose -- a
+      # fork's branch name is chosen by whoever opened the pull request -- so
+      # they reach the script as variables and are never spliced into it. A
+      # "${{ }}" in "run:" is substituted into the script's text before bash
+      # reads it, which made a branch named 'x";curl${IFS}...|sh;"' a command.
+      # Harmless while every caller runs on "pull_request" with a read-only
+      # token; not something to leave for the day one of them does not. The
+      # "container-images" action is careful with the same name for the same
+      # reason.
       env:
         BRANCH: ${{ steps.extract_branch.outputs.BRANCH }}
         BRANCH_SANITIZED: ${{ steps.extract_branch.outputs.BRANCH_SANITIZED }}
+        HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
       run: |
-        if [[ "X${{ github.event.head_commit.message }}" == "XVersion updated"* ]]; then
+        if [[ "X${HEAD_COMMIT_MESSAGE}" == "XVersion updated"* ]]; then
           # Do not add the branch name to the tag if the commit is created by "bumpversion"
-          export IMAGE_TAG="${{ env.VERSION }}"
+          export IMAGE_TAG="${VERSION}"
         else
-          export IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH_SANITIZED }}"
+          export IMAGE_TAG="${VERSION}-${BRANCH_SANITIZED}"
         fi
         echo "IMAGE_TAG=$IMAGE_TAG"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
@@ -63,6 +73,8 @@ runs:
       shell: bash -el {0}
       env:
         IMAGE_TAG: ${{ steps.tag.outputs.IMAGE_TAG }}
+      # IMAGE_TAG holds the branch name, so it is read from the environment
+      # rather than substituted into the script; see the step above.
       run: |
-        echo "Replacing devcontainer:${{ env.VERSION }} with devcontainer:${{ env.IMAGE_TAG }} in .devcontainer/devcontainer.json"
-        sed "s|devcontainer:${{ env.VERSION }}|devcontainer:${{ env.IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
+        echo "Replacing devcontainer:${VERSION} with devcontainer:${IMAGE_TAG} in .devcontainer/devcontainer.json"
+        sed "s|devcontainer:${VERSION}|devcontainer:${IMAGE_TAG}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json

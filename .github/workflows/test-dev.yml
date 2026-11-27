@@ -131,9 +131,10 @@ jobs:
         with:
           # "devcontainer" too, and not only the image outputs: a change to
           # ".devcontainer" alone sets neither of those, and the job below still
-          # runs and still pushes the dev container image ("push: always"). Left
-          # out, a fork's pull request changing only that file would be told
-          # nothing about the publish it cannot do. Caught by CodeRabbit here.
+          # runs and pushes the dev container image wherever "ghcr-write" lets
+          # it. Left out, a fork's pull request changing only that file would be
+          # told nothing about the publish it cannot do. Caught by CodeRabbit
+          # here.
           needs-ghcr: ${{ needs.scope.outputs.devcontainer == 'true'
             || needs.scope.outputs.image-push == 'true'
             || needs.scope.outputs.image-degraded == 'true' }}
@@ -186,7 +187,20 @@ jobs:
           imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
           configFile: .devcontainer/devcontainer-build.json
-          push: always
+          # Only where this run's token can write, which a fork's pull request's
+          # never can: GitHub hands it "packages: read" whatever this job asks
+          # for. "always" failed every such pull request at this push -- #691,
+          # #913, #968 and #988, a collaborator's among them -- with "denied:
+          # installation not allowed to Write organization package", and every
+          # job below was skipped with it. "preflight" has already worked out
+          # which case this is and said so in its summary.
+          #
+          # Nothing is lost by not pushing. The jobs below run in the image
+          # ".devcontainer/devcontainer.json" pins -- the release's -- and name
+          # this tag only as "cacheFrom", which a missing tag turns into a
+          # warning. So the build is the whole of what this job tests on a pull
+          # request, and a fork's still runs it.
+          push: ${{ needs.preflight.outputs.ghcr-write == 'true' && 'always' || 'never' }}
 
   poetry-install:
     name: "Run: poetry install"
@@ -560,6 +574,11 @@ jobs:
             # See "Which images this run uses" on "Scope".
             PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
             PC_CONTAINER_IMAGE_OWNER=${{ needs.scope.outputs.image-owner }}
+            # Non-empty where "preflight" found no SSH_PRIVATE_KEY_RO -- every
+            # pull request from a fork. "features/environment.py" then skips the
+            # @requires-ssh-key scenarios, and "runCmd" below leaves git's
+            # clones on https. See the same variable on "Behave" in "test.yml".
+            PARTCAD_TEST_NO_SSH_KEY=${{ needs.preflight.outputs.ssh-key != 'true' && '1' || '' }}
             # The conda sandbox, stated, for this job alone, and for its running time:
             # every scenario builds a fresh sandbox under a temporary $HOME, and on the
             # "docker" sandbox that took this suite past the two hours above (~100
@@ -576,7 +595,11 @@ jobs:
           runCmd: |
             set -e
             # TODO-26: PC-186: Allow to configure git clone protocol in settings
-            git config --global url."git@github.com:".insteadOf "https://github.com/"
+            # Only with a key to clone with: without one, every https clone this
+            # rewrites to SSH is one GitHub refuses.
+            if [ -z "${PARTCAD_TEST_NO_SSH_KEY:-}" ]; then
+              git config --global url."git@github.com:".insteadOf "https://github.com/"
+            fi
             git config --global protocol.version 2
             mkdir -pv behave-results
             status=0

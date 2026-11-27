@@ -38,9 +38,28 @@ def _network_available(host: str = "github.com", port: int = 443, timeout: float
         return False
 
 
+# Scenarios tagged with this clone over SSH, which GitHub refuses without a key
+# even for a public repository. They are SKIPPED (not failed) where the run has
+# said it has no key -- ``PARTCAD_TEST_NO_SSH_KEY`` set to anything non-empty --
+# and run everywhere else.
+#
+# CI sets it from what ".github/actions/preflight" found: a pull request whose
+# branch lives in a fork is given no secrets, so ``SSH_PRIVATE_KEY_RO`` is not
+# there to load, and these scenarios used to fail every such pull request on
+# that and nothing else. The same pull request runs them in the merge queue,
+# which has the key.
+#
+# Declared rather than probed, on purpose: a machine that has not said it lacks
+# a key is taken to have one, so a key that should be there and is broken still
+# fails the scenario instead of quietly skipping it.
+SSH_KEY_TAG = "requires-ssh-key"
+
+
 def before_scenario(context: Context, scenario) -> None:
     if NETWORK_TAG in scenario.effective_tags and not _network_available():
         scenario.skip("network not available: skipping @%s scenario" % NETWORK_TAG)
+    elif SSH_KEY_TAG in scenario.effective_tags and os.environ.get("PARTCAD_TEST_NO_SSH_KEY"):
+        scenario.skip("this run has no SSH key (PARTCAD_TEST_NO_SSH_KEY): skipping @%s scenario" % SSH_KEY_TAG)
     # First, so that it runs last: after the cleanups the steps register. See
     # 'features/daemons.py'.
     from features.daemons import watch_scenario_directories
