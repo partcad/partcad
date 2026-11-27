@@ -189,12 +189,13 @@ end's `via` points, its lead point, and last its origin. The path therefore alwa
 finishes on the second end's face, with or without a lead. The tangent at an end is its Z
 axis (reversed at the second end, so the path arrives along it). At a `via` point
 it is the Catmull-Rom tangent. At a `through` entry it is the sign of Z along
-which the knot it goes to next lies further than the knot it comes from (a `via`
-point, or the entry before, or that entry's lead point): the sign of Z · (next −
-previous). The knot it goes to next is a `via` point, the second end's lead
-point (or its origin, without a lead), or, when the next entry is another
-`through` entry, that entry's origin: its lead point would depend on its own
-direction, which is decided only when the path reaches it. If the two lie level
+which the point it goes to next lies further than the point it comes from: the
+sign of Z · (next − previous). Each of the two is a `via` point, an end's lead
+point (or its origin, without a lead), or, when the neighbouring entry is
+another `through` entry, that entry's origin, on both sides alike. Its lead
+point is not used on either side: the next entry's would depend on its own
+direction, decided only when the path reaches it, and using the previous
+entry's would make the choice depend on which end is listed first (D14). If the two lie level
 along the axis (that product is zero), neither
 sign is preferred, and the route is refused (D9) rather than given one. Only
 the chord from the knot before to the knot after matters: a path that comes in
@@ -260,7 +261,11 @@ auxiliary spine through each sample offset along its frame's X, so that the
 profile follows the D4 frames and their roll rather than OCCT's own, then
 `finish_request`. The auxiliary spine is matched by length along the path
 (`CurvilinearEquivalence`), not by plane intersection, which failed on these
-curves. An approximated spine (`GeomAPI_PointsToBSpline`) was tried and
+curves. Matching by share of length is exact at the ends only: where the
+profile rolls, the auxiliary spine winds round the path and is longer there,
+so between the ends the profile is turned by about the square of the offset.
+At 1 mm a flat profile was 5.65 mrad off at a `through` entry rolled 180°; the
+auxiliary spine runs 0.01 mm off the path, which leaves 0.6 µrad. An approximated spine (`GeomAPI_PointsToBSpline`) was tried and
 dropped: it turned the end faces by up to 1.7 mrad.
 The sketch resolution and sketch cache-key folding of `PartFactorySweep` move into
 a helper that both factories use.
