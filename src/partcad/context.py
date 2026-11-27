@@ -992,9 +992,13 @@ class Context:
         a revision of its own in turn ('//pkg@<sha>/dep@v1').
         """
         with self.lock:
-            found = self._registered_project(project_path)
-            if found is not None:
-                return found
+            # Except for a name of the staged state, which moves with the index:
+            # looked up again each time, and loaded again once it has moved
+            # (see '_load_staged').
+            if not package_versions.names_staged(project_path):
+                found = self._registered_project(project_path)
+                if found is not None:
+                    return found
             base, revisions = package_versions.split(project_path)
             current = self.get_project(base)
             if current is None:
@@ -1043,6 +1047,9 @@ class Context:
         current = self.get_project(base)
         if current is None:
             raise ValueError("there is no package %s" % base)
+        if revision == package_versions.WORKTREE:
+            # The files on disk: the package without a revision, by another name.
+            return current
         repository = package_versions.repository_of(current.config_dir)
         if repository is None and package_versions.exported_sha(current.config_dir) is not None:
             # A sub-folder of a revision is part of that commit: another
@@ -1053,6 +1060,8 @@ class Context:
             )
         if repository is None:
             raise ValueError("%s is not in a git repository, so it has no revisions" % base)
+        if revision == package_versions.STAGED:
+            return self._load_staged(base, current, repository)
         downloaded = self.is_downloaded(current)
         sha = package_versions.resolve(repository, revision, fetch=downloaded, user_config=self.user_config)
         name = package_versions.versioned_name(base, sha)
@@ -1065,20 +1074,8 @@ class Context:
         project = self._registered_project(name)
         if project is None:
             root = package_versions.export(repository, sha, os.path.join(self.user_config.internal_state_dir, "git"))
-            path = os.path.join(root, *repository.relpath.split("/")) if repository.relpath else root
-            import_config = {"name": name, "type": "local", "path": path}
-            include_paths = getattr(current, "include_paths", None)
-            if include_paths:
-                import_config["includePaths"] = list(include_paths)
-            # What the package inherits from the one it is under, as the
-            # package without a revision does (see 'ImportConfiguration').
-            head = base.rstrip("/").rpartition("/")[0]
-            parent_name = "//" if head == "/" else head
-            parent = self.projects.get(parent_name) if base not in ("//", self.name) and head else None
-            if parent is not None:
-                import_config["inheritedConfig"] = {"manufacturable": parent.is_manufacturable}
             with pc_logging.Action("Revision", base, package_versions.short(sha)):
-                project = self.import_project(None, import_config)
+                project = self._import_revision(base, current, repository, root, name)
             if project is None:
                 return None
             project.revision_sha = sha
@@ -1090,6 +1087,46 @@ class Context:
         # commit is still loaded once, under its id.
         if revision != sha and package_versions.names_a_commit(repository, revision, sha):
             self.project_aliases[package_versions.versioned_name(base, revision)] = project.name
+        return project
+
+    def _import_revision(self, base: str, current: Project, repository, root: str, name: str) -> Optional[Project]:
+        """The package 'base' read out of 'root', where a revision of its repository is written out, as 'name'."""
+        path = os.path.join(root, *repository.relpath.split("/")) if repository.relpath else root
+        import_config = {"name": name, "type": "local", "path": path}
+        include_paths = getattr(current, "include_paths", None)
+        if include_paths:
+            import_config["includePaths"] = list(include_paths)
+        # What the package inherits from the one it is under, as the
+        # package without a revision does (see 'ImportConfiguration').
+        head = base.rstrip("/").rpartition("/")[0]
+        parent_name = "//" if head == "/" else head
+        parent = self.projects.get(parent_name) if base not in ("//", self.name) and head else None
+        if parent is not None:
+            import_config["inheritedConfig"] = {"manufacturable": parent.is_manufacturable}
+        return self.import_project(None, import_config)
+
+    def _load_staged(self, base: str, current: Project, repository) -> Optional[Project]:
+        """The package 'base' as the git index holds it: '<base>@STAGED', what a new revision would be made of.
+
+        Read out of the tree the index holds, written out like a commit's (see
+        'package_versions.index_tree'), and kept while the index holds that
+        tree: two reads of an unchanged index are one package, and an index that
+        has moved is read again under the same name.
+        """
+        tree = package_versions.index_tree(repository)
+        name = package_versions.versioned_name(base, package_versions.STAGED)
+        project = self._registered_project(name)
+        if project is not None and getattr(project, "revision_tree", None) == tree:
+            return project
+        if project is not None:
+            self._drop_packages([name], False)
+        root = package_versions.export_tree(repository, tree, os.path.join(self.user_config.internal_state_dir, "git"))
+        with pc_logging.Action("Revision", base, package_versions.STAGED):
+            project = self._import_revision(base, current, repository, root, name)
+        if project is None:
+            return None
+        project.revision_tree = tree
+        project.revision_of = base
         return project
 
     def get_project_from(self, project, rel_project_path: str) -> Optional[Project]:

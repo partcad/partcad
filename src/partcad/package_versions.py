@@ -89,6 +89,21 @@ REVISIONS_SCAN_LIMIT = 20000
 _export_locks: dict[str, threading.Lock] = {}
 _export_locks_lock = threading.Lock()
 
+# The two states of a package that are not commits: what the git index holds --
+# which a new revision would be made of -- and the files on disk. Upper case, so
+# that neither reads as a branch; a branch called so all the same is still
+# reached as 'refs/heads/STAGED'. A package without '@' is the working tree, so
+# '//pkg@WORKTREE' is '//pkg' by another name; '//pkg@STAGED' is loaded the way
+# a revision is, out of the tree the index holds (see 'index_tree').
+STAGED = "STAGED"
+WORKTREE = "WORKTREE"
+STATES = (STAGED, WORKTREE)
+
+# The tree the index held, by the index file's path, with what the file looked
+# like then: reading it again is one 'stat' while it does not change.
+_index_trees: dict[str, tuple] = {}
+_index_trees_lock = threading.Lock()
+
 
 def short(sha: typing.Optional[str]) -> typing.Optional[str]:
     """The first 'SHORT_SHA' characters of a commit id, which is how one is shown."""
@@ -151,6 +166,22 @@ def selector_candidates(selector: str) -> list:
 def versioned_name(base: str, revision: str) -> str:
     """The name a package is loaded under at a revision."""
     return "%s%s%s" % (base, SEPARATOR, revision)
+
+
+def is_state(revision: typing.Optional[str]) -> bool:
+    """Whether a revision is one of the two states that are not commits ('STAGED', 'WORKTREE')."""
+    return revision in STATES
+
+
+def names_staged(package_path: typing.Optional[str]) -> bool:
+    """Whether a package path names the staged state anywhere along it ('//pkg@STAGED', '//a@STAGED/sub').
+
+    Such a name moves with the index: what it names is looked up again each
+    time rather than remembered (see 'Context.get_versioned_project').
+    """
+    if not is_versioned(package_path):
+        return False
+    return any(part.split("/", 1)[0] == STAGED for part in package_path.split(SEPARATOR)[1:])
 
 
 def unversioned(package_path: str) -> str:
@@ -381,6 +412,34 @@ def resolve(repository: Repository, revision: str, fetch: bool = False, user_con
     return str(commit.id)
 
 
+def index_tree(repository: Repository) -> str:
+    """The id of the tree the git index holds: what 'git write-tree' prints, and a new revision would be made of.
+
+    Raises ValueError while the index has conflicts, which no tree can hold.
+    Read again only when the index file has changed since.
+    """
+    repo = repository.repo
+    path = os.path.join(repo.path, "index")
+    try:
+        stat = os.stat(path)
+        seen = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        seen = None
+    with _index_trees_lock:
+        cached = _index_trees.get(path)
+        if seen is not None and cached is not None and cached[0] == seen:
+            return cached[1]
+    index = repo.index
+    index.read(True)
+    if index.conflicts is not None:
+        raise ValueError("The index of %s has conflicts: resolve them before asking for %s" % (repo.workdir, STAGED))
+    tree = str(index.write_tree())
+    if seen is not None:
+        with _index_trees_lock:
+            _index_trees[path] = (seen, tree)
+    return tree
+
+
 def _lfs_object(repo: pygit2.Repository, data: bytes) -> typing.Optional[bytes]:
     """The file an LFS pointer stands for, when the repository has it locally."""
     if not data.startswith(_LFS_POINTER) or len(data) > 1024:
@@ -453,7 +512,16 @@ def _write_tree(repo: pygit2.Repository, tree: pygit2.Tree, dest: str, top: bool
 EXPORT_PREFIX = "revision-"
 
 
-def export(repository: Repository, sha: str, git_cache_dir: str) -> str:
+def export_tree(repository: Repository, tree_id: str, git_cache_dir: str) -> str:
+    """The directory the tree 'tree_id' -- the index's, see 'index_tree' -- is written out in, as 'export' writes a commit.
+
+    Named after the tree, so that an index nobody has changed since is one
+    directory, and a different one is another.
+    """
+    return export(repository, tree_id, git_cache_dir, tree=True)
+
+
+def export(repository: Repository, sha: str, git_cache_dir: str, tree: bool = False) -> str:
     """The directory the commit 'sha' of 'repository' is written out in, writing it if it is not there yet.
 
     Kept in '~/.partcad/git' beside the copies of downloaded dependencies, so
@@ -472,7 +540,7 @@ def export(repository: Repository, sha: str, git_cache_dir: str) -> str:
     from .project_factory_git import cache_dir_name
 
     os.makedirs(git_cache_dir, exist_ok=True)
-    name = EXPORT_PREFIX + cache_dir_name(repository.identity, sha)
+    name = EXPORT_PREFIX + cache_dir_name(repository.identity, ("index-" + sha) if tree else sha)
     dest = os.path.join(git_cache_dir, name)
     guard = os.path.join(dest, GUARD)
     if os.path.exists(guard):
@@ -483,13 +551,13 @@ def export(repository: Repository, sha: str, git_cache_dir: str) -> str:
     with lock, FileLock(dest + ".lock"):
         if os.path.exists(guard):
             return dest
-        commit = repository.repo.get(sha)
-        if commit is None:
-            raise ValueError("The commit %s is missing from %s" % (sha, repository.repo.path))
-        commit = commit.peel(pygit2.Commit)
+        found = repository.repo.get(sha)
+        if found is None:
+            raise ValueError("The %s %s is missing from %s" % ("tree" if tree else "commit", sha, repository.repo.path))
+        written = found.peel(pygit2.Tree) if tree else found.peel(pygit2.Commit).tree
         staging = "%s.tmp-%s" % (dest, uuid.uuid4().hex[:8])
         try:
-            _write_tree(repository.repo, commit.tree, staging, top=True)
+            _write_tree(repository.repo, written, staging, top=True)
             # Created, never opened: nothing at that name may be followed or
             # written through, whatever put it there.
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
@@ -520,7 +588,7 @@ def _subtree_id(commit: pygit2.Commit, relpath: str):
         return None
 
 
-def revisions(repository: Repository, limit: int = REVISIONS_LIMIT) -> list:
+def revisions(repository: Repository, limit: int = REVISIONS_LIMIT, after: typing.Optional[str] = None) -> list:
     """The commits that changed the package, newest first, from the one checked out.
 
     A commit is listed when what it has at the package's directory differs from
@@ -532,6 +600,9 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT) -> list:
 
     Each is {'sha', 'short', 'summary', 'author', 'time'}: the time as seconds
     since the epoch, which is what a reader formats in its own time zone.
+
+    'after' is the commit a page ended at: the listing goes on from the one
+    after it, which is how a reader asks for every revision a page at a time.
     """
     head = repository.head()
     if head is None:
@@ -560,6 +631,10 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT) -> list:
             # Nothing of the package changed - or it is not there on either
             # side, which a directory deleted and made again later is, between
             # the two: the walk goes on past it, to the commits before.
+            continue
+        if after is not None:
+            if str(commit.id) == after:
+                after = None
             continue
         found.append(
             {

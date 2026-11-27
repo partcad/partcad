@@ -3284,14 +3284,21 @@ body.busy * {
 }
 
 /*
- * Revisions: the commits that changed the package down the left, the selected
- * one compared with what is on screen on the right, and what the package used
- * and was used by at it folded away under that - the Simulation tab's page, over
- * a list of commits (see 'revisions.ts').
+ * Revisions: the revisions down the left - and above them WORKTREE and STAGED
+ * when they apply - the selected row compared with another state on the right,
+ * and what it depended on, what used it and what changing it reached folded
+ * away under that: the Simulation tab's page, over a list of commits (see
+ * 'revisions.ts').
  */
 
 .revisions-list {
-    flex-basis: 10rem;
+    flex-basis: 14rem;
+}
+
+/* A row's chips - how a commit changed an object - go under its id when the
+   column is too narrow for both. */
+.revisions-item {
+    flex-wrap: wrap;
 }
 
 .revisions-item .build-title {
@@ -3308,6 +3315,36 @@ body.busy * {
     box-shadow: none;
 }
 
+/* WORKTREE and STAGED, in the colours the editor's Source Control marks a
+   modified file and a staged one with. The list's marks say how a run went on
+   the other tabs, and which state a row is here. */
+.revisions-running {
+    color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-charts-yellow, currentColor));
+    box-shadow: none;
+}
+
+.revisions-passed {
+    color: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-charts-green, currentColor));
+    box-shadow: none;
+}
+
+.revisions-footer {
+    flex: 0 0 auto;
+    padding: 0.4rem 0.6rem;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.revisions-footer:empty {
+    display: none;
+}
+
+.revisions-footer > .placeholder,
+.revisions-footer > .error {
+    margin: 0.2rem 0;
+    padding: 0;
+    font-size: 0.9em;
+}
+
 .revisions-main {
     position: relative;
     display: flex;
@@ -3319,6 +3356,11 @@ body.busy * {
 
 .revisions-toolbar {
     justify-content: flex-start;
+}
+
+/* "This change" and "Since then", at the far end of the toolbar. */
+.revisions-mode {
+    margin-left: auto;
 }
 
 .revisions-sha {
@@ -3345,6 +3387,56 @@ body.busy * {
 
 .revisions-compare > .placeholder {
     margin: 0.5rem 1rem;
+}
+
+/* What the page says over the comparison - a change made, a warning, the advice
+   for an agent, the New revision form - set in from the edges as the
+   placeholders are. */
+.revisions-content > .requirements-note,
+.revisions-content > .requirements-form {
+    margin: 0.5rem 1rem;
+}
+
+.revisions-advice-text {
+    margin: 0 0 0.4rem;
+}
+
+.revisions-warning {
+    color: var(--vscode-editorWarning-foreground, var(--vscode-descriptionForeground));
+}
+
+.revisions-message {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 0.4rem;
+}
+
+.revisions-refusal {
+    margin: 0.4rem 0;
+}
+
+.revisions-checks {
+    margin: 0.2rem 0 0.4rem;
+    padding-left: 1.2rem;
+    list-style: none;
+}
+
+.revisions-checks .passed .revisions-check-mark {
+    color: var(--vscode-testing-iconPassed, var(--vscode-charts-green, currentColor));
+}
+
+.revisions-checks .failed .revisions-check-mark {
+    color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground, currentColor));
+}
+
+/* A package's comparison: the objects and the files that changed, over its
+   'partcad.yaml'. */
+.revisions-changes {
+    margin: 0.5rem 1rem 0.75rem;
+}
+
+.revisions-changes table.grid + table.grid {
+    margin-top: 0.5rem;
 }
 
 /* The two sides, a line of each per row, in the colours the editor's own diff
@@ -3444,4 +3536,190 @@ body.busy * {
 .usedby-note {
     margin-top: 0.8em;
     font-size: 0.9em;
+}
+
+/*
+ * What the Operations tabs share (see 'operations.ts'): chips beside a name,
+ * sections that fold under a title saying how many they hold, a checkbox in a
+ * form, a pair of buttons that is one choice, and how bad a finding is.
+ */
+.pane.deps {
+    overflow: auto;
+    padding: 0.75rem 1rem 1.5rem 1rem;
+}
+
+.ops-chips,
+.scenario-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.ops-chip,
+.scenario-chip {
+    padding: 0 0.4em;
+    border: 1px solid var(--vscode-panel-border, currentColor);
+    border-radius: 3px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.build-item.selected .scenario-chip {
+    color: inherit;
+}
+
+.ops-section {
+    margin-top: 0.8rem;
+}
+
+.ops-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0;
+    border: none;
+    background: none;
+    color: var(--vscode-foreground);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ops-section-title:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+.ops-section-chevron {
+    flex: 0 0 1em;
+    color: var(--vscode-descriptionForeground);
+}
+
+.ops-section-body {
+    padding: 0.2rem 0 0 1.35rem;
+}
+
+.ops-subtitle {
+    margin: 1rem 0 0.3rem;
+    font-weight: 600;
+}
+
+.ops-check {
+    display: block;
+    margin: 0.2rem 0;
+    cursor: pointer;
+}
+
+.ops-toggle {
+    display: inline-flex;
+    gap: 1px;
+}
+
+.ops-toggle .requirements-button[aria-pressed='true'] {
+    cursor: default;
+}
+
+.ops-severity {
+    padding: 0 0.4em;
+    border-radius: 3px;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ops-severity-breaking {
+    color: var(--vscode-errorForeground, currentColor);
+}
+
+.ops-severity-changed {
+    color: var(--vscode-editorWarning-foreground, var(--vscode-charts-yellow, currentColor));
+}
+
+.ops-severity-verify {
+    color: var(--vscode-charts-blue, currentColor);
+}
+
+.ops-severity-info,
+.ops-severity.none {
+    color: var(--vscode-descriptionForeground);
+    font-weight: normal;
+}
+
+/* Dependencies: the declared ones with Update and Remove, the form, and what is
+   used but not declared. */
+.deps td {
+    overflow-wrap: anywhere;
+}
+
+.deps td.actions {
+    white-space: nowrap;
+    text-align: right;
+}
+
+.deps td.actions .requirements-button + .requirements-button {
+    margin-left: 0.3rem;
+}
+
+.deps-from .deps-sha {
+    margin-left: 0.4em;
+}
+
+.deps-users > div + div {
+    margin-top: 0.15rem;
+}
+
+/* Impact: the selector along the top, and what the change reaches under it. */
+.pane.impact {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.impact-toolbar {
+    justify-content: flex-start;
+}
+
+.impact-toolbar .render-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.impact-revision {
+    width: 16rem;
+}
+
+.impact-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.75rem 1rem 1.5rem 1rem;
+}
+
+.impact-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0 0 0.6rem;
+}
+
+.impact-finding + .impact-finding {
+    margin-top: 0.3rem;
+}
+
+.impact-finding-text {
+    margin-left: 0.4em;
+}
+
+.impact-measured,
+.impact-tested {
+    margin-left: 1rem;
+    font-size: 0.9em;
+}
+
+.impact-via {
+    color: var(--vscode-descriptionForeground);
+    overflow-wrap: anywhere;
 }

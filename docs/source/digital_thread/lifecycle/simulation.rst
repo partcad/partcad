@@ -90,7 +90,7 @@ This is ``stable``:
     sim-mujoco:
       type: git
       url: https://github.com/partcad/partcad-sim-mujoco.git
-      track: main                          # `pc update` pins `revision:` to it
+      track: main                          # `pc ops deps update --all` pins `revision:` to it
 
   scenes:
     stable:

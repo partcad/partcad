@@ -17,7 +17,7 @@ import functools
 from partcad_utils import staging
 
 from .. import debugger
-from ..core import operations
+from ..core import operations, ops
 
 # CLI-shaped method name -> operation callable.
 _OPERATIONS = {
@@ -76,16 +76,23 @@ _OPERATIONS = {
     # requirement of an object, written into its declaration or taken out.
     "requirements.add": operations.requirements_add,
     "requirements.remove": operations.requirements_remove,
-    # What the IDE's Operations tabs are drawn from, and 'pc ops rev list',
-    # 'diff', 'uses' and 'used-by' and 'pc ops used-by': the commits that changed a
-    # package, an object compared with one of them (side by side, and as a
-    # unified diff), and what uses what among what the context has loaded (see
-    # 'partcad.revisions' and 'partcad.usage').
-    "revisions.list": operations.revisions_list,
-    "revisions.compare": operations.revisions_compare,
-    "revisions.uses": operations.revisions_uses,
-    "revisions.used_by": operations.revisions_used_by,
-    "usage.used_by": operations.usage_used_by,
+    # Operations: what the IDE's Operations tabs are drawn from, and every 'pc
+    # ops' command and 'ops_*' MCP tool -- Revisions, Dependencies, Used By and
+    # Impact of a package or of one object, at any state of its repository
+    # (see 'core.ops' and 'partcad_utils.ops_views', which says which kinds of
+    # subject each applies to).
+    "ops.views": ops.views,
+    "ops.rev.list": ops.rev_list,
+    "ops.rev.diff": ops.rev_diff,
+    "ops.rev.status": ops.rev_status,
+    "ops.rev.stage": ops.rev_stage,
+    "ops.rev.new": ops.rev_new,
+    "ops.deps.list": ops.deps_list,
+    "ops.deps.add": ops.deps_add,
+    "ops.deps.remove": ops.deps_remove,
+    "ops.deps.update": ops.deps_update,
+    "ops.used_by": ops.used_by,
+    "ops.impact": ops.impact,
     # Not a CLI command: what the IDE's Qualification tabs are drawn from --
     # 'pc qual test <object>', one line per check rather than a log, by the same
     # checks; a tab asks for its own 'subtypes'.

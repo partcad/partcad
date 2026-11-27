@@ -19,7 +19,7 @@ Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text log
 ``--devel-index`` is one of those common options, and is worth calling out. The public index (the ``pub``
 dependency, published at `partcad-index <https://github.com/partcad/partcad-index>`_) lives in a repository of
 its own, and a package imports it at ``main``: the branch ``pc init`` has the dependency track and pins to the
-commit it is at, and the one ``pc update`` moves that pin to the newest commit of. That is the released state.
+commit it is at, and the one ``pc ops deps update --all`` moves that pin to the newest commit of. That is the released state.
 ``--devel-index`` imports its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so
 a change staged there can be exercised before it is released. It replaces the revision a package names rather
 than deferring to it, which is what it exists to do. The redirect follows the repository rather than the
@@ -30,7 +30,7 @@ where PartCAD runs from its sources (an editable install), which is PartCAD bein
 being developed: ``PC_DEVEL_INDEX=false`` turns it off there (see :ref:`devel-index-from-sources`).
 
 ``--force-update`` is another, and is the "force auto-update" setting. Loading a package never moves a ``git``
-dependency it has downloaded before -- ``pc update`` does that, by rewriting the dependency's ``revision:`` (see
+dependency it has downloaded before -- ``pc ops deps update --all`` does that, by rewriting the dependency's ``revision:`` (see
 :ref:`pinning-dependencies`). With ``--force-update`` every load fetches every ``git`` dependency again, and one
 that has ``track:`` is used at the newest commit of that branch instead of at its ``revision:``, without anything
 being written down. The same switch is ``PC_FORCE_UPDATE`` in the environment, ``forceUpdate`` in the user
@@ -330,7 +330,7 @@ Host commands
 
 ``pc upgrade``
   Upgrade PartCAD itself to the latest version. This upgrades the installation on this machine; the packages a
-  package imports are ``pc update``.
+  package imports are ``pc ops deps update --all``.
 
   PartCAD upgrades itself whichever way it was installed: the Python wheels are upgraded with ``pip``, and a
   standalone bundle downloads the matching release, verifies its checksum, and installs it beside the running
@@ -401,10 +401,10 @@ Package commands
   mode, and options such as ``--desc``, ``--url``, and ``--manufacturable`` to prefill package metadata.
 
   Unless it is ``-p`` (private), the package depends on the public index as ``pub``, with ``track: main`` and
-  ``revision:`` pinned to the commit ``main`` is at as the package is created -- what ``pc add dep`` writes, so
-  the package builds the same way from its first commit on and ``pc update`` is what moves it (see
+  ``revision:`` pinned to the commit ``main`` is at as the package is created -- what ``pc ops deps add`` writes, so
+  the package builds the same way from its first commit on and ``pc ops deps update --all`` is what moves it (see
   :ref:`pinning-dependencies`). With ``--offline``, or when the index cannot be reached, the package is still
-  created, without the ``revision:`` line, and a warning says to run ``pc update``.
+  created, without the ``revision:`` line, and a warning says to run ``pc ops deps update --all``.
 
   It also sets up the folder your editor opens: a **Render** command in ``.vscode/launch.json``, and the
   AI agent skills that teach a coding agent to drive PartCAD -- the ``pc`` plugin in
@@ -447,7 +447,7 @@ Package commands
 ``pc install``
   Download everything the current package needs to be built - the PartCAD counterpart of ``npm install``.
   It fetches all imported packages at the revisions they are pinned to -- a dependency downloaded before is not
-  moved, which is ``pc update``'s job -- then prepares every sketch, part and assembly by computing its cache key:
+  moved, which is ``pc ops deps update --all``'s job -- then prepares every sketch, part and assembly by computing its cache key:
   that downloads the files behind ``fileFrom`` and resolves each alias, enrich, compound and assembly link,
   which loads the packages the objects really depend on. Every piece of :ref:`software` is prepared too, by
   fetching its file - it has no cache key, being a file rather than something built out of one. Nothing is
@@ -456,13 +456,8 @@ Package commands
   it too (see :ref:`recursive-names`).
 
 ``pc update``
-  Move every ``git`` dependency that has ``track: <branch>`` to the newest commit of that branch, by rewriting its
-  ``revision:`` in ``partcad.yaml``, then fetch every imported package again. It is the one command that moves a
-  dependency: loading a package never does (see :ref:`pinning-dependencies`). Only the packages of this workspace
-  are edited -- the root and the ``local`` packages under it -- never one that was imported. A dependency that
-  tracks nothing but names a branch, or no revision at all, is fetched to that branch's newest commit, with
-  nothing written down. This updates the packages a package imports; to upgrade the PartCAD installation itself,
-  use ``pc upgrade``.
+  The old name of ``pc ops deps update --all``: every tracked dependency of the workspace moved to the newest
+  commit of its branch, then every import fetched again. Kept so that it goes on working.
 
 ``pc lint``
   Run linting checks on the files within packages. Name the package as ``-P <package>...`` to check the
@@ -494,12 +489,8 @@ Object commands
   implies ``-r``.
 
 ``pc add``
-  Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``,
-  ``scene``, and ``software``.
-
-  ``pc add dep <name> <url>`` adds a ``git`` dependency pinned, the way ``pc update`` leaves one: tracking the
-  branch the repository calls its default (``--track <branch>`` names another), at the commit that branch is at
-  now. Finding that commit needs the repository, and a dependency it cannot be found for is not added.
+  Add an object to a package. Subcommands: ``sketch``, ``part``, ``assembly``, ``scene``, and ``software``; and
+  ``dep``, the old name of ``pc ops deps add``.
 
   Each object subcommand takes a file the package already has, **or an http(s) URL**. Given a URL, the file is
   fetched once so that the declaration can be written with the ``fileHash`` of what came back -- an object
@@ -1330,67 +1321,160 @@ Object commands
   The Digital Thread's Revisions tab writes both sides of a comparison the same way, which is why it shows what
   changed in what an object *means* rather than in how it was written.
 
+``pc ops``
+  The Digital Thread's Operations tabs on the command line -- Revisions, Dependencies, Used By and Impact (see
+  :doc:`/digital_thread/lifecycle/operations`). Every one of them is about one *subject*: an object -- ``OBJECT``
+  -- or a whole package: ``-P`` selects it with no ``OBJECT``, or ``OBJECT`` is written as a package path
+  (``//pub/std``, ``./sub``). Which commands apply depends on the subject's kind; one that does not says which
+  does. A *state* is a revision -- a commit id, a tag, a branch, ``HEAD~1`` -- or ``STAGED``, what the git index
+  holds, or ``WORKTREE``, the files on disk; it is written after ``@`` like any revision
+  (``//pub/examples@STAGED:bracket``), and commands that compare take two: ``--from`` (``HEAD`` by default) and
+  ``--to`` (``WORKTREE``), or ``--staged`` (``HEAD`` to ``STAGED``), ``--unstaged`` (``STAGED`` to ``WORKTREE``) or
+  ``--since REV`` (``REV`` to ``WORKTREE``). Every reading command takes ``--json``, and every one naming an object
+  takes ``-p <name>=<value>``.
+
+  .. code-block:: shell
+
+    pc ops summary bracket                 # the views the bracket has, and a line from each
+    pc ops rev list                        # every revision of this package, newest first
+    pc ops rev list bracket                # only the revisions that changed the bracket
+    pc ops rev diff --since v1.2 bracket   # what changed in it since v1.2, as a unified diff
+    pc ops rev status                      # what is staged and what is not, by object
+    pc ops rev stage bracket               # stage the bracket's files and its declaration
+    pc ops rev new -m "Thicker flange" bracket
+    pc ops deps list                       # what this package declares, uses without declaring, holds
+    pc ops deps list frame                 # what the frame places and names, and how
+    pc ops deps add std https://github.com/acme/std.git --track main
+    pc ops used-by --load //acme/std       # the packages and objects that use it
+    pc ops impact --staged --load          # what the staged change reaches, and what it risks
+
+``pc ops summary``
+  Say which Operations views ``OBJECT`` -- or a package -- has, the commands of each that apply to it, and one
+  line from each: how many revisions, what is staged and what is not, how many dependencies and users::
+
+    pc ops summary [OBJECT]
+
 ``pc ops rev list``
-  List the commits that changed a package, newest first, ``*`` marking the one checked out -- what the
-  Digital Thread's Operations > Revisions tab lists down its left::
+  List the revisions of the subject, newest first, ``*`` marking the one checked out -- what the Revisions tab
+  lists::
 
     pc ops rev list [OBJECT]
 
-  Of the package ``OBJECT`` is in, or with no ``OBJECT`` of the package ``-P`` selects (this one by default). A
-  package that shares its repository with others lists the commits that changed its own directory, the one that
-  deleted it included. A package in no git repository, or with nothing of it committed, is *not published yet*.
-  ``--json`` prints the daemon's answer. Like every command that names an object, these take ``-p <name>=<value>``:
-  ``pc ops rev diff`` compares that instance at each side.
+  A package lists every commit that changed its directory, the one that deleted it included; a commit that changed
+  only sub-packages of it says which (``in``). An object lists only the commits that changed it -- its declaration
+  or a file it is built from -- each with how: ``added``, ``removed``, ``declaration``, ``source``. A page is 100
+  revisions (``--limit``); ``--after <sha>`` goes on from where a page ended. A package in no git repository, or
+  with nothing of it committed, is *not published yet*.
 
 ``pc ops rev diff``
-  Show what changed in an object since a revision, as a unified diff -- what the Revisions tab draws side by
+  Show what changed in the subject between two states, as a unified diff -- what the Revisions tab draws side by
   side::
 
-    pc ops rev diff REVISION [OBJECT]
+    pc ops rev diff [--from STATE] [--to STATE | --staged | --unstaged | --since REV] [OBJECT]
 
-  ``REVISION`` is a commit id (as much of it as is unique), a tag or a branch; the package is loaded at it beside
-  what is checked out (see :ref:`package-revisions`). Both sides are ``OBJECT`` written out as ``pc copy`` writes
-  one -- rendered, normalized, defaults left out -- so what differs is what the object *means*, and a comment or a
-  reformatted line is no difference. With no ``OBJECT``, the package's ``partcad.yaml`` as Jinja2 rendered it at
-  each. Nothing is printed when nothing changed; ``--exit-code`` exits with 1 when something did, as
-  ``git diff --exit-code`` does, ``-U``/``--context`` sets how many unchanged lines surround each change, and
-  ``--json`` prints the comparison side by side as well.
+  Everything not committed by default (``HEAD`` to ``WORKTREE``). Both sides are ``OBJECT`` written out as
+  ``pc copy`` writes one -- rendered, normalized, defaults left out -- so what differs is what the object
+  *means*, and a comment or a reformatted line is no difference. For a package, what changed in it object by
+  object comes first, then its ``partcad.yaml`` as rendered at each. Nothing is printed when nothing changed;
+  ``--exit-code`` exits with 1 when something did, as ``git diff --exit-code`` does, and ``-U``/``--context`` sets
+  how many unchanged lines surround each change.
 
   .. code-block:: shell
 
-    pc ops rev diff v1.2 bracket          # the bracket now, against the bracket as tagged v1.2
-    pc ops rev diff HEAD~3                # the package's partcad.yaml, three commits ago and now
-    pc ops rev diff --exit-code main :bracket || echo "changed since main"
+    pc ops rev diff --since v1.2 bracket   # the bracket now, against the bracket as tagged v1.2
+    pc ops rev diff --staged               # what is staged in this package
+    pc ops rev diff --from HEAD~3 --to HEAD
+    pc ops rev diff --exit-code --since main :bracket || echo "changed since main"
 
-``pc ops rev uses``
-  List the dependencies a package declared at a revision, each with the commit it is at and the name that loads
-  it there (``<package>@<sha>``, which any command takes) -- the Revisions tab's *Uses (Dependencies)*::
+``pc ops rev status``
+  Say what of the subject is staged -- in a new revision -- and what is not, object by object, the files of the
+  package no object is built from, and what else in the repository is staged or changed. When anything of the
+  subject is not staged it ends with one sentence to hand an agent::
 
-    pc ops rev uses REVISION [OBJECT]
+    pc ops rev status [OBJECT]
 
-  Loading a dependency may download it.
+``pc ops rev stage``
+  Stage every change of the subject that is not staged yet: a package's own files, untracked ones included, and
+  none of its sub-packages'; an object's files and its own declaration in ``partcad.yaml`` -- only the lines of
+  it, so another object's edit in the same file stays out::
 
-``pc ops rev used-by``
-  List the objects PartCAD has loaded that use a package at a revision -- by its commit, a tag, a branch, or as
-  the dependency checked out there -- each with how many times: the Revisions tab's *Used By*::
+    pc ops rev stage [OBJECT]
 
-    pc ops rev used-by REVISION [OBJECT]
+``pc ops rev new``
+  Commit what is staged as a new revision of the subject::
+
+    pc ops rev new -m MESSAGE [--include-others] [--yes] [--skip-checks] [OBJECT]
+
+  Only what is staged is committed, as the user git on this machine names. Before it is, PartCAD checks that
+  something of the subject is staged, asks before committing anything else that is staged (``--include-others``
+  agrees up front) and while changes of the subject are not staged or changed again since they were
+  (``--yes``), and runs lint and the qualification tests of what is staged (``--skip-checks`` commits without
+  them). A merge in progress, conflicts, or an index that changed since it was looked at refuse it. Where git is
+  installed the commit is made by it, so the repository's hooks and signing apply.
+
+``pc ops deps list``
+  List what the subject depends on -- the Dependencies tab::
+
+    pc ops deps list [OBJECT]
+
+  A package: the dependencies it declares, each with what its declaration says and the commit it is at; the
+  packages its objects use without declaring them, through an index the workspace root imports, say; and its
+  sub-packages. An object: what it names and places, each with how -- ``placed``, ``source (alias)``,
+  ``sketch``, ``implements`` -- and how many times. At a revision (``//pkg@v1.2``) as at the working tree;
+  asking may download a dependency.
+
+``pc ops deps add``
+  Declare a dependency of a package::
+
+    pc ops deps add NAME LOCATION [--track BRANCH] [-P PACKAGE]
+
+  ``LOCATION`` is a path, a git URL or a tarball URL. A ``git`` dependency is added pinned: tracking the branch
+  the repository calls its default (``--track`` names another), at the commit that branch is at now. Finding that
+  commit needs the repository, and a dependency it cannot be found for is not added. ``pc add dep`` is its old
+  name and still works.
+
+``pc ops deps remove``
+  Take a dependency out of a package's declaration, naming the objects of it that still use it::
+
+    pc ops deps remove NAME [-P PACKAGE]
+
+``pc ops deps update``
+  Move each ``git`` dependency that has ``track: <branch>`` to the newest commit of that branch, by rewriting its
+  ``revision:`` in ``partcad.yaml``, then fetch every imported package again::
+
+    pc ops deps update [NAME...] [-P PACKAGE] [--all]
+
+  Of the package ``-P`` selects -- only the dependencies named, when any are -- or, with ``--all``, of every
+  package of the workspace. It is the one command that moves a dependency: loading a package never does (see
+  :ref:`pinning-dependencies`). Only the packages of this workspace are edited -- the root and the ``local``
+  packages under it -- never one that was imported. A dependency that tracks nothing but names a branch, or no
+  revision at all, is fetched to that branch's newest commit, with nothing written down. ``pc update`` is its old
+  name, for ``--all``, and still works. To upgrade the PartCAD installation itself, use ``pc upgrade``.
 
 ``pc ops used-by``
-  List the objects PartCAD has loaded that use an object -- or, with no ``OBJECT``, anything in the package
-  ``-P`` selects -- each with how many times; an assembly that places a bolt four times uses it four times. The
-  Digital Thread's Operations > Used By tab::
+  List what uses the subject -- the Used By tab::
 
     pc ops used-by [OBJECT]
 
-  Only what is loaded is looked at, so ``--load`` loads every package of the workspace first: the packages in
-  this checkout, sub-folders and local dependencies, and none it downloads. An assembly that has been built is
-  counted by what it places, one not built yet by what its declaration names.
+  An object: the objects PartCAD has loaded that use it, each with how and how many times; an assembly that
+  places a bolt four times uses it four times. A package: also the packages that declare it as a dependency,
+  each with the revision it pins and how far behind that is. A package at a revision (``//pkg@v1.2``): what uses
+  it at that revision. Only what is loaded is looked at, so ``--load`` loads every package of the workspace
+  first: the packages in this checkout, sub-folders and local dependencies, and none it downloads.
 
-  .. code-block:: shell
+``pc ops impact``
+  Say what a change reaches, and what each object it reaches now risks -- the Impact tab::
 
-    pc ops used-by --load bracket
-    pc ops used-by --json -P //vendor/fasteners
+    pc ops impact [--from STATE] [--to STATE | --staged | --unstaged | --since REV] [--measure] [--test] [--load] [OBJECT]
+
+  The objects that changed between the two states -- everything not committed by default -- then everything that
+  uses them, each reached as *changed* or *via* the objects in between, with findings: **breaking** (an object
+  removed or a parameter removed while used, a reference that no longer resolves), **changed** (a shape that
+  moved), **verify** (requirements and tests to run again, drawings made from it out of date), **info** (prose
+  alone). For an object, also what it uses that changed. Packages that pin this one at an older revision are
+  listed apart: the change does not reach them until they update. It looks where ``pc ops used-by`` looks;
+  ``--measure`` measures how much each changed part moved and ``--test`` runs the qualification tests of every
+  object reached, both of which build shapes. ``--exit-code`` exits with 1 when anything is breaking.
 
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. The object is found by its name whatever its kind (see

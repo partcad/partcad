@@ -105,32 +105,57 @@ def _looks_like_reference(value: str) -> bool:
     return ":" in head
 
 
-def _walk(project, config, found: list, depth: int = 0) -> None:
-    """Every '<package>:<object>' 'config' names, resolved against 'project', into 'found'."""
+# What a reference written under a key is to the object writing it, as the
+# Dependencies and Used By views say it ('How'); any other key says itself.
+_HOW = {
+    "sketch": "sketch",
+    "openings": "opening",
+    "visual": "visual",
+    "implements": "implements",
+    "inherits": "inherits",
+    "part": "placed",
+    "assembly": "placed",
+    "scene": "placed",
+    "links": "placed",
+    "children": "placed",
+    "mates": "mate",
+    "ports": "port",
+}
+
+
+def _walk(project, config, found: list, depth: int = 0, how: typing.Optional[str] = None) -> None:
+    """Every '<package>:<object>' 'config' names, resolved against 'project', into 'found' with how it is named."""
     if depth > 32:
         return
     if isinstance(config, dict):
         for key, value in config.items():
             if key in PROSE_KEYS or key in _SOURCE_KEYS:
                 continue
+            said = _HOW.get(key, how or key)
             if key in REFERENCE_KEYS and isinstance(value, str) and value and ":" not in value:
                 # A bare name where only an object can be: one of this package's.
-                found.append((project.name, _strip_parameters(value)))
+                found.append((project.name, _strip_parameters(value), _HOW.get(key, key)))
                 continue
-            _walk(project, value, found, depth + 1)
+            _walk(project, value, found, depth + 1, said)
     elif isinstance(config, (list, tuple)):
         for item in config:
-            _walk(project, item, found, depth + 1)
+            _walk(project, item, found, depth + 1, how)
     elif isinstance(config, str) and _looks_like_reference(config):
         try:
             package, name = project.resolve(config)
         except Exception:  # pylint: disable=broad-except
             return
-        found.append((package, _strip_parameters(name)))
+        found.append((package, _strip_parameters(name), how or "reference"))
 
 
-def references(project, kind: str, config) -> list:
-    """Every object the declaration 'config' of a 'kind' in 'project' refers to, as (package, name), once per mention."""
+def references_how(project, kind: str, config) -> list:
+    """Every object the declaration 'config' of a 'kind' in 'project' refers to, as (package, name, how), once per mention.
+
+    'how' is what the reference is to the object: 'source (alias)' or 'source
+    (enrich)' for what it is made from, 'placed' for what it places, 'sketch',
+    'implements', 'inherits', 'opening', 'visual' -- or the key it is written
+    under.
+    """
     found = []
     if not isinstance(config, dict):
         if isinstance(config, str) and kind in ("sketch", "part", "assembly", "scene"):
@@ -142,15 +167,26 @@ def references(project, kind: str, config) -> list:
         try:
             source = pc_reference.source_of(project, project.name, config, kind)
             package, name = pc_reference.split(source)
-            found.append((package, _strip_parameters(name)))
+            said = config.get("type") if config.get("type") in ("alias", "enrich") else None
+            found.append((package, _strip_parameters(name), "source (%s)" % said if said else "source"))
         except Exception:  # pylint: disable=broad-except
             pass
     _walk(project, config, found)
     return found
 
 
+def references(project, kind: str, config) -> list:
+    """Every object the declaration 'config' of a 'kind' in 'project' refers to, as (package, name), once per mention."""
+    return [(package, name) for package, name, _how in references_how(project, kind, config)]
+
+
 def _loaded_projects(ctx) -> list:
-    """Every package the context has loaded, once each, PartCAD's built-in ones left out."""
+    """Every package the context has loaded, once each, PartCAD's built-in ones and its revisions left out.
+
+    A revision of a package ('//pkg@v1', '//pkg@STAGED') is loaded to be
+    compared or listed: it is the package's history, not one more package
+    using anything.
+    """
     from .output import BUILTIN_PATHS
 
     seen = set()
@@ -158,13 +194,15 @@ def _loaded_projects(ctx) -> list:
     for name, project in list(ctx.projects.items()):
         if project is None or id(project) in seen or name in BUILTIN_PATHS:
             continue
+        if package_versions.is_versioned(name) or getattr(project, "revision_sha", None):
+            continue
         seen.add(id(project))
         result.append(project)
     return result
 
 
-def _uses(ctx, project, kind: str, name: str, config, wanted) -> int:
-    """How many times the object 'kind' 'name' of 'project' refers to what 'wanted' accepts."""
+def _uses(ctx, project, kind: str, name: str, config, wanted, hows: typing.Optional[list] = None) -> int:
+    """How many times the object 'kind' 'name' of 'project' refers to what 'wanted' accepts; each 'how' into 'hows'."""
     count = 0
     reference_type = isinstance(config, dict) and config.get("type") in pc_reference.REFERENCE_TYPES
     if kind in ("assembly", "scene") and not reference_type:
@@ -179,9 +217,13 @@ def _uses(ctx, project, kind: str, name: str, config, wanted) -> int:
                 placed = _strip_parameters(getattr(item, "name", "") or "")
                 if package is not None and wanted(_canonical(ctx, package), placed):
                     count += 1
-    for package, object_name in references(project, kind, config):
+                    if hows is not None:
+                        hows.append("placed")
+    for package, object_name, how in references_how(project, kind, config):
         if wanted(_canonical(ctx, package), object_name):
             count += 1
+            if hows is not None:
+                hows.append(how)
     return count
 
 
@@ -200,8 +242,9 @@ def used_by(ctx, wanted: typing.Callable[[str, str], bool], exclude: typing.Call
             # list what it has not.
             configs = project._object_configs.get(kind)
             for name, config in list((configs or {}).items()):
+                hows = []
                 try:
-                    count = _uses(ctx, project, kind, name, config, wanted)
+                    count = _uses(ctx, project, kind, name, config, wanted, hows)
                 except Exception as e:  # pylint: disable=broad-except
                     pc_logging.debug("%s:%s: could not read what it refers to: %s" % (project.name, name, e))
                     continue
@@ -213,6 +256,7 @@ def used_by(ctx, wanted: typing.Callable[[str, str], bool], exclude: typing.Call
                             "name": name,
                             "kind": kind,
                             "count": count,
+                            "how": sorted(set(hows)),
                         }
                     )
     result.sort(key=lambda row: (row["package"], row["name"]))
@@ -348,4 +392,204 @@ def dependencies(ctx, project) -> list:
                 "type": config.get("type") if isinstance(config, dict) else None,
             }
         )
+    return rows
+
+
+# ---- Dependencies and the packages that depend -------------------------------
+
+
+def _kind_of(ctx, package: str, name: str) -> typing.Optional[str]:
+    try:
+        loaded = ctx.get_project(package)
+        return loaded.object_kind(name) if loaded is not None else None
+    except Exception:  # pylint: disable=broad-except
+        return None
+
+
+def object_dependencies(ctx, project, kind: str, name: str) -> list:
+    """What '<kind> <name>' of 'project' names, and once built places: one row per object, with how and how many times.
+
+    {'object', 'package', 'name', 'kind', 'how', 'count', 'revision',
+    'short'}, 'revision' being the commit the package it comes from is at.
+    Asking what kind each is may load the package it is in.
+    """
+    name = _strip_parameters(name)
+    config = project.object_config(kind, name)
+    if config is None:
+        raise ValueError("%s declares no %s '%s'" % (project.name, kind, name))
+    found = {}
+
+    def note(package: str, object_name: str, how: str) -> None:
+        package = _canonical(ctx, package)
+        row = found.setdefault(
+            (package, object_name),
+            {
+                "object": "%s:%s" % (package, object_name),
+                "package": package,
+                "name": object_name,
+                "how": [],
+                "count": 0,
+            },
+        )
+        row["count"] += 1
+        if how not in row["how"]:
+            row["how"].append(how)
+
+    raw = project._object_configs.get(kind, {}).get(name, config)
+    reference_type = isinstance(raw, dict) and raw.get("type") in pc_reference.REFERENCE_TYPES
+    if kind in ("assembly", "scene") and not reference_type:
+        built = project.objects(kind).get(name)
+        for child in getattr(built, "children", None) or []:
+            item = getattr(child, "item", None)
+            package = getattr(item, "project_name", None)
+            placed = _strip_parameters(getattr(item, "name", "") or "")
+            if package is not None and placed:
+                note(package, placed, "placed")
+    for package, object_name, how in references_how(project, kind, raw):
+        if package == project.name and object_name == name:
+            continue
+        note(package, object_name, how)
+    rows = []
+    for row in found.values():
+        row["kind"] = _kind_of(ctx, row["package"], row["name"])
+        loaded = ctx.get_project(row["package"]) if row["kind"] is not None else None
+        sha = pc_revision.package_revision(loaded) if loaded is not None else None
+        row["revision"] = sha
+        row["short"] = package_versions.short(sha)
+        rows.append(row)
+    rows.sort(key=lambda row: (row["package"], row["name"]))
+    return rows
+
+
+def _identity(project) -> typing.Optional[tuple]:
+    """(the repository a package's files are in, where in it the package is), or None for one in no repository."""
+    directory = getattr(project, "config_dir", None)
+    if not directory:
+        return None
+    exported = package_versions.exported_sha(directory)
+    repository = package_versions.repository_of(directory)
+    if repository is None or exported is not None:
+        return None
+    return repository.identity, repository.relpath
+
+
+def _behind(repository, pinned: typing.Optional[str]) -> typing.Optional[int]:
+    """How many revisions of the package are newer than the commit 'pinned', in its own repository; None when unknown."""
+    if not pinned:
+        return None
+    for count, row in enumerate(package_versions.revisions(repository)):
+        if row["sha"].startswith(str(pinned).lower()):
+            return count
+    return None
+
+
+def package_dependencies(ctx, project) -> dict:
+    """What a package depends on: {'package', 'declared', 'undeclared', 'subpackages'}.
+
+    'declared' is 'dependencies' (each declared dependency with the commit it
+    is at) with what each declaration says: its location, the branch it
+    tracks, the commit it is pinned to. 'undeclared' the packages its objects
+    reach without declaring them -- through an index the workspace root
+    imports, say -- each with the objects that do. 'subpackages' the packages
+    in directories below it, which need no pin: the commit checked out is it.
+    """
+    from .context import _dependency_package_name
+    from .output import BUILTIN_PATHS
+
+    declared_config = project.dependencies() or {}
+    declared = dependencies(ctx, project)
+    for row in declared:
+        config = declared_config.get(row["name"])
+        if isinstance(config, dict):
+            row["location"] = config.get("url") or config.get("path")
+            row["track"] = config.get("track")
+            pinned = config.get("revision")
+            row["pinned"] = None if pinned is None else str(pinned)
+    declared_packages = [
+        _dependency_package_name(project.name, name, config) for name, config in declared_config.items()
+    ]
+    children = [
+        child for child in (project.get_child_project_names(absolute=False) or []) if child not in declared_config
+    ]
+    from partcad_utils.utils import get_child_project_path
+
+    subpackages = [{"name": child, "package": get_child_project_path(project.name, child)} for child in children]
+
+    def ours(package: str) -> bool:
+        if _is_within(package, project.name) or package in BUILTIN_PATHS:
+            return True
+        return any(_is_within(package, dependency) for dependency in declared_packages)
+
+    undeclared = {}
+    kinds = {}
+    for kind in REFERRING_KINDS:
+        for name, config in list((project.object_configs(kind) or {}).items()):
+            kinds.setdefault(name, kind)
+            try:
+                mentioned = references_how(project, kind, config)
+            except Exception:  # pylint: disable=broad-except
+                continue
+            for package, _object_name, _how in mentioned:
+                package = package_versions.unversioned(_canonical(ctx, package))
+                if ours(package):
+                    continue
+                users = undeclared.setdefault(package, {})
+                users[name] = users.get(name, 0) + 1
+    return {
+        "package": project.name,
+        "declared": declared,
+        "undeclared": [
+            {
+                "package": package,
+                "users": [
+                    {"name": name, "object": "%s:%s" % (project.name, name), "kind": kinds.get(name), "count": count}
+                    for name, count in sorted(users.items())
+                ],
+            }
+            for package, users in sorted(undeclared.items())
+        ],
+        "subpackages": subpackages,
+    }
+
+
+def package_dependents(ctx, project) -> list:
+    """The loaded packages that declare 'project' as a dependency: {'package', 'name', 'type', 'pinned', 'short', 'behind'}.
+
+    Found by the package each declaration loads, and by where its files come
+    from: a dependency fetched from the very repository 'project' is in, at
+    its directory, is 'project' at another commit. 'behind' is how many
+    revisions of 'project' are newer than the one it is pinned to.
+    """
+    from .context import _dependency_package_name
+
+    target = project.name
+    identity = _identity(project)
+    repository = package_versions.repository_of(project.config_dir)
+    rows = []
+    for other in _loaded_projects(ctx):
+        if other.name == target or _is_within(other.name, target):
+            continue
+        for name, config in (other.dependencies() or {}).items():
+            loaded_as = _dependency_package_name(other.name, name, config)
+            matches = _canonical(ctx, loaded_as) == target
+            if not matches:
+                loaded = ctx.projects.get(loaded_as)
+                if loaded is not None and identity is not None:
+                    found = package_versions.repository_of(loaded.config_dir)
+                    matches = found is not None and (found.identity, found.relpath) == identity
+            if not matches:
+                continue
+            kind = config.get("type") if isinstance(config, dict) else None
+            pinned = config.get("revision") if isinstance(config, dict) else None
+            rows.append(
+                {
+                    "package": other.name,
+                    "name": name,
+                    "type": kind or ("local" if isinstance(config, dict) and config.get("path") else None),
+                    "pinned": None if pinned is None else str(pinned),
+                    "short": package_versions.short(str(pinned)) if pinned else None,
+                    "behind": _behind(repository, pinned) if repository is not None else None,
+                }
+            )
+    rows.sort(key=lambda row: (row["package"], row["name"]))
     return rows

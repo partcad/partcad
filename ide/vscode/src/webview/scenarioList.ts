@@ -38,6 +38,11 @@ export interface ScenarioRow {
     name: string;
     desc?: string | null;
     verdict: Verdict;
+    /**
+     * A few words after the name, each a chip: how a revision changed an
+     * object, on the Revisions tab, which lists commits with this widget.
+     */
+    chips?: string[];
 }
 
 export class ScenarioList {
@@ -83,6 +88,12 @@ export class ScenarioList {
             mark.title = entry.verdict.label;
             row.appendChild(mark);
             row.appendChild(el('span', 'build-title', entry.name));
+            if (entry.chips !== undefined && entry.chips.length > 0) {
+                const chips = row.appendChild(el('span', `scenario-chips ${this.prefix}-chips`));
+                for (const word of entry.chips) {
+                    chips.appendChild(el('span', 'scenario-chip', word));
+                }
+            }
             row.title = entry.desc?.trim() ? `${entry.name}: ${entry.desc.trim()}` : entry.name;
             row.addEventListener('click', () => this.onSelect(entry.name));
             row.addEventListener('keydown', (event: KeyboardEvent) => this.onKey(event, entry.name));

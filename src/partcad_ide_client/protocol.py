@@ -349,15 +349,15 @@ SCENARIO_TABS = ("fea", "dynamic", "thermal", "cfd", "simulation")
 # to each other. 'supply' is the tab labelled "Buy". Qualification is a tab per
 # subtype of qualification test ('partcad.qual'); its Process Emulation is not
 # here: it holds nothing yet and is always disabled, so a flag for it could
-# never open it. Operations is what has become of the object since it was
-# written: its package's revisions, each compared with what is on screen, and
-# what among the loaded packages uses it ('usedby').
+# never open it. Operations is the object's -- or the package's -- record: its
+# revisions and what is staged, what it depends on, what among the loaded
+# packages uses it ('usedby'), and what a change reaches ('impact').
 VIEWER_TABS = {
     "design": ("3d", "2d", "draft", "cmf", "cam"),
     "analysis": ("fea", "dynamic", "thermal", "cfd"),
     "manufacturing": ("bvb", "build", "supply", "bom", "assembly"),
     "qualification": ("basic", "topology", "simulation", "other"),
-    "operations": ("revisions", "usedby"),
+    "operations": ("revisions", "dependencies", "usedby", "impact"),
 }
 
 

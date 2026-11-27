@@ -484,6 +484,9 @@ class Project(project_config.Configuration):
     # None for every other package, which is read from wherever it is loaded.
     revision_sha: typing.Optional[str] = None
     revision_of: typing.Optional[str] = None
+    # For the package as the git index holds it ('<name>@STAGED'): the tree it
+    # was read out of, which it is answered for while the index still holds it.
+    revision_tree: typing.Optional[str] = None
 
     class MaterialLock(object):
         """The lock of one CMF declaration ('partcad.cmf'): materials, colours and finishes alike.
@@ -3512,6 +3515,28 @@ class Project(project_config.Configuration):
             with open(self.config_path, "w", encoding="utf-8") as fp:
                 yaml.dump(config, fp)
                 fp.close()
+        return True
+
+    def remove_import(self, alias) -> bool:
+        """Take the dependency 'alias' out of this package's 'partcad.yaml'; False, said why, where it cannot be."""
+        why = self.not_written_to()
+        if why is not None:
+            pc_logging.error("Not removing the dependency '%s' from '%s': %s" % (alias, self.name, why))
+            return False
+        with self._editing():
+            yaml = ruamel.yaml.YAML()
+            yaml.preserve_quotes = True
+            with open(self.config_path, encoding="utf-8") as fp:
+                config = yaml.load(fp)
+            dependencies = config.get("dependencies") if config is not None else None
+            if not dependencies or alias not in dependencies:
+                pc_logging.error("%s declares no dependency '%s'" % (self.name, alias))
+                return False
+            del dependencies[alias]
+            if not dependencies:
+                del config["dependencies"]
+            with open(self.config_path, "w", encoding="utf-8") as fp:
+                yaml.dump(config, fp)
         return True
 
     def rel_path(self, path) -> str:

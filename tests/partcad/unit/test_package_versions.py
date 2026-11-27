@@ -215,6 +215,7 @@ def test_a_package_in_no_repository_has_no_revisions(tmp_path, monkeypatch):
         "published": False,
         "head": None,
         "revisions": [],
+        "more": False,
     }
 
 
@@ -307,7 +308,14 @@ def test_what_uses_an_object_is_counted_among_what_is_loaded(ctx):
     ctx.get_project("//sub")
 
     assert usage.object_used_by(ctx, "//", "cube") == [
-        {"object": "//sub:peg", "package": "//sub", "name": "peg", "kind": "part", "count": 1}
+        {
+            "object": "//sub:peg",
+            "package": "//sub",
+            "name": "peg",
+            "kind": "part",
+            "count": 1,
+            "how": ["source (alias)"],
+        }
     ]
 
 

@@ -114,15 +114,21 @@ def tracked_dependencies(ctx) -> list[tuple]:
     return tracked
 
 
-def pin_tracked_dependencies(ctx) -> dict:
+def pin_tracked_dependencies(ctx, package=None, names=None) -> dict:
     """Step 1 of 'update': rewrite each tracked dependency's 'revision:' to where its branch is.
 
+    Every one of the workspace, or -- with 'package' -- that package's alone,
+    and -- with 'names' -- only the dependencies it declares under those names.
     Returns how many were moved ("pinned"), how many were where their branch
     is already ("current"), and how many could not be moved ("failed"), each of
     which has been reported.
     """
     stats = {"pinned": 0, "current": 0, "failed": 0}
     tracked = tracked_dependencies(ctx)
+    if package is not None:
+        tracked = [entry for entry in tracked if entry[0].name == package]
+    if names:
+        tracked = [entry for entry in tracked if entry[1] in names]
     if tracked and ctx.user_config.offline:
         pc_logging.error("Not moving %d tracked dependencies: PartCAD is configured to work offline" % len(tracked))
         stats["failed"] += len(tracked)
@@ -189,13 +195,14 @@ def pin_tracked_dependencies(ctx) -> dict:
     return stats
 
 
-def update(ctx) -> dict:
+def update(ctx, package=None, names=None) -> dict:
     """Move every tracked dependency's pin to its branch, then fetch every import again.
 
-    Returns the counts 'pin_tracked_dependencies' returns, and "count", how many
-    packages there are once it is done.
+    'package' and 'names' narrow what is moved, as 'pin_tracked_dependencies'
+    says. Returns the counts it returns, and "count", how many packages there
+    are once it is done.
     """
-    stats = pin_tracked_dependencies(ctx)
+    stats = pin_tracked_dependencies(ctx, package=package, names=names)
 
     # From the files as they are now, and every import resolved anew: a warm
     # context has packages loaded long before, at what were the pins then.

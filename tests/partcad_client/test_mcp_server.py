@@ -125,10 +125,18 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
             "login",
             "instructions",
             "compare",
+            "ops_summary",
             "ops_rev_list",
             "ops_rev_diff",
-            "ops_rev_uses",
+            "ops_rev_status",
+            "ops_rev_stage",
+            "ops_rev_new",
+            "ops_deps_list",
+            "ops_deps_add",
+            "ops_deps_remove",
+            "ops_deps_update",
             "ops_used_by",
+            "ops_impact",
             "version",
             "list_methods",
             "execute",
@@ -155,12 +163,17 @@ def test_the_annotations_do_not_claim_less_than_the_truth(tmp_path):
         "search",
         "instructions",
         "compare",
+        "ops_summary",
         "ops_rev_list",
         "ops_rev_diff",
-        "ops_rev_uses",
+        "ops_rev_status",
+        "ops_deps_list",
         "ops_used_by",
+        "ops_impact",
     ):
         assert tools[name].read_only_hint is True, name
+    for name in ("ops_rev_stage", "ops_rev_new", "ops_deps_add", "ops_deps_remove", "ops_deps_update"):
+        assert tools[name].read_only_hint is False, name
     assert tools["export"].read_only_hint is False
     assert tools["export"].destructive_hint is True
     assert tools["execute"].read_only_hint is False
@@ -236,10 +249,10 @@ def test_a_list_value_is_written_the_way_a_name_spells_it(tmp_path):
         ("export", "render.inline", {"format": "step", "path": "out/box.step"}),
         ("qual_test", "qual.run", {}),
         ("instructions", "assembly.guide", {}),
-        ("ops_rev_list", "revisions.list", {}),
-        ("ops_rev_diff", "revisions.compare", {"revision": "v1"}),
-        ("ops_rev_uses", "revisions.uses", {"revision": "v1"}),
-        ("ops_used_by", "usage.used_by", {}),
+        ("ops_rev_list", "ops.rev.list", {}),
+        ("ops_rev_diff", "ops.rev.diff", {"from_state": "v1"}),
+        ("ops_deps_list", "ops.deps.list", {}),
+        ("ops_used_by", "ops.used_by", {}),
     ],
 )
 def test_every_tool_naming_an_object_takes_its_parameter_values(tmp_path, tool, method, arguments):
@@ -1073,74 +1086,139 @@ UNIFIED = "--- //@aaaaaaaa:cube\n+++ //:cube\n@@ -1 +1 @@\n-  cuboid: 10\n+  cub
 
 def test_ops_rev_list_sends_what_pc_ops_rev_list_sends(tmp_path):
     """No object is the package, as 'pc ops rev list' with no OBJECT; an object says its kind when told."""
-    daemon, server = serve(tmp_path, {"revisions.list": lambda params, emit: {"published": True, "revisions": []}})
+    daemon, server = serve(tmp_path, {"ops.rev.list": lambda params, emit: {"published": True, "revisions": []}})
     assert not call(server, "ops_rev_list").is_error
-    call(server, "ops_rev_list", {"object": "frame", "kind": "assembly", "package": "//pkg"})
-    assert requests(daemon, "revisions.list") == [
-        {"package": ".", "kind": "package", "params": [], "context": "ctx-1"},
-        {"package": "//pkg", "object": "frame", "kind": "assembly", "params": [], "context": "ctx-1"},
+    call(server, "ops_rev_list", {"object": "frame", "kind": "assembly", "package": "//pkg", "after": "a" * 40})
+    assert requests(daemon, "ops.rev.list") == [
+        {"package": ".", "kind": "package", "limit": 100, "params": [], "context": "ctx-1"},
+        {
+            "package": "//pkg",
+            "object": "frame",
+            "kind": "assembly",
+            "limit": 100,
+            "params": [],
+            "after": "a" * 40,
+            "context": "ctx-1",
+        },
     ]
 
 
 def test_ops_rev_diff_is_the_unified_diff_and_not_the_side_by_side_rows(tmp_path):
     """The comparison comes back as the unified diff, as text of its own; the IDE's rows are left out."""
-    answer = {"revision": "a" * 40, "short": "a" * 8, "same": False, "rows": [{"tag": "equal"}], "unified": UNIFIED}
-    daemon, server = serve(tmp_path, {"revisions.compare": lambda params, emit: answer})
+    answer = {"from": "v1", "to": "STAGED", "same": False, "rows": [{"tag": "equal"}], "unified": UNIFIED}
+    daemon, server = serve(tmp_path, {"ops.rev.diff": lambda params, emit: answer})
 
-    result = call(server, "ops_rev_diff", {"revision": "v1", "object": "cube", "lines": 1})
+    result = call(server, "ops_rev_diff", {"from_state": "v1", "to_state": "STAGED", "object": "cube", "lines": 1})
 
     assert not result.is_error
-    (request,) = requests(daemon, "revisions.compare")
+    (request,) = requests(daemon, "ops.rev.diff")
     assert request == {
         "package": None,
         "object": "cube",
         "params": [],
-        "revision": "v1",
         "lines": 1,
+        "from": "v1",
+        "to": "STAGED",
         "context": "ctx-1",
     }
     reply = body(result)
-    assert reply["result"] == {"revision": "a" * 40, "short": "a" * 8, "same": False}
+    assert reply["result"] == {"from": "v1", "to": "STAGED", "same": False}
     assert result.content[1].text == UNIFIED
 
 
 def test_ops_rev_diff_of_nothing_changed_says_so(tmp_path):
-    answer = {"short": "a" * 8, "same": True, "rows": [], "unified": ""}
-    daemon, server = serve(tmp_path, {"revisions.compare": lambda params, emit: answer})
+    answer = {"from": "HEAD", "to": "WORKTREE", "same": True, "rows": [], "unified": ""}
+    daemon, server = serve(tmp_path, {"ops.rev.diff": lambda params, emit: answer})
 
-    result = call(server, "ops_rev_diff", {"revision": "v1"})
+    result = call(server, "ops_rev_diff")
 
-    assert requests(daemon, "revisions.compare")[0]["kind"] == "package"
-    assert result.content[1].text == "No change since aaaaaaaa."
+    assert requests(daemon, "ops.rev.diff")[0]["kind"] == "package"
+    assert result.content[1].text == "No change from HEAD to WORKTREE."
 
 
-def test_ops_rev_uses_sends_what_pc_ops_rev_uses_sends(tmp_path):
-    daemon, server = serve(tmp_path, {"revisions.uses": lambda params, emit: {"dependencies": []}})
+def test_ops_rev_status_and_stage_ask_about_the_subject(tmp_path):
+    daemon, server = serve(
+        tmp_path,
+        {"ops.rev.status": lambda params, emit: {"staged": []}, "ops.rev.stage": lambda params, emit: {"staged": []}},
+    )
 
-    assert not call(server, "ops_rev_uses", {"revision": "v1"}).is_error
-    assert requests(daemon, "revisions.uses") == [
-        {"package": ".", "object": None, "revision": "v1", "params": [], "context": "ctx-1"}
+    call(server, "ops_rev_status", {"object": "bracket"})
+    call(server, "ops_rev_stage", {"package": "//lib"})
+
+    assert requests(daemon, "ops.rev.status") == [{"package": None, "object": "bracket", "context": "ctx-1"}]
+    assert requests(daemon, "ops.rev.stage") == [{"package": "//lib", "kind": "package", "context": "ctx-1"}]
+
+
+def test_ops_rev_new_signs_with_the_user_s_git_identity_and_agrees_to_nothing_unless_told(tmp_path, monkeypatch):
+    import partcad_utils.git_identity as git_identity
+
+    monkeypatch.setattr(git_identity, "identity", lambda directory=None: {"name": "Ann", "email": "ann@example.com"})
+    daemon, server = serve(tmp_path, {"ops.rev.new": lambda params, emit: {"short": "c" * 8}})
+
+    call(server, "ops_rev_new", {"message": "Bracket", "object": "bracket", "expect_index": "d" * 40})
+    call(server, "ops_rev_new", {"message": "All", "include_others": True, "yes": True, "skip_checks": True})
+
+    first, second = requests(daemon, "ops.rev.new")
+    assert first["author"] == {"name": "Ann", "email": "ann@example.com"}
+    assert first["expect_index"] == "d" * 40
+    assert (first["include_others"], first["yes"], first["skip_checks"]) == (False, False, False)
+    assert (second["include_others"], second["yes"], second["skip_checks"]) == (True, True, True)
+    assert second["kind"] == "package"
+
+
+def test_ops_deps_tools_send_what_pc_ops_deps_sends(tmp_path):
+    answers = {method: (lambda params, emit: {}) for method in ("ops.deps.add", "ops.deps.remove", "ops.deps.update")}
+    daemon, server = serve(tmp_path, answers)
+
+    call(server, "ops_deps_add", {"name": "std", "location": "https://x/std.git", "track": "main"})
+    call(server, "ops_deps_remove", {"name": "std", "package": "//lib"})
+    call(server, "ops_deps_update", {"names": ["std"]})
+    call(server, "ops_deps_update", {"all": True})
+
+    assert requests(daemon, "ops.deps.add") == [
+        {"package": ".", "name": "std", "location": "https://x/std.git", "track": "main", "context": "ctx-1"}
+    ]
+    assert requests(daemon, "ops.deps.remove") == [{"package": "//lib", "name": "std", "context": "ctx-1"}]
+    assert requests(daemon, "ops.deps.update") == [
+        {"package": ".", "names": ["std"], "context": "ctx-1"},
+        {"all": True, "context": "ctx-1"},
     ]
 
 
-def test_ops_used_by_is_pc_ops_used_by_and_with_a_revision_pc_ops_rev_used_by(tmp_path):
+def test_ops_used_by_and_ops_impact_send_what_their_commands_send(tmp_path):
     daemon, server = serve(
         tmp_path,
-        {
-            "usage.used_by": lambda params, emit: {"objects": []},
-            "revisions.used_by": lambda params, emit: {"objects": []},
-        },
+        {"ops.used_by": lambda params, emit: {"objects": []}, "ops.impact": lambda params, emit: {"affects": []}},
     )
 
     call(server, "ops_used_by", {"object": "cube", "load": True})
-    call(server, "ops_used_by", {"revision": "v1"})
+    call(server, "ops_used_by", {"package": "//lib@v1"})
+    call(server, "ops_impact", {"from_state": "HEAD", "to_state": "STAGED", "measure": True})
 
-    assert requests(daemon, "usage.used_by") == [
-        {"package": None, "object": "cube", "params": [], "load": True, "context": "ctx-1"}
+    assert requests(daemon, "ops.used_by") == [
+        {"package": None, "object": "cube", "params": [], "load": True, "context": "ctx-1"},
+        {"package": "//lib@v1", "kind": "package", "params": [], "load": False, "context": "ctx-1"},
     ]
-    assert requests(daemon, "revisions.used_by") == [
-        {"package": ".", "object": None, "revision": "v1", "params": [], "context": "ctx-1"}
+    assert requests(daemon, "ops.impact") == [
+        {
+            "package": ".",
+            "kind": "package",
+            "measure": True,
+            "test": False,
+            "load": False,
+            "from": "HEAD",
+            "to": "STAGED",
+            "context": "ctx-1",
+        }
     ]
+
+
+def test_ops_summary_asks_for_the_views_and_their_summary(tmp_path):
+    daemon, server = serve(tmp_path, {"ops.views": lambda params, emit: {"views": []}})
+
+    call(server, "ops_summary", {"object": "frame"})
+
+    assert requests(daemon, "ops.views") == [{"package": None, "object": "frame", "summary": True, "context": "ctx-1"}]
 
 
 # --- Comments ----------------------------------------------------------------

@@ -24,8 +24,17 @@
 // PartCAD to draw, so the host shows it itself, and its CMF tab asks the daemon
 // by the kind, which is the only thing that finds a declaration.
 //
+// And when an Operations tab asks a question, or for a change: a question is
+// about the object, its package or the package at a state, and is cancelled
+// only by a newer one of its kind; a change is never cancelled, a new revision
+// is made as the user git names here, and a revision refused says why.
+//
 
 import * as assert from 'assert';
+import { execFileSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { PartcadViewer } from '../../viewer/PartcadViewer';
@@ -847,6 +856,231 @@ suite('The Digital Thread host, and CMF', () => {
                 ['cmf', 2],
                 ['cmf', 3],
             ],
+        );
+        viewer.dispose();
+    });
+});
+
+suite('The Digital Thread host, asked by an Operations tab', () => {
+    /** What each Operations command was asked with, and a way to answer it. */
+    const asked: { command: string; args: Record<string, unknown>; answer: (data: unknown) => void }[] = [];
+    /** What the next call of a command throws, instead of waiting for an answer. */
+    const failing = new Map<string, unknown>();
+    const registrations: vscode.Disposable[] = [];
+
+    suiteSetup(() => {
+        for (const command of [
+            'partcad.opsRevList',
+            'partcad.opsRevDiff',
+            'partcad.opsRevNew',
+            'partcad.opsDepsList',
+            'partcad.opsUsedBy',
+        ]) {
+            registrations.push(
+                vscode.commands.registerCommand(command, (args: Record<string, unknown>) => {
+                    const error = failing.get(command);
+                    if (error !== undefined) {
+                        failing.delete(command);
+                        return Promise.reject(error);
+                    }
+                    return new Promise((resolve) => asked.push({ command, args, answer: resolve }));
+                }),
+            );
+        }
+    });
+
+    suiteTeardown(() => registrations.forEach((registration) => registration.dispose()));
+
+    function shown(): {
+        viewer: PartcadViewer;
+        internals: {
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+            opsWrite(
+                token: number,
+                tab: string,
+                ops: unknown,
+                made: unknown,
+                directory: string | null | undefined,
+            ): Promise<void>;
+        };
+        posted: Record<string, unknown>[];
+    } {
+        asked.length = 0;
+        const posted: Record<string, unknown>[] = [];
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const internals = viewer as unknown as {
+            lastShow: unknown;
+            panel: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+            opsWrite(
+                token: number,
+                tab: string,
+                ops: unknown,
+                made: unknown,
+                directory: string | null | undefined,
+            ): Promise<void>;
+        };
+        internals.lastShow = { type: 'show', name: 'bracket', kind: 'part', package: '//pkg' };
+        internals.panel = {
+            webview: {
+                postMessage: (message: Record<string, unknown>) => {
+                    posted.push(message);
+                    return Promise.resolve(true);
+                },
+            },
+            dispose: () => undefined,
+        };
+        return { viewer, internals, posted };
+    }
+
+    async function until(condition: () => boolean): Promise<void> {
+        for (let i = 0; i < 500 && !condition(); i++) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        assert.ok(condition());
+    }
+
+    test('a question is about the object, its package, or the package at a state', async () => {
+        const { viewer, internals } = shown();
+        const pending = [
+            internals.fetchTab({
+                tab: 'revisions',
+                token: 1,
+                ops: { method: 'ops.rev.diff', params: { from: 'HEAD', to: 'WORKTREE' } },
+            }),
+            internals.fetchTab({ tab: 'revisions', token: 2, ops: { method: 'ops.deps.list', at: 'abc' } }),
+            internals.fetchTab({ tab: 'revisions', token: 3, ops: { method: 'ops.used_by', at: 'abc', whole: true } }),
+            // Opened with no question named: the tab's own first one.
+            internals.fetchTab({ tab: 'dependencies', token: 4 }),
+        ];
+        await until(() => asked.length === 4);
+
+        assert.deepStrictEqual(
+            asked.map(({ command, args }) => [command, args.pkg, args.name, args.kind, args.from, args.to]),
+            [
+                ['partcad.opsRevDiff', '//pkg', 'bracket', 'part', 'HEAD', 'WORKTREE'],
+                ['partcad.opsDepsList', '//pkg@abc', 'bracket', 'part', undefined, undefined],
+                ['partcad.opsUsedBy', '//pkg@abc', 'bracket', 'package', undefined, undefined],
+                ['partcad.opsDepsList', '//pkg', 'bracket', 'part', undefined, undefined],
+            ],
+        );
+        asked.forEach((call) => call.answer({}));
+        await Promise.all(pending);
+        viewer.dispose();
+    });
+
+    test('a newer question of one kind cancels only the older one of that kind', async () => {
+        const { viewer, internals } = shown();
+        const pending = [
+            internals.fetchTab({ tab: 'revisions', token: 1, ops: { method: 'ops.rev.list' } }),
+            internals.fetchTab({ tab: 'revisions', token: 2, ops: { method: 'ops.rev.diff', params: { from: 'a' } } }),
+        ];
+        await until(() => asked.length === 2);
+        pending.push(
+            internals.fetchTab({ tab: 'revisions', token: 3, ops: { method: 'ops.rev.diff', params: { from: 'b' } } }),
+        );
+        await until(() => asked.length === 3);
+
+        const cancelled = asked.map(
+            ({ args }) => (args.cancellation as vscode.CancellationToken).isCancellationRequested,
+        );
+        assert.deepStrictEqual(cancelled, [false, true, false]);
+        asked.forEach((call) => call.answer({}));
+        await Promise.all(pending);
+        viewer.dispose();
+    });
+
+    test('a change is never asked as a question', async () => {
+        const { viewer, internals, posted } = shown();
+
+        await internals.fetchTab({ tab: 'revisions', token: 1, ops: { method: 'ops.rev.new' } });
+
+        assert.strictEqual(asked.length, 0);
+        assert.ok(String(posted.find((message) => message.type === 'tabData')?.error).includes('nothing to fill'));
+        viewer.dispose();
+    });
+
+    test('a new revision is made as the user git names here, and another show does not take it back', async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'partcad-revision-'));
+        try {
+            execFileSync('git', ['init', '-q'], { cwd: directory });
+            execFileSync('git', ['config', 'user.name', 'Ada Lovelace'], { cwd: directory });
+            execFileSync('git', ['config', 'user.email', 'ada@example.com'], { cwd: directory });
+            const { viewer, internals, posted } = shown();
+            const made = internals.opsWrite(
+                7,
+                'revisions',
+                { method: 'ops.rev.new', params: { message: 'Longer', expectIndex: 'abc' } },
+                { package: '//pkg', name: 'bracket', kind: 'part' },
+                directory,
+            );
+            await until(() => asked.length === 1);
+            viewer.handle({ type: 'show', name: 'nut', kind: 'part', package: '//pkg', object: null });
+
+            const { command, args, answer } = asked[0];
+            assert.strictEqual(command, 'partcad.opsRevNew');
+            assert.deepStrictEqual(args.author, { name: 'Ada Lovelace', email: 'ada@example.com' });
+            assert.deepStrictEqual([args.message, args.expectIndex, args.pkg], ['Longer', 'abc', '//pkg']);
+            assert.strictEqual(args.cancellation, undefined);
+            answer({ sha: 'c0ffee', short: 'c0ffee', summary: 'Longer', checks: [] });
+            await made;
+
+            const written = posted.find((message) => message.type === 'opsWritten');
+            assert.strictEqual(written?.token, 7);
+            assert.deepStrictEqual((written?.data as { author?: unknown }).author, {
+                name: 'Ada Lovelace',
+                email: 'ada@example.com',
+            });
+            viewer.dispose();
+        } finally {
+            fs.rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    test('a revision refused says which reason, for the tab to ask the user', async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'partcad-revision-'));
+        try {
+            execFileSync('git', ['init', '-q'], { cwd: directory });
+            execFileSync('git', ['config', 'user.name', 'Ada Lovelace'], { cwd: directory });
+            execFileSync('git', ['config', 'user.email', 'ada@example.com'], { cwd: directory });
+            const { viewer, internals, posted } = shown();
+            failing.set('partcad.opsRevNew', {
+                code: -32002,
+                message: 'Also staged: //other',
+                data: { code: 'others-staged', status: { staged: [] } },
+            });
+
+            await internals.opsWrite(
+                8,
+                'revisions',
+                { method: 'ops.rev.new', params: { message: 'm' } },
+                { package: '//pkg', name: 'bracket', kind: 'part' },
+                directory,
+            );
+
+            const written = posted.find((message) => message.type === 'opsWritten');
+            assert.strictEqual(written?.error, 'Also staged: //other');
+            assert.deepStrictEqual(written?.refusal, { code: 'others-staged', status: { staged: [] } });
+            viewer.dispose();
+        } finally {
+            fs.rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    test('a change asked on another object than the one shown is not made', async () => {
+        const { viewer, internals, posted } = shown();
+
+        await internals.opsWrite(
+            9,
+            'dependencies',
+            { method: 'ops.deps.add', params: { name: 'std', location: '../std' } },
+            { package: '//pkg', name: 'nut', kind: 'part' },
+            null,
+        );
+
+        assert.strictEqual(asked.length, 0);
+        assert.ok(
+            String(posted.find((message) => message.type === 'opsWritten')?.error).includes('nothing was changed'),
         );
         viewer.dispose();
     });

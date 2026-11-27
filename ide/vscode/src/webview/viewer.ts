@@ -11,7 +11,7 @@
 // panel is a strip of tabs over one object rather than a canvas:
 //
 //     (Requirements)  |  Design                 |  Analysis                                 |  Manufacturing                                                    |  Qualification                                                 |  Operations
-//                           3D | 2D | Draft | CMF     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Basic | Topology | Simulation | Other | Process Emulation    Revisions | Used By
+//                           3D | 2D | Draft | CMF     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Basic | Topology | Simulation | Other | Process Emulation    Revisions | Dependencies | Used By | Impact
 //
 // Four groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing, and what each of
@@ -30,10 +30,14 @@
 // supply that it declares, with what each tool reported; and Process Emulation
 // holds nothing yet and is always disabled. Qualification is always enabled,
 // since every object has tests. Operations is what has become of the object
-// since it was written: Revisions, the commits that changed its package, each
-// compared with what is on screen and with what the package used and was used
-// by at it (see 'revisions.ts'); and Used By, what among the loaded packages
-// uses the object (see 'usedBy.ts').
+// since it was written, four questions the daemon answers ('ops.*', see
+// 'operations.ts'): Revisions, the commits that changed it and what is not
+// committed yet, each compared side by side, with Stage all and a New revision
+// (see 'revisions.ts'); Dependencies, what it uses, which for a package is also
+// where a dependency is declared, removed or updated (see 'dependencies.ts');
+// Used By, what among the loaded packages uses it (see 'usedBy.ts'); and
+// Impact, what a change to it reaches (see 'impact.ts'). A software object has
+// only the first and the third: it names nothing of its own.
 //
 // Not every kind of object has every group. An interface is ports rather than
 // a shape: Design, with its 3D view alone - so no strip under it - and
@@ -125,6 +129,7 @@ import { HeldForShow } from './held';
 import { LabelBoxes, Labels, renderOptions } from './labels';
 import {
     askComments as askHostComments,
+    copyText,
     fetchDetails,
     fetchFormats,
     cancelTab,
@@ -142,6 +147,7 @@ import {
     showObject,
     showSection,
     videoFullscreen,
+    writeOps,
 } from './host';
 import {
     ANALYSIS_TABS,
@@ -175,8 +181,10 @@ import {
     RequirementEdit,
     RequirementEditedMessage,
     RequirementsData,
-    RevisionsData,
-    RevisionsQuery,
+    OpsQuery,
+    OpsReadMethod,
+    OpsWriteMethod,
+    OpsWrittenMessage,
     SectionShownMessage,
     ShowMessage,
     SimulationListData,
@@ -187,8 +195,6 @@ import {
     TestArtifact,
     TestData,
     TestResult,
-    UsedByData,
-    UsedByRow,
     isQualTestTab,
     ViewportData,
     groupOf,
@@ -198,6 +204,9 @@ import {
 } from './messages';
 import { Choice, RenderView } from './render';
 import { RequirementsView } from './requirements';
+import { DependenciesView } from './dependencies';
+import { ImpactView } from './impact';
+import { OpsAnswer, OpsCallbacks, OpsSubject, OpsWritten } from './operations';
 import { RevisionsView } from './revisions';
 import { UsedByView } from './usedBy';
 import {
@@ -254,7 +263,9 @@ const panes: Record<TabId, HTMLElement> = {
     other: byId('pane-other'),
     emulation: byId('pane-emulation'),
     revisions: byId('pane-revisions'),
+    dependencies: byId('pane-dependencies'),
     usedby: byId('pane-usedby'),
+    impact: byId('pane-impact'),
 };
 
 /** The tabs whose panes are rebuilt from scratch on every show. */
@@ -351,30 +362,93 @@ const requirementsView = new RequirementsView(panes.requirements, {
     onEdit: (edit) => sendRequirementEdit(edit),
 });
 /**
- * The Operations tabs. Revisions asks its own questions - a comparison, and
- * what the package uses and is used by at a revision - each under a token of
- * its own ('revisionQueries'), because a comparison asked for another revision
- * does not take back the list it was chosen from.
+ * The Operations tabs. Each asks the daemon several questions - the Revisions
+ * tab a list, a status, a comparison per row and a folded view per row - and
+ * each is answered under a token of its own, to the callback it was asked with
+ * ('opsAnswers'): a comparison asked for another revision does not take back
+ * the list it was chosen from. A change is the same, through 'opsWrites'.
  */
-const revisionsView = new RevisionsView(panes.revisions, {
-    ask: (query, revision) => askRevision(query, revision),
-    openPackage: (name) => openPackage(name),
-    showObject: (row) => openUser(row),
-});
-const usedByView = new UsedByView(panes.usedby, (row) => openUser(row));
+type OpsTabId = Extract<TabId, 'revisions' | 'dependencies' | 'usedby' | 'impact'>;
+const OPS_TABS: OpsTabId[] = ['revisions', 'dependencies', 'usedby', 'impact'];
 
-/** An object a Used By list names, shown in the panel as the explorer would show it. */
-function openUser(row: UsedByRow): void {
-    showObject({ type: 'showObject', package: row.package, name: row.name, kind: row.kind });
+function isOpsTab(tab: TabId): tab is OpsTabId {
+    return (OPS_TABS as TabId[]).includes(tab);
 }
 
-/** The Revisions tab's questions in flight, by token: which, and of which revision. */
-const revisionQueries = new Map<number, { query: Exclude<RevisionsQuery, 'list'>; revision: string }>();
+/** The questions the Operations tabs have in flight, by token, each with what to do with its answer. */
+const opsAnswers = new Map<number, OpsAnswer>();
+/** The changes they asked for and have not heard back about, by token. */
+const opsWrites = new Map<number, OpsWritten>();
 
-function askRevision(query: Exclude<RevisionsQuery, 'list'>, revision: string): void {
+function opsCallbacks(tab: OpsTabId): OpsCallbacks {
+    return {
+        ask: (query, answer) => askOps(tab, query, answer),
+        write: (query, answer, directory) => writeOpsChange(tab, query, answer, directory),
+        openPackage: (name) => openPackage(name),
+        showObject: (object) => showObject({ type: 'showObject', ...object }),
+        copy: (text) => copyText(text),
+    };
+}
+
+const revisionsView = new RevisionsView(panes.revisions, opsCallbacks('revisions'));
+const dependenciesView = new DependenciesView(panes.dependencies, opsCallbacks('dependencies'));
+const usedByView = new UsedByView(panes.usedby, opsCallbacks('usedby'));
+const impactView = new ImpactView(panes.impact, opsCallbacks('impact'));
+
+function askOps(tab: OpsTabId, query: OpsQuery<OpsReadMethod>, answer: OpsAnswer): void {
     lastToken += 1;
-    revisionQueries.set(lastToken, { query, revision });
-    fetchTab({ type: 'fetchTab', tab: 'revisions', token: lastToken, query, revision });
+    opsAnswers.set(lastToken, answer);
+    fetchTab({ type: 'fetchTab', tab, token: lastToken, ops: query });
+}
+
+function writeOpsChange(
+    tab: OpsTabId,
+    query: OpsQuery<OpsWriteMethod>,
+    answer: OpsWritten,
+    directory: string | null | undefined,
+): void {
+    if (shown === undefined) {
+        return;
+    }
+    lastToken += 1;
+    opsWrites.set(lastToken, answer);
+    writeOps({
+        type: 'opsWrite',
+        token: lastToken,
+        tab,
+        target: { package: shown.package ?? '', name: shown.name ?? '', kind: shown.kind ?? '' },
+        ops: query,
+        directory,
+    });
+}
+
+/** A change has been made, or was not: to whichever tab asked for it, if the object it asked on is still on screen. */
+function onOpsWritten(message: OpsWrittenMessage): void {
+    const answer = opsWrites.get(message.token);
+    if (answer === undefined) {
+        // Sent for an object no longer on screen: it was made all the same.
+        return;
+    }
+    opsWrites.delete(message.token);
+    answer({ data: message.data, error: message.error, refusal: message.refusal });
+}
+
+/** What an Operations tab is about: the object on screen, or the package. */
+function opsSubject(): OpsSubject | undefined {
+    if (!shown?.package || !shown.name) {
+        return undefined;
+    }
+    return { package: shown.package, name: shown.name, kind: shown.kind ?? 'part' };
+}
+
+/** Every Operations tab back to waiting for its first look, saying 'text' (or, for Revisions, 'revisions'). */
+function resetOperations(text: (tab: OpsTabId) => string): void {
+    opsAnswers.clear();
+    opsWrites.clear();
+    revisionsView.setBusy(text('revisions'));
+    dependenciesView.setBusy(text('dependencies'));
+    usedByView.setBusy(text('usedby'));
+    impactView.setBusy(text('impact'));
 }
 
 /** What the object on screen is called in a sentence: "this package" or "this sketch". */
@@ -2220,17 +2294,24 @@ function operationsGroup(message: ShowMessage | undefined): TabSpec {
 }
 
 /**
- * Operations: Revisions, the commits that changed the package of what is on
- * screen, each compared with it; and Used By, what among the loaded packages
- * uses it. Both are questions about '<package>:<name>' - or, for a package,
- * about the package - so an object whose package is not known gets neither.
+ * Operations: Revisions, Dependencies, Used By and Impact (see
+ * 'partcad_utils.ops_views', which says the same for the daemon). All four are
+ * questions about '<package>:<name>' - or, for a package, about the package -
+ * so an object whose package is not known gets none. A software object names
+ * nothing of its own, so it has no Dependencies and no Impact: those two are
+ * shown disabled for it, as a strip shows what does not apply.
  */
 function operationsTabsFor(message: ShowMessage | undefined): TabSpec[] {
     const known = Boolean(message?.package) && !isDeclaration(message?.kind);
-    const hint = 'PartCAD did not say which package this belongs to';
+    const unknown = 'PartCAD did not say which package this belongs to';
+    const software = message?.kind === 'software';
+    const refers = known && !software;
+    const names = software ? 'A software object names nothing of its own to depend on or to reach' : unknown;
     return [
-        { id: 'revisions', label: 'Revisions', pane: panes.revisions, disabled: !known, hint },
-        { id: 'usedby', label: 'Used By', pane: panes.usedby, disabled: !known, hint },
+        { id: 'revisions', label: 'Revisions', pane: panes.revisions, disabled: !known, hint: unknown },
+        { id: 'dependencies', label: 'Dependencies', pane: panes.dependencies, disabled: !refers, hint: names },
+        { id: 'usedby', label: 'Used By', pane: panes.usedby, disabled: !known, hint: unknown },
+        { id: 'impact', label: 'Impact', pane: panes.impact, disabled: !refers, hint: names },
     ];
 }
 
@@ -2519,9 +2600,15 @@ async function show(message: ShowMessage): Promise<void> {
     cmfView.setBusy('Select this tab to see what this is in.');
     // Asked when looked at, as the render tabs are: the history is a walk
     // over the repository, and what uses the object a walk over the context.
-    revisionQueries.clear();
-    revisionsView.setBusy('Select this tab to see the history of this package.');
-    usedByView.setBusy(`Select this tab to see what uses ${thisObject()}.`);
+    resetOperations(
+        (tab) =>
+            ({
+                revisions: `Select this tab to see the revisions of ${thisObject()}.`,
+                dependencies: `Select this tab to see what ${thisObject()} depends on.`,
+                usedby: `Select this tab to see what uses ${thisObject()}.`,
+                impact: `Select this tab to see what a change to ${thisObject()} reaches.`,
+            })[tab],
+    );
     resetManufacturing('Asking PartCAD what this is made of…');
     resetSimulations('Asking PartCAD what this declares under qual: sim:…');
     if (!message.keepCamera) {
@@ -2811,9 +2898,7 @@ function clear(): void {
     eachTestView((view) => view.setBusy('Nothing to test: select an object.'));
     requirements = undefined;
     requirementsView.setBusy('Nothing to show.');
-    revisionQueries.clear();
-    revisionsView.setBusy('Nothing to show.');
-    usedByView.setBusy('Nothing to show.');
+    resetOperations(() => 'Nothing to show.');
     resetSimulations('Nothing to simulate.');
     simulationView.setViewpoint(undefined);
     for (const panel of designPanels()) {
@@ -3239,18 +3324,16 @@ function onLeafSelected(tab: TabId): void {
         verifyRequirements();
         return;
     }
-    if (tab === 'revisions') {
-        // The history first; a comparison is asked for once it says which
-        // revision is the newest (see 'RevisionsView.showHistory').
-        requested.add(tab);
-        revisionsView.setBusy('Asking PartCAD for the history of this package…');
-        request(tab, { query: 'list' });
-        return;
-    }
-    if (tab === 'usedby') {
-        requested.add(tab);
-        usedByView.setBusy(`Asking PartCAD what uses ${thisObject()}…`);
-        request(tab);
+    if (isOpsTab(tab)) {
+        // Each asks what it needs itself, and is answered through the callback
+        // it asked with (see 'opsAnswers').
+        const subject = opsSubject();
+        if (subject !== undefined) {
+            requested.add(tab);
+            ({ revisions: revisionsView, dependencies: dependenciesView, usedby: usedByView, impact: impactView })[
+                tab
+            ].start(subject);
+        }
         return;
     }
     if (isQualTestTab(tab)) {
@@ -3328,12 +3411,12 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
         }
         return;
     }
-    const revisionQuery = tab === 'revisions' ? revisionQueries.get(token) : undefined;
-    if (revisionQuery !== undefined) {
-        // A comparison, or what the package uses or is used by at a revision,
-        // each answered under a token of its own: see 'askRevision'.
-        revisionQueries.delete(token);
-        revisionsView.answer(revisionQuery.query, revisionQuery.revision, data, error);
+    const answer = isOpsTab(tab) ? opsAnswers.get(token) : undefined;
+    if (answer !== undefined) {
+        // One of an Operations tab's questions, each answered under a token
+        // of its own: see 'askOps'.
+        opsAnswers.delete(token);
+        answer(data, error);
         return;
     }
     if (awaiting.get(tab) !== token) {
@@ -3342,25 +3425,6 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
         return;
     }
     awaiting.delete(tab);
-
-    if (tab === 'revisions') {
-        if (error !== undefined) {
-            revisionsView.showError(error);
-        } else if (data === null || data === undefined) {
-            revisionsView.showError('PartCAD had nothing to say about the history of this package.');
-        } else {
-            revisionsView.showHistory(data as RevisionsData);
-        }
-        return;
-    }
-    if (tab === 'usedby') {
-        if (error !== undefined) {
-            usedByView.showError(error);
-        } else {
-            usedByView.show((data as UsedByData | undefined) ?? { objects: [] }, thisObject());
-        }
-        return;
-    }
 
     if (isRenderTab(tab)) {
         const view = renderViews[tab];
@@ -3786,6 +3850,11 @@ function collectState(): Record<string, unknown> {
                 // own text is among the controls already.
                 selections.analysis = caeViews[id]?.state();
             }
+            if (id === 'revisions') {
+                // Which row is on screen and what it is compared with: the
+                // list is rows, and the toggle buttons, not controls.
+                selections.revisions = revisionsView.state();
+            }
             subTabs[id] = { filters: tree?.filter() ?? null, selections };
         }
     }
@@ -3841,6 +3910,8 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
         onCamSaved(message);
     } else if (message.type === 'requirementEdited') {
         onRequirementEdited(message);
+    } else if (message.type === 'opsWritten') {
+        onOpsWritten(message);
     } else if (
         message.type === 'comments' ||
         message.type === 'commentLocated' ||

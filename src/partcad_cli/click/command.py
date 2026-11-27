@@ -134,7 +134,8 @@ command_groups = [
     },
     {
         "name": "Package commands",
-        "commands": ["init", "install", "update", "lint"],
+        # 'update' is 'pc ops deps update --all' now, kept for those who know it.
+        "commands": ["init", "install", "lint"],
     },
     {
         # `search` sits beside `list`: both enumerate the objects in a package,
@@ -170,9 +171,8 @@ command_groups = [
             # Beside `filter`: a second object out of the first, all of it, and
             # written as the context holds it rather than as the file says it.
             "copy",
-            # What has become of an object since it was written -- the IDE's
-            # Operations tabs: the package's history, what changed since a
-            # revision, and what among the loaded packages uses it.
+            # The IDE's Operations tabs: the revisions of a package or an object,
+            # what it depends on, what uses it, and what a change reaches.
             "ops",
             "export",
             "render",

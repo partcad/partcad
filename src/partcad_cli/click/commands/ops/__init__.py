@@ -19,15 +19,17 @@ class OpsCommands(Loader):
 @click.command(
     cls=OpsCommands,
     help=(
-        "Operations: what has become of an object since it was written -- the revisions of its package (rev) "
-        "and what uses it (used-by)"
+        "Operations of a package or of one object of it: its revisions (rev), what it depends on (deps), what "
+        "uses it (used-by), and what a change reaches (impact), at any state of its repository -- a revision, "
+        "STAGED or WORKTREE"
     ),
 )
 def cli() -> None:
-    """The `pc ops` group: `rev` and `used-by`.
+    """The `pc ops` group: `summary`, `rev`, `deps`, `used-by` and `impact`.
 
-    The IDE's Operations tabs on the command line: `pc ops rev` is its
-    Revisions tab and `pc ops used-by` its Used By tab, each asking the daemon
-    what the tab asks it. `rev` is a group of its own so that what is done with
-    a revision (`pc ops rev list|diff|uses|used-by`) has room to grow beside it.
+    The IDE's Operations tabs on the command line, each asking the daemon what
+    the tab asks it (`ops.*`; see `partcad_utils.ops_views`, which says which
+    kinds of subject each applies to). The subject is the only argument of
+    every reading command: an object, or a package -- `-P`'s, this one, or one
+    written as a package path.
     """

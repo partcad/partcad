@@ -29,11 +29,20 @@ export const NO_AUTHOR =
  * git names nobody, or is not there to ask.
  */
 export function gitAuthor(cwd?: string, git = 'git'): Promise<string | undefined> {
+    return gitConfig('user.name', cwd, git);
+}
+
+/**
+ * What 'git config <key>' says, asked in 'cwd', or undefined where it says
+ * nothing or git is not there to ask. Who the author of a new revision is, too
+ * ('operations.ts').
+ */
+export function gitConfig(key: string, cwd?: string, git = 'git'): Promise<string | undefined> {
     const directory = cwd !== undefined && fs.existsSync(cwd) ? cwd : undefined;
     return new Promise((resolve) => {
-        execFile(git, ['config', 'user.name'], { cwd: directory, timeout: 10_000 }, (error, stdout) => {
-            const name = error ? '' : String(stdout).trim();
-            resolve(name || undefined);
+        execFile(git, ['config', key], { cwd: directory, timeout: 10_000 }, (error, stdout) => {
+            const value = error ? '' : String(stdout).trim();
+            resolve(value || undefined);
         });
     });
 }

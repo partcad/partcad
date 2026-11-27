@@ -207,15 +207,28 @@ sketch is Requirements when it declares any, Design with 2D and Draft, and Opera
 one view of its plane (`singleView`, `render.inline`'s `single_view`), which the daemon sends as the viewport
 and as `views` to the drawing implementation.
 
-**Operations is Revisions and Used By** (`revisions.ts`, `usedBy.ts`). Revisions is the Simulation tab's page
-over a list of commits: the list (`ScenarioList`), the selected revision compared with what is on screen, and the
-same folded views along the bottom -- "Uses (Dependencies)" and "Used By" -- each asked for the first time it is
-opened. Its four questions travel as `query` on one tab id; the host keys its in-flight requests by `tab:query`
-so a comparison does not cancel the list it was chosen from, and the renderer matches the answers to a
-comparison or a folded view by token (`revisionQueries`), as it does a simulation run. **Nothing is diffed
-here**: the daemon answers with the rows of a side-by-side view (`revisions.compare`). A dependency or its commit
-opens in the Package Explorer (`partcad.openInExplorer`), which lists that package in place of the workspace's
-with a row going back -- a revision is no child of anything in the tree, so it cannot be revealed where it is.
+**Operations is Revisions, Dependencies, Used By and Impact** (`revisions.ts`, `dependencies.ts`, `usedBy.ts`,
+`impact.ts`, with what they share in `operations.ts`), each drawn from the daemon's `ops.*` methods -- one per
+`pc ops` command, and which kinds of subject each applies to is `partcad_utils.ops_views`, which the daemon refuses
+by: a `software` object has Revisions and Used By, and Dependencies and Impact are shown disabled for it, as a
+strip shows what does not apply. Each tab asks several questions under its one tab id, as `ops` (`OpsQuery`: the
+method, the package at a state -- `at`, which the host makes `<package>@<state>` -- or the package rather than the
+object -- `whole` -- and the parameters), and each question is answered under a token of its own to the callback
+it was asked with (`opsAnswers`); the host keys its in-flight requests by `tab:method`, so a comparison does not
+cancel the list it was chosen from. **A change is not a question**: staging, a new revision and declaring,
+removing or updating a dependency go as `opsWrite`, which the host never cancels -- not on another show, not when
+the tab asks again -- and answers with `opsWritten`. Revisions is the Simulation tab's page over a list of
+commits (`ScenarioList`), paged (`after`, "Load more"), with WORKTREE and STAGED above them when `ops.rev.status`
+says they apply: the selected row compared side by side with what it changed or with the files on disk since,
+and folded views along the bottom -- what it depended on, what used it, what changing it reached -- each asked
+for the first time it is opened. **Nothing is diffed here**: the daemon answers with the rows of a side-by-side
+view (`ops.rev.diff`). **A new revision is signed here, never by the daemon**: the host reads `git config
+user.name` and `user.email` in the package's repository (`src/viewer/operations.ts`, the twin of
+`partcad_utils.git_identity`) and sends it as `author`; a revision the daemon will not make on those terms comes
+back with its reason (`data.code`: `others-staged`, `warnings`, `checks-failed`, `index-changed`, ...), and the form
+lets the user agree and send it again. A package -- a dependency, a dependent, either at its commit -- opens in the
+Package Explorer (`partcad.openInExplorer`), which lists that package in place of the workspace's with a row going
+back -- a revision is no child of anything in the tree, so it cannot be revealed where it is.
 
 **A colour, a material or a finish opened from the explorer is shown by the host, not by PartCAD**
 (`PartcadViewer.showDeclaration`): there is nothing to draw, so the show is made here with no object in it, and the

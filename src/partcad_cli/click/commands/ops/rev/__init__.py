@@ -19,16 +19,17 @@ class RevCommands(OpsCommands):
 @click.command(
     cls=RevCommands,
     help=(
-        "The revisions of a package in its git repository: list them, show what changed in an object (or the "
-        "package) since one of them, and what the package used and was used by at one"
+        "The revisions of a package or an object in its git repository: list them, compare two states, say what "
+        "is staged, stage it, and make a new revision of it"
     ),
 )
 def cli() -> None:
-    """The `pc ops rev` group: `list`, `diff`, `uses` and `used-by`.
+    """The `pc ops rev` group: `list`, `diff`, `status`, `stage` and `new`.
 
-    The IDE's Operations > Revisions tab on the command line, asking the daemon
-    what the tab asks it (`revisions.list`, `revisions.compare`,
-    `revisions.uses`, `revisions.used_by`). A revision is loaded into the
-    daemon's context as `<package>@<sha>` and stays there, as it does for the tab
-    (see "A package at a revision" in docs/source/config_package.rst).
+    The IDE's Operations > Revisions tab on the command line (`ops.rev.*`). A
+    state is a revision -- a commit id, a tag, a branch, `HEAD~1` -- or
+    `STAGED` (the git index) or `WORKTREE` (the files on disk); a revision is
+    loaded into the daemon's context as `<package>@<sha>` and stays there, as it
+    does for the tab (see "A package at a revision" in
+    docs/source/config_package.rst).
     """
