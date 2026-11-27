@@ -212,6 +212,142 @@ def test_settings_put_back_are_read_back_within_one_tick_of_the_save(session, pa
     assert next(control for control in again["controls"] if control["key"] == "infill")["value"] == "20%"
 
 
+@pytest.mark.parametrize("failure", ["config", "other"])
+@pytest.mark.parametrize("change", ["edit", "remove"])
+def test_failed_save_does_not_restore_over_a_later_edit(session, package, monkeypatch, failure, change):
+    config = package / "partcad.yaml"
+    (package / "print.brep").write_text("an old print", encoding="utf-8")
+    later = []
+
+    async def broken(*args, **kwargs):
+        if change == "edit":
+            edited = config.read_bytes().replace(b"The block, printed", b"Another author's description")
+            config.write_bytes(edited)
+            later.append(edited)
+        else:
+            config.unlink()
+        if failure == "config":
+            raise pc.cam.CamFailed("the product could not be rebuilt")
+        raise RuntimeError("the sandbox went away")
+
+    monkeypatch.setattr(cam_view, "rematerialize_async", broken)
+    with pytest.raises(JsonRpcError) as caught:
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": {"infill": "35%"}})
+    assert "not restored" in caught.value.message
+    assert "changed" in caught.value.message
+    if change == "edit":
+        assert config.read_bytes() == later[0]
+        assert session.partcad_ctx.get_part("//camdemo:print").config["desc"] == "Another author's description"
+    else:
+        assert not config.exists()
+    assert (package / "print.brep").read_text(encoding="utf-8") == "an old print"
+
+
+def test_failed_save_snapshots_after_another_writer_has_finished(session, package, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from contextlib import contextmanager
+    from threading import Event
+
+    config = package / "partcad.yaml"
+    project = session.partcad_ctx.get_project("//camdemo")
+    editing = project._editing
+    attempted = Event()
+
+    @contextmanager
+    def announced_edit():
+        attempted.set()
+        with editing():
+            yield
+
+    async def broken(*args, **kwargs):
+        raise pc.cam.CamFailed("the product could not be rebuilt")
+
+    monkeypatch.setattr(project, "_editing", announced_edit)
+    monkeypatch.setattr(cam_view, "rematerialize_async", broken)
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        with editing():
+            save = workers.submit(
+                operations.cam_save, session, {"package": "//", "object": "print", "settings": {"infill": "35%"}}
+            )
+            assert attempted.wait(30)
+            edited = config.read_bytes().replace(b"The block, printed", b"Another author's description")
+            config.write_bytes(edited)
+        with pytest.raises(JsonRpcError):
+            save.result(timeout=60)
+    assert config.read_bytes() == edited
+
+
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n"])
+def test_failed_save_replaces_the_complete_original_bytes(session, package, monkeypatch, newline):
+    import builtins
+
+    config = package / "partcad.yaml"
+    config.write_bytes(config.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", newline))
+    before = config.read_bytes()
+    original_open = builtins.open
+
+    def never_truncate(path, mode="r", *args, **kwargs):
+        assert not (os.path.realpath(path) == os.path.realpath(config) and "w" in mode)
+        return original_open(path, mode, *args, **kwargs)
+
+    async def broken(*args, **kwargs):
+        # A reader must never see the declaration truncated during rollback.
+        monkeypatch.setattr(operations, "open", never_truncate, raising=False)
+        raise pc.cam.CamFailed("the product could not be rebuilt")
+
+    monkeypatch.setattr(cam_view, "rematerialize_async", broken)
+    with pytest.raises(JsonRpcError):
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": {"infill": "35%"}})
+    assert config.read_bytes() == before
+
+
+def test_failed_rollback_keeps_the_saved_declaration_and_removes_its_temporary_file(session, package, monkeypatch):
+    config = package / "partcad.yaml"
+    saved = []
+    files = []
+
+    def refused(source, target):
+        raise PermissionError("the declaration cannot be replaced")
+
+    async def broken(*args, **kwargs):
+        saved.append(config.read_bytes())
+        files.append(set(package.iterdir()))
+        monkeypatch.setattr(os, "replace", refused)
+        raise pc.cam.CamFailed("the product could not be rebuilt")
+
+    monkeypatch.setattr(cam_view, "rematerialize_async", broken)
+    with pytest.raises(JsonRpcError) as caught:
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": {"infill": "35%"}})
+    assert "not restored" in caught.value.message
+    assert "cannot be replaced" in caught.value.message
+    assert config.read_bytes() == saved[0]
+    assert set(package.iterdir()) == files[0]
+
+
+def test_failed_save_preserves_an_unreadable_later_edit_and_clears_products(session, package, monkeypatch):
+    config = package / "partcad.yaml"
+    later = b"parts: [\n"
+    cleared = []
+    forget = cam_view.forget_products
+
+    def forget_products():
+        cleared.append(True)
+        forget()
+
+    async def broken(*args, **kwargs):
+        config.write_bytes(later)
+        monkeypatch.setattr(cam_view, "forget_products", forget_products)
+        raise pc.cam.CamFailed("the product could not be rebuilt")
+
+    monkeypatch.setattr(cam_view, "rematerialize_async", broken)
+    with pytest.raises(JsonRpcError) as caught:
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": {"infill": "35%"}})
+    assert "not restored" in caught.value.message and "changed" in caught.value.message
+    assert "could not be rebuilt" in caught.value.message
+    assert config.read_bytes() == later
+    assert cleared == [True]
+
+
 @pytest.mark.parametrize("settings", [[], False, 0, ""])
 def test_save_refuses_settings_that_are_not_a_mapping(session, package, made, settings):
     before = (package / "partcad.yaml").read_text()
