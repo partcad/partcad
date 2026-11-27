@@ -101,6 +101,7 @@ Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everyth
   - a script part's region uses the radius measured from its built section at each joint: a script cable pushed onto a barb passes within it, and fails beyond it; a script cable thicker at a `through` entry than at its ends gets the radius measured there;
   - a tube pushed onto a barb overlaps it on the cable side of its end face (+Z), and passes within the joint's depth.
 - [ ] 5.2 Make the instruction book (`assembly_guide.py`) state each route step, from end to end with tree paths, and "leave the other end at (x, y, z)" for a free end. Verify with cases in `test_assembly_guide.py` for a two-ended route and a one-ended one.
+- [ ] 5.4 Keep routed links in place in exploded views (D15): no offset in `assembly_explode.offsets_async`, nothing moved with them, and their instruction-book step drawn with the parts they connect to solid and the rest see-through (an opacity per item in the step's picture). Verify with cases in `test_assembly_explode.py` (a routed link's offset is zero, its end parts still back out, nothing new is swept) and `test_assembly_guide.py` (the step's colours and opacities for a route with two `through` entries).
 
 ## 6. Example and integration
 

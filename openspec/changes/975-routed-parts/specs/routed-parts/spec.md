@@ -289,6 +289,21 @@ A routed part SHALL NOT be added to the assembly when its path cannot carry its 
 - **WHEN** a hose is pushed onto a manifold's barb, whose port declares `snapIn`, and its path also runs back through the same manifold elsewhere
 - **THEN** `pc qual test` fails the assembly with an interference naming the hose and the manifold at that other place: the allowance covers the joint's region, not every overlap between the two parts
 
+### Requirement: Routed parts stay in place in exploded views
+A routed part SHALL NOT be moved, rebuilt or checked in an exploded view of its assembly, nor in its instruction-book step: it SHALL be drawn as built. Its step SHALL draw it in the new item's colour, every part it connects to (its ends and every `through` entry) solid in the context colour, and every other part see-through.
+
+#### Scenario: Exploded assembly
+- **WHEN** an assembly with a cable from a board, through a grommet, to a sensor is drawn with `exploded: true`
+- **THEN** the board and the sensor are backed out as usual, and the cable is drawn where it was built, still through the grommet
+
+#### Scenario: The cable's step
+- **WHEN** the instruction book draws the cable's step
+- **THEN** the cable is in place in the new item's colour, the board, the grommet and the sensor are solid in the context colour, and the wall and every other part are see-through
+
+#### Scenario: Several ports passed through
+- **WHEN** the cable passes through three grommets, each in a panel the exploded view moves its own way
+- **THEN** the cable is still drawn as built, and no route is built for the view
+
 ### Requirement: Length and bend radius are checked
 When a routed part declares `length`, `pc qual test` SHALL fail the assembly if the route's centreline is longer than that length. The centreline runs from the first end face to the last, so it includes leads but not port offsets. When it declares `minBendRadius`, `pc qual test` SHALL fail the assembly if the tightest bend of the centreline has a smaller radius. Either failure SHALL state the measured and the declared value. The route SHALL NOT be reshaped to meet either limit.
 

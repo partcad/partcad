@@ -628,7 +628,30 @@ is a fact about the profile, not a direction of the cable, so the keys stay
 modelled; if it is ever needed, it is a field of its own rather than something
 read from which end is listed first.
 
-## Risks / Trade-offs
+### D15. A routed part does not move in an exploded view (decided 2026-11-28)
+An exploded view backs each item out of what it is joined to
+(`assembly_explode.py`). A routed part is joined to two or more parts that back
+out different ways, so no single move takes it off all of them.
+
+| Option | What is drawn | Pros | Cons |
+|---|---|---|---|
+| **a. Stays where it was built (chosen)** | The cable as built; the parts move away from it | The cable as it is cut: its own shape and length. The cached solid, no new sweep, never refused. Still threaded through a `through` part that does not move. Any number of `through` entries | Its ends hang where the ports were |
+| b. Moved as one piece | The cable backed out of where its group was assembled, the default for an item joined to several | No exception in `assembly_explode.py` | It floats off every part it joins |
+| c. Rebuilt between the moved ports | A new route through the moved frames, each end pulled back out of its port, each entry's `via` moved with it | Every end still meets its port | A longer cable of another shape. A sweep per view, which D9 can refuse. Every `through` part moving its own way adds bends. Needs `exploded` on ends |
+
+So a routed link has no offset in `offsets_async`, in the whole exploded
+assembly and in its instruction-book step. Items joined to it are not moved with
+it either, since it does not move. The step draws the cable in place, in the new
+item's colour, the parts it connects to (both ends and every `through` part)
+solid in the context colour, and every other part see-through, so the cable can
+be followed behind a wall. How each end goes in is said by its `how` (D8). An
+exploded view is a picture, not a check: no route check reads it.
+
+The second pass (D2) puts every cable after every part, so the book shows a
+grommet in place before its cable, where in practice it is often slid onto the
+cable first. That order is a limitation of the second pass, not of the exploded
+view; an entry's `how` or `comment` can say so, and a step order of its own is a
+follow-up.
 
 ## Risks / Trade-offs
 

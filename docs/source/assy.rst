@@ -482,6 +482,16 @@ part's `minBendRadius`, as it does when the route needs more cable than its
 The assembly instruction book says, at the route's step, which ports the cable
 runs between.
 
+**Exploded views leave a routed part where it is.** The parts it joins back out
+as they always do, and the cable stays as it was built, with its own shape and
+length: nothing is rebuilt or checked for the view. At its step in the
+instruction book, the cable is drawn in place, the parts it connects to - both
+ends and every port passed through - solid, and the rest see-through, so that
+it can be followed behind a wall. How an end goes in is its `how`.
+
+.. image:: images/routed-exploded.png
+   :alt: A cable from a board, through a grommet in a wall, to a sensor. At its step, the board, the grommet and the sensor are solid grey, the wall and floor faint, and the cable blue. Exploded, the board and the sensor back out, and the cable stays where it was built, through the grommet.
+
 Expected overlaps
 -----------------
 
