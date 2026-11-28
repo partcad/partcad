@@ -1,0 +1,126 @@
+# Tasks
+
+Test rules for every group: tests build their own temporary packages (STL cubes with ports, as in
+`tests/partcad/unit/test_assembly_also.py`), share no state, and pass under `-n logical --dist worksteal`.
+Tests marked *(sandbox)* run OCP in the Python sandbox and are kept few. Everything else runs without one.
+
+## 1. Extract the connection resolver (refactor, no behaviour change)
+
+- [x] 1.1 Extract from `handle_node` the step that turns a `connect*` section, a child item and a target child with its location into the ports, interfaces and params passed to `compose_connection`. The target location becomes an explicit argument (D8). Verify that `test_assembly_also.py`, `test_assembly_connect_how.py`, `test_connect_motion_declared.py`, `test_connect_self_screw.py`, `test_assembly_guide.py`, `test_import_assy.py` and `tests/partcad_utils/test_assy_lint.py` all pass with no test edited.
+- [x] 1.2 Add `tests/partcad/unit/test_connection_resolver.py`: for a `connectPorts` link, a `connect` link by interface, one with `toParams`, and a port-less child (which keeps today's "auto-detection" warning), the extracted method called directly returns the placement `handle_node` gives the same link, and both equal, bit for bit, the placements recorded from the code before the extraction (commit 4cd60751), so that the test is not the new code compared with itself. Verify that it passes.
+- [x] 1.3 Fix the source-side `withPort` and `withInstance` patterns, which matched `Port` objects and instance port maps instead of names and raised `TypeError` (a bug older than this change, found while extracting the resolver). Verify with tests in `test_connection_resolver.py` that a `with: r2*` pattern and a `withInstance: lef*` pattern each pick the right one, and that both fail on the code before the fix.
+
+## 2. Route path math and feasibility (pure Python)
+
+- [x] 2.1 Add `src/partcad/route_path.py` (D4). Verify with `tests/partcad/unit/test_route_path.py`:
+  - a straight two-end route has length equal to the distance (to 1e-9) and an infinite minimum radius;
+  - a lead's samples lie on the end axis, within 1e-9 mm of the axis;
+  - every `via` point and `through` entry is a sample point;
+  - a route shaped like a quarter circle is within 2 % of the analytic length and radius;
+  - transported frames stay orthonormal (to 1e-9), and the first frame's X equals the first end's X;
+  - the closest approach of a straight route is infinite, and that of a hairpin is the hairpin's gap.
+- [x] 2.2 Add canonical route JSON (rounded to 1e-6 mm, sorted keys). Verify in the same file that equal routes are byte-identical, that a 1 µm move of an end changes the JSON, and that a sub-1e-7 mm jitter does not (the path is built from the rounded stops).
+- [x] 2.3 Add the D9 pre-sweep checks, returning structured refusals (reason, point, values, remedy). Verify with `tests/partcad/unit/test_route_feasibility.py`, one test per case, each asserting the reason and point:
+  - a `via` point coinciding with an end;
+  - a `via` point back on the first end with a `through` entry in between (knots A, T, A, B), refused although no two consecutive knots coincide;
+  - two ends at the same point;
+  - a `via` point 1 mm from an end of a 6 mm tube (bend radius below 3 mm);
+  - the same `via` point moved 20 mm from the end, which passes (a `lead` does not fix it: the path doubles back to the point);
+  - a figure-eight of `via` points that crosses itself;
+  - a hairpin whose gap is below the diameter, refused, and the same hairpin with the gap above it, which passes;
+  - a 2 m route with 5 000 samples, checked in under 1 s, or 5 s while coverage is measuring (tracing slows pure Python several times);
+  - a `through` entry whose knots before and after lie level along its axis is refused, naming the entry (previous (100, 0, 100), next (-100, 0, 100), axis Z), while one reached square to its axis whose next knot lies further along it (previous (100, 0, 0), next (0, 0, 100)) is passed; with two `through` entries in a row, the first's direction is decided from the second's origin, not its lead point, and the second's lead points lie either side of its origin along its own decided direction; where a `via` point on the knot before it is the cause, the coincidence is reported instead;
+  - the path `check_route` checks is the path built from the rounded stops, and handing it to `canonical_json` gives the same JSON as sampling again.
+- [x] 2.4 Roll the carried frames to meet the X axis of each `through` entry and of the second end, spread evenly by arc length, the short way round (D4); name knots as the YAML does (`end 2`, `through 1`, `via point 1 of end 2`); give the JSON `ends`, `through` and per-entry `via` (D14). Verify in `test_route_path.py` that a straight route to a second end turned 90° rolls linearly to it, that one turned 270° rolls 90° the other way, that on a curved route through two entries the frame's X equals each entry's X (to 1e-9) with the frames still orthonormal, and that knot names match the YAML.
+
+## 3. Routed part type and its ends
+
+- [x] 3.1 Add `routed` to `partcad.json` (`diameter`, `innerDiameter`, `sketch`, `length`, `minBendRadius`; exactly one of `diameter` or `sketch`). Verify that schema tests accept valid declarations, and reject both-or-neither. `innerDiameter >= diameter` is refused by the part, not the schema, which cannot compare two fields; 3.2's tests cover it.
+- [x] 3.2 Make routed parts expose exactly the ports and interfaces they declare (none by default), and reject ports or interface parameters that refer to `route`. Verify with unit tests: a plain routed part has empty `with_ports.get_ports()`; declared ports appear as declared; the `route` reference is reported as invalid.
+- [x] 3.3 Extract the sketch resolution and sketch cache-key folding from `PartFactorySweep` into a shared helper (D6), with `sweep` and its `CACHE_VERSION` unchanged. Verify that the sweep cache keys in `test_cache_key_collisions.py` are identical before and after, and that `examples/produce_part_sweep` still passes `pc qual test`.
+- [x] 3.4 Add `src/partcad/wrappers/wrapper_route.py` (D6, plus the D9 post-sweep checks) and `src/partcad/part_factory_routed.py`. Register the type in the part-type registry and `partcad_client.object_types` (`ide/vscode/src/partTypes.ts` is the picker of file-based part types, which lists no `sweep` either, so `routed` stays out of it). Verify that the completeness tests pass, plus these *(sandbox)* tests in `tests/partcad/unit/test_part_routed.py`:
+  - a 6/4 mm tube on a sampled arc is one valid solid, with volume within 1 % of π(3²−2²)·L;
+  - both end faces are centred on the end origins (to 1e-6 mm) and normal to their Z axes (to 1e-6 rad);
+  - a flat rectangular sketch has its long side along each end's X at both end faces (to 1e-6 rad), i.e. the solid follows the rolled frames (D4), and at a `through` entry rolled half a turn, straight and on an arc, to the D6 bound (1e-5 rad over 25 mm or more, 1e-3 rad over 5 mm);
+  - a sketch too wide for a bend is refused before the sweep, with the bend and the profile's radius named, and no shape is returned (D9: `BRepCheck_Analyzer` does not see a sweep that crosses itself); a result that is not one valid solid is refused;
+  - a missing `route` param is a clear error.
+- [x] 3.5 Document the `routed` type in `docs/source/config_parts.rst`: its fields, the profile rule, the end frame and when to declare ports, a pointer to `route:`, and a short "routed or sweep?" note. Use `sweep` for a fixed shape drawn in the part's own frame, and `routed` for anything that joins two placed parts and has to follow them. Cross-link the two sections. Verify that the docs build has no warnings.
+
+## 4. ASSY `route:` placement
+
+- [ ] 4.1 Add the `route` node section to `assy.json`: `ends` with exactly two entries, an optional `through` list, `via` and `comment` (D14). Each end and `through` entry is `connectPorts` or `connect` (built from those definitions: the fields naming the two sides, plus `comment` and `how`) with `lead` and `via` (D12, D8); only ends take `with` or `location`. Add `not required` pairs against `location`, `connect` and `connectPorts`. Verify with schema tests, and with `pc lint` cases in `test_assy_lint.py`, for: a valid route; route plus `connectPorts`; one end only; three ends, with a message pointing at `through`; `joint` or `motion` inside an end or a `through` entry; `how` on an end and on a `through` entry, which is valid; an end with both `connect` and `connectPorts`; `with` on a `through` entry; a route with no `with` anywhere, which is valid. Waypoints (D12): `via` on the first end; a route-level `via` together with `through`; `via` both on the route and on the second end. Free ends (D10): a free first or second end is valid; a free `through` entry; every end free; `location` together with `connectPorts` or `connect` in one end; `with` on a free end.
+- [ ] 4.2 Add tree-path target resolution (D3). Verify with `tests/partcad/unit/test_route_targets.py` on a two-level assembly:
+  - a sibling end;
+  - a nested end, whose world pose equals the pose `alsoConnectPorts` computes for the same port;
+  - a `map:` port by its single-segment name;
+  - a wrong segment and a wrong port, each with the list of available names;
+  - a path through an alias, with the "places no links" message.
+- [ ] 4.3 Give the D8 resolver an optional source port that skips every source-side detection step (single port, single interface, patterns, mating), and have it prepare the moving item's ports itself; a route end without `with` passes the identity port. Add the second pass in `handle_node_list` (D2), using the D8 resolver for each end, with the routed part fetched without `route` to resolve the ends, then with the route registered (`Context.register_route`) and given by its digest (D5). Verify with `tests/partcad/unit/test_assembly_route.py`:
+  - **equivalence:** each end frame equals the placement of a plain part with the same port placed by the same `connectPorts` or `connect`, to 1e-9;
+  - **equivalence without `with`:** an end without `with` equals the placement of a plain part whose only port is at its origin, unturned, placed by `connectPorts` naming that port, and no "auto-detection" warning is logged;
+  - `with` naming a port the routed part does not declare is reported with the list of its ports, or "none", and the link is left out;
+  - a target port declared the other way round sends the end into the part, as it does the plain part;
+  - interfaces with no mating report the same problem a `connect` does;
+  - a free mating takes its default, and no joint appears in `assembly.joints()`;
+  - an end listed after the route resolves;
+  - moving an end's `location:` changes only that end's frame and the route JSON;
+  - an unchanged rebuild is a cache hit;
+  - connecting to a routed link, by any of the four ways, is refused;
+  - a `through` entry is passed along its axis between the two ends; two `through` entries are passed in order; a `through` entry giving `with` is refused;
+  - **free end:** its end frame equals the parsed `location:` exactly; moving the connected end's link changes only the connected end; a free end with `lead`, `via` points and a `through` grommet passes through all of them in order;
+  - **waypoints (D12):** each entry's `via` points become stops just before it, in order, across two `through` entries with several points each; a route-level `via` builds the same stops as `via` on the second end; the three misplaced-`via` cases are refused at build time; a route whose ends are all free is refused at build time with the "at least one connected end" message;
+  - a script part that declares `route` and no ports is connected at both ends by the end frame's origin;
+  - **connectors (D11):** a route ending at the `cable-exit` port of a separately placed plug part starts exactly there, with the plug listed before and after the route; the routed solid adds no geometry for an offset port (its end face lies at the end origin); a route straight to a barb port with no fitting part builds with no warning;
+  - `AssemblyChild.route` holds the ends, length, minimum radius and closest approach.
+  - the routed child is named `<part>;route=<16 hex digits>`, the same for an unchanged route and different when an end moves.
+- [ ] 4.4 Wire the D9 refusals into the build, kept on the assembly in a list of problems from links left out, which `get_connect_problems()` reads together with its children's (D9). Verify with the same test file that each pre-sweep refusal case from 2.3 leaves the link out of `assembly.children`, logs the reason, and appears in `get_connect_problems()` under the link's name; that the same holds for a route refused inside an embedded `links:` list; and that `pc qual test`'s `connect` check fails the assembly for it.
+- [ ] 4.5 Add the script hook (a part that declares `route: {type: string}`); the script factory puts the registered JSON in place of the digest (D5). A script route whose `through` entry has no decided direction is refused before the script runs. Verify with a *(sandbox)* test whose build123d script sweeps a circle along the received frames, and asserts that the JSON has `origin`, `z`, `x` and `lead` per end, and that the solid's endpoints are on the end origins. A `step` part placed with `route:` is reported and left out. A script route whose `via` point coincides with an end is refused before the script runs; one whose script returns two solids is refused after; a tight bend is not refused for a script part (D9).
+- [x] 4.6 Document `route:` in `docs/source/assy.rst`: ends as connections, the end frame, tree paths, `lead`, `via`, the script hook, the second pass, refusals and their remedies, and the restrictions. Verify that the docs build has no warnings.
+
+## 5. Checks and instructions
+
+- [ ] 5.1 Add `qual/basic/route.py` (D7). Verify with `tests/partcad/unit/test_qual_route.py`:
+  - too short fails, naming the link and both values;
+  - port offsets are not counted in the length;
+  - bending tighter than `minBendRadius` (but wider than the profile) builds the part and fails, naming both values;
+  - within limits passes;
+  - no limits declared passes;
+  - a D9 refusal fails with its own text.
+- [ ] 5.3 Make the interference check treat each route end and `through` entry as a joint (D13). Verify with cases in `tests/partcad/unit/test_qual_route.py` *(sandbox)*:
+  - a `via` point listed on the second end instead of the grommet sends the cable back through the panel, and the check fails naming the cable and the panel;
+  - the same point listed on the grommet passes;
+  - a tube end overlapping a barb whose port declares `snapIn` passes, and fails without it;
+  - a cable resting against a surface without entering it passes;
+  - a hose pushed onto a manifold barb (`snapIn`) that also runs back through the same manifold fails, naming the hose, the manifold and the point away from the barb: the allowance covers the joint's region, not the pair.
+  - a cable through a grommet that grips it on both sides of the port passes when the joint declares the overlap, and an overlap beyond the joint's depth on either side fails;
+  - a script cable that bulges within a grommet's depth passes where the joint declares the overlap, the radius being measured over the whole depth; an overlap beyond the depth still fails;
+  - a tube that loops back through the same manifold, inside the joint's cylinder but far along the path from the joint, fails at that second pass; the same for a script cable, whose measured radius is not widened by the second pass;
+  - a script cable with no push distance, whose later stretch crosses the joint's plane 100 mm from the axis, gets its depth from its own section only;
+  - a bulge of the joint's own stretch lying nearer to a thin later stretch's centreline than to its own is still excused.
+  - a hollow script tube, whose joint origin lies in its bore, gets its local section from the annular face around it;
+  - a script cable wider at the end of the joint's stretch than at the joint is severed there by its own section, so a later stretch beyond the cut is not excused.
+  - a script part's region uses the radius measured from its built section at each joint: a script cable pushed onto a barb passes within it, and fails beyond it; a script cable thicker at a `through` entry than at its ends gets the radius measured there;
+  - a tube pushed onto a barb overlaps it on the cable side of its end face (+Z), and passes within the joint's depth.
+- [ ] 5.2 Make the instruction book (`assembly_guide.py`) state each route step, from end to end with tree paths, and "leave the other end at (x, y, z)" for a free end. Verify with cases in `test_assembly_guide.py` for a two-ended route and a one-ended one.
+- [ ] 5.4 Keep routed links in place in exploded views (D15): no offset in `assembly_explode.offsets_async`, nothing moved with them, and their instruction-book step drawn with the parts they connect to solid and the rest see-through (an opacity per item in the step's picture). Verify with cases in `test_assembly_explode.py` (a routed link's offset is zero, its end parts still back out, nothing new is swept) and `test_assembly_guide.py` (the step's colours and opacities for a route with two `through` entries).
+
+## 6. Example and integration
+
+- [ ] 6.1 Add `examples/feature_routed_parts`:
+  - two blocks with ports, one of them inside a sub-assembly;
+  - a tube routed between them with `lead` and `via`;
+  - a cable through a panel grommet and a clip (`through`), with `via` points on each stretch;
+  - a cable with a USB-style plug as a part of its own, connected into a socket by interface, the route starting at the plug's `cable-exit` port;
+  - a push-fit tube whose end implements an interface that mates with a fitting;
+  - a build123d cable that uses the script hook;
+  - a drain hose with one free end;
+  - an SVG render in its README.
+  Register it in `examples/partcad.yaml`. Verify that `pc test` and `pc render` succeed in it.
+- [ ] 6.2 Add `features/routed_parts.feature` with these scenarios: build and inspect; move an end by editing `location:` and rebuild, with the route changed; `pc qual test` reports a cable that is too short; a `via` point too close gives the refusal message; a `via` point on the wrong stretch fails `pc qual test` with an interference naming the cable and the panel. Verify with `poetry run behave features/routed_parts.feature`.
+- [ ] 6.3 Run the unit suite (`poetry run pytest tests -x -n logical --dist worksteal`), `features/routed_parts.feature` and the lint hooks, and verify that all pass.
+
+## Workflow follow-up
+
+- Open a PR against `devel` from branch `975-routed-parts` pushed to origin, with "Closes #975" in its description, listing the behave features that were run.
+- Archive the change once the PR is merged.
+- Adopt `route:` for the MicroLab tubes and thermistor cable in the 4tv project, as a separate change.

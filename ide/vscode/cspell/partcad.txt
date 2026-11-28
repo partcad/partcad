@@ -25,6 +25,7 @@ axis
 background
 ball
 basic
+bend
 binaries
 binary
 bool
@@ -355,6 +356,7 @@ revision
 revolute
 root
 roughness
+routed
 safe
 sat
 scad

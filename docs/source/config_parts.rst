@@ -41,7 +41,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <basic|scad|cadquery|build123d|chili3d|sdf|extrude|sweep|boolean
+      type: <basic|scad|cadquery|build123d|chili3d|sdf|extrude|sweep|routed|boolean
              |step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz|usd
              |heightmap|pointcloud|voxels
              |kicad|compound|wall|alias|enrich|:<partType declared by this package>
@@ -1012,6 +1012,151 @@ Define parts by sweeping a sketch using the following syntax:
 |       sketch: section                                                     |                                                                                                                         |
 |       axis: [[0, 0, 20], [0, 0, 20], [20, 0, 0], [20, 20, 0], [0, 20, 0]] |                                                                                                                         |
 +---------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+The path of a sweep is part of the part, drawn in its own frame. For a cable, a
+hose or a tube that joins two parts placed in an assembly, and has to follow them
+when they move, use a :ref:`routed part <routed>` instead.
+
+.. _routed:
+
+Routed
+------
+
+A routed part is a cable, a hose or a tube: a profile swept along a path that
+the assembly works out, not the part. The part says what the cable is. The
+assembly link that places it says which ports it runs between
+(:ref:`route: <assembly-route>`), and its shape follows them. Move either end,
+and the next build reroutes it.
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: routed
+      # The profile: a round section, or a sketch (exactly one of the two).
+      diameter: <outer diameter, mm>
+      innerDiameter: <(optional) bore, mm: makes it a tube>
+      sketch: <(optional, instead of diameter) the sketch to sweep>
+      # Limits, checked by 'pc qual test' (the route is not reshaped to meet them).
+      length: <(optional) the real length of the cable, mm>
+      minBendRadius: <(optional) the tightest bend the material is rated for, mm>
+      # The ends (optional): ports and interfaces, in the end frame.
+      ports: ...
+      implements: ...
+
+**Ends.** Every end of a route has an **end frame**: its origin is the centre of
+the cable's end face, and +Z runs along the cable. A plain tube declares nothing
+about its ends. Each of them is simply its end face, plugged into the port the
+route names.
+
+**Connectors are parts of their own.** A routed part is the swept cable and
+nothing else. Where a cable has a plug, a ferrule or a fitting, place that as a
+part of its own, usually by ``connect:`` into its socket, and end the route at
+its cable-exit port (see :ref:`assembly-route`). Then the plug is drawn, listed
+in the bill of materials and checked like any part. A connector is never
+required: a route can end straight at any port, such as a tube on a barb or a
+wire in a terminal block.
+
+.. image:: images/routed-end-frame.png
+   :alt: The end frame. A plain tube's end face sits at the port it is plugged into. A cable with a plug ends at the plug's cable-exit port, and the plug is a part of its own.
+
+.. code-block:: yaml
+
+  parts:
+    silicone-tube-6x4:
+      type: routed
+      diameter: 6
+      innerDiameter: 4
+      minBendRadius: 15
+
+    thermistor-cable:       # its plug is the part usb-a-plug
+      type: routed
+      diameter: 3.5
+      length: 1000
+      minBendRadius: 10
+
+Declare ports and interfaces, in the end frame, only for ends that differ:
+
+- an interface, when the cable's end itself mates, as with a tube in a push-fit
+  coupling;
+- a port turned the other way round, for a target port declared that way;
+- an offset port, when something else draws what lies between the port and the
+  end face, such as a gland built into an enclosure. Nothing is drawn in an
+  offset, and it does not count towards ``length``.
+
+.. code-block:: yaml
+
+  parts:
+    push-fit-tube-6mm:
+      type: routed
+      diameter: 6
+      innerDiameter: 4
+      implements:
+        push-fit-6mm-tube: [[0, 0, 0], [0, 0, 1], 0]
+
+Ports and interfaces cannot depend on the route, because the ends have to be
+known before the route can be.
+
+**Sketch profiles** are swept in the plane normal to the path, with the sketch's
+X axis along the X axis of each port the route reaches: both ends, and every
+port it passes `through`. Between two of them, the profile rolls evenly along the
+path, the short way round, so a flat cable arrives at each connector turned the
+way the connector is. Declare the ports' X axes accordingly. A round tube shows
+none of this.
+
+The sketch is drawn in the frame of the first end listed. Only its X axis can be
+matched at the other ports: at the second end the cable is seen from the other
+side, so the sketch's +Y lies on that port's −Y. A sketch symmetric about its X
+axis, such as a flat ribbon, is the same either way. One that is not, such as a
+D-shaped tube, is not: list first the end it must match exactly.
+
+**Limits.** ``length`` and ``minBendRadius`` describe the real cable, and
+:doc:`pc qual test </digital_thread/lifecycle/qualification_tests>` fails an assembly whose route needs more
+cable, or bends it tighter, than they allow. ``length`` is measured along the
+centreline from end face to end face, so it counts leads but not port
+offsets. A route that cannot carry its profile at all is a different matter. A
+bend tighter than the profile's own radius, or a path that crosses itself, has
+no solid, so the link is left out of the assembly. The build says where on the
+path it happens and how to fix it (see :ref:`assembly-route`).
+
+A routed part is built only when an assembly places it with ``route:``. It has
+no shape of its own. A route may also leave one end free, at a location instead
+of a port, for a hose or a cord that is connected at one end only (see
+:ref:`assembly-route`).
+
+**Script parts can be routed too.** A ``cadquery`` or ``build123d`` part that
+declares a string parameter called ``route`` can be placed with ``route:``. It
+receives the route as JSON and builds whatever follows it, such as a braided
+hose, a cable with ferrules, or a chain of beads. Its ends are connected the
+same way a routed part's are:
+
+.. code-block:: yaml
+
+  parts:
+    braided-hose:
+      type: build123d
+      path: braided_hose.py
+      parameters:
+        route:
+          type: string
+
+.. code-block:: python
+
+  import json
+
+  route = json.loads(route)
+  # route["ends"]:    [first, second], each {"origin": [x, y, z], "z": [...], "x": [...], "lead": mm}
+  # route["through"]: [{...the same...}, ...]   # the ports passed through, in order
+  # Each 'through' entry and the second end also has "via": [[x, y, z], ...],
+  # the points passed on the way to it.
+  # route["path"]: {"points": [[x, y, z], ...], "z": [...], "x": [...],
+  #                 "knots": [sample index, ...], "length": mm}
+  # All of it in the frame of the assembly's 'links:' list that places the part.
+
+**Routed or sweep?** Use ``sweep`` for a shape with a fixed path: a bent rod, a
+handle, a moulding. The path is drawn once, in the part's own frame. Use
+``routed`` for anything that joins two parts placed in an assembly and has to
+follow them when they move.
 
 .. _walls:
 

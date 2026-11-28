@@ -28,6 +28,55 @@ from .interface import port_location
 from .shape_ports import prepare_async as prepare_ports_async
 
 
+class ConnectSpec:
+    """A link's 'connect' or 'connectPorts' section, read (see
+    'AssemblyFactoryAssy.connect_spec'): names that are not given are None, and
+    an instance or port name with a '*' in it is held as a pattern instead."""
+
+    def __init__(self, section: dict):
+        self.section = section
+        self.with_iface = None
+        self.with_params = None
+        self.with_instance = None
+        self.with_instance_pattern = None
+        self.with_port = None
+        self.with_port_pattern = None
+        self.to_name = None
+        self.to_iface = None
+        self.to_params = None
+        self.to_instance = None
+        self.to_instance_pattern = None
+        self.to_port = None
+        self.to_port_pattern = None
+
+
+class ConnectionResolution:
+    """What 'AssemblyFactoryAssy.resolve_connection' found: the placement, how
+    it was composed, the joint it makes, and the two ends it was made from."""
+
+    def __init__(
+        self,
+        location,
+        composition,
+        joint,
+        joint_problems,
+        connection,
+        source_port,
+        target_port,
+        source_iface_obj,
+        target_iface_obj,
+    ):
+        self.location = location
+        self.composition = composition
+        self.joint = joint
+        self.joint_problems = joint_problems
+        self.connection = connection
+        self.source_port = source_port
+        self.target_port = target_port
+        self.source_iface_obj = source_iface_obj
+        self.target_iface_obj = target_iface_obj
+
+
 @telemetry.instrument()
 def _as_names(value, where=""):
     """One name, several names, or nothing, as a list either way.
@@ -938,50 +987,17 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         composition = None
         joint = None
         joint_problems = []
-        # What naming the two ends' interfaces found wrong, which the joint
-        # problems are added to once the connection is composed.
-        naming_problems = []
-        connect_with_iface = None
-        connect_with_params = None
-        connect_with_instance = None
-        connect_with_instance_pattern = None
-        connect_with_port = None
-        connect_with_port_pattern = None
+        connect_spec = None
         connect_to_name = None
-        connect_to_iface = None
-        connect_to_params = None
-        connect_to_instance = None
-        connect_to_instance_pattern = None
-        connect_to_port = None
-        connect_to_port_pattern = None
         # "location" is an optional parameter for both parts and assemblies
         located = "location" in node
         if "location" in node:
             loc = node["location"]
             location = Location((loc[0][0], loc[0][1], loc[0][2]), (loc[1][0], loc[1][1], loc[1][2]), loc[2])
-        elif "connect" in node:
-            connect = node["connect"]
-            connect_with_iface = connect.get("with", None)
-            if connect_with_iface is not None and ":" not in connect_with_iface:
-                connect_with_iface = self.project.name + ":" + connect_with_iface
-            connect_with_params = connect.get("withParams", None)
-            connect_with_instance = connect.get("withInstance", None)
-            connect_with_port = connect.get("withPort", None)
-
-            connect_to_name = connect.get("name", None)
-
-            connect_to_iface = connect.get("to", None)
-            if connect_to_iface is not None and ":" not in connect_to_iface:
-                connect_to_iface = self.project.name + ":" + connect_to_iface
-            connect_to_params = connect.get("toParams", None)
-            connect_to_instance = connect.get("toInstance", None)
-            connect_to_port = connect.get("toPort", None)
-            location = None
-        elif "connectPorts" in node:
-            connect = node["connectPorts"]
-            connect_with_port = connect.get("with", None)
-            connect_to_name = connect.get("name", None)
-            connect_to_port = connect.get("to", None)
+        elif "connect" in node or "connectPorts" in node:
+            connect_spec = self.connect_spec(node)
+            connect = connect_spec.section
+            connect_to_name = connect_spec.to_name
             location = None
         else:
             location = Location((0, 0, 0), (0, 0, 1), 0)
@@ -992,20 +1008,6 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             # perform the assembly belong in the other fields.
             connect_comment = connect.get("comment", None)
             connect_how = self.connect_how(node, connect, name)
-
-        if connect_with_instance is not None and "*" in connect_with_instance:
-            connect_with_instance_pattern = connect_with_instance
-            connect_with_instance = None
-        if connect_to_instance is not None and "*" in connect_to_instance:
-            connect_to_instance_pattern = connect_to_instance
-            connect_to_instance = None
-
-        if connect_with_port is not None and "*" in connect_with_port:
-            connect_with_port_pattern = connect_with_port
-            connect_with_port = None
-        if connect_to_port is not None and "*" in connect_to_port:
-            connect_to_port_pattern = connect_to_port
-            connect_to_port = None
 
         fixed = self.node_fixed(node, name)
 
@@ -1091,540 +1093,35 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 # off its declaration, so they have to be worked out first.
                 await prepare_ports_async(item, self.ctx)
                 source_port = None
-                source_iface = None
                 source_iface_obj = None
-                source_iface_instance = None
-                target_part = None
-                target_part_location = None
                 target_port = None
-                target_iface = None
                 target_iface_obj = None
-                target_iface_instance = None
-                # trsf = None # TODO(clairbee): implement offsets
-
-                for child in assembly.children:
-                    # if hasattr(child, "name"):
-                    #     pc_logging.debug("Found part: %s" % child.name)
-                    if hasattr(child, "name") and child.name == connect_to_name:
-                        # pc_logging.debug(
-                        #     "Found target part: %s" % connect_to_name
-                        # )
-
-                        target_part = child.item
-                        break
+                target_child = self.link_child(assembly, connect_to_name)
+                target_part = None if target_child is None else target_child.item
 
                 if target_part is None:
                     pc_logging.error("Target part not found: %s" % connect_to_name)
                 else:
-                    await prepare_ports_async(target_part, self.ctx)
-                    if getattr(child, "location", None) is not None:
-                        target_part_location = child.location
+                    if getattr(target_child, "location", None) is not None:
+                        target_part_location = target_child.location
                     else:
                         # A target whose own connection could not be made - one
                         # refused for closing a loop, say - has no placement, and
                         # is drawn at the origin. This used to multiply 'None'.
                         target_part_location = Location((0, 0, 0), (0, 0, 1), 0)
 
-                    # If there is no source interface specified,
-                    # but there is only one present, then use it
-                    if (
-                        connect_with_iface is None
-                        and item.with_ports is not None
-                        and not item.with_ports.has_loose_ports()
-                        and len(list(item.with_ports.get_interfaces().keys())) == 1
-                    ):
-                        connect_with_iface = list(item.with_ports.get_interfaces().keys())[0]
-                        pc_logging.debug("Using the only source interface: %s" % connect_with_iface)
-
-                    # If there is only one source port, then just use it.
-                    if connect_with_port is None:
-                        if len(list(item.with_ports.get_ports().keys())) == 1:
-                            connect_with_port = list(item.with_ports.get_ports().keys())[0]
-                            pc_logging.debug("Using the only source port: %s" % connect_with_port)
-                            # If the instance is known and the port pattern is configured
-                        elif connect_with_port_pattern is not None:
-                            matched = []
-                            for port in item.with_ports.get_ports().values():
-                                if fnmatch.fnmatch(port, connect_with_port_pattern):
-                                    matched.append(port)
-
-                            if len(matched) == 1:
-                                connect_with_port = matched[0]
-                                pc_logging.debug("Found source port by pattern: %s" % connect_with_port)
-                            elif len(matched) > 1:
-                                pc_logging.debug(
-                                    "Multiple source ports are matching the pattern, pending interface checks: %s"
-                                    % matched
-                                )
-
-                    # If the source port is known, then use it
-                    if connect_with_port is not None:
-                        source_port = item.with_ports.get_ports()[connect_with_port]
-                        pc_logging.debug("Configured source port: %s" % source_port.name)
-                    else:
-                        # Source port is not configured.
-                        # It needs to be determined below.
-                        pass
-
-                    # If there is no target interface specified,
-                    # but there is only one present, then use it
-                    if (
-                        connect_to_iface is None
-                        and target_part.with_ports is not None
-                        and not target_part.with_ports.has_loose_ports()
-                        and len(list(target_part.with_ports.get_interfaces().keys())) == 1
-                    ):
-                        connect_to_iface = list(target_part.with_ports.get_interfaces().keys())[0]
-                        pc_logging.debug("Using the only target interface: %s" % connect_to_iface)
-
-                    # If there is only one target port, then just use it.
-                    if connect_to_port is None:
-                        if len(list(target_part.with_ports.get_ports().keys())) == 1:
-                            connect_to_port = list(target_part.with_ports.get_ports().keys())[0]
-                            pc_logging.debug("Using the only target port: %s" % connect_to_port)
-                        elif connect_to_port_pattern is not None:
-                            matched = []
-                            for port in target_part.with_ports.get_ports().keys():
-                                if fnmatch.fnmatch(port, connect_to_port_pattern):
-                                    matched.append(port)
-
-                            if len(matched) == 1:
-                                connect_to_port = matched[0]
-                                pc_logging.debug("Found target port by pattern: %s" % connect_to_port)
-                            elif len(matched) > 1:
-                                pc_logging.debug(
-                                    "Multiple target ports are matching the pattern, pending interface checks: %s"
-                                    % matched
-                                )
-
-                    # If the target port is configured, then use it
-                    if connect_to_port is not None:
-                        target_port = target_part.with_ports.get_ports()[connect_to_port]
-                        pc_logging.debug("Configured target port: %s" % target_port.name)
-                    else:
-                        # Target port is not configured.
-                        # It needs to be determined below.
-                        pass
-
-                    # If we have either source or target interface/port missing,
-                    # then we need to use mating information to determine them.
-                    if (connect_with_port is None and connect_with_iface is None) or (
-                        connect_to_port is None and connect_to_iface is None
-                    ):
-                        # FIXME: PC-10:
-                        # Brake the following step up into two:
-                        # 1. If we know the port name but not the interface,
-                        #    learn which interface it belons to.
-                        # 2. Get the list of interface for each part for which
-                        #    we don't know the interface yet.
-                        # 3. Given two lists of interfaces, find the mating
-                        #    candidates.
-                        (
-                            source_candidate_interfaces,
-                            target_candidate_interfaces,
-                        ) = self.project.ctx.find_mating_interfaces(item, target_part)
-
-                        # If it's the source interface that we need to auto-detect
-                        if connect_with_port is None and connect_with_iface is None:
-                            if len(source_candidate_interfaces) == 1:
-                                connect_with_iface = source_candidate_interfaces.pop()
-                            elif len(source_candidate_interfaces) > 1:
-                                # FIXME(clairbee): what if we have patterns configured?
-                                pc_logging.debug(
-                                    "Multiple source interfaces are candidates for connection: %s"
-                                    % source_candidate_interfaces
-                                )
-                            else:
-                                pc_logging.debug("No source interfaces are candidates for connection")
-
-                        # If it's the target interface that we need to auto-detect
-                        if connect_to_port is None and connect_to_iface is None:
-                            if len(target_candidate_interfaces) == 1:
-                                connect_to_iface = target_candidate_interfaces.pop()
-                            elif len(target_candidate_interfaces) > 1:
-                                # FIXME(clairbee): what if we have patterns configured?
-                                pc_logging.debug(
-                                    "Multiple target interfaces are candidates for connection: %s"
-                                    % target_candidate_interfaces
-                                )
-                            else:
-                                pc_logging.debug("No target interfaces are candidates for connection")
-
-                    # Resolve interface names: to the one each end implements
-                    # them under, which for an interface built from parameters
-                    # is the name it was built with (see 'implemented_name').
-                    if connect_with_iface is not None:
-                        connect_with_iface = self.implemented_interface(item, connect_with_iface, name, naming_problems)
-                    if connect_to_iface is not None:
-                        connect_to_iface = self.implemented_interface(
-                            target_part, connect_to_iface, connect_to_name, naming_problems
-                        )
-                    if connect_with_iface is not None:
-                        source_iface = item.with_ports.get_interface(connect_with_iface)
-                        source_iface_obj = self.project.ctx.get_interface(connect_with_iface)
-                    if connect_to_iface is not None:
-                        target_iface = target_part.with_ports.get_interface(connect_to_iface)
-                        target_iface_obj = self.project.ctx.get_interface(connect_to_iface)
-
-                    # If we know the source interface but not the port
-                    if connect_with_port is None and source_iface_obj is not None:
-                        # If the instance is specified, then find it
-                        pc_logging.debug("Source interface instances: %s" % source_iface.keys())
-
-                        # If there is an instance pattern configured
-                        if (
-                            source_iface is not None
-                            and source_iface_instance is None
-                            and connect_with_instance_pattern is not None
-                        ):
-                            matched = []
-                            for instance in source_iface.values():
-                                if fnmatch.fnmatch(instance, connect_with_instance_pattern):
-                                    matched.append(instance)
-
-                            if len(matched) == 1:
-                                connect_with_instance = matched[0]
-                                pc_logging.debug("Found source instance by pattern: %s" % connect_with_instance)
-                            elif len(matched) > 1:
-                                pc_logging.debug("Multiple source instances are matching the pattern: %s" % matched)
-
-                            if connect_with_instance is None:
-                                pc_logging.error(
-                                    "Connect %s to %s: instance is not found by pattern: %s"
-                                    % (
-                                        name,
-                                        connect_to_name,
-                                        connect_with_instance_pattern,
-                                    )
-                                )
-
-                        if connect_with_instance is not None:
-                            if connect_with_instance not in source_iface:
-                                pc_logging.error(
-                                    "Connect %s to %s: source instance is not found: %s"
-                                    % (
-                                        name,
-                                        connect_to_name,
-                                        connect_with_instance,
-                                    )
-                                )
-                            else:
-                                source_iface_instance = source_iface[connect_with_instance]
-                        # If there is only one instance, then use it
-                        elif len(list(source_iface.values())) == 1:
-                            source_iface_instance = list(source_iface.values())[0]
-                        elif len(list(source_iface.values())) > 1:
-                            # This could be ok if we have a port name or pattern
-                            pc_logging.debug(
-                                "Missing instance specification for the source interface: %s" % connect_with_iface
-                            )
-
-                        # If the instance is known and it has only one port, then use it
-                        if (
-                            source_iface_instance is not None
-                            and connect_with_port is None
-                            and len(list(source_iface_instance.values())) == 1
-                        ):
-                            connect_with_port = list(source_iface_instance.values())[0]
-                        # If the instance is known and the port pattern is configured
-                        elif (
-                            source_iface_instance is not None
-                            and connect_with_port is None
-                            and connect_with_port_pattern is not None
-                        ):
-                            matched = []
-                            for port in source_iface_instance.values():
-                                if fnmatch.fnmatch(port, connect_with_port_pattern):
-                                    matched.append(port)
-
-                            if len(matched) == 1:
-                                connect_with_port = matched[0]
-                                pc_logging.debug("Found source port by pattern: %s" % connect_with_port)
-                            elif len(matched) > 1:
-                                pc_logging.debug("Multiple source ports are matching the pattern: %s" % matched)
-
-                            if connect_with_port is None:
-                                pc_logging.error(
-                                    "Connect %s to %s: port is not found by pattern: %s"
-                                    % (
-                                        name,
-                                        connect_to_name,
-                                        connect_with_port_pattern,
-                                    )
-                                )
-                        # If the instance is known and the interface has the lead port
-                        elif (
-                            source_iface_instance is not None
-                            and connect_with_port is None
-                            and source_iface_obj.lead_port is not None
-                        ):
-                            for port in source_iface_instance.values():
-                                if fnmatch.fnmatch(port, "*" + source_iface_obj.lead_port):
-                                    connect_with_port = port
-                                    break
-                            if connect_with_port is None:
-                                pc_logging.error(
-                                    "Connect %s to %s: lead port is not found: %s"
-                                    % (
-                                        name,
-                                        connect_to_name,
-                                        source_iface_obj.lead_port,
-                                    )
-                                )
-                        # pc_logging.info("Found source interface: %s" % source_iface.name)
-
-                    # If we know the target interface but not the port
-                    if connect_to_port is None and target_iface_obj is not None:
-                        # If the instance is specified, then find it
-                        pc_logging.debug("Target interface instances: %s" % target_iface.keys())
-
-                        # If there is an instance pattern configured and there is only one match
-                        if (
-                            target_iface is not None
-                            and target_iface_instance is None
-                            and connect_to_instance_pattern is not None
-                        ):
-                            matched = []
-                            for instance in list(target_iface.keys()):
-                                pc_logging.debug("Instance: %s" % instance)
-                                pc_logging.debug("Pattern: %s" % connect_to_instance_pattern)
-                                if fnmatch.fnmatch(instance, connect_to_instance_pattern):
-                                    matched.append(instance)
-
-                            if len(matched) == 1:
-                                connect_to_instance = matched[0]
-                                pc_logging.debug("Found target instance by pattern: %s" % connect_to_instance)
-                            elif len(matched) > 1:
-                                pc_logging.debug("Multiple target instances are matching the pattern: %s" % matched)
-
-                            if connect_to_instance is None:
-                                pc_logging.error(
-                                    "Connect %s to %s: instance is not found by pattern: %s"
-                                    % (
-                                        name,
-                                        connect_to_name,
-                                        connect_to_instance_pattern,
-                                    )
-                                )
-
-                        if connect_to_instance is not None:
-                            if connect_to_instance not in target_iface:
-                                pc_logging.error(
-                                    "Connect %s to %s: target instance is not found: %s"
-                                    % (
-                                        name,
-                                        connect_to_name,
-                                        connect_to_instance,
-                                    )
-                                )
-                            else:
-                                target_iface_instance = target_iface[connect_to_instance]
-                        # If there is only one instance, then use it
-                        elif len(list(target_iface.values())) == 1:
-                            target_iface_instance = list(target_iface.values())[0]
-                        elif len(list(target_iface.values())) > 1:
-                            # This could be ok if we have a port name or pattern
-                            pc_logging.debug(
-                                "Missing instance specification for the target interface: %s" % connect_to_iface
-                            )
-
-                        # If the instance is known and it has only one port, then use it
-                        if (
-                            target_iface_instance is not None
-                            and connect_to_port is None
-                            and len(list(target_iface_instance.values())) == 1
-                        ):
-                            connect_to_port = list(target_iface_instance.values())[0]
-                        # If the instance is known and the port pattern is configured
-                        elif (
-                            target_iface_instance is not None
-                            and connect_to_port is None
-                            and connect_to_port_pattern is not None
-                        ):
-                            matched = []
-                            for port in target_iface_instance.values():
-                                if fnmatch.fnmatch(port, connect_to_port_pattern):
-                                    matched.append(port)
-
-                            if len(matched) == 1:
-                                connect_to_port = matched[0]
-                                pc_logging.debug("Found target port by pattern: %s" % connect_to_port)
-                            elif len(matched) > 1:
-                                pc_logging.debug("Multiple target ports are matching the pattern: %s" % matched)
-
-                            if connect_to_port is None:
-                                pc_logging.error(
-                                    "Connect %s to %s: port is not found by pattern: %s"
-                                    % (
-                                        name,
-                                        connect_to_name,
-                                        connect_to_port_pattern,
-                                    )
-                                )
-                        # If the instance is known and the interface has the lead port
-                        elif (
-                            target_iface_instance is not None
-                            and connect_to_port is None
-                            and target_iface_obj.lead_port is not None
-                        ):
-                            for port in target_iface_instance.values():
-                                if fnmatch.fnmatch(port, "*" + target_iface_obj.lead_port):
-                                    connect_to_port = port
-                                    break
-                            if connect_to_port is None:
-                                pc_logging.error(
-                                    "Connect %s to %s: lead port is not found: %s"
-                                    % (
-                                        name,
-                                        connect_to_name,
-                                        target_iface_obj.lead_port,
-                                    )
-                                )
-                        # pc_logging.info("Found target interface: %s" % target_iface.name)
-
-                    # We know both interface instances but we don't know one of the ports
-                    # FIXME(claibee): it is currently working only for cases where we don't know both ports
-                    # TODO(clairbee): should the following condition drop the check for iface_instance?
-                    #                 shouldn't we try to match ports even if there is no mating information?
-                    if (
-                        source_iface_instance is not None
-                        and target_iface_instance is not None
-                        # FIXME(clairbee): what if we only know one?
-                        and connect_with_port is None
-                        and connect_to_port is None
-                    ):
-                        pc_logging.debug("Trying to match ports by name")
-                        # Both interfaces are known but they have more than one port each.
-                        # Let's find a matching pair of ports.
-                        source_ports = sorted(list(source_iface_instance.keys()))
-                        target_ports = sorted(list(target_iface_instance.keys()))
-                        if source_ports == target_ports:
-                            # FIXME(clairbee): so what? what if we have patterns configured?
-                            # The interfaces have the same number of ports and the same names.
-                            # We can connect them using any pair of matching ports.
-                            connect_with_port = source_iface_instance[source_ports[0]]
-                            connect_to_port = target_iface_instance[target_ports[0]]
-                        else:
-                            connect_with_port_index = -1
-                            connect_to_port_index = -1
-                            if len(source_ports) != 1:
-                                if connect_with_port_pattern is None and connect_to_port_pattern is None:
-                                    if len(source_ports) == len(target_ports):
-                                        pc_logging.debug(
-                                            "Connect %s to %s: port mating is not detected deterministically on BOTH ends, guessing alphabetically..."
-                                            % (name, connect_to_name)
-                                        )
-                                        connect_with_port_index = 0
-                                        connect_to_port_index = 0
-                                    else:
-                                        pc_logging.error(
-                                            "Connect %s to %s: port mating is not detected deterministically on BOTH ends, different number of ports"
-                                            % (name, connect_to_name)
-                                        )
-
-                                if connect_with_port_pattern is not None:
-                                    for i, port in enumerate(source_ports):
-                                        if fnmatch.fnmatch(port, connect_with_port_pattern):
-                                            connect_with_port_index = i
-                                            break
-                                if connect_to_port_pattern is not None:
-                                    for i, port in enumerate(target_ports):
-                                        if fnmatch.fnmatch(port, connect_to_port_pattern):
-                                            connect_to_port_index = i
-                                            break
-
-                                if (
-                                    len(source_ports) == len(target_ports)
-                                    and connect_with_port_index != -1
-                                    and connect_to_port_index == -1
-                                ):
-                                    pc_logging.debug(
-                                        "Connect %s to %s: port selection is not detected on the target end, guessing alphabetically..."
-                                        % (name, connect_to_name)
-                                    )
-                                    connect_to_port_index = connect_with_port_index
-                                if (
-                                    len(source_ports) == len(target_ports)
-                                    and connect_with_port_index == -1
-                                    and connect_to_port_index != -1
-                                ):
-                                    pc_logging.debug(
-                                        "Connect %s to %s: port selection is not detected on the source end, guessing alphabetically..."
-                                        % (name, connect_to_name)
-                                    )
-                                    connect_with_port_index = connect_to_port_index
-
-                            if connect_with_port_index != -1:
-                                connect_with_port = source_iface_instance[source_ports[connect_with_port_index]]
-                            if connect_to_port_index != -1:
-                                connect_to_port = target_iface_instance[target_ports[connect_to_port_index]]
-
-                    # If the source port is determined, then use it
-                    if connect_with_port is not None and source_port is None:
-                        source_port = item.with_ports.get_ports()[connect_with_port]
-                        pc_logging.debug("Found source port: %s" % source_port.name)
-                    if connect_with_port is not None and connect_with_port_pattern is not None:
-                        if not fnmatch.fnmatch(connect_with_port, connect_with_port_pattern):
-                            pc_logging.error(
-                                "The determined source port does not match the pattern: %s" % connect_with_port_pattern
-                            )
-
-                    # If the target port is determined, then use it
-                    if connect_to_port is not None and target_port is None:
-                        target_port = target_part.with_ports.get_ports()[connect_to_port]
-                        pc_logging.debug("Found target port: %s" % target_port.name)
-                    if connect_to_port is not None and connect_to_port_pattern is not None:
-                        if not fnmatch.fnmatch(connect_to_port, connect_to_port_pattern):
-                            pc_logging.error(
-                                "The determined target port does not match the pattern: %s" % connect_to_port_pattern
-                            )
-
-                    # TODO(clairbee): before the next step, deduce the interface
-                    #                 based on the port name if the interface is missing
-
-                    if (source_port is None and target_port is not None) or (
-                        source_port is not None and target_port is None
-                    ):
-                        # One of the parts may have no parts declared.
-                        # TODO(clairbee): Do we need to support this?
-                        pc_logging.warning("Peer port auto-detection has failed: %s" % name)
-
-                    # Pure-Python rigid-transform algebra (geom.Location): the
-                    # connection location is the target part/port placement,
-                    # flipped to face the source, offset by the freedom-of-movement
-                    # parameters, and pulled back by the source port - kept as the
-                    # ordered steps it is the product of, which is what a joint is
-                    # made of (see 'partcad.joint'). The product is the placement:
-                    # it is taken from the steps rather than worked out beside them.
-                    composition, joint, joint_problems = self.compose_connection(
-                        connect,
-                        name,
-                        connect_to_name,
-                        target_part_location,
-                        target_port,
-                        source_port,
-                        target_iface_obj,
-                        source_iface_obj,
-                        connect_to_params,
-                        connect_with_params,
+                    resolved = await self.resolve_connection(
+                        item, name, connect_spec, target_part, target_part_location
                     )
-                    location = composition.location()
-                    joint_problems = naming_problems + joint_problems
-                    pc_logging.debug(
-                        "Connected %s of %s to %s of %s" % (connect_with_port, name, connect_to_port, connect_to_name)
-                    )
-
-                    connection = self._connection_info(
-                        connect,
-                        connect_to_name,
-                        connect_with_port,
-                        connect_to_port,
-                        connect_with_iface,
-                        connect_to_iface,
-                        target_part_location,
-                        target_port,
-                        None if source_port is None else location * port_location(source_port),
-                    )
+                    location = resolved.location
+                    composition = resolved.composition
+                    joint = resolved.joint
+                    joint_problems = resolved.joint_problems
+                    connection = resolved.connection
+                    source_port = resolved.source_port
+                    target_port = resolved.target_port
+                    source_iface_obj = resolved.source_iface_obj
+                    target_iface_obj = resolved.target_iface_obj
 
                 # Now that both ends of the connection are known, the interfaces
                 # to hold them by can be matched against what they implement.
@@ -1678,6 +1175,585 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             return child
         else:
             return None
+
+    def connect_spec(self, node) -> Optional["ConnectSpec"]:
+        """The node's 'connect' or 'connectPorts' section, read into the names
+        'resolve_connection' works with, or None for a node that has neither.
+
+        An interface name without a package is this package's, and an instance
+        or port name with a '*' in it is a pattern rather than a name.
+        """
+        if "connect" in node:
+            section = node["connect"]
+            spec = ConnectSpec(section)
+            spec.with_iface = section.get("with", None)
+            if spec.with_iface is not None and ":" not in spec.with_iface:
+                spec.with_iface = self.project.name + ":" + spec.with_iface
+            spec.with_params = section.get("withParams", None)
+            spec.with_instance = section.get("withInstance", None)
+            spec.with_port = section.get("withPort", None)
+
+            spec.to_name = section.get("name", None)
+
+            spec.to_iface = section.get("to", None)
+            if spec.to_iface is not None and ":" not in spec.to_iface:
+                spec.to_iface = self.project.name + ":" + spec.to_iface
+            spec.to_params = section.get("toParams", None)
+            spec.to_instance = section.get("toInstance", None)
+            spec.to_port = section.get("toPort", None)
+        elif "connectPorts" in node:
+            section = node["connectPorts"]
+            spec = ConnectSpec(section)
+            spec.with_port = section.get("with", None)
+            spec.to_name = section.get("name", None)
+            spec.to_port = section.get("to", None)
+        else:
+            return None
+
+        if spec.with_instance is not None and "*" in spec.with_instance:
+            spec.with_instance_pattern = spec.with_instance
+            spec.with_instance = None
+        if spec.to_instance is not None and "*" in spec.to_instance:
+            spec.to_instance_pattern = spec.to_instance
+            spec.to_instance = None
+
+        if spec.with_port is not None and "*" in spec.with_port:
+            spec.with_port_pattern = spec.with_port
+            spec.with_port = None
+        if spec.to_port is not None and "*" in spec.to_port:
+            spec.to_port_pattern = spec.to_port
+            spec.to_port = None
+        return spec
+
+    @staticmethod
+    def link_child(assembly, link_name):
+        """The child of 'assembly' placed by the link named 'link_name', or None."""
+        for child in assembly.children:
+            if hasattr(child, "name") and child.name == link_name:
+                return child
+        return None
+
+    async def resolve_connection(self, item, name, spec, target_part, target_part_location) -> "ConnectionResolution":
+        """Where 'item' goes when connected as 'spec' says to 'target_part',
+        which sits at 'target_part_location' in this assembly's frame.
+
+        Works out the ports, interfaces and parameters of both ends and hands
+        them to 'compose_connection'. The target and its location are passed in
+        rather than looked up, so that whatever finds them - a sibling link, or
+        an item further down the tree - can share this.
+        """
+        await prepare_ports_async(target_part, self.ctx)
+        connect = spec.section
+        connect_with_iface = spec.with_iface
+        connect_with_params = spec.with_params
+        connect_with_instance = spec.with_instance
+        connect_with_instance_pattern = spec.with_instance_pattern
+        connect_with_port = spec.with_port
+        connect_with_port_pattern = spec.with_port_pattern
+        connect_to_name = spec.to_name
+        connect_to_iface = spec.to_iface
+        connect_to_params = spec.to_params
+        connect_to_instance = spec.to_instance
+        connect_to_instance_pattern = spec.to_instance_pattern
+        connect_to_port = spec.to_port
+        connect_to_port_pattern = spec.to_port_pattern
+
+        source_port = None
+        source_iface = None
+        source_iface_obj = None
+        source_iface_instance = None
+        target_port = None
+        target_iface = None
+        target_iface_obj = None
+        target_iface_instance = None
+        # What naming the two ends' interfaces found wrong, which the joint
+        # problems are added to once the connection is composed.
+        naming_problems = []
+
+        # If there is no source interface specified,
+        # but there is only one present, then use it
+        if (
+            connect_with_iface is None
+            and item.with_ports is not None
+            and not item.with_ports.has_loose_ports()
+            and len(list(item.with_ports.get_interfaces().keys())) == 1
+        ):
+            connect_with_iface = list(item.with_ports.get_interfaces().keys())[0]
+            pc_logging.debug("Using the only source interface: %s" % connect_with_iface)
+
+        # If there is only one source port, then just use it.
+        if connect_with_port is None:
+            if len(list(item.with_ports.get_ports().keys())) == 1:
+                connect_with_port = list(item.with_ports.get_ports().keys())[0]
+                pc_logging.debug("Using the only source port: %s" % connect_with_port)
+                # If the instance is known and the port pattern is configured
+            elif connect_with_port_pattern is not None:
+                matched = []
+                for port in item.with_ports.get_ports().keys():
+                    if fnmatch.fnmatch(port, connect_with_port_pattern):
+                        matched.append(port)
+
+                if len(matched) == 1:
+                    connect_with_port = matched[0]
+                    pc_logging.debug("Found source port by pattern: %s" % connect_with_port)
+                elif len(matched) > 1:
+                    pc_logging.debug(
+                        "Multiple source ports are matching the pattern, pending interface checks: %s" % matched
+                    )
+
+        # If the source port is known, then use it
+        if connect_with_port is not None:
+            source_port = item.with_ports.get_ports()[connect_with_port]
+            pc_logging.debug("Configured source port: %s" % source_port.name)
+        else:
+            # Source port is not configured.
+            # It needs to be determined below.
+            pass
+
+        # If there is no target interface specified,
+        # but there is only one present, then use it
+        if (
+            connect_to_iface is None
+            and target_part.with_ports is not None
+            and not target_part.with_ports.has_loose_ports()
+            and len(list(target_part.with_ports.get_interfaces().keys())) == 1
+        ):
+            connect_to_iface = list(target_part.with_ports.get_interfaces().keys())[0]
+            pc_logging.debug("Using the only target interface: %s" % connect_to_iface)
+
+        # If there is only one target port, then just use it.
+        if connect_to_port is None:
+            if len(list(target_part.with_ports.get_ports().keys())) == 1:
+                connect_to_port = list(target_part.with_ports.get_ports().keys())[0]
+                pc_logging.debug("Using the only target port: %s" % connect_to_port)
+            elif connect_to_port_pattern is not None:
+                matched = []
+                for port in target_part.with_ports.get_ports().keys():
+                    if fnmatch.fnmatch(port, connect_to_port_pattern):
+                        matched.append(port)
+
+                if len(matched) == 1:
+                    connect_to_port = matched[0]
+                    pc_logging.debug("Found target port by pattern: %s" % connect_to_port)
+                elif len(matched) > 1:
+                    pc_logging.debug(
+                        "Multiple target ports are matching the pattern, pending interface checks: %s" % matched
+                    )
+
+        # If the target port is configured, then use it
+        if connect_to_port is not None:
+            target_port = target_part.with_ports.get_ports()[connect_to_port]
+            pc_logging.debug("Configured target port: %s" % target_port.name)
+        else:
+            # Target port is not configured.
+            # It needs to be determined below.
+            pass
+
+        # If we have either source or target interface/port missing,
+        # then we need to use mating information to determine them.
+        if (connect_with_port is None and connect_with_iface is None) or (
+            connect_to_port is None and connect_to_iface is None
+        ):
+            # FIXME: PC-10:
+            # Brake the following step up into two:
+            # 1. If we know the port name but not the interface,
+            #    learn which interface it belons to.
+            # 2. Get the list of interface for each part for which
+            #    we don't know the interface yet.
+            # 3. Given two lists of interfaces, find the mating
+            #    candidates.
+            (
+                source_candidate_interfaces,
+                target_candidate_interfaces,
+            ) = self.project.ctx.find_mating_interfaces(item, target_part)
+
+            # If it's the source interface that we need to auto-detect
+            if connect_with_port is None and connect_with_iface is None:
+                if len(source_candidate_interfaces) == 1:
+                    connect_with_iface = source_candidate_interfaces.pop()
+                elif len(source_candidate_interfaces) > 1:
+                    # FIXME(clairbee): what if we have patterns configured?
+                    pc_logging.debug(
+                        "Multiple source interfaces are candidates for connection: %s" % source_candidate_interfaces
+                    )
+                else:
+                    pc_logging.debug("No source interfaces are candidates for connection")
+
+            # If it's the target interface that we need to auto-detect
+            if connect_to_port is None and connect_to_iface is None:
+                if len(target_candidate_interfaces) == 1:
+                    connect_to_iface = target_candidate_interfaces.pop()
+                elif len(target_candidate_interfaces) > 1:
+                    # FIXME(clairbee): what if we have patterns configured?
+                    pc_logging.debug(
+                        "Multiple target interfaces are candidates for connection: %s" % target_candidate_interfaces
+                    )
+                else:
+                    pc_logging.debug("No target interfaces are candidates for connection")
+
+        # Resolve interface names: to the one each end implements
+        # them under, which for an interface built from parameters
+        # is the name it was built with (see 'implemented_name').
+        if connect_with_iface is not None:
+            connect_with_iface = self.implemented_interface(item, connect_with_iface, name, naming_problems)
+        if connect_to_iface is not None:
+            connect_to_iface = self.implemented_interface(
+                target_part, connect_to_iface, connect_to_name, naming_problems
+            )
+        if connect_with_iface is not None:
+            source_iface = item.with_ports.get_interface(connect_with_iface)
+            source_iface_obj = self.project.ctx.get_interface(connect_with_iface)
+        if connect_to_iface is not None:
+            target_iface = target_part.with_ports.get_interface(connect_to_iface)
+            target_iface_obj = self.project.ctx.get_interface(connect_to_iface)
+
+        # If we know the source interface but not the port
+        if connect_with_port is None and source_iface_obj is not None:
+            # If the instance is specified, then find it
+            pc_logging.debug("Source interface instances: %s" % source_iface.keys())
+
+            # If there is an instance pattern configured
+            if source_iface is not None and source_iface_instance is None and connect_with_instance_pattern is not None:
+                matched = []
+                for instance in source_iface.keys():
+                    if fnmatch.fnmatch(instance, connect_with_instance_pattern):
+                        matched.append(instance)
+
+                if len(matched) == 1:
+                    connect_with_instance = matched[0]
+                    pc_logging.debug("Found source instance by pattern: %s" % connect_with_instance)
+                elif len(matched) > 1:
+                    pc_logging.debug("Multiple source instances are matching the pattern: %s" % matched)
+
+                if connect_with_instance is None:
+                    pc_logging.error(
+                        "Connect %s to %s: instance is not found by pattern: %s"
+                        % (
+                            name,
+                            connect_to_name,
+                            connect_with_instance_pattern,
+                        )
+                    )
+
+            if connect_with_instance is not None:
+                if connect_with_instance not in source_iface:
+                    pc_logging.error(
+                        "Connect %s to %s: source instance is not found: %s"
+                        % (
+                            name,
+                            connect_to_name,
+                            connect_with_instance,
+                        )
+                    )
+                else:
+                    source_iface_instance = source_iface[connect_with_instance]
+            # If there is only one instance, then use it
+            elif len(list(source_iface.values())) == 1:
+                source_iface_instance = list(source_iface.values())[0]
+            elif len(list(source_iface.values())) > 1:
+                # This could be ok if we have a port name or pattern
+                pc_logging.debug("Missing instance specification for the source interface: %s" % connect_with_iface)
+
+            # If the instance is known and it has only one port, then use it
+            if (
+                source_iface_instance is not None
+                and connect_with_port is None
+                and len(list(source_iface_instance.values())) == 1
+            ):
+                connect_with_port = list(source_iface_instance.values())[0]
+            # If the instance is known and the port pattern is configured
+            elif (
+                source_iface_instance is not None
+                and connect_with_port is None
+                and connect_with_port_pattern is not None
+            ):
+                matched = []
+                for port in source_iface_instance.values():
+                    if fnmatch.fnmatch(port, connect_with_port_pattern):
+                        matched.append(port)
+
+                if len(matched) == 1:
+                    connect_with_port = matched[0]
+                    pc_logging.debug("Found source port by pattern: %s" % connect_with_port)
+                elif len(matched) > 1:
+                    pc_logging.debug("Multiple source ports are matching the pattern: %s" % matched)
+
+                if connect_with_port is None:
+                    pc_logging.error(
+                        "Connect %s to %s: port is not found by pattern: %s"
+                        % (
+                            name,
+                            connect_to_name,
+                            connect_with_port_pattern,
+                        )
+                    )
+            # If the instance is known and the interface has the lead port
+            elif (
+                source_iface_instance is not None
+                and connect_with_port is None
+                and source_iface_obj.lead_port is not None
+            ):
+                for port in source_iface_instance.values():
+                    if fnmatch.fnmatch(port, "*" + source_iface_obj.lead_port):
+                        connect_with_port = port
+                        break
+                if connect_with_port is None:
+                    pc_logging.error(
+                        "Connect %s to %s: lead port is not found: %s"
+                        % (
+                            name,
+                            connect_to_name,
+                            source_iface_obj.lead_port,
+                        )
+                    )
+            # pc_logging.info("Found source interface: %s" % source_iface.name)
+
+        # If we know the target interface but not the port
+        if connect_to_port is None and target_iface_obj is not None:
+            # If the instance is specified, then find it
+            pc_logging.debug("Target interface instances: %s" % target_iface.keys())
+
+            # If there is an instance pattern configured and there is only one match
+            if target_iface is not None and target_iface_instance is None and connect_to_instance_pattern is not None:
+                matched = []
+                for instance in list(target_iface.keys()):
+                    pc_logging.debug("Instance: %s" % instance)
+                    pc_logging.debug("Pattern: %s" % connect_to_instance_pattern)
+                    if fnmatch.fnmatch(instance, connect_to_instance_pattern):
+                        matched.append(instance)
+
+                if len(matched) == 1:
+                    connect_to_instance = matched[0]
+                    pc_logging.debug("Found target instance by pattern: %s" % connect_to_instance)
+                elif len(matched) > 1:
+                    pc_logging.debug("Multiple target instances are matching the pattern: %s" % matched)
+
+                if connect_to_instance is None:
+                    pc_logging.error(
+                        "Connect %s to %s: instance is not found by pattern: %s"
+                        % (
+                            name,
+                            connect_to_name,
+                            connect_to_instance_pattern,
+                        )
+                    )
+
+            if connect_to_instance is not None:
+                if connect_to_instance not in target_iface:
+                    pc_logging.error(
+                        "Connect %s to %s: target instance is not found: %s"
+                        % (
+                            name,
+                            connect_to_name,
+                            connect_to_instance,
+                        )
+                    )
+                else:
+                    target_iface_instance = target_iface[connect_to_instance]
+            # If there is only one instance, then use it
+            elif len(list(target_iface.values())) == 1:
+                target_iface_instance = list(target_iface.values())[0]
+            elif len(list(target_iface.values())) > 1:
+                # This could be ok if we have a port name or pattern
+                pc_logging.debug("Missing instance specification for the target interface: %s" % connect_to_iface)
+
+            # If the instance is known and it has only one port, then use it
+            if (
+                target_iface_instance is not None
+                and connect_to_port is None
+                and len(list(target_iface_instance.values())) == 1
+            ):
+                connect_to_port = list(target_iface_instance.values())[0]
+            # If the instance is known and the port pattern is configured
+            elif target_iface_instance is not None and connect_to_port is None and connect_to_port_pattern is not None:
+                matched = []
+                for port in target_iface_instance.values():
+                    if fnmatch.fnmatch(port, connect_to_port_pattern):
+                        matched.append(port)
+
+                if len(matched) == 1:
+                    connect_to_port = matched[0]
+                    pc_logging.debug("Found target port by pattern: %s" % connect_to_port)
+                elif len(matched) > 1:
+                    pc_logging.debug("Multiple target ports are matching the pattern: %s" % matched)
+
+                if connect_to_port is None:
+                    pc_logging.error(
+                        "Connect %s to %s: port is not found by pattern: %s"
+                        % (
+                            name,
+                            connect_to_name,
+                            connect_to_port_pattern,
+                        )
+                    )
+            # If the instance is known and the interface has the lead port
+            elif (
+                target_iface_instance is not None and connect_to_port is None and target_iface_obj.lead_port is not None
+            ):
+                for port in target_iface_instance.values():
+                    if fnmatch.fnmatch(port, "*" + target_iface_obj.lead_port):
+                        connect_to_port = port
+                        break
+                if connect_to_port is None:
+                    pc_logging.error(
+                        "Connect %s to %s: lead port is not found: %s"
+                        % (
+                            name,
+                            connect_to_name,
+                            target_iface_obj.lead_port,
+                        )
+                    )
+            # pc_logging.info("Found target interface: %s" % target_iface.name)
+
+        # We know both interface instances but we don't know one of the ports
+        # FIXME(claibee): it is currently working only for cases where we don't know both ports
+        # TODO(clairbee): should the following condition drop the check for iface_instance?
+        #                 shouldn't we try to match ports even if there is no mating information?
+        if (
+            source_iface_instance is not None
+            and target_iface_instance is not None
+            # FIXME(clairbee): what if we only know one?
+            and connect_with_port is None
+            and connect_to_port is None
+        ):
+            pc_logging.debug("Trying to match ports by name")
+            # Both interfaces are known but they have more than one port each.
+            # Let's find a matching pair of ports.
+            source_ports = sorted(list(source_iface_instance.keys()))
+            target_ports = sorted(list(target_iface_instance.keys()))
+            if source_ports == target_ports:
+                # FIXME(clairbee): so what? what if we have patterns configured?
+                # The interfaces have the same number of ports and the same names.
+                # We can connect them using any pair of matching ports.
+                connect_with_port = source_iface_instance[source_ports[0]]
+                connect_to_port = target_iface_instance[target_ports[0]]
+            else:
+                connect_with_port_index = -1
+                connect_to_port_index = -1
+                if len(source_ports) != 1:
+                    if connect_with_port_pattern is None and connect_to_port_pattern is None:
+                        if len(source_ports) == len(target_ports):
+                            pc_logging.debug(
+                                "Connect %s to %s: port mating is not detected deterministically on BOTH ends, guessing alphabetically..."
+                                % (name, connect_to_name)
+                            )
+                            connect_with_port_index = 0
+                            connect_to_port_index = 0
+                        else:
+                            pc_logging.error(
+                                "Connect %s to %s: port mating is not detected deterministically on BOTH ends, different number of ports"
+                                % (name, connect_to_name)
+                            )
+
+                    if connect_with_port_pattern is not None:
+                        for i, port in enumerate(source_ports):
+                            if fnmatch.fnmatch(port, connect_with_port_pattern):
+                                connect_with_port_index = i
+                                break
+                    if connect_to_port_pattern is not None:
+                        for i, port in enumerate(target_ports):
+                            if fnmatch.fnmatch(port, connect_to_port_pattern):
+                                connect_to_port_index = i
+                                break
+
+                    if (
+                        len(source_ports) == len(target_ports)
+                        and connect_with_port_index != -1
+                        and connect_to_port_index == -1
+                    ):
+                        pc_logging.debug(
+                            "Connect %s to %s: port selection is not detected on the target end, guessing alphabetically..."
+                            % (name, connect_to_name)
+                        )
+                        connect_to_port_index = connect_with_port_index
+                    if (
+                        len(source_ports) == len(target_ports)
+                        and connect_with_port_index == -1
+                        and connect_to_port_index != -1
+                    ):
+                        pc_logging.debug(
+                            "Connect %s to %s: port selection is not detected on the source end, guessing alphabetically..."
+                            % (name, connect_to_name)
+                        )
+                        connect_with_port_index = connect_to_port_index
+
+                if connect_with_port_index != -1:
+                    connect_with_port = source_iface_instance[source_ports[connect_with_port_index]]
+                if connect_to_port_index != -1:
+                    connect_to_port = target_iface_instance[target_ports[connect_to_port_index]]
+
+        # If the source port is determined, then use it
+        if connect_with_port is not None and source_port is None:
+            source_port = item.with_ports.get_ports()[connect_with_port]
+            pc_logging.debug("Found source port: %s" % source_port.name)
+        if connect_with_port is not None and connect_with_port_pattern is not None:
+            if not fnmatch.fnmatch(connect_with_port, connect_with_port_pattern):
+                pc_logging.error(
+                    "The determined source port does not match the pattern: %s" % connect_with_port_pattern
+                )
+
+        # If the target port is determined, then use it
+        if connect_to_port is not None and target_port is None:
+            target_port = target_part.with_ports.get_ports()[connect_to_port]
+            pc_logging.debug("Found target port: %s" % target_port.name)
+        if connect_to_port is not None and connect_to_port_pattern is not None:
+            if not fnmatch.fnmatch(connect_to_port, connect_to_port_pattern):
+                pc_logging.error("The determined target port does not match the pattern: %s" % connect_to_port_pattern)
+
+        # TODO(clairbee): before the next step, deduce the interface
+        #                 based on the port name if the interface is missing
+
+        if (source_port is None and target_port is not None) or (source_port is not None and target_port is None):
+            # One of the parts may have no parts declared.
+            # TODO(clairbee): Do we need to support this?
+            pc_logging.warning("Peer port auto-detection has failed: %s" % name)
+
+        # Pure-Python rigid-transform algebra (geom.Location): the
+        # connection location is the target part/port placement,
+        # flipped to face the source, offset by the freedom-of-movement
+        # parameters, and pulled back by the source port - kept as the
+        # ordered steps it is the product of, which is what a joint is
+        # made of (see 'partcad.joint'). The product is the placement:
+        # it is taken from the steps rather than worked out beside them.
+        composition, joint, joint_problems = self.compose_connection(
+            connect,
+            name,
+            connect_to_name,
+            target_part_location,
+            target_port,
+            source_port,
+            target_iface_obj,
+            source_iface_obj,
+            connect_to_params,
+            connect_with_params,
+        )
+        location = composition.location()
+        joint_problems = naming_problems + joint_problems
+        pc_logging.debug("Connected %s of %s to %s of %s" % (connect_with_port, name, connect_to_port, connect_to_name))
+
+        connection = self._connection_info(
+            connect,
+            connect_to_name,
+            connect_with_port,
+            connect_to_port,
+            connect_with_iface,
+            connect_to_iface,
+            target_part_location,
+            target_port,
+            None if source_port is None else location * port_location(source_port),
+        )
+
+        return ConnectionResolution(
+            location=location,
+            composition=composition,
+            joint=joint,
+            joint_problems=joint_problems,
+            connection=connection,
+            source_port=source_port,
+            target_port=target_port,
+            source_iface_obj=source_iface_obj,
+            target_iface_obj=target_iface_obj,
+        )
 
     def info(self, shape):
         """The usual shape info, plus the joints the assembly is a mechanism of.
