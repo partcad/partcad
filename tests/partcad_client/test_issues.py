@@ -469,3 +469,18 @@ def test_every_record_is_kept():
     assert issues.recorded("pc-sig:000000000001")["issue"] == 1
     assert issues.recorded("pc-sig:000000000002")["action"] == "upvoted"
     assert not [name for name in os.listdir(os.path.dirname(issues.ledger_path())) if name.endswith(".tmp")]
+
+
+def test_reactions_that_cannot_all_be_read_leave_the_upvote_unknown(monkeypatch):
+    def answer(path, params=None, token=None):
+        if path == "user":
+            return {"login": "ann"}
+        if path.startswith("search/"):
+            return {"items": [an_issue(comments=0)]}
+        if params["page"] > 1:
+            raise issues.Unavailable("GitHub answered 502 to reactions")
+        return [{"user": {"login": "bob"}}] * issues.PAGE
+
+    monkeypatch.setattr(issues, "_token", lambda: "t")
+    monkeypatch.setattr(issues, "_get", answer)
+    assert issues.search("pc-sig:000000000000")["issues"][0]["upvoted_by_you"] is None

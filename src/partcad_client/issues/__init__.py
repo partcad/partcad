@@ -274,7 +274,10 @@ def _comments(repo: str, number: int, token: Optional[str]) -> tuple:
 def _upvoted(repo: str, number: int, token: Optional[str], login: Optional[str]) -> Optional[bool]:
     if not login:
         return None
-    reactions, complete = _all("repos/%s/issues/%d/reactions" % (repo, number), {"content": "+1"}, token)
+    try:
+        reactions, complete = _all("repos/%s/issues/%d/reactions" % (repo, number), {"content": "+1"}, token)
+    except Unavailable:
+        return None
     if any((reaction.get("user") or {}).get("login") == login for reaction in reactions):
         return True
     return False if complete else None
