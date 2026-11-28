@@ -165,8 +165,8 @@ once: when a VSCodium release changes the code underneath them, the build stops 
 docstring of `patch_workbench.py` quotes the source each one stands for.
 
 **The result is checked** (`tools/verify_bundle.py`): branding applied, every required extension present, no
-extension present that the policy skips, every extension the policy holds at a version at that version, the
-tools where they should be, the launcher runnable. Each of those
+extension present that the policy skips, every extension the policy holds at a version at that version and no
+extension in it twice, the tools where they should be, the launcher runnable. Each of those
 failures produces an application that starts and looks right, so none of them would be noticed before a user
 hit it.
 
@@ -419,7 +419,10 @@ without building.
 An extension from the gallery is the newest version the gallery has, unless `extensions.json` holds it at
 another with `"version"` -- which needs a `"reason"`, since a hold nobody can explain is one nobody lifts. The
 build asks the editor for `<id>@<version>`, and `verify_bundle.py` fails the build if something else was
-installed. A hold for a path that is too deep is lifted by deleting it and building on Windows, where
+installed. When an extension installed earlier depends on the held one, the editor first brings in the newest
+and then replaces it, and leaves the replaced one's directory behind until it next starts; so the build copies
+into the IDE what the editor *lists* as installed (`tools/installed_extensions.py`), never every directory it
+installed into. A hold for a path that is too deep is lifted by deleting it and building on Windows, where
 `check_install_paths.py` says whether the newest version fits.
 
 ## Releasing

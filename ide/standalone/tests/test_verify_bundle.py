@@ -160,6 +160,28 @@ def test_an_extension_held_at_the_version_installed_passes(tmp_path):
     assert run(make_bundle(tmp_path), tmp_path, plan=plan) == 0
 
 
+def test_a_held_extension_beside_the_version_it_was_held_against_fails(tmp_path, capsys):
+    # What 0.10.42 built on Windows: the held `ms-python.python` and the newer
+    # one a dependency had brought in, both copied in. `2026.4.0` sorts after
+    # `2026.10.0`, so the held one was the one checked, and it passed.
+    resources = make_bundle(tmp_path)
+    extensions = resources / "app" / "extensions"
+    shutil.rmtree(extensions / "yzhang.markdown-all-in-one-1.0.0")
+    add_extension(extensions, "yzhang", "markdown-all-in-one", "2026.4.0")
+    add_extension(extensions, "yzhang", "markdown-all-in-one", "2026.10.0")
+    plan = {**PLAN, "install": [dict(entry) for entry in PLAN["install"]]}
+    plan["install"][1]["version"] = "2026.4.0"
+
+    assert run(resources, tmp_path, plan=plan) == 1
+    output = capsys.readouterr().out
+    assert (
+        "extension yzhang.markdown-all-in-one is in the IDE more than once: "
+        "yzhang.markdown-all-in-one-2026.10.0, yzhang.markdown-all-in-one-2026.4.0"
+    ) in output
+    # The hold itself is still reported as met: that check is not what caught it.
+    assert "extension: yzhang.markdown-all-in-one 2026.4.0" in output
+
+
 def test_an_extension_the_policy_skips_must_not_be_there(tmp_path, capsys):
     resources = make_bundle(tmp_path)
     add_extension(resources / "app" / "extensions", "ms-python", "vscode-pylance")

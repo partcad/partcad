@@ -537,12 +537,22 @@ for entry in plan['install']:
   fi
 
   log "==> Moving the extensions into the application"
+  # What the editor lists as installed, not every directory in the staging one:
+  # installing a held version over one a dependency brought in (as
+  # `ms-python.black-formatter` brings in the newest `ms-python.python`) leaves
+  # the replaced version's directory behind until the editor next starts, and
+  # copying that shipped the very version the hold keeps out. See the tool.
+  INSTALLED_LISTING="${WORK_DIR}/installed-extensions.txt"
+  run_vscodium --list-extensions --show-versions >"${INSTALLED_LISTING}"
+  INSTALLED_DIRECTORIES="$("${PYTHON}" "${SCRIPT_DIR}/tools/installed_extensions.py" \
+    --extensions "${STAGING_EXTENSIONS}" --listed "${INSTALLED_LISTING}")"
   mkdir -p "${BUILTIN_EXTENSIONS_DIR}"
-  for extension in "${STAGING_EXTENSIONS}"/*/; do
-    [ -f "${extension}package.json" ] || continue
-    rm -rf "${BUILTIN_EXTENSIONS_DIR:?}/$(basename "${extension}")"
-    cp -R "${extension%/}" "${BUILTIN_EXTENSIONS_DIR}/"
-  done
+  while IFS= read -r extension; do
+    extension="${extension%$'\r'}"
+    [ -n "${extension}" ] || continue
+    rm -rf "${BUILTIN_EXTENSIONS_DIR:?}/${extension}"
+    cp -R "${STAGING_EXTENSIONS}/${extension}" "${BUILTIN_EXTENSIONS_DIR}/"
+  done <<<"${INSTALLED_DIRECTORIES}"
 fi
 
 ###############################################  BRANDING  ###################################################
