@@ -27,6 +27,7 @@ holds, which a new revision is made of; and WORKTREE, the files on disk.
 """
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -661,6 +662,17 @@ def check(result: dict, expect_index: typing.Optional[str], include_others: bool
         raise Refused("; ".join(pending), "warnings", result)
 
 
+def _holds(repo, branch: typing.Optional[str], sha: str) -> bool:
+    """Whether 'branch' -- or HEAD, detached -- is at the commit 'sha' or past it."""
+    import pygit2
+
+    try:
+        tip = repo.references[branch].target if branch else repo.head.target
+        return str(tip) == sha or repo.descendant_of(tip, pygit2.Oid(hex=sha))
+    except (KeyError, ValueError, pygit2.GitError):
+        return False
+
+
 def _head_ref(repo) -> typing.Optional[str]:
     """The branch HEAD is on, as a reference name ('refs/heads/main'); None while it is detached."""
     try:
@@ -720,7 +732,8 @@ def _git_executable() -> typing.Optional[str]:
     return shutil.which("git")
 
 
-def _git(git: str, workdir: str, env: dict, *args, input: typing.Optional[str] = None) -> None:
+def _git(git: str, workdir: str, env: dict, *args, input: typing.Optional[str] = None) -> str:
+    """Run git; what it printed, or ValueError with what it said where it failed."""
     done = subprocess.run(
         [git, *args],
         cwd=workdir,
@@ -735,6 +748,12 @@ def _git(git: str, workdir: str, env: dict, *args, input: typing.Optional[str] =
     )
     if done.returncode != 0:
         raise ValueError("git %s failed: %s" % (args[0], done.stderr.strip() or done.stdout.strip()))
+    return done.stdout or ""
+
+
+# What 'git commit' says it made: '[main 1a2b3c4] Subject', '[main (root-commit) 1a2b3c4] ...',
+# '[detached HEAD 1a2b3c4] ...' -- the words may be in the user's language, the id never is.
+_MADE = re.compile(r"^\[[^\]]* ([0-9a-f]{7,64})\] ", re.MULTILINE)
 
 
 _ANY = object()
@@ -789,20 +808,27 @@ def commit(
         try:
             if tree is not None:
                 _git(git, workdir, env, "read-tree", tree)
-            _git(git, workdir, env, "commit", "--quiet", "--file", "-", input=message)
+            said = _git(git, workdir, env, "commit", "--file", "-", input=message)
         finally:
             if scratch is not None:
                 shutil.rmtree(scratch, ignore_errors=True)
         import pygit2
 
         repo = repository.repo
-        made = str(repo.head.target)
+        # The revision git says it made, not whatever HEAD is by now.
+        found = _MADE.findall(said)
+        try:
+            made = str(repo.revparse_single(found[-1]).peel(pygit2.Commit).id) if found else str(repo.head.target)
+        except (KeyError, ValueError, pygit2.GitError):
+            made = str(repo.head.target)
         # git has no way to be told which commit to go on top of: HEAD moved
-        # between the check above and git reading it is found here, and said,
-        # with the revision it made.
+        # between the check above and git reading it, or the branch moved off
+        # the revision since, is found here, and said, with the revision made.
         parents = [str(each) for each in repo[made].peel(pygit2.Commit).parent_ids]
         moved = parent is not _ANY and parents != ([parent] if parent else [])
-        if moved or (branch is not _ANY and _head_ref(repo) != branch):
+        if branch is not _ANY:
+            moved = moved or _head_ref(repo) != branch or not _holds(repo, branch, made)
+        if moved:
             raise Refused(
                 "HEAD moved while git was making the revision: it made %s on top of %s"
                 % (package_versions.short(made), package_versions.short(parents[0]) if parents else "nothing"),
@@ -813,11 +839,11 @@ def commit(
             # The index the user stages into still holds what was committed
             # unless something was staged meanwhile: it is then the new
             # revision's, hooks' additions included; otherwise left as it is.
-            committed = str(repo.head.peel(pygit2.Commit).tree.id)
+            committed = str(repo[made].peel(pygit2.Commit).tree.id)
             if committed != tree:
                 _move_index(repository, tree, committed)
         repo.index.read(True)
-        return str(repo.head.target)
+        return made
 
     import pygit2
 
@@ -914,7 +940,8 @@ def new_revision(
             branch=result.get("head_ref"),
         )
     except Refused as refused:
-        refused.status = result
+        # The status it was refused on, and what it says of itself ('made').
+        refused.status = {**result, **(refused.status or {})}
         raise
     # A hook of the repository may have changed what git committed: that is
     # the repository's own rule, and it is said rather than undone.

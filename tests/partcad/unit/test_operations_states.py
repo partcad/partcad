@@ -1284,3 +1284,38 @@ def test_pygit2_commits_on_the_branch_it_was_agreed_to_go_on(workspace, ctx):
 
     repo = pygit2.Repository(str(root))
     assert str(repo.head.target) == made["sha"] and [str(p) for p in repo[made["sha"]].parent_ids] == [first]
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_the_revision_said_to_be_made_is_the_one_git_made_whatever_the_branch_does_after(workspace, ctx, monkeypatch):
+    root, first = workspace
+    monkeypatch.setattr(working_copy, "_git_executable", lambda: shutil.which("git"))
+    _git(root, "config", "user.name", "Test")
+    _git(root, "config", "user.email", "test@example.com")
+    _lib(root, desc="Approved")
+    _stage(root, "lib/partcad.yaml")
+    real_git = working_copy._git
+    repo = pygit2.Repository(str(root))
+    branch = working_copy._head_ref(repo)
+
+    def git_then_a_sibling(git, workdir, env, *args, **kwargs):
+        said = real_git(git, workdir, env, *args, **kwargs)
+        if args and args[0] == "commit":
+            # Somebody else puts another child of the same parent on the branch, after git returns.
+            signature = pygit2.Signature("Other", "other@example.com")
+            parent = repo[first].peel(pygit2.Commit)
+            sibling = repo.create_commit(None, signature, signature, "Sibling", parent.tree.id, [parent.id])
+            repo.references[branch].set_target(sibling)
+        return said
+
+    monkeypatch.setattr(working_copy, "_git", git_then_a_sibling)
+
+    with pytest.raises(working_copy.Refused) as refused:
+        working_copy.new_revision(
+            ctx, ctx.get_project("//lib"), "Approved", author={"name": "Ann", "email": "ann@example.com"}, accept=True
+        )
+
+    made = refused.value.status["made"]
+    assert refused.value.code == "head-moved"
+    assert repo[made].message.strip() == "Approved" and [str(p) for p in repo[made].parent_ids] == [first]
+    assert "staged" in refused.value.status
