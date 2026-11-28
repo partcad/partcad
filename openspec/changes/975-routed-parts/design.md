@@ -246,10 +246,25 @@ from the rounded stops, not rounded after: rounding thousands of samples would
 let a sub-micrometre jitter of an end flip some of them and change the cache key.
 The D9 checks run on that same rounded route, and the path they sample is the one
 handed to the part, so what is checked is exactly what is built, sampled once.
-It is passed as
-`{"route": json}` to `_get_part_async`. This gives a per-link instance and a
-cache key that is unchanged when the route is. `routed` declares the parameter
-implicitly, and a script part declares it explicitly. The ends are resolved
+The route goes to the part by its digest: the first 16 hex digits of the
+JSON's SHA-256. The placement registers the JSON with the context
+(`Context.register_route`), which returns the digest, and passes
+`{"route": digest}` to `_get_part_async`. The part is named
+`tube;route=3f9a0c…` and reads the JSON back from the context when it is built.
+This gives a per-link instance and a cache key that is unchanged when the route
+is, as the JSON itself would, without a name of tens of kilobytes: with the
+sampled path, the JSON of a short route is about 19 kB, and a part's name shows
+up in every error and log line about it and is stored with its cache entries.
+A digest the build has not registered (the part fetched by that name on its
+own) is an error that names the assembly as the place the route comes from. The
+JSON is also accepted as the value, for a route made outside an assembly.
+
+*Alternative:* pass only the ends, `through` and `via`, and let the part sample
+the path. The name is then a few hundred characters, readable, but still long,
+and the D9 checks and the build would sample the path twice. `routed` declares the parameter
+implicitly, and a script part declares it explicitly; its factory puts the JSON
+in place of the digest before the script runs, so a script reads the route
+itself. The ends are resolved
 against the part fetched *without* `route`, which is why the spec forbids ports
 that depend on it.
 
