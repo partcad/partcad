@@ -395,6 +395,9 @@ class Context:
         self.runtimes_javascript = {}
         self.runtimes_javascript_lock = threading.Lock()
 
+        # The routes placed in this build, by digest (see 'register_route').
+        self.routes = {}
+
         self.stats_packages = 0
         self.stats_packages_instantiated = 0
         self.stats_interfaces_instantiated = 0
@@ -2054,6 +2057,17 @@ class Context:
         """
         await self._warm_project_async(project_path)
         return self.get_project(project_path)
+
+    def register_route(self, route_json: str) -> str:
+        """Keep a route for the part it is given to, and return the digest that
+        part is fetched with: 'get_part(":tube", {"route": digest})' names the
+        part 'tube;route=<digest>' instead of the route itself (issue #975, D5).
+        The part reads the route back from here when it is built."""
+        from .route_path import route_digest
+
+        digest = route_digest(route_json)
+        self.routes[digest] = route_json
+        return digest
 
     def get_part(self, part_spec, params=None, referrer=None) -> Optional[Part]:
         """The part '<package>:<name>' names, or None; 'referrer' as 'get_sketch' takes it."""

@@ -10,8 +10,11 @@ The part is declared once, with its profile - a round section ('diameter',
 hollow with 'innerDiameter') or a sketch - and the ports and interfaces of its
 ends, in the end frame. Its geometry comes from where it is placed: an assembly
 link with a 'route:' hands it the route as the parameter 'route', the canonical
-JSON 'route_path.canonical_json' writes, and each different route is a part of
-its own, cached by that route.
+JSON 'route_path.canonical_json' writes - registered with the context and
+given by its digest ('Context.register_route'), so that the part is named
+'tube;route=<digest>' and not by tens of kilobytes of JSON. Each different route
+is a part of its own, cached by that route. The JSON itself is accepted too, for
+a route made outside an assembly.
 
 Fetched without a route - to resolve its ends before the route exists, or on its
 own - the part has its ports and its declaration, and no geometry: building it is
@@ -54,7 +57,8 @@ def _reads_route(value) -> bool:
 
 
 def route_of(config) -> str:
-    """The route a routed part was given, or '' when it was given none."""
+    """The route a routed part was given - a digest, or the JSON - or '' when
+    it was given none."""
     parameters = config.get("parameters") or {}
     declared = parameters.get(ROUTE_PARAMETER)
     if isinstance(declared, dict):
@@ -137,6 +141,13 @@ class PartFactoryRouted(SketchProfile, PartFactory):
                         "and this one has none" % (part.project_name, part.name)
                     )
                     return None
+                route = self._route_json()
+                if route is None:
+                    part.error(
+                        "%s: %s: route %s is known only to the build of the assembly that places this part; "
+                        "build that assembly instead" % (part.project_name, part.name, self.route)
+                    )
+                    return None
 
                 sketch_env = None
                 if self.source_sketch_spec is not None:
@@ -149,7 +160,7 @@ class PartFactoryRouted(SketchProfile, PartFactory):
                 if outer_radius is None:
                     part.error("%s: %s: the profile's size could not be measured" % (part.project_name, part.name))
                     return None
-                _, refusals = route_path.check_route(route_path.stops_from_json(self.route), outer_radius)
+                _, refusals = route_path.check_route(route_path.stops_from_json(route), outer_radius)
                 if refusals:
                     for refusal in refusals:
                         part.error("%s: %s: %s" % (part.project_name, part.name, refusal.message))
@@ -158,7 +169,7 @@ class PartFactoryRouted(SketchProfile, PartFactory):
                 runtime = self.ctx.get_python_runtime(version=self.PYTHON_SANDBOX_VERSION)
                 await runtime.ensure_async(sandbox_versions.OCP)
                 request = {
-                    "route": self.route,
+                    "route": route,
                     "diameter": self.diameter,
                     "innerDiameter": self.inner_diameter,
                     "sketch": sketch_env,
@@ -188,6 +199,14 @@ class PartFactoryRouted(SketchProfile, PartFactory):
                 pc_logging.exception(f"Failed to build a routed part: {e}")
                 return None
 
+    def _route_json(self):
+        """The route's JSON: given as it is, or looked up by its digest; None for a
+        digest this build has not registered."""
+        if self.route.lstrip().startswith("{"):
+            return self.route
+        return self.ctx.routes.get(self.route)
+
     def route_record(self) -> dict:
         """The route this part was given, parsed, or {} when it has none."""
-        return json.loads(self.route) if self.route else {}
+        route = self._route_json() if self.route else None
+        return json.loads(route) if route else {}

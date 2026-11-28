@@ -301,3 +301,33 @@ def test_a_flat_profile_meets_a_through_entry_turned_as_its_x_axis(first, gromme
     norm = math.sqrt(sum(c * c for c in x))
     alignment = abs(sum(a * b / norm for a, b in zip(long_side, x)))
     assert math.acos(min(1.0, alignment)) == pytest.approx(0.0, abs=tolerance)
+
+
+def test_a_registered_route_names_the_part_by_its_digest(tmp_path):
+    """D5: 'tube;route=<16 hex digits>', not tens of kilobytes of JSON."""
+    ctx = _context(tmp_path)
+    _, route = _quarter_route()
+    _, other = _quarter_route(60.0)
+    digest = ctx.register_route(route)
+    assert ctx.register_route(route) == digest
+    assert ctx.register_route(other) != digest
+    tube = ctx.get_part(":tube", {"route": digest})
+    assert tube.name == "tube;route=" + digest
+    assert len(digest) == 16
+    assert len(route) > 10000
+
+
+def test_a_route_by_digest_is_built_as_the_route_itself(tmp_path):
+    ctx = _context(tmp_path)
+    _, route = _quarter_route()
+    tube = ctx.get_part(":tube", {"route": ctx.register_route(route)})
+    assert asyncio.run(tube.get_wrapped(ctx)) is not None
+    assert tube.errors == []
+
+
+def test_a_digest_this_build_has_not_registered_says_where_the_route_comes_from(tmp_path):
+    ctx = _context(tmp_path)
+    tube = ctx.get_part(":tube", {"route": "0123456789abcdef"})
+    assert asyncio.run(tube.get_wrapped(ctx)) is None
+    (error,) = tube.errors
+    assert "route 0123456789abcdef is known only to the build of the assembly that places this part" in error

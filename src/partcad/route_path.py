@@ -31,6 +31,7 @@ the same on a cache hit and testable in the core. The geometry is built from it
 in the sandbox.
 """
 
+import hashlib
 import json
 import math
 from typing import List, Optional, Sequence, Tuple, Union
@@ -601,6 +602,19 @@ def canonical_json(stops: Sequence[Stop], step: float = DEFAULT_STEP, path: Opti
         },
     }
     return json.dumps(document, sort_keys=True, separators=(",", ":"))
+
+
+# How many hex digits of a route's SHA-256 name it (D5): 64 bits, so two routes
+# of one build never share a name in practice.
+DIGEST_LENGTH = 16
+
+
+def route_digest(route_json: str) -> str:
+    """The short name a route goes by in a part's name: 'tube;route=<digest>'
+    rather than the route itself, which holds the sampled path and runs to tens
+    of kilobytes (D5). The same canonical JSON always has the same digest, so
+    the part's name, and its cache key, are unchanged when the route is."""
+    return hashlib.sha256(route_json.encode("utf-8")).hexdigest()[:DIGEST_LENGTH]
 
 
 def stops_from_json(route) -> List[Stop]:
