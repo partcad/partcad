@@ -18,6 +18,7 @@ from partcad.geom import Location
 from partcad.route_path import (
     AmbiguousDirection,
     EndFrame,
+    Refusal,
     RoutePath,
     build_knots,
     canonical_json,
@@ -429,3 +430,39 @@ def test_a_route_listed_the_other_way_round_passes_each_port_the_other_way():
     assert len(back.points) == len(there.points)
     for a, b in zip(back.points, reversed(there.points)):
         assert a == pytest.approx(b, abs=1e-9)
+
+
+@pytest.mark.parametrize(
+    "build, message",
+    [
+        (lambda: EndFrame((0, 0, 0), (0, 0, 0)), "a direction of zero length"),
+        (lambda: EndFrame((0, 0, 0), (0, 0, 1), lead=-1), "a lead cannot be negative"),
+        (
+            lambda: RoutePath([EndFrame((0, 0, 0), (0, 0, 1)), EndFrame((0, 0, 9), (0, 0, -1))], step=0),
+            "step must be positive",
+        ),
+        (lambda: RoutePath([EndFrame((0, 0, 0), (0, 0, 1)), EndFrame((0, 0, 0), (0, 0, -1))]), "at the same point"),
+    ],
+    ids=["zero-direction", "negative-lead", "zero-step", "coincident-knots"],
+)
+def test_what_a_route_cannot_be_made_of_is_refused_on_the_spot(build, message):
+    with pytest.raises(ValueError, match=message):
+        build()
+
+
+def test_an_end_frame_reads_back_as_the_dict_it_is_written_as():
+    frame = EndFrame((1, 2, 3), (0, 0, 1), (1, 0, 0), lead=4)
+    assert frame.as_dict() == {"origin": [1.0, 2.0, 3.0], "z": [0.0, 0.0, 1.0], "x": [1.0, 0.0, 0.0], "lead": 4.0}
+
+
+def test_a_path_that_turns_straight_back_at_a_via_point_still_has_a_tangent_there():
+    """Both ends at one point, a 'via' point straight above: the knots either
+    side of it coincide, so its tangent is the one to the next knot."""
+    path = RoutePath([EndFrame((0, 0, 0), (0, 0, 1)), (0, 0, 50), EndFrame((0, 0, 0), (0, 0, -1))])
+    assert path.length > 0
+    assert path.closest_approach(0) == (math.inf, None, None)
+
+
+def test_a_refusal_says_what_it_is_in_its_repr():
+    refusal = Refusal("bend-tighter-than-profile", (0, 0, 0), {}, "move it", "a bend of 2 mm")
+    assert repr(refusal).startswith("Refusal('bend-tighter-than-profile', a bend of 2 mm")

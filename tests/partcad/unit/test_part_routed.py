@@ -95,8 +95,10 @@ def test_declared_ports_appear_as_declared(tmp_path):
         ("diameter: 6\n    innerDiameter: 8", "'innerDiameter' (8) must be smaller than 'diameter' (6)"),
         ("diameter: 6\n    ports:\n      tip: ['%route%', [0, 0, 1], 0]", "cannot depend on it"),
         ("diameter: 6\n    implements:\n      'slab;length=%route%':", "cannot depend on it"),
+        ("length: 100", "a routed part's profile is 'diameter' or 'sketch', exactly one of the two"),
+        ("sketch: strip\n    innerDiameter: 2", "'innerDiameter' is the bore of a 'diameter'"),
     ],
-    ids=["bore-equal", "bore-wider", "port-reads-route", "interface-reads-route"],
+    ids=["bore-equal", "bore-wider", "port-reads-route", "interface-reads-route", "no-profile", "bore-of-a-sketch"],
 )
 def test_a_declaration_the_part_cannot_use_is_refused(tmp_path, declaration, message, caplog):
     ctx = _context(tmp_path, "parts:\n  bad:\n    type: routed\n    %s\n" % declaration)
@@ -331,3 +333,11 @@ def test_a_digest_this_build_has_not_registered_says_where_the_route_comes_from(
     assert asyncio.run(tube.get_wrapped(ctx)) is None
     (error,) = tube.errors
     assert "route 0123456789abcdef is known only to the build of the assembly that places this part" in error
+
+
+def test_a_sketch_that_is_not_there_is_reported_when_the_part_is_built(tmp_path):
+    ctx = _context(tmp_path, "parts:\n  ribbon:\n    type: routed\n    sketch: nowhere\n    project: this\n")
+    _, route = _quarter_route()
+    ribbon = ctx.get_part(":ribbon", {"route": route})
+    assert asyncio.run(ribbon.get_wrapped(ctx)) is None
+    assert any("sketch not found" in error for error in ribbon.errors), ribbon.errors
