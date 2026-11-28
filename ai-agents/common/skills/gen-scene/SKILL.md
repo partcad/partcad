@@ -693,7 +693,7 @@ Where the description says something physical about the scene (everything
 settles where it is put, the stack of boxes topples, the ball rolls down the
 ramp), declare it as a `qual: sim:` on the scene and check it with `pc qual test --simulation`,
 the way `/pc:gen-assembly` §7 does for an assembly, with the same `sim-mujoco`
-dependency (`pc add dep sim-mujoco https://github.com/partcad/partcad-sim-mujoco.git`):
+dependency (`pc ops deps add sim-mujoco https://github.com/partcad/partcad-sim-mujoco.git`):
 
 ```yaml
 scenes:

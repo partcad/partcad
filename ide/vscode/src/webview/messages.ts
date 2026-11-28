@@ -22,8 +22,9 @@ import type { SpaceMouseSettings } from './spacemouse';
  * five: 'design', the object itself; 'analysis', what analysing it says;
  * 'manufacturing', what making it takes; 'qualification', whether it is what it
  * claims to be and does what it is supposed to; and 'operations', what has
- * become of it since: 'revisions', its package's history, each revision
- * compared with it, and 'usedby', what uses it. Each group is a strip of its own:
+ * become of it since: 'revisions', its history and what is not committed yet,
+ * 'dependencies', what it uses, 'usedby', what uses it, and 'impact', what a
+ * change to it reaches. Each group is a strip of its own:
  * the object as '3d' (first, always), '2d', 'draft' and 'cmf' (what each of
  * its items is in: colour, material, finish); 'fea', 'dynamic',
  * 'thermal' and 'cfd'; 'bvb' (Build vs Buy), 'build', 'supply' (labelled Buy),
@@ -69,7 +70,9 @@ export type TabId =
     | 'topology'
     | 'other'
     | 'revisions'
-    | 'usedby';
+    | 'dependencies'
+    | 'usedby'
+    | 'impact';
 
 /**
  * The Qualification tabs drawn from 'qual.report', each the tests of one subtype
@@ -136,7 +139,7 @@ export const TAB_GROUPS: Partial<Record<TabId, TabId[]>> = {
     // Not 'emulation' (Process Emulation) yet: it holds nothing and is always
     // disabled, so a request for it could never be met.
     qualification: ['basic', 'topology', 'simulation', 'other'],
-    operations: ['revisions', 'usedby'],
+    operations: ['revisions', 'dependencies', 'usedby', 'impact'],
 };
 
 /** The group a tab of 'TAB_GROUPS' is in, or undefined for anything else. */
@@ -593,6 +596,20 @@ export interface RequirementEditedMessage {
     error?: string;
 }
 
+/**
+ * Host to renderer: a change asked with 'OpsWriteMessage' has been made, or was
+ * not, and 'error' is why. A new revision the daemon would not make on these
+ * terms says which ('refusal'), so that the tab can ask the user to agree and
+ * send it again.
+ */
+export interface OpsWrittenMessage {
+    type: 'opsWritten';
+    token: number;
+    data?: unknown;
+    error?: string;
+    refusal?: RevRefusal;
+}
+
 /** Host to renderer: the CAM tab's Save has been done, or could not be, and 'error' is why. */
 export interface CamSavedMessage {
     type: 'camSaved';
@@ -619,6 +636,7 @@ export type HostMessage =
     | SectionShownMessage
     | CamSavedMessage
     | RequirementEditedMessage
+    | OpsWrittenMessage
     | CommentsAnswerMessage
     | ShowMessage
     | ClearMessage
@@ -765,18 +783,95 @@ export interface FetchTabMessage {
      */
     singleView?: string;
     /**
-     * On the Revisions tab: which of its questions this is - the package's
-     * commits ('list', the default), the object compared with one of them
-     * ('compare'), what the package declares as its dependencies at one
-     * ('uses'), or what the loaded packages use of it ('usedBy').
+     * On an Operations tab: which of the daemon's Operations methods this is,
+     * and what it is asked with beyond the object on screen. Left out, the
+     * tab's own first question: the revisions, the dependencies, what uses it,
+     * or the impact of what is not committed.
      */
-    query?: RevisionsQuery;
-    /** On the Revisions tab, but for 'list': the revision asked about, as a commit id. */
-    revision?: string;
+    ops?: OpsQuery<OpsReadMethod>;
 }
 
-/** The questions the Revisions tab asks (see 'FetchTabMessage.query'). */
-export type RevisionsQuery = 'list' | 'compare' | 'uses' | 'usedBy';
+/**
+ * The daemon's Operations methods, one per 'pc ops' command (see
+ * 'partcad_utils.ops_views'): each is asked about the object on screen, or
+ * about its package, as the host puts it ('src/viewer/operations.ts').
+ */
+export type OpsMethod =
+    | 'ops.rev.list'
+    | 'ops.rev.diff'
+    | 'ops.rev.status'
+    | 'ops.rev.stage'
+    | 'ops.rev.new'
+    | 'ops.deps.list'
+    | 'ops.deps.add'
+    | 'ops.deps.remove'
+    | 'ops.deps.update'
+    | 'ops.used_by'
+    | 'ops.impact';
+
+/**
+ * The methods that change something: the index, a commit, a 'partcad.yaml'.
+ * Asked with 'OpsWriteMessage' rather than 'fetchTab', because nothing may
+ * cancel one - another object shown, or the tab asked again - once it is sent.
+ */
+export type OpsWriteMethod = 'ops.rev.stage' | 'ops.rev.new' | 'ops.deps.add' | 'ops.deps.remove' | 'ops.deps.update';
+
+/** The methods that only ask. */
+export type OpsReadMethod = Exclude<OpsMethod, OpsWriteMethod>;
+
+/**
+ * What git calls the index, and the files on disk: the two states of a
+ * repository that are not a commit, as the daemon names them.
+ */
+export const STAGED = 'STAGED';
+export const WORKTREE = 'WORKTREE';
+
+/**
+ * What an Operations method is asked with beyond its subject, in this
+ * extension's spelling; 'src/common/backend.ts' writes each the way the daemon
+ * reads it ('expect_index', 'include_others', 'skip_checks').
+ */
+export interface OpsParams {
+    /** 'ops.rev.list': how many revisions a page holds, and the one the last page ended at. */
+    limit?: number;
+    after?: string;
+    /** 'ops.rev.diff', 'ops.impact': the two states compared - a commit-ish, 'STAGED' or 'WORKTREE'. */
+    from?: string;
+    to?: string;
+    /** 'ops.used_by', 'ops.impact': load every package of the workspace first. */
+    load?: boolean;
+    /** 'ops.impact': how much each changed shape moved, and the tests of what it reaches. */
+    measure?: boolean;
+    test?: boolean;
+    /** 'ops.deps.add', 'ops.deps.remove': the dependency, as the package declares it. */
+    name?: string;
+    /** 'ops.deps.add': a path, a git URL or a tarball URL, and for git the branch it tracks. */
+    location?: string;
+    track?: string;
+    /** 'ops.deps.update': the dependencies whose pins move; all tracked ones when left out. */
+    names?: string[];
+    /** 'ops.rev.new': the message, and the index the status that was looked at holds. */
+    message?: string;
+    expectIndex?: string | null;
+    /** 'ops.rev.new': what the user agreed to once a first attempt was refused. */
+    includeOthers?: boolean;
+    yes?: boolean;
+    skipChecks?: boolean;
+}
+
+/** One Operations question or change, as the renderer asks it of the host. */
+export interface OpsQuery<M extends OpsMethod = OpsMethod> {
+    method: M;
+    /**
+     * The package at a state rather than as it is loaded: a commit id, or
+     * 'STAGED'. The host names it '<package>@<at>', which is how the daemon is
+     * asked about a package at a revision.
+     */
+    at?: string;
+    /** About the package of the object on screen rather than the object itself. */
+    whole?: boolean;
+    params?: OpsParams;
+}
 
 /**
  * A cross-section as it travels: the axes that cut, each with the slab it keeps,
@@ -883,6 +978,36 @@ export interface AttachFilesMessage {
     directory?: string | null;
 }
 
+/**
+ * Renderer to host: change something from an Operations tab - stage, make a
+ * revision, declare, remove or update a dependency - and answer 'opsWritten'
+ * quoting 'token'. Never cancelled: it is somebody's change.
+ */
+export interface OpsWriteMessage {
+    type: 'opsWrite';
+    token: number;
+    tab: TabId;
+    /**
+     * The object the change was asked on, as the show that drew it said it. The
+     * host refuses it when it is showing another by the time the message
+     * arrives, rather than make it on whatever is on screen then.
+     */
+    target: { package: string; name: string; kind: string };
+    ops: OpsQuery<OpsWriteMethod>;
+    /**
+     * For 'ops.rev.new': the repository the package is in, as the status said
+     * it, which is where the host reads who the author is from git - a
+     * repository's own identity applies there.
+     */
+    directory?: string | null;
+}
+
+/** Renderer to host: put this on the clipboard (the advice for an agent). */
+export interface CopyTextMessage {
+    type: 'copyText';
+    text: string;
+}
+
 /** Renderer to host: write the CAM tab's settings into the part's declaration ('cam.save'). */
 export interface SaveCamMessage {
     type: 'saveCam';
@@ -908,9 +1033,9 @@ export interface ShowObjectMessage {
 
 /**
  * Renderer to host: open a package in the Package Explorer - its contents
- * listed there in place of the workspace's, with a way back. What a row of the
- * Revisions tab's "Uses (Dependencies)" view opens: the dependency, or the
- * dependency at the commit it is at ('<package>@<sha>').
+ * listed there in place of the workspace's, with a way back. What a package an
+ * Operations tab lists opens: a dependency, a package that depends on this one,
+ * or either at the commit it is at ('<package>@<sha>').
  */
 export interface OpenPackageMessage {
     type: 'openPackage';
@@ -1662,7 +1787,15 @@ export interface RequirementsData {
     kinds?: string[];
 }
 
-/** One commit that changed a package, as 'revisions.list' answers. */
+//
+// The Operations tabs' answers: 'partcad_service_json_rpc.core.ops', which is
+// the normative description of each.
+//
+
+/**
+ * One revision of a package or of an object, as 'ops.rev.list' answers: a
+ * commit, newest first.
+ */
 export interface RevisionEntry {
     sha: string;
     /** Its first eight characters, which is how a revision is shown. */
@@ -1671,15 +1804,34 @@ export interface RevisionEntry {
     author: string;
     /** When it was committed, in seconds since the epoch. */
     time: number;
+    /**
+     * A package's revision that changed nothing of it but sub-packages: which,
+     * as directories below it. Absent from every other.
+     */
+    in?: string[];
+    /** An object's revision: how it changed the object - 'added', 'removed', 'declaration', 'source'. */
+    how?: string[];
 }
 
-/** A package's history: what the Revisions tab lists. */
+/** A page of the revisions of a package or of an object: what the Revisions tab lists. */
 export interface RevisionsData {
     package: string;
-    /** Whether anything of the package was ever committed: if not, it is "not published yet". */
+    /** The object, as '<package>:<name>', or absent for a package. */
+    object?: string | null;
+    kind?: string;
+    /** Whether anything of it was ever committed: if not, it is "not published yet". */
     published: boolean;
     /** The commit checked out, where the package is in a repository. */
     head: string | null;
+    /** Whether there are older revisions than this page holds: asked for 'after' 'next'. */
+    more?: boolean;
+    /**
+     * The commit the next page is asked 'after': the last row's, as a rule, but
+     * one no row is where the walk stopped short of a full page - which can then
+     * hold no rows at all. Absent from a daemon from before it, which pages
+     * after the last row.
+     */
+    next?: string | null;
     /** Newest first. */
     revisions: RevisionEntry[];
 }
@@ -1693,24 +1845,163 @@ export interface CompareRow {
     rightLine: number | null;
 }
 
-/** The object (or package) at a revision on the left, and as it is now on the right ('revisions.compare'). */
-export interface CompareData {
+/**
+ * One object that changed between two states, and how: 'added', 'removed',
+ * 'declaration', 'source'; whether its shape or only its prose did.
+ */
+export interface ObjectChange {
+    kind: string;
+    name: string;
+    /** As '<package>:<name>'. */
+    object: string;
+    how: string[];
+    geometry?: boolean;
+    prose?: boolean;
+}
+
+/** One file of a package that changed between two states. */
+export interface FileChange {
+    path: string;
+    how: 'added' | 'removed' | 'modified' | string;
+}
+
+/** What changed in a package between two states, object by object and file by file. */
+export interface PackageChanges {
     package: string;
-    revision: string;
-    short: string;
-    /** The name the revision was loaded under. */
-    loaded: string;
+    from: string;
+    to: string;
+    objects: ObjectChange[];
+    files: FileChange[];
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    package_changed?: boolean;
+}
+
+/**
+ * The object (or package) at one state on the left and at another on the
+ * right ('ops.rev.diff'): written out as 'pc copy' would, or for a package its
+ * 'partcad.yaml' as rendered, and compared by the daemon.
+ */
+export interface DiffData {
+    package: string;
+    object: string | null;
+    kind?: string;
+    from: string;
+    to: string;
+    /** The commit each side is, where it is one. */
+    fromRevision: string | null;
+    toRevision: string | null;
     left: { label: string; missing: boolean };
     right: { label: string; missing: boolean };
     same: boolean;
     rows: CompareRow[];
+    unified?: string;
+    /** For a package: what changed in it, object by object, which its 'partcad.yaml' says only part of. */
+    changes?: PackageChanges;
+    /**
+     * For an object: the files it is built from that differ between the two
+     * states - a change, though its declaration may read the same ('same' is
+     * false then).
+     */
+    sources?: FileChange[];
 }
 
-/** One dependency a package declares at a revision, with the commit it is at ('revisions.uses'). */
-export interface DependencyRow {
+/** A file of the package, and the sections git puts it in: 'staged', 'unstaged', 'untracked', 'conflicted'. */
+export interface StatusFile {
+    path: string;
+    sections: string[];
+}
+
+/** Another package of the repository, or files in none, with changes of its own. */
+export interface StatusElsewhere {
+    directory: string;
+    package: string | null;
+    staged: number;
+    unstaged: number;
+}
+
+/**
+ * What of the subject is staged and what is not, object by object
+ * ('ops.rev.status'): what the Revisions tab's WORKTREE and STAGED rows are.
+ */
+export interface RevStatusData {
+    package: string;
+    object: string | null;
+    kind?: string;
+    /** The repository's working directory, on the daemon's machine. */
+    repository: string;
+    branch: string | null;
+    head: string | null;
+    detached: boolean;
+    /** The tree the index holds: what a new revision is asked to commit ('expect_index'). */
+    index: string | null;
+    /** What git is in the middle of - a merge, a rebase - or null. */
+    state: string | null;
+    conflicted: string[];
+    staged: ObjectChange[];
+    unstaged: ObjectChange[];
+    untracked: string[];
+    files: StatusFile[];
+    /** For an object: the files it is built from, as paths inside the package. Null for a package. */
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    own_files: string[] | null;
+    /** The objects staged and changed again since. */
+    partial: string[];
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    others_staged: ObjectChange[];
+    elsewhere: StatusElsewhere[];
+    /** One sentence to hand an agent, while anything of the subject is not staged. */
+    advice: string | null;
+}
+
+/** What 'ops.rev.stage' staged, and the status after it. */
+export interface RevStageData {
+    package: string;
+    object: string | null;
+    staged: string[];
+    notes: string[];
+    status: RevStatusData;
+}
+
+/** One check a new revision runs on what is staged: lint, or the tests of a changed object. */
+export interface RevCheck {
+    name: string;
+    object?: string;
+    passed: boolean;
+    summary: string;
+}
+
+/**
+ * The revision 'ops.rev.new' made, and the checks it passed - with the
+ * identity it was made as, which the host adds: it read it from git here.
+ */
+export interface RevNewData {
+    package: string;
+    object: string | null;
+    sha: string;
+    short: string;
+    summary: string;
+    checks: RevCheck[];
+    author?: { name?: string; email?: string };
+}
+
+/** Why 'ops.rev.new' made no revision; see 'RevRefusal'. */
+export type RevRefusalCode =
+    'nothing-staged' | 'others-staged' | 'warnings' | 'index-changed' | 'checks-failed' | 'conflicts' | 'in-progress';
+
+/**
+ * A new revision the daemon would not make on these terms: which reason, and
+ * the status it looked at - with the checks it ran, when they failed.
+ */
+export interface RevRefusal {
+    code: RevRefusalCode | string;
+    status?: (RevStatusData & { checks?: RevCheck[] }) | null;
+}
+
+/** One dependency a package declares, with what the declaration says and the commit it is at ('ops.deps.list'). */
+export interface DeclaredDependency {
     /** As the package declares it. */
     name: string;
-    /** The name it is loaded under at that revision. */
+    /** The name it is loaded under. */
     package: string;
     /** The same package without a revision, where the context has one. */
     current: string | null;
@@ -1719,29 +2010,144 @@ export interface DependencyRow {
     /** The name that loads it at that commit, '<package>@<sha>'. */
     versioned: string | null;
     type: string | null;
+    /** Its path or URL. */
+    location?: string | null;
+    /** The branch it tracks, for git. */
+    track?: string | null;
+    /** The revision it is pinned to, as declared. */
+    pinned?: string | null;
 }
 
-export interface UsesData {
+/** A package the objects of this one reach without declaring it, and the objects that do. */
+export interface UndeclaredDependency {
     package: string;
-    revision: string | null;
-    loaded: string;
-    dependencies: DependencyRow[];
+    users: { name: string; object: string; count: number }[];
 }
 
-/** One loaded object that uses something, and how many times ('usage.used_by', 'revisions.used_by'). */
+/** What a package depends on ('ops.deps.list' of a package). */
+export interface PackageDepsData {
+    package: string;
+    object: null;
+    kind: 'package';
+    declared: DeclaredDependency[];
+    undeclared: UndeclaredDependency[];
+    subpackages: { name: string; package: string }[];
+}
+
+/** One object another one names, with how and how many times, and the commit its package is at. */
+export interface ObjectDependency {
+    object: string;
+    package: string;
+    name: string;
+    kind: string | null;
+    /** 'placed', 'source (alias)', 'source (enrich)', 'sketch', 'implements', 'inherits', ... */
+    how: string[];
+    count: number;
+    revision: string | null;
+    short: string | null;
+}
+
+/** What an object depends on ('ops.deps.list' of an object). */
+export interface ObjectDepsData {
+    package: string;
+    object: string;
+    kind: string;
+    dependencies: ObjectDependency[];
+}
+
+export type DepsData = PackageDepsData | ObjectDepsData;
+
+/** One loaded object that uses something, and how many times, and how ('ops.used_by'). */
 export interface UsedByRow {
     object: string;
     package: string;
     name: string;
     kind: string;
     count: number;
+    how?: string[];
 }
 
+/** One loaded package that declares this one as a dependency, and how far behind its pin is. */
+export interface DependentPackage {
+    package: string;
+    /** The name it declares this one under. */
+    name: string;
+    type: string | null;
+    pinned: string | null;
+    short: string | null;
+    /** How many revisions of this package are newer than the one it pins; null when not known. */
+    behind: number | null;
+}
+
+/** What uses an object, or a package - at a revision, too ('ops.used_by'). */
 export interface UsedByData {
-    object?: string;
     package?: string;
+    object?: string | null;
+    kind?: string;
+    /** For a package asked about at a revision: that revision. */
     revision?: string | null;
+    /** For a package: the packages that declare it as a dependency. */
+    packages?: DependentPackage[];
     objects: UsedByRow[];
+}
+
+/** How bad what an analyzer found is, worst first. */
+export type ImpactSeverity = 'breaking' | 'changed' | 'verify' | 'info';
+
+/** The severities, worst first, as the summary counts them. */
+export const IMPACT_SEVERITIES: ImpactSeverity[] = ['breaking', 'changed', 'verify', 'info'];
+
+/** One thing an analyzer found about an object a change reaches. */
+export interface ImpactFinding {
+    severity: ImpactSeverity | string;
+    analyzer: string;
+    summary: string;
+    users?: string[];
+    files?: string[];
+    /** With 'measure': how much the shape moved ('pc compare'), or why it could not be measured. */
+    measured?: Record<string, unknown>;
+    /** With 'test': how its tests came out, or why they were not run. */
+    tested?: Record<string, unknown>;
+}
+
+/** One object a change reaches: changed itself, or through what it uses ('via', a path of objects). */
+export interface ImpactRow {
+    kind: string;
+    name: string;
+    package: string;
+    object: string;
+    how: string[];
+    geometry?: boolean;
+    reached: 'changed' | 'via';
+    via: string[];
+    users: string[];
+    findings: ImpactFinding[];
+}
+
+/** A dependency of the package whose declaration changed. */
+export interface ImpactPin {
+    name: string;
+    how: 'added' | 'removed' | 'pin moved' | 'changed' | string;
+    from: string | null;
+    to: string | null;
+}
+
+/** What a change reaches ('ops.impact'), from 'from' to 'to'. */
+export interface ImpactData {
+    package: string;
+    object: string | null;
+    kind?: string | null;
+    from: string;
+    to: string;
+    changed: (ObjectChange & { package?: string })[];
+    affects: ImpactRow[];
+    /** For an object: what it uses, transitively, that changed, each with the path it is used through. */
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    affected_by: (ObjectChange & { package?: string; path?: string[] })[];
+    pins: ImpactPin[];
+    /** The packages that pin this one by git commit: not affected until they update. */
+    pinned: DependentPackage[];
+    summary: Partial<Record<ImpactSeverity, number>>;
 }
 
 /** One simulation an object declares, as 'qual.simulations' answers: its 'qual: sim:' entry. */

@@ -46,8 +46,10 @@ What a revision cannot reach is a relative reference *out of* the package
 revision is of this package's repository, and a sibling may be in another one.
 """
 
+import hashlib
 import os
 import re
+import shutil
 import threading
 import typing
 import uuid
@@ -88,6 +90,21 @@ REVISIONS_SCAN_LIMIT = 20000
 
 _export_locks: dict[str, threading.Lock] = {}
 _export_locks_lock = threading.Lock()
+
+# The two states of a package that are not commits: what the git index holds --
+# which a new revision would be made of -- and the files on disk. Upper case, so
+# that neither reads as a branch; a branch called so all the same is still
+# reached as 'refs/heads/STAGED'. A package without '@' is the working tree, so
+# '//pkg@WORKTREE' is '//pkg' by another name; '//pkg@STAGED' is loaded the way
+# a revision is, out of the tree the index holds (see 'index_tree').
+STAGED = "STAGED"
+WORKTREE = "WORKTREE"
+STATES = (STAGED, WORKTREE)
+
+# The tree the index held, by the index file's path, with what the file looked
+# like then: reading it again is one 'stat' while it does not change.
+_index_trees: dict[str, tuple] = {}
+_index_trees_lock = threading.Lock()
 
 
 def short(sha: typing.Optional[str]) -> typing.Optional[str]:
@@ -151,6 +168,22 @@ def selector_candidates(selector: str) -> list:
 def versioned_name(base: str, revision: str) -> str:
     """The name a package is loaded under at a revision."""
     return "%s%s%s" % (base, SEPARATOR, revision)
+
+
+def is_state(revision: typing.Optional[str]) -> bool:
+    """Whether a revision is one of the two states that are not commits ('STAGED', 'WORKTREE')."""
+    return revision in STATES
+
+
+def names_staged(package_path: typing.Optional[str]) -> bool:
+    """Whether a package path names the staged state anywhere along it ('//pkg@STAGED', '//a@STAGED/sub').
+
+    Such a name moves with the index: what it names is looked up again each
+    time rather than remembered (see 'Context.get_versioned_project').
+    """
+    if not is_versioned(package_path):
+        return False
+    return any(part.split("/", 1)[0] == STAGED for part in package_path.split(SEPARATOR)[1:])
 
 
 def unversioned(package_path: str) -> str:
@@ -381,6 +414,123 @@ def resolve(repository: Repository, revision: str, fetch: bool = False, user_con
     return str(commit.id)
 
 
+def _index_identity(path: str) -> typing.Optional[tuple]:
+    """What the index file holds, cheaply: its size and the checksum git ends it with; None when it cannot be read.
+
+    Not its time and size, which a restored copy of another index can share.
+    An index written with 'index.skipHash' ends in zeros instead, and is then
+    told apart by a digest of all of it.
+    """
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 32))
+            trailer = f.read()
+            if trailer[-20:].strip(b"\0"):
+                return (size, trailer)
+            f.seek(0)
+            return _identity_of(f.read())
+    except OSError:
+        return None
+
+
+def _identity_of(data: bytes) -> tuple:
+    """'_index_identity' of an index file's bytes."""
+    trailer = data[-32:]
+    if trailer[-20:].strip(b"\0"):
+        return (len(data), trailer)
+    return (len(data), hashlib.sha256(data).hexdigest())
+
+
+# The parent of a commit, written the way 'git' writes it: '<rev>~', '<rev>~1', '<rev>^', '<rev>^1'.
+_PARENT = re.compile(r"^(?P<base>.+?)(?:~1?|\^1?)$")
+
+
+def before_history(repository: Repository, revision: typing.Optional[str]) -> bool:
+    """Whether 'revision' is the parent of a commit that has none ('<first commit>~1'): before the history, and empty.
+
+    What a first commit is compared against -- nothing -- rather than a
+    revision that is not there.
+    """
+    found = _PARENT.match(revision or "")
+    if found is None:
+        return False
+    commit = _local_commit(repository.repo, found.group("base"))
+    return commit is not None and not commit.parent_ids
+
+
+def declares_package_at(repository: Repository, state: str) -> bool:
+    """Whether the package's 'partcad.yaml' is in the repository at 'state' -- a commit-ish or 'STAGED'; False when unknown."""
+    path = "/".join(part for part in (repository.relpath, "partcad.yaml") if part)
+    repo = repository.repo
+    try:
+        if state == STAGED:
+            tree = repo[index_tree(repository)]
+        else:
+            commit = _local_commit(repo, state)
+            if commit is None:
+                return False
+            tree = commit.tree
+        return path in tree
+    except (KeyError, ValueError, pygit2.GitError):
+        return False
+
+
+def index_tree(repository: Repository) -> str:
+    """The id of the tree the git index holds: what 'git write-tree' prints, and a new revision would be made of.
+
+    Raises ValueError while the index has conflicts, which no tree can hold.
+    Read again only when what the index file holds has changed since.
+    """
+    repo = repository.repo
+    path = os.path.join(repo.path, "index")
+    seen = _index_identity(path)
+    with _index_trees_lock:
+        cached = _index_trees.get(path)
+        if seen is not None and cached is not None and cached[0] == seen:
+            return cached[1]
+    # Read once: what it is kept under and the tree it holds come from the
+    # same bytes, whatever git writes over the file meanwhile.
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError:
+        data = None
+    index = _index_of(data) if data else None
+    if index is None:
+        # No index yet, or one that cannot be read apart from its repository
+        # (a split index): the repository's own, and nothing kept of it.
+        index, data = repo.index, None
+        index.read(True)
+    if index.conflicts is not None:
+        raise ValueError("The index of %s has conflicts: resolve them before asking for %s" % (repo.workdir, STAGED))
+    tree = str(index.write_tree(repo))
+    if data is not None:
+        with _index_trees_lock:
+            _index_trees[path] = (_identity_of(data), tree)
+    return tree
+
+
+def _index_of(data: bytes) -> typing.Optional[pygit2.Index]:
+    """The index whose file holds 'data', read from a copy of it; None where a copy cannot be read on its own."""
+    import tempfile
+
+    try:
+        directory = tempfile.mkdtemp(prefix="partcad-index-")
+    except OSError:
+        return None
+    try:
+        copy = os.path.join(directory, "index")
+        with open(copy, "wb") as f:
+            f.write(data)
+        return pygit2.Index(copy)
+    except (OSError, ValueError, pygit2.GitError):
+        return None
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
 def _lfs_object(repo: pygit2.Repository, data: bytes) -> typing.Optional[bytes]:
     """The file an LFS pointer stands for, when the repository has it locally."""
     if not data.startswith(_LFS_POINTER) or len(data) > 1024:
@@ -453,7 +603,16 @@ def _write_tree(repo: pygit2.Repository, tree: pygit2.Tree, dest: str, top: bool
 EXPORT_PREFIX = "revision-"
 
 
-def export(repository: Repository, sha: str, git_cache_dir: str) -> str:
+def export_tree(repository: Repository, tree_id: str, git_cache_dir: str) -> str:
+    """The directory the tree 'tree_id' -- the index's, see 'index_tree' -- is written out in, as 'export' writes a commit.
+
+    Named after the tree, so that an index nobody has changed since is one
+    directory, and a different one is another.
+    """
+    return export(repository, tree_id, git_cache_dir, tree=True)
+
+
+def export(repository: Repository, sha: str, git_cache_dir: str, tree: bool = False) -> str:
     """The directory the commit 'sha' of 'repository' is written out in, writing it if it is not there yet.
 
     Kept in '~/.partcad/git' beside the copies of downloaded dependencies, so
@@ -472,7 +631,7 @@ def export(repository: Repository, sha: str, git_cache_dir: str) -> str:
     from .project_factory_git import cache_dir_name
 
     os.makedirs(git_cache_dir, exist_ok=True)
-    name = EXPORT_PREFIX + cache_dir_name(repository.identity, sha)
+    name = EXPORT_PREFIX + cache_dir_name(repository.identity, ("index-" + sha) if tree else sha)
     dest = os.path.join(git_cache_dir, name)
     guard = os.path.join(dest, GUARD)
     if os.path.exists(guard):
@@ -483,13 +642,13 @@ def export(repository: Repository, sha: str, git_cache_dir: str) -> str:
     with lock, FileLock(dest + ".lock"):
         if os.path.exists(guard):
             return dest
-        commit = repository.repo.get(sha)
-        if commit is None:
-            raise ValueError("The commit %s is missing from %s" % (sha, repository.repo.path))
-        commit = commit.peel(pygit2.Commit)
+        found = repository.repo.get(sha)
+        if found is None:
+            raise ValueError("The %s %s is missing from %s" % ("tree" if tree else "commit", sha, repository.repo.path))
+        written = found.peel(pygit2.Tree) if tree else found.peel(pygit2.Commit).tree
         staging = "%s.tmp-%s" % (dest, uuid.uuid4().hex[:8])
         try:
-            _write_tree(repository.repo, commit.tree, staging, top=True)
+            _write_tree(repository.repo, written, staging, top=True)
             # Created, never opened: nothing at that name may be followed or
             # written through, whatever put it there.
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
@@ -520,7 +679,19 @@ def _subtree_id(commit: pygit2.Commit, relpath: str):
         return None
 
 
-def revisions(repository: Repository, limit: int = REVISIONS_LIMIT) -> list:
+class Revisions(list):
+    """The rows 'revisions' found, and where the walk stopped.
+
+    'scanned' is the commit the walk looked at last; 'truncated' that it
+    stopped there because it had looked at 'REVISIONS_SCAN_LIMIT' commits, and
+    not because the history ended -- so there may be more, after 'scanned'.
+    """
+
+    scanned: typing.Optional[str] = None
+    truncated: bool = False
+
+
+def revisions(repository: Repository, limit: int = REVISIONS_LIMIT, after: typing.Optional[str] = None) -> "Revisions":
     """The commits that changed the package, newest first, from the one checked out.
 
     A commit is listed when what it has at the package's directory differs from
@@ -528,24 +699,39 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT) -> list:
     package that shares its repository with others lists its own history and
     nobody else's, the commit that deleted its directory included. A package at
     the repository's root lists every commit. At most 'REVISIONS_SCAN_LIMIT'
-    commits are looked at.
+    commits are looked at, which the answer says ('Revisions.truncated').
 
     Each is {'sha', 'short', 'summary', 'author', 'time'}: the time as seconds
     since the epoch, which is what a reader formats in its own time zone.
+
+    'after' is the commit a page ended at -- one the checked out commit has on
+    its first-parent line: the walk goes on from the one before it, with all of
+    its budget, which is how a reader asks for every revision a page at a time.
+    Refused, with ValueError, for a commit that is not on that line.
     """
+    found = Revisions()
     head = repository.head()
     if head is None:
-        return []
-    found = []
+        return found
+    start = head
+    if after is not None:
+        start = _first_parent_cursor(repository, head, after)
     try:
-        walker = repository.repo.walk(head, pygit2.enums.SortMode.TOPOLOGICAL | pygit2.enums.SortMode.TIME)
+        walker = repository.repo.walk(start, pygit2.enums.SortMode.TOPOLOGICAL | pygit2.enums.SortMode.TIME)
         walker.simplify_first_parent()
     except (pygit2.GitError, ValueError, KeyError):
-        return []
+        return found
     relpath = repository.relpath
-    for scanned, commit in enumerate(walker):
+    scanned = 0
+    for commit in walker:
+        if after is not None and str(commit.id) == start:
+            # The cursor itself was on the last page.
+            continue
         if scanned >= REVISIONS_SCAN_LIMIT:
+            found.truncated = True
             break
+        scanned += 1
+        found.scanned = str(commit.id)
         here = _subtree_id(commit, relpath)
         parents = commit.parent_ids
         before = None
@@ -573,3 +759,26 @@ def revisions(repository: Repository, limit: int = REVISIONS_LIMIT) -> list:
         if len(found) >= limit:
             break
     return found
+
+
+def _first_parent_cursor(repository: Repository, head: str, after: str) -> str:
+    """'after' as a full commit id, refused unless 'head' has it on its first-parent line, which a page ends on."""
+    try:
+        cursor = str(repository.repo.revparse_single(after).peel(pygit2.Commit).id)
+    except (KeyError, ValueError, pygit2.GitError) as e:
+        raise ValueError("There is no commit '%s' to go on from" % after) from e
+    if cursor == head:
+        return cursor
+    # As far back as it takes: a cursor this history handed out can be deeper
+    # than any one walk looks, a page at a time.
+    commit = repository.repo[head]
+    while True:
+        if not commit.parent_ids:
+            break
+        try:
+            commit = repository.repo[commit.parent_ids[0]]
+        except (KeyError, ValueError):
+            break
+        if str(commit.id) == cursor:
+            return cursor
+    raise ValueError("'%s' is not a commit this history goes back through" % after)

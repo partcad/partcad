@@ -5,8 +5,8 @@
 #
 """The daemon methods the IDE's Operations tabs are drawn from, and 'pc copy'.
 
-'revisions.list', 'revisions.compare', 'revisions.uses', 'revisions.used_by' and
-'usage.used_by', with 'requirements.check' asked of a package, and 'copy.object':
+'ops.rev.list', 'ops.rev.diff', 'ops.deps.list' and 'ops.used_by', with
+'requirements.check' asked of a package, and 'copy.object':
 against a real context of a package with a history, written with pygit2 into a
 temporary directory. What each answer says is pinned beside 'partcad.revisions',
 'partcad.usage' and 'partcad.serialize' in 'tests/partcad/unit'; what is pinned
@@ -18,7 +18,7 @@ import pytest
 import yaml
 
 import partcad as pc
-from partcad_service_json_rpc.core import operations
+from partcad_service_json_rpc.core import operations, ops
 from partcad_service_json_rpc.core.events import EventEmitter
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
@@ -62,11 +62,10 @@ def session(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "method, operation",
     [
-        ("revisions.list", operations.revisions_list),
-        ("revisions.compare", operations.revisions_compare),
-        ("revisions.uses", operations.revisions_uses),
-        ("revisions.used_by", operations.revisions_used_by),
-        ("usage.used_by", operations.usage_used_by),
+        ("ops.rev.list", ops.rev_list),
+        ("ops.rev.diff", ops.rev_diff),
+        ("ops.deps.list", ops.deps_list),
+        ("ops.used_by", ops.used_by),
         ("copy.object", operations.copy_object),
     ],
 )
@@ -74,54 +73,53 @@ def test_they_are_methods_of_the_daemon(method, operation):
     assert build_registry()[method].__wrapped__ is operation
 
 
-def test_the_history_of_an_object_s_package(session):
-    answer = operations.revisions_list(session, {"package": "//", "object": "cube", "kind": "part"})
+def test_the_revisions_of_an_object_are_those_that_changed_it(session):
+    answer = ops.rev_list(session, {"package": "//", "object": "cube", "kind": "part"})
 
-    assert answer["package"] == "//"
+    assert answer["package"] == "//" and answer["object"] == "//:cube"
     assert answer["published"] is True
-    assert [entry["sha"] for entry in answer["revisions"]] == [session.first]
+    assert [(entry["sha"], entry["how"]) for entry in answer["revisions"]] == [(session.first, ["added"])]
 
 
 def test_the_history_of_a_package(session):
-    answer = operations.revisions_list(session, {"package": "//", "kind": "package"})
+    answer = ops.rev_list(session, {"package": "//"})
 
     assert [entry["short"] for entry in answer["revisions"]] == [session.first[:8]]
 
 
 def test_an_object_compared_with_a_revision(session):
-    answer = operations.revisions_compare(
-        session, {"package": "//", "object": "cube", "kind": "part", "revision": session.first}
-    )
+    answer = ops.rev_diff(session, {"package": "//", "object": "cube", "kind": "part", "from": session.first})
 
-    assert answer["revision"] == session.first
+    assert answer["fromRevision"] == session.first and answer["to"] == "WORKTREE"
     assert [(row["left"], row["right"]) for row in answer["rows"] if row["tag"] == "replace"] == [
         ("  cuboid: 1", "  cuboid: 2")
     ]
 
 
 def test_a_package_compared_with_a_revision(session):
-    answer = operations.revisions_compare(session, {"package": "//", "kind": "package", "revision": session.first})
+    answer = ops.rev_diff(session, {"package": "//", "from": session.first})
 
     assert answer["same"] is False
     assert any(row["right"] == "requirements:" for row in answer["rows"] if row["tag"] == "insert")
 
 
-def test_a_comparison_needs_a_revision(session):
-    with pytest.raises(JsonRpcError):
-        operations.revisions_compare(session, {"package": "//", "object": "cube", "kind": "part"})
+def test_a_comparison_is_from_head_unless_told_otherwise(session):
+    answer = ops.rev_diff(session, {"package": "//", "object": "cube", "kind": "part"})
+
+    assert answer["from"] == "HEAD" and answer["fromRevision"] == session.first
 
 
 def test_what_a_revision_uses_and_is_used_by(session):
-    uses = operations.revisions_uses(session, {"package": "//", "revision": session.first})
-    used_by = operations.revisions_used_by(session, {"package": "//", "revision": session.first})
+    uses = ops.deps_list(session, {"package": "//@%s" % session.first})
+    used_by = ops.used_by(session, {"package": "//@%s" % session.first})
 
-    assert uses["revision"] == session.first
-    assert uses["dependencies"] == []
+    assert used_by["revision"] == session.first
+    assert uses["declared"] == []
     assert used_by["objects"] == []
 
 
 def test_what_uses_an_object(session):
-    answer = operations.usage_used_by(session, {"package": "//", "object": "cube", "kind": "part"})
+    answer = ops.used_by(session, {"package": "//", "object": "cube", "kind": "part"})
 
     assert answer["object"] == "//:cube"
     assert [(row["object"], row["count"]) for row in answer["objects"]] == [("//:user", 1)]
@@ -207,14 +205,14 @@ def test_a_package_has_no_ports_of_its_own_to_require(session):
 
 
 def test_a_comparison_is_a_unified_diff_too(session):
-    answer = operations.revisions_compare(
-        session, {"package": "//", "object": "cube", "kind": "part", "revision": session.first, "lines": 0}
+    answer = ops.rev_diff(
+        session, {"package": "//", "object": "cube", "kind": "part", "from": session.first, "lines": 0}
     )
 
     first = session.first[:8]
     assert answer["unified"].splitlines() == [
         "--- //@%s:cube" % first,
-        "+++ //:cube",
+        "+++ //@WORKTREE:cube",
         "@@ -3 +3 @@",
         "-  cuboid: 1",
         "+  cuboid: 2",
@@ -222,16 +220,14 @@ def test_a_comparison_is_a_unified_diff_too(session):
 
 
 def test_a_comparison_looks_the_kind_up(session):
-    answer = operations.revisions_compare(session, {"package": "//", "object": "cube", "revision": session.first})
+    answer = ops.rev_diff(session, {"package": "//", "object": "cube", "from": session.first})
 
     assert answer["left"]["missing"] is False and answer["right"]["missing"] is False
 
 
 def test_a_comparison_refuses_a_number_of_lines_that_is_none(session):
     with pytest.raises(JsonRpcError):
-        operations.revisions_compare(
-            session, {"package": "//", "object": "cube", "revision": session.first, "lines": "many"}
-        )
+        ops.rev_diff(session, {"package": "//", "object": "cube", "from": session.first, "lines": "many"})
 
 
 def test_used_by_can_load_the_workspace_first(session, tmp_path):
@@ -242,8 +238,8 @@ def test_used_by_can_load_the_workspace_first(session, tmp_path):
     )
     session.partcad_ctx = pc.Context(str(root), search_root=False)
 
-    before = operations.usage_used_by(session, {"package": "//", "object": "cube", "kind": "part"})
-    after = operations.usage_used_by(session, {"package": "//", "object": "cube", "kind": "part", "load": True})
+    before = ops.used_by(session, {"package": "//", "object": "cube", "kind": "part"})
+    after = ops.used_by(session, {"package": "//", "object": "cube", "kind": "part", "load": True})
 
     assert "//users:peg" not in [row["object"] for row in before["objects"]]
     assert "//users:peg" in [row["object"] for row in after["objects"]]
@@ -277,7 +273,7 @@ def test_an_object_gone_since_the_revision_is_compared_as_what_it_was(session):
         f.write(yaml.safe_dump(config, sort_keys=False))
     session.partcad_ctx.reload_packages(["//"])
 
-    answer = operations.revisions_compare(session, {"package": "//", "object": "cube", "revision": session.first})
+    answer = ops.rev_diff(session, {"package": "//", "object": "cube", "from": session.first})
 
     assert answer["left"]["missing"] is False
     assert answer["right"]["missing"] is True
@@ -299,7 +295,7 @@ def test_copy_of_an_instance_is_that_instance(session):
 
 
 def test_used_by_an_instance_is_used_by_its_object(session):
-    answer = operations.usage_used_by(session, {"package": "//", "object": "cube", "params": ["x=1"], "kind": "part"})
+    answer = ops.used_by(session, {"package": "//", "object": "cube", "params": ["x=1"], "kind": "part"})
 
     assert answer["object"] == "//:cube"
 
@@ -317,7 +313,7 @@ def test_a_comparison_looks_up_a_kind_that_is_not_the_default(session):
         f.write(yaml.safe_dump(config, sort_keys=False))
     session.partcad_ctx.reload_packages(["//"])
 
-    answer = operations.revisions_compare(session, {"package": "//", "object": "outline", "revision": sketched})
+    answer = ops.rev_diff(session, {"package": "//", "object": "outline", "from": sketched})
 
     assert answer["left"]["missing"] is False and answer["right"]["missing"] is False
     assert [(row["left"], row["right"]) for row in answer["rows"] if row["tag"] == "replace"] == [
@@ -331,26 +327,36 @@ def test_a_comparison_looks_up_a_kind_that_is_not_the_default(session):
 @pytest.mark.parametrize(
     "operation",
     [
-        operations.revisions_list,
-        operations.revisions_compare,
-        operations.revisions_uses,
-        operations.revisions_used_by,
-        operations.usage_used_by,
+        ops.views,
+        ops.rev_list,
+        ops.rev_diff,
+        ops.rev_status,
+        ops.rev_stage,
+        ops.rev_new,
+        ops.deps_list,
+        ops.deps_add,
+        ops.deps_remove,
+        ops.deps_update,
+        ops.used_by,
+        ops.impact,
         operations.copy_object,
     ],
 )
 def test_with_no_context_there_is_no_answer(session, operation):
     session.partcad_ctx = None
 
-    assert operation(session, {"package": "//", "object": "cube", "revision": "x", "target": "y"}) is None
+    assert operation(session, {"package": "//", "object": "cube", "from": "x", "target": "y"}) is None
 
 
 @pytest.mark.parametrize(
     "operation, params",
     [
-        (operations.revisions_list, {"package": "//nowhere", "kind": "package"}),
-        (operations.revisions_compare, {"package": "//", "object": "cube", "revision": "nowhere"}),
-        (operations.revisions_uses, {"package": "//", "revision": "nowhere"}),
+        (ops.rev_list, {"package": "//nowhere"}),
+        (ops.rev_diff, {"package": "//", "object": "cube", "from": "nowhere"}),
+        (ops.deps_list, {"package": "//@nowhere"}),
+        (ops.used_by, {"package": "//nowhere", "object": "x", "kind": "part"}),
+        (ops.deps_add, {"package": "//", "object": "cube", "name": "x", "location": "../x"}),
+        (ops.rev_list, {"package": "//", "object": "nothing"}),
         (operations.copy_object, {"package": "//", "object": "//nowhere:x", "target": "y"}),
         (operations.copy_object, {"package": "//", "object": "cube", "target": "//nowhere:y"}),
     ],
@@ -360,16 +366,11 @@ def test_what_is_not_there_is_refused(session, operation, params):
         operation(session, params)
 
 
-def test_used_by_an_object_of_no_package_is_no_answer(session):
-    # Said in the log, as every lookup of an object that is not there is.
-    assert operations.usage_used_by(session, {"package": "//nowhere", "object": "x", "kind": "part"}) is None
-
-
 def test_used_by_a_package_is_what_uses_anything_in_it(session):
-    answer = operations.usage_used_by(session, {"package": "//", "kind": "package"})
+    answer = ops.used_by(session, {"package": "//"})
 
-    assert answer["object"] == "//"
-    assert answer["objects"] == []
+    assert answer["package"] == "//" and answer["object"] is None
+    assert answer["objects"] == [] and answer["packages"] == []
 
 
 def test_a_package_s_declaration_that_cannot_be_written_says_why(session, tmp_path):

@@ -20,9 +20,9 @@ then the dependency on the public PartCAD repository is added automatically. It 
 repository's released branch, ``main``, and is pinned to the commit ``main`` is at as the package
 is created: ``pc init`` writes that commit into a ``revision:`` line under ``track: main``, and
 from then on the package is built against that commit, wherever ``main`` goes, until you run
-``pc update`` (see :ref:`pinning-dependencies`). Offline, or when the repository cannot be
+``pc ops deps update --all`` (see :ref:`pinning-dependencies`). Offline, or when the repository cannot be
 reached, the package is created all the same, with no ``revision:`` yet, and a warning says to
-run ``pc update`` to pin it.
+run ``pc ops deps update --all`` to pin it.
 
 ``pc init`` also adds a **Render** command to ``.vscode/launch.json``, at the root of the git
 repository it is run in (next to the package, when there is no repository). It shows up in the
@@ -52,12 +52,12 @@ Alternatively, manually create ``partcad.yaml`` with the following content:
         track: main
 
 Then pin it to the commit ``main`` is at now, the way ``pc init`` would have.
-``pc update`` writes that commit into a ``revision:`` line under ``track: main``,
+``pc ops deps update --all`` writes that commit into a ``revision:`` line under ``track: main``,
 and moves it again each time you run it:
 
   .. code-block:: shell
 
-    pc update
+    pc ops deps update --all
 
 Now launch ``pc list`` to see the list of packages currently available in
 the public PartCAD repository.

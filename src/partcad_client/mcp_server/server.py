@@ -30,7 +30,7 @@ from mcp_types import TextContent, ToolAnnotations
 from pydantic import Field
 
 from partcad_client import __version__
-from partcad_utils import agent_skills, comments, framing, garage, parameters
+from partcad_utils import agent_skills, comments, framing, garage, git_identity, parameters
 
 from .bridge import Bridge, CallFailed, Outcome
 from .sandbox import OutsideScope, PathScope
@@ -128,13 +128,15 @@ TestKind = Literal["part", "assembly", "scene", "sketch", "interface"]
 # `pc info` also reports on a colour, a material or a finish (`--color`, `-m`,
 # `--finish`), which are looked for only where no object has the name.
 InfoKind = Literal["part", "assembly", "scene", "sketch", "interface", "software", "material", "color", "finish"]
-# What has a history and users: an object -- an interface too -- or a package.
-RevisedKind = Literal["part", "assembly", "scene", "sketch", "interface"]
-Revision = Annotated[
-    str,
+# What has revisions, dependencies and users: an object -- an interface too -- or a package.
+RevisedKind = Literal["part", "assembly", "scene", "sketch", "interface", "software"]
+State = Annotated[
+    Optional[str],
     Field(
-        description="A revision of the package's git repository: a commit id (as much of it as is unique), a tag "
-        "or a branch. It is loaded as '<package>@<sha>' beside what is checked out, and stays loaded."
+        description="A state of the package's git repository: a revision (a commit id, as much of it as is "
+        "unique, a tag, a branch, 'HEAD~1'), 'STAGED' (what the git index holds: what a new revision would be "
+        "made of) or 'WORKTREE' (the files on disk). A revision is loaded as '<package>@<sha>' beside what is "
+        "checked out, and stays loaded."
     ),
 ]
 
@@ -222,10 +224,14 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
         "and add to it with comment_add, which signs with the user's git name; read it against another "
         "object -- volume, displacement, mass, and how far apart their surfaces are -- with compare; write STEP, "
         "STL, 3MF and "
-        "the rest with export. What has become of an object since it was written: its package's revisions with "
-        "revisions, what changed since one, as a unified diff, with diff, what the package depended on then with "
-        "revision_uses, and what uses it with used_by; an object of a package at a revision is "
-        "'//package@<revision>:name'. "
+        "the rest with export. Operations of an object or a package: its revisions with ops_rev_list (a package's "
+        "every commit, an object's own), what changed between two states as a unified diff with ops_rev_diff, "
+        "what is staged and what is not with ops_rev_status, staging it with ops_rev_stage and committing it as a "
+        "new revision with ops_rev_new (ask the user first); what it depends on with ops_deps_list (and a "
+        "package's dependencies changed with ops_deps_add, ops_deps_remove and ops_deps_update); what uses it with "
+        "ops_used_by; and what a change reaches, with what each object reached now risks, with ops_impact. A "
+        "state is a revision, 'STAGED' or 'WORKTREE'; an object of a package at one is "
+        "'//package@<state>:name'. "
         "To create or change an object, edit partcad.yaml and its script with your own file "
         "tools -- the daemon reloads what changed -- then render and qual_test again. Everything else PartCAD does "
         "(bom, instructions, cae, cam, simulations, add, import, convert, install) is a daemon method: "
@@ -886,51 +892,80 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             return report(outcome, failure=CallFailed("%s does not hold to %s" % (current, reference), outcome))
         return report(outcome)
 
-    @server.tool(title="List a package's revisions", annotations=_READS)
-    async def revisions(
+    @server.tool(title="Operations of an object or a package", annotations=_READS)
+    async def ops_summary(
         ctx: Context,
         object: SomeObjectName = None,
         kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
         package: PackageName = None,
+    ) -> CallToolResult:
+        """Say which Operations views an object -- or a package -- has, the tools of each, and one line from each.
+
+        `pc ops summary --json`: how many revisions it has, what of it is staged and what is not, how many
+        dependencies and users. Which tools apply depends on the kind: ops_deps_add, ops_deps_remove and
+        ops_deps_update apply to a package only.
+        """
+        return await run(ctx, "ops.views", {**_subject(package, object, kind), "summary": True})
+
+    @server.tool(title="List revisions", annotations=_READS)
+    async def ops_rev_list(
+        ctx: Context,
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+        limit: Annotated[int, Field(ge=1, description="How many to list ('--limit').")] = 100,
+        after: Annotated[
+            Optional[str], Field(description="List the ones after this commit: where the last page ended ('--after').")
+        ] = None,
         params: Parameters = None,
     ) -> CallToolResult:
-        """List the commits that changed the package of an object, or the package itself, newest first.
+        """List the revisions of a package -- every commit that changed it -- or only those that changed an object.
 
-        `pc revisions list --json`: each commit's id, its first eight characters, its summary, author and time,
-        and which one is checked out ('head'). A package sharing its repository lists the commits that changed its
-        own directory; one in no git repository is not published ('published': false). Any of them is a revision
-        diff, revision_uses and used_by take.
+        `pc ops rev list --json`, newest first: each commit's id, its first eight characters, its summary, author
+        and time, and which one is checked out ('head'); for an object, how each changed it ('added', 'removed',
+        'declaration', 'source'). 'more' says there is another page: ask again with 'after' set to 'next'. A
+        package in no git repository is not
+        published ('published': false). Any of them is a state the other ops_ tools take.
         """
-        return await run(ctx, "revisions.list", {**_subject(package, object, kind), "params": _assignments(params)})
+        request = {**_subject(package, object, kind), "limit": limit, "params": _assignments(params)}
+        if after:
+            request["after"] = after
+        return await run(ctx, "ops.rev.list", request)
 
-    @server.tool(title="What changed since a revision", annotations=_READS)
-    async def diff(
+    @server.tool(title="What changed between two states", annotations=_READS)
+    async def ops_rev_diff(
         ctx: Context,
-        revision: Revision,
         object: SomeObjectName = None,
         kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
         package: PackageName = None,
+        from_state: Annotated[
+            State, Field(description="The state to compare from ('--from'): HEAD when left out.")
+        ] = None,
+        to_state: Annotated[
+            State, Field(description="The state to compare to ('--to'): WORKTREE when left out.")
+        ] = None,
         lines: Annotated[
             int, Field(ge=0, description="Lines of what did not change to show around each change ('-U').")
         ] = 3,
         params: Parameters = None,
     ) -> CallToolResult:
-        """Show what changed in an object -- or, with no object, the package's partcad.yaml -- since a revision.
+        """Show what changed in an object -- or a package -- between two states, as a unified diff.
 
-        `pc revisions diff`: a unified diff of the object at the revision against the object now, each written out
-        as `pc copy` writes one -- rendered, normalized, defaults left out -- so a comment or a reformatted line is
-        no change; for a package, its partcad.yaml as Jinja2 rendered it at each. The diff follows the result as
-        text of its own ("No change since ..." when nothing changed, 'same': true). 'missing' on a side says the
-        object is not declared there.
+        `pc ops rev diff`: the object at 'from' against it at 'to', each written out as `pc copy` writes one --
+        rendered, normalized, defaults left out -- so a comment or a reformatted line is no change; for a package,
+        what changed in it object by object ('changes'), then its partcad.yaml as rendered at each. HEAD to
+        WORKTREE when no state is given -- what is not committed; HEAD to STAGED is what is staged, STAGED to
+        WORKTREE what is not ('from_state' and 'to_state' are '--from' and '--to'). The diff follows the result as text of its own, after
+        the objects and files that changed ('sources': the files an object is built from); "No change ..." when
+        nothing did, 'same': true. 'missing' on a side says the object is not declared there.
         """
-        request = {
-            **_subject(package, object, kind),
-            "params": _assignments(params),
-            "revision": revision,
-            "lines": lines,
-        }
+        request = {**_subject(package, object, kind), "params": _assignments(params), "lines": lines}
+        if from_state:
+            request["from"] = from_state
+        if to_state:
+            request["to"] = to_state
         try:
-            outcome = await call(ctx, "revisions.compare", request)
+            outcome = await call(ctx, "ops.rev.diff", request)
         except CallFailed as e:
             return report(e.outcome, failure=e)
         answer = outcome.result if isinstance(outcome.result, dict) else {}
@@ -938,59 +973,242 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         # The rows are the IDE's side-by-side view of the same comparison: the
         # diff after the result says it once, the way an agent reads one.
         outcome.result = {key: value for key, value in answer.items() if key not in ("rows", "unified")}
-        text = unified if unified else "No change since %s." % (answer.get("short") or revision)
+        if answer.get("same"):
+            text = "No change from %s to %s." % (answer.get("from"), answer.get("to"))
+        else:
+            # What the declaration's diff does not show: the files an object is
+            # built from, and what of a package changed besides its partcad.yaml.
+            listed = [
+                "%s %s" % (entry.get("how"), entry.get("path"))
+                for entry in (answer.get("sources") or []) + ((answer.get("changes") or {}).get("files") or [])
+            ]
+            listed += [
+                "%s %s" % ("/".join(row.get("how") or []), row.get("object"))
+                for row in (answer.get("changes") or {}).get("objects") or []
+            ]
+            text = "\n".join(part for part in ("\n".join(listed), unified) if part) or "Changed from %s to %s." % (
+                answer.get("from"),
+                answer.get("to"),
+            )
         return report(outcome, content=[TextContent(type="text", text=text)])
 
-    @server.tool(title="A revision's dependencies", annotations=_READS)
-    async def revision_uses(
-        ctx: Context,
-        revision: Revision,
-        package: PackageName = None,
-        object: SomeObjectName = None,
-        params: Parameters = None,
-    ) -> CallToolResult:
-        """List the dependencies a package declared at a revision, each with the commit it is at.
-
-        `pc revisions uses --json`: of the package named, or of the package the object is in. Each comes with the
-        name that loads it at that commit ('versioned', '<package>@<sha>'), which any tool takes. Loading a
-        dependency may download it.
-        """
-        request = {"package": package or ".", "object": object, "revision": revision, "params": _assignments(params)}
-        return await run(ctx, "revisions.uses", request)
-
-    @server.tool(title="What uses an object", annotations=_READS)
-    async def used_by(
+    @server.tool(title="What is staged and what is not", annotations=_READS)
+    async def ops_rev_status(
         ctx: Context,
         object: SomeObjectName = None,
         kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
         package: PackageName = None,
-        revision: Annotated[
+    ) -> CallToolResult:
+        """Say what of an object -- or a package -- is staged and what is not, object by object.
+
+        `pc ops rev status --json`: 'staged' and 'unstaged' are the objects whose changes are and are not in the
+        git index, with how each changed; 'files' what git says of each file of the package; 'partial' what was
+        changed again since it was staged; 'elsewhere' the other packages, and files in no package, that are
+        staged or changed; 'index' the tree the index holds, which ops_rev_new takes as 'expect_index'; and
+        'advice' what to stage, when anything is not staged. Stage with ops_rev_stage, or with git: an object's
+        declaration is the lines of it in partcad.yaml, its files those 'own_files' names.
+        """
+        return await run(ctx, "ops.rev.status", _subject(package, object, kind))
+
+    @server.tool(title="Stage an object or a package", annotations=_WRITES)
+    async def ops_rev_stage(
+        ctx: Context,
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+    ) -> CallToolResult:
+        """Stage every change of an object -- or a package -- that is not staged yet: `pc ops rev stage`.
+
+        A package: its own files, untracked ones included, none of its sub-packages'. An object: the files it is
+        built from and its own declaration in partcad.yaml, only those lines -- another object's edit in the same
+        file stays out. Answers what was staged and the status after it.
+        """
+        return await run(ctx, "ops.rev.stage", _subject(package, object, kind))
+
+    @server.tool(title="Make a new revision", annotations=_APPENDS)
+    async def ops_rev_new(
+        ctx: Context,
+        message: Annotated[str, Field(description="What the revision is: its first line is its summary.")],
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+        expect_index: Annotated[
             Optional[str],
-            Field(
-                description="Ask about the package at this revision instead of what is checked out "
-                "('pc revisions used-by'): what refers to it by its commit, a tag or a branch."
-            ),
+            Field(description="The 'index' ops_rev_status answered: refused if what is staged changed since."),
         ] = None,
+        include_others: Annotated[
+            bool,
+            Field(
+                description="Commit what else is staged too. Only once the user has agreed to it ('--include-others')."
+            ),
+        ] = False,
+        yes: Annotated[
+            bool,
+            Field(
+                description="Commit although changes of it are not staged, or changed again since they were. Only "
+                "once the user has agreed to it ('--yes')."
+            ),
+        ] = False,
+        skip_checks: Annotated[
+            bool, Field(description="Commit without running lint and the qualification tests ('--skip-checks').")
+        ] = False,
+    ) -> CallToolResult:
+        """Commit what is staged as a new revision of an object -- or a package: `pc ops rev new`. Ask the user first.
+
+        Only what is staged is committed, by the user's git identity on this machine. Refused, saying why in
+        'code', when nothing of it is staged ('nothing-staged'), when something else is staged
+        ('others-staged': ask the user, then include_others), when changes of it are not staged ('warnings':
+        ask, then yes), when the index changed since 'expect_index' ('index-changed'), and when lint or the
+        qualification tests of what is staged fail ('checks-failed').
+        """
+        request = {
+            **_subject(package, object, kind),
+            "message": message,
+            "author": git_identity.identity(bridge.root),
+            "include_others": include_others,
+            "yes": yes,
+            "skip_checks": skip_checks,
+        }
+        if expect_index:
+            request["expect_index"] = expect_index
+        return await run(ctx, "ops.rev.new", request)
+
+    @server.tool(title="What an object or a package depends on", annotations=_READS)
+    async def ops_deps_list(
+        ctx: Context,
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+        params: Parameters = None,
+    ) -> CallToolResult:
+        """List what a package depends on -- or what an object names and places: `pc ops deps list --json`.
+
+        A package: the dependencies it declares ('declared', each with what its declaration says and the commit
+        it is at), the packages its objects use without declaring them ('undeclared'), and its sub-packages. An
+        object: each object it names or places, with how ('placed', 'source (alias)', 'sketch', 'implements',
+        ...) and how many times. A package at a revision -- '//package@<state>' -- is asked as it was then.
+        Asking may download a dependency.
+        """
+        return await run(ctx, "ops.deps.list", {**_subject(package, object, kind), "params": _assignments(params)})
+
+    @server.tool(title="Declare a dependency", annotations=_WRITES)
+    async def ops_deps_add(
+        ctx: Context,
+        name: Annotated[str, Field(description="The name the package will know the dependency by.")],
+        location: Annotated[str, Field(description="Where it is: a path, a git URL or a tarball URL.")],
+        package: PackageName = None,
+        track: Annotated[
+            Optional[str], Field(description="The branch of a git dependency to track: its default one when left out.")
+        ] = None,
+    ) -> CallToolResult:
+        """Declare a dependency of a package: `pc ops deps add`. Ask the user first.
+
+        A git dependency is added tracking a branch, its 'revision:' pinned to the commit that branch is at now;
+        ops_deps_update moves the pin from then on.
+        """
+        request = {"package": package or ".", "name": name, "location": location}
+        if track:
+            request["track"] = track
+        return await run(ctx, "ops.deps.add", request)
+
+    @server.tool(title="Remove a dependency", annotations=_WRITES)
+    async def ops_deps_remove(
+        ctx: Context,
+        name: Annotated[str, Field(description="The dependency, by the name the package declares it under.")],
+        package: PackageName = None,
+    ) -> CallToolResult:
+        """Take a dependency out of a package's declaration: `pc ops deps remove`. Ask the user first.
+
+        Answers the objects of the package that still use it ('users'), which will not load until they use
+        something else.
+        """
+        return await run(ctx, "ops.deps.remove", {"package": package or ".", "name": name})
+
+    @server.tool(title="Move dependencies to their branches", annotations=_WRITES)
+    async def ops_deps_update(
+        ctx: Context,
+        package: PackageName = None,
+        names: Annotated[
+            Optional[List[str]], Field(description="Only these dependencies of the package: all of them when left out.")
+        ] = None,
+        all: Annotated[  # noqa: A002 -- the flag's own name, '--all'
+            bool, Field(description="Every tracked dependency of every package of the workspace ('--all').")
+        ] = False,
+    ) -> CallToolResult:
+        """Move tracked dependencies to the newest commit of their branches: `pc ops deps update`. Ask the user first.
+
+        Each git dependency with 'track:' gets its 'revision:' rewritten to the commit its branch is at now, and
+        every import is fetched again.
+        """
+        if all and (package or names):
+            # The workspace, or one package: an 'all' beside a narrower scope
+            # would widen what is written without anybody having asked for it.
+            return _refusal("'all' updates every package of the workspace: give it without 'package' and 'names'")
+        request = {"all": True} if all else {"package": package or "."}
+        if names:
+            request["names"] = list(names)
+        return await run(ctx, "ops.deps.update", request)
+
+    @server.tool(title="What uses an object or a package", annotations=_READS)
+    async def ops_used_by(
+        ctx: Context,
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
         load: Annotated[
             bool,
             Field(
                 description="Load every package of the workspace first -- those in this checkout, none it "
-                "downloads -- so that all of them are asked ('--load'). Without a revision only."
+                "downloads -- so that all of them are asked ('--load')."
             ),
         ] = False,
         params: Parameters = None,
     ) -> CallToolResult:
-        """List the loaded objects that use an object -- or anything in a package -- each with how many times.
+        """List what uses an object -- or a package: `pc ops used-by --json`.
 
-        `pc used-by --json`, or with a revision `pc revisions used-by --json`. An assembly that places a bolt four
-        times uses it four times. Only what is loaded is looked at, so an empty list is not "nothing uses it":
-        load asks for the workspace's packages to be loaded first.
+        An object: the loaded objects that refer to it, each with how and how many times (an assembly placing a
+        bolt four times uses it four times). A package: also the packages that declare it as a dependency, each
+        with the revision it pins and how far behind that is. A package at a revision -- '//package@<state>' --
+        is what uses it at that revision. Only what is loaded is looked at, so an empty list is not "nothing uses
+        it": load asks for the workspace's packages to be loaded first.
         """
-        assigned = _assignments(params)
-        if revision is not None:
-            request = {"package": package or ".", "object": object, "revision": revision, "params": assigned}
-            return await run(ctx, "revisions.used_by", request)
-        return await run(ctx, "usage.used_by", {**_subject(package, object, kind), "params": assigned, "load": load})
+        return await run(
+            ctx, "ops.used_by", {**_subject(package, object, kind), "params": _assignments(params), "load": load}
+        )
+
+    @server.tool(title="What a change reaches", annotations=_READS)
+    async def ops_impact(
+        ctx: Context,
+        object: SomeObjectName = None,
+        kind: Annotated[Optional[RevisedKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+        from_state: Annotated[
+            State, Field(description="The state the change is from ('--from'): HEAD when left out.")
+        ] = None,
+        to_state: Annotated[
+            State, Field(description="The state the change is to ('--to'): WORKTREE when left out.")
+        ] = None,
+        measure: Annotated[
+            bool, Field(description="Measure how much each changed part or assembly moved. Builds both states.")
+        ] = False,
+        test: Annotated[bool, Field(description="Run the qualification tests of every object reached.")] = False,
+        load: Annotated[bool, Field(description="Load every package of the workspace first ('--load').")] = False,
+    ) -> CallToolResult:
+        """Say what a change reaches, and what each object it reaches now risks: `pc ops impact --json`.
+
+        The objects that changed from 'from' to 'to' (HEAD to WORKTREE by default: everything not committed;
+        HEAD to STAGED is what is staged), then everything that uses them, each 'reached' as 'changed' or 'via' a
+        path, with findings: 'breaking' (a reference that no longer resolves, a parameter removed while passed),
+        'changed' (a shape that moved), 'verify' (requirements and tests to run again, drawings out of date),
+        'info' (prose alone). For an object, 'affected_by' is what it uses that changed. 'pinned' are the
+        packages pinning this one at an older revision, which the change does not reach until they update.
+        """
+        request = {**_subject(package, object, kind), "measure": measure, "test": test, "load": load}
+        if from_state:
+            request["from"] = from_state
+        if to_state:
+            request["to"] = to_state
+        return await run(ctx, "ops.impact", request)
 
     @server.tool(title="PartCAD version", annotations=_LOCAL)
     async def version(ctx: Context) -> CallToolResult:
@@ -1499,7 +1717,7 @@ def _kind_flag(kind: Optional[str]) -> dict:
 
 
 def _subject(package: Optional[str], object: Optional[str], kind: Optional[str]) -> dict:
-    """What `pc revisions` and `pc used-by` ask about: the object, or with none the package (see 'operations_args')."""
+    """What every `pc ops` command asks about: the object, or with none the package (see 'operations_args')."""
     if not object:
         return {"package": package or ".", "kind": "package"}
     return {"package": package, "object": object, **_kind(kind)}

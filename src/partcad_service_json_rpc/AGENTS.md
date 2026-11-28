@@ -240,15 +240,22 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
 `list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults|list`, `cam.route`, `filter.object`,
 `copy.object`, `test`, `info`, `activate`, and `rpc.discover`. These mirror no subcommand:
 
-* `revisions.list`, `revisions.compare`, `revisions.uses`, `revisions.used_by` and `usage.used_by`, behind the
-  Digital Thread's Operations tabs (`partcad/revisions.py`, `partcad/usage.py`). A revision is loaded into the
-  session's context as `<package>@<commit>` (see `partcad/package_versions.py`) and **stays there**: the context
-  is warm, so a second comparison with the same revision costs nothing, and two revisions of one package sit
-  side by side in it the way two packages do. The comparison is made here, as rows of a side-by-side view,
-  because the webview has no differ and should not ship one; each side is what `copy.object` would write
-  (`partcad/serialize.py`), or for a package its `partcad.yaml` as Jinja2 rendered it when it was read
-  (`ProjectLocal.rendered_config`), never a second rendering. `usage.used_by` and `revisions.used_by` look only
-  at what the context has loaded -- nothing is loaded or built to answer them.
+* `ops.views`, `ops.rev.list|diff|status|stage|new`, `ops.deps.list|add|remove|update`, `ops.used_by` and
+  `ops.impact` (`core/ops.py`) are every `pc ops` command and the Digital Thread's Operations tabs; which kinds of
+  subject each applies to is `partcad_utils/ops_views.py`, and a method refuses a kind it does not apply to in words
+  taken from there. A state is a revision, `STAGED` or `WORKTREE`, loaded into the session's context as
+  `<package>@<commit>` or `<package>@STAGED` (see `partcad/package_versions.py`), where a revision **stays**: the
+  context is warm, so a second comparison with the same revision costs nothing, and two revisions of one package sit
+  side by side in it the way two packages do; `STAGED` is read again whenever the index moves. The work is
+  `partcad/changes.py` (what changed between two states, object by object), `partcad/revisions.py`,
+  `partcad/working_copy.py` (status, staging, new revisions), `partcad/usage.py` and `partcad/impact.py`. A
+  comparison is made here, as rows of a side-by-side view, because the webview has no differ and should not ship
+  one; each side is what `copy.object` would write (`partcad/serialize.py`), or for a package its `partcad.yaml` as
+  Jinja2 rendered it when it was read (`ProjectLocal.rendered_config`), never a second rendering. `ops.used_by` and
+  `ops.impact` look only at what the context has loaded -- nothing is loaded or built to answer them unless `load`
+  asks for the workspace. `ops.rev.new` commits with the author the client sends (a daemon may be somebody
+  else's), runs lint and the qualification tests of what is staged first, and refuses with `data.code` saying
+  what the client can ask the user to agree to.
 * `copy.object` is `pc copy`, a daemon method for the reason `filter.object` is one: it writes a declaration.
   It reloads the package it wrote into before answering, because a stat may not show the write.
 * `requirements.check` with `kind: package` is a package's own `requirements:`, the subset an object's has that a

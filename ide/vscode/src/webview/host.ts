@@ -27,6 +27,7 @@ import {
     AddCommentMessage,
     AttachFilesMessage,
     CancelTabMessage,
+    CopyTextMessage,
     FetchCommentsMessage,
     FetchDetailsMessage,
     FetchFormatsMessage,
@@ -34,6 +35,7 @@ import {
     GeometryMissingMessage,
     LocateCommentMessage,
     OpenPackageMessage,
+    OpsWriteMessage,
     SaveCamMessage,
     EditRequirementMessage,
     SaveChoicesMessage,
@@ -88,7 +90,7 @@ export function showObject(message: ShowObjectMessage): void {
     vscode.postMessage(message);
 }
 
-/** Ask the host to list a package in the Package Explorer: a dependency the Revisions tab lists. */
+/** Ask the host to list a package in the Package Explorer: a dependency, or a package that depends on this one. */
 export function openPackage(name: string): void {
     const message: OpenPackageMessage = { type: 'openPackage', package: name };
     vscode.postMessage(message);
@@ -101,6 +103,17 @@ export function showSection(message: ShowSectionMessage): void {
 
 /** Ask the host to write the CAM tab's settings into the part's declaration ('cam.save'). */
 export function saveCam(message: SaveCamMessage): void {
+    vscode.postMessage(message);
+}
+
+/** Ask the host to change something from an Operations tab; it answers with 'opsWritten'. */
+export function writeOps(message: OpsWriteMessage): void {
+    vscode.postMessage(message);
+}
+
+/** Ask the host to put text on the clipboard: the advice the Revisions tab hands an agent. */
+export function copyText(text: string): void {
+    const message: CopyTextMessage = { type: 'copyText', text };
     vscode.postMessage(message);
 }
 

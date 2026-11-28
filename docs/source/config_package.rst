@@ -158,8 +158,8 @@ Besides the package properties and, optionally, a list of imported dependencies,
           path: <(local only) relative path to the package>
           url: <(git|tar only) URL of the package>
           relPath: <(git|tar only) relative path within the repository>
-          track: <(git only) the branch to follow; "pc update" moves "revision" to where it is>
-          revision: <(git only) the commit to import, written by "pc update"; see "Pinning git dependencies">
+          track: <(git only) the branch to follow; "pc ops deps update --all" moves "revision" to where it is>
+          revision: <(git only) the commit to import, written by "pc ops deps update --all"; see "Pinning git dependencies">
           plugin: <(external only) reference to the repository plugin that serves this package>
           subfolder: <(external only) location within the repository, for hierarchies>
           includePaths: <(optional) Jinja2 include path>
@@ -430,7 +430,7 @@ Here are some examples of a dependency declaration in ``partcad.yaml``:
 |                    |         url: https://github.com/partcad/partcad                                                       |
 |                    |         relPath: examples  # where to "cd"                                                            |
 |                    |         track: devel       # the branch to follow                                                     |
-|                    |         revision: c6b5320d44cdb66269270319a5cd263246cd4429  # written by `pc update`                  |
+|                    |         revision: c6b5320d44cdb66269270319a5cd263246cd4429  # `pc ops deps update`                    |
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | Hosted tar ball    | .. code-block:: yaml                                                                                  |
 | :raw-html:`<br />` |                                                                                                       |
@@ -458,7 +458,7 @@ Pinning git dependencies
 ------------------------
 
 A ``git`` dependency says which branch it follows with ``track:``, and which commit of it the package is built
-against with ``revision:``. ``pc update`` is what connects the two: it asks the repository where the tracked branch
+against with ``revision:``. ``pc ops deps update --all`` is what connects the two: it asks the repository where the tracked branch
 is now, and writes that commit into ``revision:`` -- in your ``partcad.yaml``.
 
 .. code-block:: yaml
@@ -468,38 +468,38 @@ is now, and writes that commit into ``revision:`` -- in your ``partcad.yaml``.
       type: git
       url: https://github.com/partcad/partcad-index.git
       track: main
-      revision: 8c1517c6a65e0316910f5caff64291a56c7fa0c2  # written by `pc update`
+      revision: 8c1517c6a65e0316910f5caff64291a56c7fa0c2  # written by `pc ops deps update --all`
 
-This is the recommended way to declare every ``git`` dependency, and it is what ``pc init`` and ``pc add dep``
+This is the recommended way to declare every ``git`` dependency, and it is what ``pc init`` and ``pc ops deps add``
 write for you:
 
 .. code-block:: shell
 
-  pc add dep sim-mujoco https://github.com/partcad/partcad-sim-mujoco.git   # tracks the default branch, pinned
-  pc add dep pub https://github.com/partcad/partcad-index.git --track main  # tracks the branch you name
-  pc update                                                                # later: move every pin to its branch
+  pc ops deps add sim-mujoco https://github.com/partcad/partcad-sim-mujoco.git    # tracks the default branch, pinned
+  pc ops deps add pub https://github.com/partcad/partcad-index.git --track main   # tracks the branch you name
+  pc ops deps update --all                                                         # later: move every pin to its branch
 
 * **Loading a package never moves a dependency.** A ``git`` dependency is downloaded the first time a package
   needs it and is used exactly as downloaded from then on. PartCAD does not check again whether its branch has
   moved -- not the next day, not ever -- so a package builds the same way until you decide otherwise.
-* ``pc update`` **is how you decide otherwise.** It moves every tracked dependency of your workspace -- the root
+* ``pc ops deps update --all`` **is how you decide otherwise.** It moves every tracked dependency of your workspace -- the root
   package and the ``local`` packages under it -- to the newest commit of its branch, then downloads what the new
   pins name. What changed is a diff in ``partcad.yaml``: review it, commit it, revert it; and every other checkout
   of your package builds against the same commits as soon as it has that commit. Running it again when nothing
-  has moved changes nothing. On disk a tracked dependency is one copy per branch, which ``pc update`` moves from
+  has moved changes nothing. On disk a tracked dependency is one copy per branch, which ``pc ops deps update --all`` moves from
   commit to commit rather than adding a copy for every commit it has been pinned to -- unless another workspace
   open at the same time is built from that copy at another commit, in which case the new pin gets a copy of its
   own and the other workspace's is left where it is.
 * A dependency with ``track:`` and no ``revision:`` yet is downloaded at the newest commit of that branch the first
-  time it is needed, and stays there until ``pc update`` pins it.
-* ``pc update`` never edits a package it imported. The pins in an imported package are its maintainers' to move,
-  and they move for you when you ``pc update`` to a release of that package in which they moved them.
+  time it is needed, and stays there until ``pc ops deps update --all`` pins it.
+* ``pc ops deps update --all`` never edits a package it imported. The pins in an imported package are its maintainers' to move,
+  and they move for you when you ``pc ops deps update --all`` to a release of that package in which they moved them.
 * A dependency without ``track:`` works as it always did: ``revision:`` names a commit, a tag or a branch, and with
   no ``revision:`` the repository's default branch is used. A branch named that way is not moved by loading
-  either. ``pc update`` still fetches its newest commit, but has nowhere to write it down, so your machine and the
+  either. ``pc ops deps update --all`` still fetches its newest commit, but has nowhere to write it down, so your machine and the
   next one can be building against different commits without anything saying so -- add ``track:`` to fix that.
 
-``pc update`` only rewrites a ``revision:`` it can find unambiguously: one plain line in the dependency's own block
+``pc ops deps update --all`` only rewrites a ``revision:`` it can find unambiguously: one plain line in the dependency's own block
 under the top-level ``dependencies:`` section, or a new line right under its ``track:``. Comments, the order of the
 keys and any Jinja2 around the entry are left exactly as they were. A declaration it cannot edit that way -- one
 written in flow style, one a template produces twice, a revision that is itself a template expression -- is
@@ -516,7 +516,7 @@ changed by it.
 
 That is for trying a package out against whatever its dependencies are about to release. It is not a way to keep a
 package up to date: what it builds against is then a matter of when you happened to run it, and nothing in the
-package records which commits those were. ``pc update`` is.
+package records which commits those were. ``pc ops deps update --all`` is.
 
 How to run a library of packages that other packages pin -- branches, releases, and making a breaking change -- is
 in :doc:`/digital_thread/change_management`.
