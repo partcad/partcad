@@ -1333,3 +1333,59 @@ def test_the_revision_said_to_be_made_is_the_one_git_made_whatever_the_branch_do
 )
 def test_what_git_commit_says_it_made_is_read_whatever_the_branch_or_abbreviation(said, named):
     assert named in working_copy._MADE.findall(said)
+
+
+@pytest.mark.skipif(shutil.which("git") is None or sys.platform == "win32", reason="needs git and a POSIX hook")
+def test_a_revision_whose_message_a_hook_rewrote_is_still_the_one_said_made(workspace, ctx, monkeypatch):
+    root, first = workspace
+    monkeypatch.setattr(working_copy, "_git_executable", lambda: shutil.which("git"))
+    _git(root, "config", "user.name", "Test")
+    _git(root, "config", "user.email", "test@example.com")
+    hook = root / ".git" / "hooks" / "commit-msg"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/bin/sh\nprintf 'Rewritten by a hook\\n' > \"$1\"\n")
+    hook.chmod(0o755)
+    _lib(root, desc="Approved")
+    _stage(root, "lib/partcad.yaml")
+    real_git = working_copy._git
+    repo = pygit2.Repository(str(root))
+    branch = working_copy._head_ref(repo)
+
+    def git_then_a_sibling(git, workdir, env, *args, **kwargs):
+        said = real_git(git, workdir, env, *args, **kwargs)
+        if "commit" in args:
+            signature = pygit2.Signature("Other", "other@example.com")
+            parent = repo[first].peel(pygit2.Commit)
+            sibling = repo.create_commit(None, signature, signature, "Sibling", parent.tree.id, [parent.id])
+            repo.references[branch].set_target(sibling)
+        return said
+
+    monkeypatch.setattr(working_copy, "_git", git_then_a_sibling)
+
+    with pytest.raises(working_copy.Refused) as refused:
+        working_copy.new_revision(
+            ctx, ctx.get_project("//lib"), "Approved", author={"name": "Ann", "email": "ann@example.com"}, accept=True
+        )
+
+    made = refused.value.status["made"]
+    assert repo[made].message.strip() == "Rewritten by a hook" and [str(p) for p in repo[made].parent_ids] == [first]
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_a_revision_git_does_not_name_is_not_guessed_from_head(workspace, monkeypatch):
+    root, _ = workspace
+    monkeypatch.setattr(working_copy, "_git_executable", lambda: shutil.which("git"))
+    _git(root, "config", "user.name", "Test")
+    _git(root, "config", "user.email", "test@example.com")
+    _lib(root, desc="Approved")
+    _stage(root, "lib/partcad.yaml")
+    repository = package_versions.repository_of(str(root))
+    real_git = working_copy._git
+    monkeypatch.setattr(working_copy, "_git", lambda *args, **kwargs: real_git(*args, **kwargs) and "")
+
+    with pytest.raises(working_copy.Refused) as refused:
+        working_copy.commit(
+            repository, "Approved\n", {"name": "A", "email": "a@example.com"}, package_versions.index_tree(repository)
+        )
+
+    assert refused.value.code == "unidentified"

@@ -406,7 +406,8 @@ def rev_new(session, params):
     ('others-staged'), when changes of the subject are not staged or were
     changed again since and 'yes' does not agree to that ('warnings'), when the
     index is not the one 'expect_index' names, or moved while the checks ran
-    ('index-changed'), when HEAD moved meanwhile ('head-moved'), and when lint
+    ('index-changed'), when HEAD moved meanwhile ('head-moved'), when git did
+    not say which revision it made ('unidentified'), and when lint
     or the qualification tests of what is staged fail ('checks-failed'), which
     'skip_checks' does not run. 'author' ({'name', 'email'}) is who the client
     says the user is, and is required whole: the daemon's own git identity is

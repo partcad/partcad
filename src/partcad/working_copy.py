@@ -662,17 +662,22 @@ def check(result: dict, expect_index: typing.Optional[str], include_others: bool
         raise Refused("; ".join(pending), "warnings", result)
 
 
-def _said_made(repo, said: str, message: str) -> typing.Optional[str]:
-    """The commit 'git commit' said it made -- 'said' is what it printed -- of the ones it names, the one with 'message'."""
+def _said_made(repo, said: str) -> typing.Optional[str]:
+    """The commit 'git commit' said it made -- 'said' is what it printed -- or None where it named none.
+
+    Its own summary names it in full (it is run with core.abbrev=40), so an id
+    in full is taken before an abbreviated one, which a hook printing
+    something alike could have written; not by its message, which a
+    'commit-msg' hook may have rewritten.
+    """
     import pygit2
 
-    for found in _MADE.findall(said):
+    found = _MADE.findall(said)
+    for candidate in [each for each in found if len(each) in (40, 64)] + [each for each in found if len(each) < 40]:
         try:
-            commit = repo.revparse_single(found).peel(pygit2.Commit)
+            return str(repo.revparse_single(candidate).peel(pygit2.Commit).id)
         except (KeyError, ValueError, pygit2.GitError):
             continue
-        if commit.message.strip() == message.strip():
-            return str(commit.id)
     return None
 
 
@@ -832,9 +837,15 @@ def commit(
         import pygit2
 
         repo = repository.repo
-        # The revision git says it made, not whatever HEAD is by now: the one
-        # it names with this message, a hook printing something alike aside.
-        made = _said_made(repo, said, message) or str(repo.head.target)
+        # The revision git says it made, not whatever HEAD is by now -- which
+        # may be somebody else's, so it is never taken for it.
+        made = _said_made(repo, said)
+        if made is None:
+            raise Refused(
+                "git made a revision, it seems, without saying which: look at the history before making it again",
+                "unidentified",
+                {"made": None},
+            )
         # git has no way to be told which commit to go on top of: HEAD moved
         # between the check above and git reading it, or the branch moved off
         # the revision since, is found here, and said, with the revision made.
