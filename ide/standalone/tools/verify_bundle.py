@@ -67,6 +67,33 @@ def installed_extension_entries(extensions_dir: pathlib.Path) -> dict[str, tuple
     return found
 
 
+def extensions_in_more_than_one_directory(extensions_dir: pathlib.Path) -> dict[str, list[str]]:
+    """Map `publisher.name` (lowercased) to its directories, for every extension found in more than one.
+
+    `installed_extension_entries` keeps one directory per extension, the last in
+    sorted order, so a second version of an extension beside the first is
+    invisible to every check built on it -- and `2026.4.0` sorts after
+    `2026.10.0`, which is how a held version passed with the one it was held
+    against shipping beside it.
+    """
+    directories: dict[str, list[str]] = {}
+    if not extensions_dir.is_dir():
+        return {}
+    for entry in sorted(extensions_dir.iterdir()):
+        manifest = entry / "package.json"
+        if not manifest.is_file():
+            continue
+        try:
+            package = jsonc.load(manifest)
+        except (ValueError, UnicodeDecodeError) as error:
+            raise SystemExit(f"error: {manifest} is not readable: {error}")
+        publisher = package.get("publisher")
+        name = package.get("name")
+        if publisher and name:
+            directories.setdefault(f"{publisher}.{name}".lower(), []).append(entry.name)
+    return {identifier: names for identifier, names in directories.items() if len(names) > 1}
+
+
 def installed_extensions(extensions_dir: pathlib.Path) -> dict[str, dict]:
     """Map `publisher.name` (lowercased) to its manifest, for every extension found."""
     return {identifier: package for identifier, (_, package) in installed_extension_entries(extensions_dir).items()}
@@ -353,6 +380,11 @@ def main(argv: list[str] | None = None) -> int:
     extensions_dir = args.resources / "app" / "extensions"
     present = installed_extensions(extensions_dir)
     plan = json.loads(args.plan.read_text(encoding="utf-8"))
+
+    # The editor loads one of them and the installer ships all of them, so
+    # whichever version is checked below, the other one is in the IDE as well.
+    for identifier, names in extensions_in_more_than_one_directory(extensions_dir).items():
+        problems.append(f"extension {identifier} is in the IDE more than once: {', '.join(names)}")
 
     for entry in plan["install"]:
         identifier = entry["id"].lower()
