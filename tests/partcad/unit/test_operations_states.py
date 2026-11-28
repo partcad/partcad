@@ -830,6 +830,43 @@ def test_impact_of_what_is_staged_reaches_what_uses_it_as_staged(workspace, ctx)
     assert any(finding["severity"] == impact.BREAKING for finding in bolt["findings"])
 
 
+def test_a_measurement_or_a_test_that_fails_is_reported_on_its_finding(workspace, ctx):
+    root, _ = workspace
+    (root / "lib" / "bolt.py").write_text("x = 2\n")
+    usage.load_workspace(ctx)
+
+    def fail(row):
+        raise RuntimeError("no sandbox for %s" % row["name"])
+
+    found = impact.impact(ctx, ctx.get_project("//lib"), measure=fail, test=fail)
+
+    rows = {row["object"]: row for row in found["affects"]}
+    measured = next(f for f in rows["//lib:bolt"]["findings"] if f["analyzer"] == "geometry")
+    tested = next(f for f in rows["//app:long_bolt"]["findings"] if f["analyzer"] == "requirements")
+    assert measured["measured"] == {"error": "no sandbox for bolt"}
+    assert tested["tested"] == {"error": "no sandbox for long_bolt"}
+
+
+def test_a_port_removed_from_an_interface_or_moved_is_a_finding(workspace, ctx):
+    root, _ = workspace
+    up = [[0, 0, 0], [0, 0, 1], 0]
+    config = yaml.safe_load((root / "lib" / "partcad.yaml").read_text())
+    config["interfaces"] = {"socket": {"ports": {"a": {"location": up}, "b": {"location": up}}}}
+    _write(root / "lib" / "partcad.yaml", config)
+    _commit(root, "socket")
+    config["interfaces"]["socket"]["ports"] = {"b": {"location": [[1, 0, 0], [0, 0, 1], 0]}}
+    _write(root / "lib" / "partcad.yaml", config)
+    ctx.reload_packages(["//lib"])
+
+    found = impact.impact(ctx, ctx.get_project("//lib"), "interface", "socket")
+
+    (row,) = found["affects"]
+    ports = [f["summary"] for f in row["findings"] if f["analyzer"] == "interfaces"]
+    # Nothing implements it, so a port gone breaks nothing yet.
+    assert ports == ["port 'a' removed", "port 'b' moved, and every mate on it"]
+    assert [f["severity"] for f in row["findings"] if f["analyzer"] == "interfaces"] == [impact.CHANGED] * 2
+
+
 def test_a_change_of_prose_does_not_change_the_shape_of_what_uses_it(workspace, ctx):
     root, _ = workspace
     _lib(root, desc="Reworded")

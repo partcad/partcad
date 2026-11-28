@@ -509,3 +509,41 @@ def test_every_command_naming_an_object_takes_its_parameter_values(monkeypatch, 
     assert called == method
     assert params["object"] == "bolt"
     assert params["params"] == ["length=10", "include=UP,DOWN"]
+
+
+def test_the_printers_print_every_part_of_an_answer(capsys):
+    from partcad_cli.click import operations_args
+
+    operations_args.print_revisions({"package": "//", "object": "//:cube", "published": True, "revisions": []})
+    operations_args.print_sources([{"how": "modified", "path": "cube.py"}])
+    operations_args.print_status({**STATUS, "partial": ["bracket"], "others_staged": [{"object": "//motors:shaft"}]})
+    operations_args.print_object_dependencies({"object": "//:cube", "dependencies": []})
+    operations_args.print_impact(
+        {
+            "package": "//",
+            "object": "//:cube",
+            "from": "HEAD",
+            "to": "WORKTREE",
+            "changed": [],
+            "affects": [],
+            "affected_by": [{"object": "//lib:bolt", "path": ["//lib:bolt", "//:cube"]}],
+            "pins": [{"name": "std", "how": "moved", "from": "a" * 40, "to": None}],
+        }
+    )
+
+    printed = capsys.readouterr().out
+    assert "No revision changed //:cube" in printed
+    assert "Files it is built from:\n  modified   cube.py" in printed
+    assert "Changed again since they were staged: :bracket" in printed
+    assert "  staged      //motors:shaft" in printed
+    assert "//:cube names no other object" in printed
+    assert "Affected by:" in printed and "via //lib:bolt -> //:cube" in printed
+    assert "Dependencies whose declaration changed:" in printed and "moved  aaaaaaaa -> -" in printed
+
+
+def test_a_command_the_daemon_gave_no_answer_to_says_so(monkeypatch):
+    _record(monkeypatch, "ops.impact", None)
+
+    result = _invoke("ops", "impact")
+
+    assert result.exit_code != 0 and "The daemon gave no answer" in result.output

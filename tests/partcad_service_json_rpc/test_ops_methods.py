@@ -13,6 +13,8 @@ what they refuse and with which code, and that the checks before a new
 revision run on what is staged.
 """
 
+import types
+
 import pygit2
 import pytest
 import yaml
@@ -281,3 +283,138 @@ def test_a_first_commit_is_compared_with_the_nothing_before_it(session):
 def test_a_page_of_revisions_after_a_commit_not_in_the_history_is_refused(session):
     with pytest.raises(JsonRpcError):
         ops.rev_list(session, {"package": "//", "after": "f" * 40})
+
+
+def test_impact_measures_each_changed_shape_and_runs_the_tests_of_what_it_reaches(session, monkeypatch):
+    from partcad import compare as pc_compare
+    from partcad.qual import report
+
+    compared = []
+
+    async def compare_async(ctx, reference, current, limits=None, worst=0):
+        # What 'pc compare' would say, without building either shape.
+        compared.append((reference.project_name, current.project_name))
+        return {"volume": 0.5, "mass": None, "passed": False, "worst": 1}
+
+    async def run_async(ctx, shape, verify=False, subtypes=None):
+        return [types.SimpleNamespace(name="Big enough", status=report.FAILED)]
+
+    monkeypatch.setattr(pc_compare, "compare_async", compare_async)
+    monkeypatch.setattr(report, "run_async", run_async)
+    cube = {"type": "basic", "cuboid": 3, "requirements": [{"name": "Big enough"}]}
+    _write(session.root / "partcad.yaml", {"parts": {"cube": cube}})
+    session.partcad_ctx.reload_packages(["//"])
+
+    found = ops.impact(session, {"package": "//", "measure": True, "test": True})
+
+    (row,) = found["affects"]
+    findings = {finding["analyzer"]: finding for finding in row["findings"]}
+    # Only what a comparison says of how far it moved; the rest of its report stays in 'pc compare'.
+    assert findings["geometry"]["measured"] == {"volume": 0.5, "mass": None, "passed": False}
+    assert findings["requirements"]["tested"] == {"passed": False, "failed": ["Big enough"]}
+    # HEAD is loaded under the commit it names.
+    assert compared == [("//@" + session.first, "//")]
+
+
+def test_what_cannot_be_measured_or_tested_says_why_rather_than_failing():
+    class Nothing:
+        """A context in which nothing loads."""
+
+        def _get(self, path):
+            return None
+
+        get_part = get_assembly = get_scene = get_sketch = _get
+
+    measure = ops._measure(Nothing(), "HEAD", "WORKTREE")
+    test = ops._test(Nothing(), "WORKTREE")
+    outside = {"package": "//elsewhere", "name": "bolt", "kind": "part"}
+    outside["states"] = {"from": "WORKTREE", "to": "WORKTREE", "outside": True}
+    gone = {"package": "//", "name": "cube", "kind": "assembly"}
+
+    assert "not in the repository compared" in measure(outside)["skipped"]
+    assert measure(gone) == {"error": "not there at HEAD"}
+    assert test({"package": "//", "name": "port", "kind": "interface"}) == {"skipped": "not tested"}
+    assert test(gone) == {"error": "could not be loaded"}
+
+
+@pytest.mark.parametrize(
+    "operation, params, said",
+    [
+        (ops.rev_list, {"limit": "many"}, "'limit' is a number, not 'many'"),
+        (ops.rev_list, {"limit": 0}, "'limit' is at least 1"),
+        (ops.rev_diff, {"from": 3}, "'from' is a revision, STAGED or WORKTREE, not 3"),
+        (ops.rev_diff, {"to": "v1:2"}, "'v1:2' is not a revision: it contains ':'"),
+        (ops.deps_add, {"location": "lib"}, "No dependency is named"),
+        (ops.deps_add, {"name": "std"}, "No location is given for std"),
+        (ops.deps_update, {"names": "std"}, "'names' is a list of dependency names"),
+    ],
+)
+def test_a_parameter_that_cannot_be_what_it_names_is_refused_in_words_that_say_so(session, operation, params, said):
+    with pytest.raises(JsonRpcError) as refused:
+        operation(session, {"package": "//", **params})
+
+    assert str(refused.value) == said
+
+
+def test_a_dependency_the_package_did_not_take_or_give_up_is_refused(session, monkeypatch):
+    from partcad.project import Project
+
+    config = yaml.safe_load((session.root / "partcad.yaml").read_text())
+    config["dependencies"] = {"near": {"type": "local", "path": "lib"}}
+    _write(session.root / "partcad.yaml", config)
+    session.partcad_ctx.reload_packages(["//"])
+    monkeypatch.setattr(Project, "add_import", lambda self, name, location, track=None: False)
+    monkeypatch.setattr(Project, "remove_import", lambda self, name: False)
+
+    with pytest.raises(JsonRpcError) as added:
+        ops.deps_add(session, {"package": "//", "name": "std", "location": "lib"})
+    with pytest.raises(JsonRpcError) as removed:
+        ops.deps_remove(session, {"package": "//", "name": "near"})
+
+    assert str(added.value) == "std was not added to //"
+    assert str(removed.value) == "near was not removed from //"
+
+
+def test_an_update_that_failed_says_how_many_did(session, monkeypatch):
+    stats = {"pinned": 1, "current": 0, "failed": 2}
+    monkeypatch.setattr(session.partcad.actions.package, "update", lambda ctx, package=None, names=None: dict(stats))
+
+    answer = ops.deps_update(session, {"package": "//", "names": ["near"]})
+
+    assert answer == {**stats, "package": "//"}
+
+
+def test_the_summary_of_an_object_counts_its_own_revisions_dependencies_and_users(session):
+    summary = ops.views(session, {"package": "//", "object": "cube", "summary": True})["summary"]
+
+    assert summary["revisions"]["count"] == 1
+    assert summary["dependencies"] == {"objects": 0}
+    assert summary["usedBy"] == {"objects": 0}
+
+
+def test_staging_what_has_not_changed_stages_nothing(session):
+    staged = ops.rev_stage(session, {"package": "//"})
+
+    assert staged["staged"] == [] and staged["status"]["staged"] == []
+
+
+def test_the_checks_of_a_new_revision_test_what_was_added_and_not_what_was_removed(session, monkeypatch):
+    from partcad.qual import report
+
+    tested = []
+
+    async def run_async(ctx, shape, verify=False, subtypes=None):
+        tested.append(shape.name)
+        return []
+
+    monkeypatch.setattr(report, "run_async", run_async)
+    _write(session.root / "partcad.yaml", {"parts": {"block": {"type": "basic", "cuboid": 2}}})
+    _stage(session.root, "partcad.yaml")
+
+    made = ops.rev_new(
+        session,
+        {"package": "//", "message": "Block", "author": {"name": "Ann", "email": "ann@example.com"}},
+    )
+
+    assert tested == ["block"]
+    assert [check["name"] for check in made["checks"]] == ["lint", "qual test"]
