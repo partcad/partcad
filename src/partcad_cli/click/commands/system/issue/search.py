@@ -22,6 +22,7 @@ def cli(cli_ctx, signature, error, traceback_path) -> None:
         raise click.UsageError("Give --signature, --error or --traceback")
     if not signature:
         signature = issues.signature(error, traceback)
+    error = error or issues.error_line(traceback)
     try:
         emit(issues.search(signature, error, workspace(cli_ctx)))
     except issues.Unavailable as e:

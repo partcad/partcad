@@ -6,6 +6,8 @@
 
 import json
 import os
+import subprocess
+import urllib.error
 import urllib.parse
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,6 +30,9 @@ KeyError: 'width'
 """
 
 ADMIN, CLAIRBEE = 188809786, 7663232
+
+
+TOKEN = issues._token
 
 
 @pytest.fixture(autouse=True)
@@ -95,10 +100,35 @@ def test_what_differs_between_runs_is_normalized_away():
 
 def test_the_users_paths_addresses_and_secrets_are_scrubbed():
     home = os.path.expanduser("~")
-    text = "%s/w/partcad.yaml %s/x by a@b.co token=ghp_%s password: hunter2" % (home, home, "a" * 30)
-    assert issues.scrub(text, os.path.join(home, "w")) == (
-        "<workspace>/partcad.yaml ~/x by <email> token=<redacted> password: <redacted>"
+    workspace = os.path.join(home, "w")
+    text = "%s %s by a@b.co token=ghp_%s password: hunter2" % (
+        os.path.join(workspace, "partcad.yaml"),
+        os.path.join(home, "x"),
+        "a" * 30,
     )
+    assert issues.scrub(
+        text, workspace
+    ) == "<workspace>%spartcad.yaml ~%sx by <email> token=<redacted> password: <redacted>" % (
+        os.sep,
+        os.sep,
+    )
+
+
+@pytest.mark.parametrize(
+    "text, scrubbed",
+    [
+        ("Authorization: Bearer abc.def", "Authorization: Bearer <redacted>"),
+        ('{"password": "hunter2", "api_key": \'k1\'}', '{"password": "<redacted>", "api_key": \'<redacted>\'}'),
+        ("curl -H 'authorization: token abc'", "curl -H 'authorization: token <redacted>'"),
+    ],
+)
+def test_a_credential_is_scrubbed_however_it_is_written(text, scrubbed):
+    assert issues.scrub(text) == scrubbed
+
+
+def test_a_path_is_scrubbed_whichever_separators_spell_it(monkeypatch):
+    monkeypatch.setattr(issues.os.path, "expanduser", lambda path: "C:\\Users\\b")
+    assert issues.scrub("C:\\Users\\b/w/x and C:/Users/b\\y; C:\\Users\\bob") == "~/w/x and ~\\y; C:\\Users\\bob"
 
 
 def test_untrusted_text_loses_what_a_reader_would_not_see():
@@ -237,3 +267,202 @@ def test_pc_system_issue_record_refuses_what_is_not_a_signature():
     from partcad_cli.click.commands.system.issue import record
 
     assert CliRunner().invoke(record.cli, ["nope", "1"]).exit_code != 0
+
+
+# --- GitHub, for real --------------------------------------------------------
+
+
+class Response:
+    def __init__(self, data):
+        self.data = data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return json.dumps(self.data).encode("utf-8")
+
+
+def test_github_is_asked_as_partcad_with_the_users_token(monkeypatch):
+    sent = []
+    monkeypatch.setattr(
+        issues.urllib.request, "urlopen", lambda request, timeout: sent.append(request) or Response({"a": 1})
+    )
+    assert issues._get("search/issues", {"q": "x y"}, token="t") == {"a": 1}
+    assert sent[0].full_url == "https://api.github.com/search/issues?q=x+y"
+    assert sent[0].get_header("Authorization") == "Bearer t"
+    assert sent[0].get_header("User-agent").startswith("partcad/")
+
+
+@pytest.mark.parametrize(
+    "error, said",
+    [
+        (urllib.error.HTTPError("u", 403, "rate limited", {}, None), "GitHub answered 403"),
+        (urllib.error.URLError("no route"), "GitHub could not be reached"),
+    ],
+)
+def test_github_failing_is_unavailable(monkeypatch, error, said):
+    def failing(request, timeout):
+        raise error
+
+    monkeypatch.setattr(issues.urllib.request, "urlopen", failing)
+    with pytest.raises(issues.Unavailable, match=said):
+        issues._get("user")
+
+
+def test_the_token_is_the_environments_then_ghs(monkeypatch):
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setenv("GITHUB_TOKEN", "from-env")
+    assert TOKEN() == "from-env"
+    monkeypatch.delenv("GITHUB_TOKEN")
+    monkeypatch.setattr(issues.shutil, "which", lambda name: "/bin/gh")
+    ran = subprocess.CompletedProcess([], 0, "from-gh\n", "")
+    monkeypatch.setattr(issues.subprocess, "run", lambda *args, **kwargs: ran)
+    assert TOKEN() == "from-gh"
+    ran.returncode = 1
+    assert TOKEN() is None
+
+    def missing(*args, **kwargs):
+        raise OSError("gone")
+
+    monkeypatch.setattr(issues.subprocess, "run", missing)
+    assert TOKEN() is None
+    monkeypatch.setattr(issues.shutil, "which", lambda name: None)
+    assert TOKEN() is None
+
+
+def test_with_a_token_the_search_says_whether_the_user_upvoted(monkeypatch):
+    github = FakeGitHub(an_issue(comments=0), [])
+
+    def answer(path, params=None, token=None):
+        assert token == "t"
+        if path == "user":
+            return {"login": "ann"}
+        if path.endswith("/reactions"):
+            return [{"user": {"login": "bob"}}, {"user": {"login": "ann"}}]
+        return github(path, params, token)
+
+    monkeypatch.setattr(issues, "_token", lambda: "t")
+    monkeypatch.setattr(issues, "_get", answer)
+    assert issues.search("pc-sig:000000000000")["issues"][0]["upvoted_by_you"] is True
+
+
+def test_a_token_github_refuses_is_not_used(monkeypatch):
+    tokens = []
+
+    def answer(path, params=None, token=None):
+        tokens.append(token)
+        if path == "user":
+            raise issues.Unavailable("GitHub answered 401 to user")
+        return {"items": [{"number": 1, "pull_request": {}}]}
+
+    monkeypatch.setattr(issues, "_token", lambda: "bad")
+    monkeypatch.setattr(issues, "_get", answer)
+    assert issues.search("pc-sig:000000000000")["issues"] == []
+    assert tokens == ["bad", None]
+
+
+@pytest.mark.parametrize("latest, shown", [("99.0.0", "99.0.0"), ("0.0.1", None), (RuntimeError("offline"), None)])
+def test_a_closed_issue_comes_with_a_newer_release_if_there_is_one(monkeypatch, latest, shown):
+    def latest_version():
+        if isinstance(latest, Exception):
+            raise latest
+        return latest
+
+    monkeypatch.setattr(issues, "_get", FakeGitHub(an_issue(state="closed", comments=0), []))
+    monkeypatch.setattr(selfupdate, "latest_version", latest_version)
+    assert issues.search("pc-sig:000000000000").get("newer_release") == shown
+
+
+def test_a_long_traceback_keeps_its_end_and_a_reported_defect_says_so():
+    traceback = "\n".join("line %d" % n for n in range(100)) + "\nKeyError: 'w'"
+    signature = issues.signature("", traceback)
+    issues.record(signature, 3)
+    drafted = issues.draft("KeyError: 'w'", traceback)
+    assert "line 99" in drafted["body"] and "line 10\n" not in drafted["body"]
+    assert drafted["reported_here"]["issue"] == 3
+
+
+def test_a_ledger_that_is_not_one_is_empty():
+    os.makedirs(os.path.dirname(issues.ledger_path()))
+    with open(issues.ledger_path(), "w", encoding="utf-8") as f:
+        f.write("[]")
+    assert issues.recorded("pc-sig:000000000000") is None
+
+
+def test_pc_system_issue_search_works_the_signature_out(tmp_path, monkeypatch):
+    from partcad_cli.click.commands.system.issue import search
+
+    asked = []
+    monkeypatch.setattr(issues, "search", lambda *args: asked.append(args) or {"issues": []})
+    (tmp_path / "tb.txt").write_text(TRACEBACK % {"root": "/x", "line": 1})
+    obj = SimpleNamespace(path=str(tmp_path))
+    result = CliRunner().invoke(search.cli, ["--error", "e", "--traceback", str(tmp_path / "tb.txt")], obj=obj)
+    assert result.exit_code == 0, result.output
+    assert asked == [(issues.signature("e", TRACEBACK % {"root": "/x", "line": 1}), "e", str(tmp_path))]
+    result = CliRunner().invoke(search.cli, ["--traceback", "-"], input="KeyError: 'w'", obj=obj)
+    assert asked[-1][0] == issues.signature("KeyError: 'w'")
+    assert CliRunner().invoke(search.cli, [], obj=obj).exit_code == 2
+
+    def unavailable(*args):
+        raise issues.Unavailable("PartCAD is offline")
+
+    monkeypatch.setattr(issues, "search", unavailable)
+    result = CliRunner().invoke(search.cli, ["--signature", "pc-sig:000000000000"], obj=obj)
+    assert result.exit_code == 1 and "PartCAD is offline" in result.output
+
+
+def test_pc_system_issue_draft_and_record_say_what_stops_them(tmp_path, monkeypatch):
+    from partcad_cli.click.commands.system.issue import draft, record
+
+    result = CliRunner().invoke(record.cli, ["pc-sig:0123456789ab", "4", "--upvoted"])
+    assert json.loads(result.output)["action"] == "upvoted"
+    monkeypatch.setattr(user_config, "agent_issues", "off")
+    result = CliRunner().invoke(draft.cli, ["--error", "x"], obj=SimpleNamespace(path=None))
+    assert result.exit_code == 1 and "'agentIssues' is 'off'" in result.output
+
+
+def test_every_page_of_comments_and_reactions_is_read(monkeypatch):
+    pages = {
+        "comments": [[comment(2, "x", "a")] * 100, [comment(CLAIRBEE, "clairbee", "**Workaround:** b")]],
+        "reactions": [[{"user": {"login": "bob"}}] * 100] * issues.PAGES,
+    }
+
+    def answer(path, params=None, token=None):
+        if path == "user":
+            return {"login": "ann"}
+        if path.startswith("search/"):
+            return {"items": [an_issue()]}
+        listed = pages[path.rsplit("/", 1)[1]]
+        return listed[params["page"] - 1] if params["page"] <= len(listed) else []
+
+    monkeypatch.setattr(issues, "_token", lambda: "t")
+    monkeypatch.setattr(issues, "_get", answer)
+    [issue] = issues.search("pc-sig:000000000000")["issues"]
+    assert [c["author"] for c in issue["guidance"]["comments"]] == ["clairbee"]
+    assert issue["other_comments"]["count"] == 100
+    # Every page read, the user in none of them, and more beyond: not known.
+    assert issue["upvoted_by_you"] is None
+
+
+def test_a_traceback_alone_is_searched_for_by_its_error_too(tmp_path, monkeypatch):
+    from partcad_cli.click.commands.system.issue import search
+
+    asked = []
+    monkeypatch.setattr(issues, "search", lambda *args: asked.append(args) or {})
+    traceback = TRACEBACK % {"root": "/x", "line": 1}
+    (tmp_path / "tb.txt").write_text(traceback)
+    CliRunner().invoke(search.cli, ["--traceback", str(tmp_path / "tb.txt")], obj=SimpleNamespace(path=None))
+    assert asked[0][1] == "KeyError: 'width'" == issues.error_line(traceback)
+    assert issues.error_line("no exception here") is None
+
+
+def test_every_record_is_kept():
+    issues.record("pc-sig:000000000001", 1)
+    issues.record("pc-sig:000000000002", 2, "upvoted")
+    assert issues.recorded("pc-sig:000000000001")["issue"] == 1
+    assert issues.recorded("pc-sig:000000000002")["action"] == "upvoted"
+    assert not [name for name in os.listdir(os.path.dirname(issues.ledger_path())) if name.endswith(".tmp")]

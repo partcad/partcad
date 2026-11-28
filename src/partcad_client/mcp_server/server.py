@@ -1672,6 +1672,7 @@ def report(outcome: Outcome, failure: Optional[CallFailed] = None, content=()) -
 
 
 def _answer(body: dict) -> CallToolResult:
+    body = {"ok": True, **body}
     return CallToolResult(content=[TextContent(type="text", text=json.dumps(body, indent=2, default=str))])
 
 

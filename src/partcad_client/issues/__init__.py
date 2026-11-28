@@ -17,6 +17,7 @@ import re
 import shutil
 import string
 import subprocess
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -31,7 +32,10 @@ SEARCH_LIMIT = 5
 TITLE_LIMIT = 300
 BODY_LIMIT = 2000
 TRACEBACK_LINES = 25
+PAGE = 100
+PAGES = 10
 URL_LIMIT = 8000
+LOCK_TIMEOUT = 60
 
 
 class Unavailable(Exception):
@@ -111,8 +115,10 @@ def _raised(traceback: Optional[str]) -> tuple:
     return "", None
 
 
-def error_type(traceback: Optional[str]) -> str:
-    return _raised(traceback)[0]
+def error_line(traceback: Optional[str]) -> Optional[str]:
+    """The traceback's last line naming what was raised, if it has one."""
+    kind, raised = _raised(traceback)
+    return "%s: %s" % (kind, raised) if raised is not None else None
 
 
 def signature(message: Optional[str], traceback: Optional[str] = None) -> str:
@@ -129,38 +135,40 @@ def signature(message: Optional[str], traceback: Optional[str] = None) -> str:
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _SECRET = re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})\b")
 _ASSIGNED = re.compile(
-    r"(?i)\b(authorization|bearer|token|password|passwd|secret|api[_-]?key)(\s*[:=]\s*|\s+)([\"']?)[^\s\"',]+"
+    r"(?i)\b(authorization|bearer|token|password|passwd|secret|api[_-]?key)"
+    r"([\"']?\s*[:=]\s*|\s+)((?:bearer|basic|token)\s+)?([\"']?)[^\s\"',]+"
 )
 
 
 def _aliases(workspace: Optional[str]) -> list:
+    """Each path to hide and what it becomes, longest first, matching either separator."""
     pairs = []
     if workspace:
         pairs.append((os.path.abspath(workspace), "<workspace>"))
     home = os.path.expanduser("~")
     if home and len(home) > 1 and home != "~":
         pairs.append((home, "~"))
-    spelled = set()
-    for path, alias in pairs:
-        for variant in (path, path.replace("\\", "/"), path.replace("/", "\\")):
-            spelled.add((variant, alias))
-    return sorted(spelled, key=lambda pair: -len(pair[0]))
+    pairs.sort(key=lambda pair: -len(pair[0]))
+    return [(r"[\\/]".join(re.escape(part) for part in re.split(r"[\\/]", path)), alias) for path, alias in pairs]
 
 
 def scrub(text: Optional[str], workspace: Optional[str] = None) -> str:
     """'text' without the user's paths, addresses and credentials."""
     text = text or ""
-    for path, alias in _aliases(workspace):
-        text = re.sub(re.escape(path) + r"(?=[\\/\s'\":,)]|$)", lambda _: alias, text)
+    for pattern, alias in _aliases(workspace):
+        text = re.sub(pattern + r"(?=[\\/\s'\":,)]|$)", lambda _: alias, text)
     text = _SECRET.sub("<redacted>", text)
-    text = _ASSIGNED.sub(lambda m: m.group(1) + m.group(2) + m.group(3) + "<redacted>", text)
+    text = _ASSIGNED.sub(lambda m: m.group(1) + m.group(2) + (m.group(3) or "") + m.group(4) + "<redacted>", text)
     return _EMAIL.sub("<email>", text)
 
 
 # --- Untrusted text ----------------------------------------------------------
 
 _HIDDEN = re.compile(r"<!--.*?(?:-->|\Z)", re.S)
-_INVISIBLE = re.compile("[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f­​-‏‪-‮⁠-⁤⁦-⁯" "﻿\U000e0000-\U000e007f]")
+_INVISIBLE = re.compile(
+    "[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u00ad\u200b-\u200f"
+    "\u202a-\u202e\u2060-\u2064\u2066-\u206f\ufeff\U000e0000-\U000e007f]"
+)
 
 
 def untrusted_text(text: Optional[str], limit: int) -> str:
@@ -183,7 +191,15 @@ def _token() -> Optional[str]:
     gh = shutil.which("gh")
     if gh:
         try:
-            out = subprocess.run([gh, "auth", "token"], capture_output=True, text=True, timeout=5, check=False)
+            out = subprocess.run(
+                [gh, "auth", "token"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+                check=False,
+            )
         except (OSError, subprocess.SubprocessError):
             return None
         if out.returncode == 0 and out.stdout.strip():
@@ -217,11 +233,22 @@ def _keywords(text: str, count: int = 6) -> str:
     return " ".join(words[:count])
 
 
+def _all(path: str, params: dict, token: Optional[str]) -> tuple:
+    """Every item of a list GitHub pages, up to PAGES pages, and whether that was all of them."""
+    items = []
+    for page in range(1, PAGES + 1):
+        batch = _get(path, dict(params, per_page=PAGE, page=page), token)
+        items.extend(batch)
+        if len(batch) < PAGE:
+            return items, True
+    return items, False
+
+
 def _comments(repo: str, number: int, token: Optional[str]) -> tuple:
     maintainers = trusted()
     notes = config()["notes"]
     guidance, others = [], 0
-    for comment in _get("repos/%s/issues/%d/comments" % (repo, number), {"per_page": 100}, token):
+    for comment in _all("repos/%s/issues/%d/comments" % (repo, number), {}, token)[0]:
         author = (comment.get("user") or {}).get("id")
         if author in maintainers:
             guidance.append(
@@ -240,8 +267,10 @@ def _comments(repo: str, number: int, token: Optional[str]) -> tuple:
 def _upvoted(repo: str, number: int, token: Optional[str], login: Optional[str]) -> Optional[bool]:
     if not login:
         return None
-    reactions = _get("repos/%s/issues/%d/reactions" % (repo, number), {"content": "+1", "per_page": 100}, token)
-    return any((reaction.get("user") or {}).get("login") == login for reaction in reactions)
+    reactions, complete = _all("repos/%s/issues/%d/reactions" % (repo, number), {"content": "+1"}, token)
+    if any((reaction.get("user") or {}).get("login") == login for reaction in reactions):
+        return True
+    return False if complete else None
 
 
 def _issue(repo: str, item: dict, token: Optional[str], login: Optional[str]) -> dict:
@@ -327,21 +356,15 @@ def search(
 
 
 def installation() -> str:
-    try:
-        from .. import selfupdate
+    from .. import selfupdate
 
-        return selfupdate.installation_kind()
-    except Exception:  # pylint: disable=broad-except
-        return "unknown"
+    return selfupdate.installation_kind()
 
 
 def sandbox() -> str:
-    try:
-        from partcad_utils.user_config import user_config
+    from partcad_utils.user_config import user_config
 
-        return str(user_config.python_sandbox or "-")
-    except Exception:  # pylint: disable=broad-except
-        return "-"
+    return str(user_config.python_sandbox or "-")
 
 
 def _title(error: str) -> str:
@@ -435,14 +458,17 @@ def record(sig: str, issue: int, action: str = "filed") -> dict:
         "version": __version__,
         "date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    ledger = _ledger()
-    ledger[sig] = entry
+    from filelock import FileLock
+
     path = ledger_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    temporary = "%s.%d.tmp" % (path, os.getpid())
-    with open(temporary, "w", encoding="utf-8") as f:
-        json.dump(ledger, f, indent=2, sort_keys=True)
-    os.replace(temporary, path)
+    with FileLock(path + ".lock", timeout=LOCK_TIMEOUT):
+        ledger = _ledger()
+        ledger[sig] = entry
+        handle, temporary = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+        with os.fdopen(handle, "w", encoding="utf-8") as f:
+            json.dump(ledger, f, indent=2, sort_keys=True)
+        os.replace(temporary, path)
     return entry
 
 

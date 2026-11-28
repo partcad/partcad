@@ -1358,7 +1358,7 @@ def test_known_issues_is_the_search_and_a_refusal_is_a_result(tmp_path, monkeypa
     asked = []
     monkeypatch.setattr(mcp_server.issues, "search", lambda *args: asked.append(args) or {"issues": []})
     _, server = serve(tmp_path)
-    assert body(call(server, "known_issues", {"signature": "pc-sig:000000000000"})) == {"issues": []}
+    assert body(call(server, "known_issues", {"signature": "pc-sig:000000000000"})) == {"ok": True, "issues": []}
     assert asked == [("pc-sig:000000000000", None, str(tmp_path))]
 
     def unavailable(*args):
@@ -1371,9 +1371,9 @@ def test_known_issues_is_the_search_and_a_refusal_is_a_result(tmp_path, monkeypa
 
 def test_a_draft_names_the_daemons_version_and_the_agent(tmp_path, monkeypatch):
     drafted = []
-    monkeypatch.setattr(mcp_server.issues, "draft", lambda *args, **kwargs: drafted.append(kwargs) or {"ok": 1})
+    monkeypatch.setattr(mcp_server.issues, "draft", lambda *args, **kwargs: drafted.append(kwargs) or {"title": "t"})
     _, server = serve(tmp_path, {"version": lambda params, emit: {"partcad": "9.9.9"}})
-    assert body(call(server, "draft_issue", {"error": "KeyError: 'w'"})) == {"ok": 1}
+    assert body(call(server, "draft_issue", {"error": "KeyError: 'w'"})) == {"ok": True, "title": "t"}
     assert drafted[0]["daemon"] == "9.9.9" and drafted[0]["workspace"] == str(tmp_path)
 
 
@@ -1393,3 +1393,14 @@ def test_the_instructions_say_nothing_of_issues_when_the_user_said_off(tmp_path,
     monkeypatch.setattr(user_config, "agent_issues", "off")
     assert "known_issues" not in mcp_server.instructions(*workspace)
     assert mcp_server._defect("bom", mcp_server.CallFailed("x", None, -32603, None)) is None
+
+
+def test_the_issue_tools_refuse_as_results(tmp_path, monkeypatch):
+    from partcad_utils.user_config import user_config
+
+    _, server = serve(tmp_path)
+    assert call(server, "known_issues", {}).is_error
+    assert call(server, "record_issue", {"signature": "nope", "issue": 1}).is_error
+    monkeypatch.setattr(user_config, "agent_issues", "off")
+    result = call(server, "draft_issue", {"error": "x"})
+    assert result.is_error and "'agentIssues' is 'off'" in body(result)["error"]
