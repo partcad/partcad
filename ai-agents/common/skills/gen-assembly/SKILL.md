@@ -423,7 +423,8 @@ that are merely silent.
 
 Then fix it where it belongs: a part missing a mating feature it really has is a
 gap in the package that serves the part, not something to work around in the
-assembly. Report it or fix it there, and the assembly gets shorter for free.
+assembly. Report it to that package's repository or fix it there, and the
+assembly gets shorter for free.
 
 A part that is a standard part under a name of its own (an `enrich`, such as a
 leg cut from a post) has the standard part's ports. Where the joint is *near*
@@ -600,7 +601,8 @@ which depends on the parts' shapes as much as on where they are.
 Every row of the layout's table has to be within its tolerance on the
 assembly. One that is not is a placement to correct from the error, the way
 `/pc:gen-sketch` §8 reads it — and, under `connect:`, a port in the wrong place
-on a part (the next section) rather than a number to adjust in the ASSY.
+on a part (the next section) rather than a number to adjust in the ASSY. An
+error in PartCAD itself rather than in the ASSY is `/pc:report-issue`.
 
 ### When a connection comes out wrong
 

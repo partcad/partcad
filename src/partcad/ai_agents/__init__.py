@@ -62,6 +62,7 @@ import json
 import os
 import re
 import shutil
+import textwrap
 from dataclasses import dataclass
 from typing import Optional
 
@@ -1269,6 +1270,7 @@ def instructions_section(root: str, package_dir: str) -> str:
         "- Check every change. `pc qual test <object>` builds an object and holds it to its declared requirements,",
         "  but it cannot say whether the shape is the one that was asked for: render it from more than one angle",
         "  (`pc render -t png --view iso <object>`, then `front`, `top`, `right`) and look at the pictures.",
+        *_bullet(agent_skills.issues_instruction()),
         "- Before generating, validating, rendering, exporting or converting, read PartCAD's skill for that kind of",
         "  work and follow it. `pc mcp` serves every one of them, as its `pc-<skill>` prompts and through its",
         "  `skill` tool; `/pc:<skill>` and `pc-<skill>` name the same skill.%s" % _where_the_skills_are(root),
@@ -1284,6 +1286,10 @@ def instructions_section(root: str, package_dir: str) -> str:
         lines.append("  - `%s%s`: %s" % (agent_skills.PREFIX, skill, description))
     lines += ["", _SECTION_END]
     return "\n".join(lines) + "\n"
+
+
+def _bullet(text: str) -> list:
+    return textwrap.wrap(text, width=112, initial_indent="- ", subsequent_indent="  ", break_on_hyphens=False)
 
 
 def _where_the_skills_are(root: str) -> str:

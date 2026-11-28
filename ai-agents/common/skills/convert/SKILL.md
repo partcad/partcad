@@ -122,4 +122,5 @@ Name the files that were written, with their paths, and say plainly whether
 `partcad.yaml` changed — it does for `pc convert` and never for
 `pc adhoc convert`. If PartCAD printed an error, surface it verbatim rather than
 working around it: a conversion that fails on the geometry is a fact about the
-model, not something to retry with different flags.
+model, not something to retry with different flags. One in PartCAD itself is
+`/pc:report-issue`.

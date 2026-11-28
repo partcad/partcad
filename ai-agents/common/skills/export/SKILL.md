@@ -135,4 +135,5 @@ what they want when it should have a name.
 Name the files that were written, with their paths — all of them for `-t urdf`
 or a whole-package export, or a count plus the directory when there are many.
 State that `partcad.yaml` is unchanged, since that is the property that makes
-this command the right one. If PartCAD printed an error, surface it verbatim.
+this command the right one. If PartCAD printed an error, surface it verbatim;
+one in PartCAD itself is `/pc:report-issue`.

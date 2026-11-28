@@ -1,0 +1,42 @@
+name: Bug report
+description: PartCAD did something wrong.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error
+      render: text
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: PartCAD
+      description: "`pc version`"
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation
+      options:
+        - wheel
+        - standalone
+        - ide-managed
+        - image
+        - source
+  - type: input
+    id: platform
+    attributes:
+      label: OS

@@ -315,7 +315,8 @@ Say which you did rather than filtering the same assembly again and again.
 
 Name the files that were written, with their paths, and which view each one is.
 Nothing in this skill changes `partcad.yaml` — say so if the user might have
-expected otherwise. If PartCAD printed an error, surface it verbatim.
+expected otherwise. If PartCAD printed an error, surface it verbatim; one in
+PartCAD itself is `/pc:report-issue`.
 
 When the user wanted a description rather than the pictures themselves,
 `/pc:describe` writes one from a render.

@@ -38,6 +38,15 @@ SKILLS_DIR = os.path.normpath(
 # in GitHub Copilot's, in Codex's, and as an MCP prompt.
 PREFIX = "pc-"
 
+ISSUES_TEXT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_issues.md")
+
+
+def issues_instruction() -> str:
+    """What every agent is told about PartCAD's own defects, as one line."""
+    with open(ISSUES_TEXT, "r", encoding="utf-8") as f:
+        return " ".join(f.read().split())
+
+
 # The front matter key a copy of a skill is stamped with, under `metadata:`.
 # Two things depend on it and neither has another way to know: which PartCAD
 # wrote the copy (so `pc healthcheck` can say it is stale), and that PartCAD

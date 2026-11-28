@@ -36,6 +36,13 @@ If you need help deciding what could be the best project for you to work on,
 engage with the community on
 `PartCAD's Discord server <https://discord.gg/h5qhbHtygj>`_
 
+Answering Issues
+================
+
+AI agents read an issue's comments by ``partcad-admin`` and ``clairbee`` only
+(``src/partcad_client/issues/config.json``). Start a reply there with
+``**Workaround:**`` or ``Fixed in <version>``.
+
 Spread The Word
 ===============
 

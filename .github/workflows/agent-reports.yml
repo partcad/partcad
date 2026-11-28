@@ -1,0 +1,25 @@
+name: Agent reports
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    name: "Label an agent's report"
+    if: >-
+      contains(github.event.issue.body, '<!-- pc-agent-report -->') &&
+      !contains(github.event.issue.labels.*.name, 'agent-reported')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Add the label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: gh api "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/labels" -f "labels[]=agent-reported"
