@@ -662,6 +662,20 @@ def check(result: dict, expect_index: typing.Optional[str], include_others: bool
         raise Refused("; ".join(pending), "warnings", result)
 
 
+def _said_made(repo, said: str, message: str) -> typing.Optional[str]:
+    """The commit 'git commit' said it made -- 'said' is what it printed -- of the ones it names, the one with 'message'."""
+    import pygit2
+
+    for found in _MADE.findall(said):
+        try:
+            commit = repo.revparse_single(found).peel(pygit2.Commit)
+        except (KeyError, ValueError, pygit2.GitError):
+            continue
+        if commit.message.strip() == message.strip():
+            return str(commit.id)
+    return None
+
+
 def _holds(repo, branch: typing.Optional[str], sha: str) -> bool:
     """Whether 'branch' -- or HEAD, detached -- is at the commit 'sha' or past it."""
     import pygit2
@@ -747,13 +761,15 @@ def _git(git: str, workdir: str, env: dict, *args, input: typing.Optional[str] =
         check=False,
     )
     if done.returncode != 0:
-        raise ValueError("git %s failed: %s" % (args[0], done.stderr.strip() or done.stdout.strip()))
+        command = next((arg for arg in args if not arg.startswith("-") and "=" not in arg), "")
+        raise ValueError("git %s failed: %s" % (command, done.stderr.strip() or done.stdout.strip()))
     return done.stdout or ""
 
 
 # What 'git commit' says it made: '[main 1a2b3c4] Subject', '[main (root-commit) 1a2b3c4] ...',
-# '[detached HEAD 1a2b3c4] ...' -- the words may be in the user's language, the id never is.
-_MADE = re.compile(r"^\[[^\]]* ([0-9a-f]{7,64})\] ", re.MULTILINE)
+# '[detached HEAD 1a2b3c4] ...', '[feature]x 1a2b] ...' -- the words may be in the user's
+# language and a branch may hold a ']', the id is hex; the first ' <hex>] ' on the line is it.
+_MADE = re.compile(r"^\[\S.*? ([0-9a-f]{4,64})\] ", re.MULTILINE)
 
 
 _ANY = object()
@@ -808,19 +824,17 @@ def commit(
         try:
             if tree is not None:
                 _git(git, workdir, env, "read-tree", tree)
-            said = _git(git, workdir, env, "commit", "--file", "-", input=message)
+            # The id in full, whatever 'core.abbrev' the user has.
+            said = _git(git, workdir, env, "-c", "core.abbrev=40", "commit", "--file", "-", input=message)
         finally:
             if scratch is not None:
                 shutil.rmtree(scratch, ignore_errors=True)
         import pygit2
 
         repo = repository.repo
-        # The revision git says it made, not whatever HEAD is by now.
-        found = _MADE.findall(said)
-        try:
-            made = str(repo.revparse_single(found[-1]).peel(pygit2.Commit).id) if found else str(repo.head.target)
-        except (KeyError, ValueError, pygit2.GitError):
-            made = str(repo.head.target)
+        # The revision git says it made, not whatever HEAD is by now: the one
+        # it names with this message, a hook printing something alike aside.
+        made = _said_made(repo, said, message) or str(repo.head.target)
         # git has no way to be told which commit to go on top of: HEAD moved
         # between the check above and git reading it, or the branch moved off
         # the revision since, is found here, and said, with the revision made.

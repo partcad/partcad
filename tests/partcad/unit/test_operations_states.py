@@ -1201,7 +1201,7 @@ def test_what_is_staged_while_git_commits_stays_staged_and_out_of_the_revision(w
     real_git = working_copy._git
 
     def git_with_a_stage_meanwhile(git, workdir, env, *args, **kwargs):
-        if args and args[0] == "commit":
+        if "commit" in args:
             # Somebody else stages a file into the user's index, after the
             # check and before git commits.
             (root / "lib" / "late.py").write_text("late = 1\n")
@@ -1234,7 +1234,7 @@ def test_head_moved_while_git_commits_is_found_and_said_with_the_revision_made(w
     real_git = working_copy._git
 
     def git_after_a_soft_reset(git, workdir, env, *args, **kwargs):
-        if args and args[0] == "commit":
+        if "commit" in args:
             # Somebody else moves the branch back, after the check and before git reads HEAD.
             _git(root, "update-ref", branch, first)
         return real_git(git, workdir, env, *args, **kwargs)
@@ -1300,7 +1300,7 @@ def test_the_revision_said_to_be_made_is_the_one_git_made_whatever_the_branch_do
 
     def git_then_a_sibling(git, workdir, env, *args, **kwargs):
         said = real_git(git, workdir, env, *args, **kwargs)
-        if args and args[0] == "commit":
+        if "commit" in args:
             # Somebody else puts another child of the same parent on the branch, after git returns.
             signature = pygit2.Signature("Other", "other@example.com")
             parent = repo[first].peel(pygit2.Commit)
@@ -1319,3 +1319,17 @@ def test_the_revision_said_to_be_made_is_the_one_git_made_whatever_the_branch_do
     assert refused.value.code == "head-moved"
     assert repo[made].message.strip() == "Approved" and [str(p) for p in repo[made].parent_ids] == [first]
     assert "staged" in refused.value.status
+
+
+@pytest.mark.parametrize(
+    "said, named",
+    [
+        ("[main 1a2b3c4] Approved\n 1 file changed", "1a2b3c4"),
+        ("[master (root-commit) a9c6] Approved", "a9c6"),
+        ("[feature]example 3981804] Approved", "3981804"),
+        ("[main 1a2b3c4] fix abc1234] y", "1a2b3c4"),
+        ("a hook said [x deadbeef] hello\n[main 1a2b3c4] Approved", "1a2b3c4"),
+    ],
+)
+def test_what_git_commit_says_it_made_is_read_whatever_the_branch_or_abbreviation(said, named):
+    assert named in working_copy._MADE.findall(said)
