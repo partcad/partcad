@@ -15,7 +15,7 @@ tarball, and the individual files an object pulls with ``fileFrom: url``.
     export HTTPS_PROXY=http://proxy.example.com:3128
     export NO_PROXY=git.internal.example.com,localhost
 
-    pc update
+    pc ops deps update --all
 
 ``HTTPS_PROXY`` covers ``https://`` remotes and ``HTTP_PROXY`` covers ``http://``
 ones; the lowercase spellings work equally. ``NO_PROXY`` exempts the hosts it

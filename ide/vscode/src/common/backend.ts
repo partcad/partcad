@@ -754,28 +754,72 @@ class JsonRpcBackend implements PartcadBackend {
                 a.cancellation,
             );
         });
-        // The Operations tabs. Revisions: the commits that changed the package
-        // of what is on screen; that object (or package) compared with one of
-        // them, both written out as 'pc copy' would write them; and what the
-        // package declares as its dependencies, and what the loaded packages
-        // use of it, at one. Used By: what among the loaded packages uses the
-        // object on screen, and how many times. A package names no object.
+        // The Operations tabs, a command per 'ops.*' method of the daemon (see
+        // 'partcad_utils.ops_views'), each asked about the package 'pkg' names
+        // - '<package>@<sha>' or '<package>@STAGED' for one at a state - or one
+        // object of it. Revisions: the revisions, two states compared, what is
+        // staged and what is not, staging it and a new revision of it.
+        // Dependencies: what it depends on, and declaring, removing and
+        // updating a package's. Used By: what uses it. Impact: what a change
+        // reaches. A package names no object. A change is sent without a
+        // token: once asked for, nothing takes it back.
         const operationsParams = (a: any) => ({
             package: a.pkg,
             object: a.kind === 'package' ? undefined : a.name,
             kind: a.kind,
         });
-        reg('partcad.revisionsList', (a) => this.send('revisions.list', operationsParams(a), a.cancellation));
-        reg('partcad.revisionsCompare', (a) =>
-            this.send('revisions.compare', { ...operationsParams(a), revision: a.revision }, a.cancellation),
+        reg('partcad.opsRevList', (a) =>
+            this.send('ops.rev.list', { ...operationsParams(a), limit: a.limit, after: a.after }, a.cancellation),
         );
-        reg('partcad.revisionsUses', (a) =>
-            this.send('revisions.uses', { ...operationsParams(a), revision: a.revision }, a.cancellation),
+        reg('partcad.opsRevDiff', (a) =>
+            this.send('ops.rev.diff', { ...operationsParams(a), from: a.from, to: a.to }, a.cancellation),
         );
-        reg('partcad.revisionsUsedBy', (a) =>
-            this.send('revisions.used_by', { ...operationsParams(a), revision: a.revision }, a.cancellation),
+        reg('partcad.opsRevStatus', (a) => this.send('ops.rev.status', operationsParams(a), a.cancellation));
+        reg('partcad.opsRevStage', (a) => this.send('ops.rev.stage', operationsParams(a)));
+        reg('partcad.opsRevNew', (a) =>
+            this.send('ops.rev.new', {
+                ...operationsParams(a),
+                message: a.message,
+                // Who the user is to git on this machine, which the caller read:
+                // never the daemon's, which may be somebody else's.
+                author: a.author,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                expect_index: a.expectIndex ?? undefined,
+                // What the user agreed to once a first attempt was refused.
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                include_others: a.includeOthers,
+                yes: a.yes,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                skip_checks: a.skipChecks,
+            }),
         );
-        reg('partcad.usedBy', (a) => this.send('usage.used_by', operationsParams(a), a.cancellation));
+        reg('partcad.opsDepsList', (a) => this.send('ops.deps.list', operationsParams(a), a.cancellation));
+        reg('partcad.opsDepsAdd', (a) =>
+            this.send('ops.deps.add', {
+                ...operationsParams(a),
+                // The dependency's own name, which 'name' cannot carry: that
+                // is the subject's.
+                name: a.dependency,
+                location: a.location,
+                track: a.track,
+            }),
+        );
+        reg('partcad.opsDepsRemove', (a) =>
+            this.send('ops.deps.remove', { ...operationsParams(a), name: a.dependency }),
+        );
+        reg('partcad.opsDepsUpdate', (a) =>
+            this.send('ops.deps.update', { ...operationsParams(a), names: a.names, all: a.all }),
+        );
+        reg('partcad.opsUsedBy', (a) =>
+            this.send('ops.used_by', { ...operationsParams(a), load: a.load }, a.cancellation),
+        );
+        reg('partcad.opsImpact', (a) =>
+            this.send(
+                'ops.impact',
+                { ...operationsParams(a), from: a.from, to: a.to, load: a.load, measure: a.measure, test: a.test },
+                a.cancellation,
+            ),
+        );
         // The Qualification tabs: every test of the subtypes asked for 'pc qual
         // test' runs on one object, and with 'verify' how each came out.
         reg('partcad.qualReport', (a) =>

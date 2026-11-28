@@ -3,21 +3,23 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
+"""`pc add dep NAME LOCATION`: what `pc ops deps add` is called now, kept so that it goes on working.
+
+Hidden from the help: the command to learn is `pc ops deps add`, which this says
+before doing exactly what it does.
+"""
 
 import rich_click as click
 
-import partcad as pc
-
-from ...cli_context import CliContext
+from ..ops.deps.add import add
 
 
-# TODO-92: @alexanderilyin: Patch rich_click to support help strings for arguments
 @click.command(
-    help="Add a dependency. A git dependency is added tracking a branch, with 'revision:' pinned to the "
-    "commit that branch is at now; 'pc update' moves the pin from then on."
+    hidden=True,
+    help="Add a dependency: 'pc ops deps add' by its old name.",
 )
-@click.argument("alias", type=str)  # help="Alias to be used to reference the package"
-@click.argument("location", type=str)  # help="Path or URL to the package"
+@click.argument("alias", type=str)
+@click.argument("location", type=str)
 @click.option(
     "--track",
     type=str,
@@ -26,18 +28,5 @@ from ...cli_context import CliContext
 )
 @click.pass_context
 def cli(click_ctx: click.Context, alias: str, location: str, track: str):
-    package = click_ctx.parent.params["package"]
-    cli_ctx: CliContext = click_ctx.obj
-
-    with pc.telemetry.set_context(cli_ctx.otel_context):
-        ctx: pc.Context = cli_ctx.get_partcad_context()
-
-        package = ctx.resolve_package_path(package)
-        package_obj: pc.Project = ctx.get_project(package)
-        if not package_obj:
-            pc.logging.error(f"Package {package} is not found")
-            return
-        package = package_obj.name  # '//' may end up having a different name
-
-        with pc.logging.Process("AddDep", package):
-            package_obj.add_import(alias, location, track=track)
+    click.echo("'pc add dep' is 'pc ops deps add' now", err=True)
+    add(click_ctx.obj, click_ctx.parent.params.get("package") or "", alias, location, track)

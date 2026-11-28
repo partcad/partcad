@@ -341,23 +341,55 @@ its compound, rather than as the tree of what it places (see :ref:`part-compound
      - ``pc compare --json``
      - Reads one part or assembly against another: volume, mass, tolerances, with ``displacement`` what each
        would push aside if submerged, and with ``surface_distance`` how far apart their surfaces are. ``ok`` is false when something it was held to does not hold.
-   * - ``revisions``
-     - ``pc revisions list --json``
-     - The commits that changed an object's package -- or, with no object, the package -- newest first, and which
-       is checked out. See :doc:`/digital_thread/lifecycle/operations`.
-   * - ``diff``
-     - ``pc revisions diff``
-     - What changed in an object, or with no object the package's rendered ``partcad.yaml``, since a
-       ``revision``: a unified diff, as text after the result, of both sides written as ``pc copy`` writes them.
-       ``lines`` is ``-U``. Where the Digital Thread draws the comparison side by side, this is the same comparison
-       as a unified diff.
-   * - ``revision_uses``
-     - ``pc revisions uses --json``
-     - The dependencies a package declared at a ``revision``, each with its commit and the name that loads it there.
-   * - ``used_by``
-     - ``pc used-by --json``
-     - The objects PartCAD has loaded that use an object, or anything in a package, each with how many times; with
-       ``revision``, what uses the package at that revision (``pc revisions used-by``). ``load`` is ``--load``.
+   * - ``ops_summary``
+     - ``pc ops summary --json``
+     - Which Operations views an object -- or, with no object, a package -- has, the tools of each that apply to
+       it, and one line from each: revisions, what is staged, dependencies, users. See
+       :doc:`/digital_thread/lifecycle/operations`.
+   * - ``ops_rev_list``
+     - ``pc ops rev list --json``
+     - A package's revisions -- every commit that changed it -- or only those that changed an object, each with
+       how, newest first, a page at a time (``limit``, ``after``), and which is checked out.
+   * - ``ops_rev_diff``
+     - ``pc ops rev diff``
+     - What changed in an object -- or a package, object by object and its rendered ``partcad.yaml`` -- between
+       two states (``from_state``, HEAD by default; ``to_state``, WORKTREE): a revision, ``STAGED`` or
+       ``WORKTREE``. A unified diff, as text after the result, of both sides written as ``pc copy`` writes them;
+       ``lines`` is ``-U``.
+   * - ``ops_rev_status``
+     - ``pc ops rev status --json``
+     - What of an object or a package is staged and what is not, object by object, what else in the repository
+       is, the ``index`` a new revision is checked against, and what to stage.
+   * - ``ops_rev_stage``
+     - ``pc ops rev stage``
+     - Stages every change of an object (its files and only its own declaration's lines) or of a package (its own
+       files) that is not staged yet.
+   * - ``ops_rev_new``
+     - ``pc ops rev new``
+     - Commits what is staged as a new revision, signed with the user's git identity, once lint and the
+       qualification tests of it pass. Refused with a ``code`` when anything else is staged
+       (``include_others`` agrees), when changes of it are not staged (``yes``), or when the index moved
+       (``expect_index``). Ask the user first.
+   * - ``ops_deps_list``
+     - ``pc ops deps list --json``
+     - What a package declares, uses without declaring, and holds as sub-packages; or what an object names and
+       places, each with how and how many times. At a revision as ``//package@<state>``.
+   * - ``ops_deps_add``, ``ops_deps_remove``, ``ops_deps_update``
+     - ``pc ops deps add``, ``remove``, ``update``
+     - Declare a dependency of a package (a git one pinned to the tip of the branch it tracks), take one out
+       (naming what still uses it), or move tracked ones to the tip of their branches (``all`` for the whole
+       workspace). Ask the user first.
+   * - ``ops_used_by``
+     - ``pc ops used-by --json``
+     - What uses an object, or a package: the packages declaring it a dependency (with the revision each pins and
+       how far behind it is) and the loaded objects using it, with how and how many times; ``load`` loads the
+       workspace first. A package at a revision, ``//package@<state>``, is what uses it then.
+   * - ``ops_impact``
+     - ``pc ops impact --json``
+     - What a change reaches -- from ``from_state`` to ``to_state``, everything not committed by default -- each
+       object reached with its findings (``breaking``, ``changed``, ``verify``, ``info``), what an object uses
+       that changed, and the packages pinned to an older revision, which it does not reach. ``measure`` and
+       ``test`` build shapes.
    * - ``version``
      - ``pc version``
      - The version of the server and of the daemon serving the workspace.

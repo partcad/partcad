@@ -37,8 +37,10 @@ _TAB_HELP = {
     "basic": "the Basic tab: every basic qualification test, run",
     "topology": "the Topology tab: every topology qualification test, run, and where each finding is",
     "other": "the Other tab: the qualification tests plugins supply, and what each tool reported",
-    "revisions": "the Revisions tab: the commits that changed the object's package, each compared with it",
-    "usedby": "the Used By tab: the loaded objects that use this one, and how many times each",
+    "revisions": "the Revisions tab: the revisions of the object (or the package), what is staged, a new revision",
+    "dependencies": "the Dependencies tab: what the object names and places, or what the package depends on",
+    "usedby": "the Used By tab: the packages and the loaded objects that use this one, and how",
+    "impact": "the Impact tab: what a change reaches, and what each object it reaches now risks",
 }
 
 

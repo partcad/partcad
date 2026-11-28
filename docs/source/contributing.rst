@@ -550,7 +550,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.10.40)
+  Installing the current project: partcad (0.10.42)
 
 .. warning::
 
@@ -1302,7 +1302,7 @@ to the other. Both follow these rules:
    commits is what publishes that version to PyPI. A package that has to keep up with ``devel`` tests against
    TestPyPI: ``partcad`` from there by exact version, and its dependencies from PyPI, as
    ``partcad-ldraw-examples``' CI does. The index's ``main`` is what
-   every package created by ``pc init`` tracks, so moving it is what ``pc update`` delivers to them.
+   every package created by ``pc init`` tracks, so moving it is what ``pc ops deps update --all`` delivers to them.
 #. **The two** ``main`` **branches move in order, and the index's waits for PartCAD's release to finish.**
    PartCAD's ``main`` first; then, once its ``Deployment`` run has completed and the version is on PyPI, the
    index's. See :ref:`release-order` -- the fast-forward starts that run, it does not finish it, and an index
@@ -1375,7 +1375,7 @@ previous one, and the run can also fail outright or sit unapproved indefinitely.
 **That is why the index's** ``main`` **is fast-forwarded only after PartCAD's** ``Deployment`` **run has completed
 and the version is on PyPI**, and never in the same sitting as a matter of course. The index's ``main`` is what an
 *installed* PartCAD reads, and what every package created by ``pc init`` tracks, so releasing it first hands those
-packages, on their next ``pc update``, pins whose ``partcad:`` floor is above the newest release on PyPI. They fail
+packages, on their next ``pc ops deps update --all``, pins whose ``partcad:`` floor is above the newest release on PyPI. They fail
 with ``Incompatible PartCAD version!`` -- until the upload lands, or permanently if it never does, with the only
 way back a second release of the index moving the pins down again. The order costs a wait; getting it wrong breaks
 every consumer of the index at once.
@@ -1476,7 +1476,7 @@ the end:
    merely once PartCAD's ``main`` points at it -- and once its ``devel`` works with N, which a source checkout of
    PartCAD at N, or ``pc --devel-index`` with N installed, shows. Released any earlier, the index pins packages
    requiring an N that nobody can install, and every package tracking the index's ``main`` fails on its next
-   ``pc update``.
+   ``pc ops deps update --all``.
 #. **Retire the old form, if at all, last** -- as a PartCAD change of its own, and only once no commit the
    index's ``main`` pins uses it any more. This is the step that breaks packages nobody migrated, outside the
    index included, so give the warning from step 1 time to be seen first, and say in the pull request what stops

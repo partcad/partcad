@@ -16,6 +16,16 @@ import { getViewerPerformanceDebugFromSetting } from '../common/settings';
 import * as utils from '../utils';
 import { NO_AUTHOR, attachmentNames, gitAuthor } from './comments';
 import { WebviewLedger } from './geometryStore';
+import {
+    NO_IDENTITY,
+    OPS_COMMANDS,
+    OPS_TABS,
+    OpsRequest,
+    gitIdentity,
+    opsArgs,
+    opsDoing,
+    refusalOf,
+} from './operations';
 import { detailsBytes, filesAsBytes } from './payloads';
 import { GltfPayload, MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, glbOf } from './protocol';
 import { SpacenavClient } from './spacenav';
@@ -109,21 +119,14 @@ const TAB_COMMANDS: Record<string, string> = {
     // What the object declares under 'qual: sim:', read rather than run; a
     // request naming one of them runs it instead (see 'SIMULATION_RUN').
     simulation: 'partcad.simulateList',
-    // The Operations tabs. Revisions asks four questions of one package - its
-    // commits, the object compared with one of them, and what the package uses
-    // and is used by at it - and which one travels as 'query' (see
-    // 'REVISIONS_COMMANDS'). Used By is what uses the object, among what the
-    // daemon has loaded.
-    revisions: 'partcad.revisionsList',
-    usedby: 'partcad.usedBy',
-};
-
-/** What each question the Revisions tab asks is put to the daemon as. */
-const REVISIONS_COMMANDS: Record<string, string> = {
-    list: 'partcad.revisionsList',
-    compare: 'partcad.revisionsCompare',
-    uses: 'partcad.revisionsUses',
-    usedBy: 'partcad.revisionsUsedBy',
+    // The Operations tabs. Each asks several of the daemon's 'ops.*' questions
+    // - Revisions its list, a status, comparisons and what the package was at
+    // each revision - and which one travels as 'ops' (see 'OPS_COMMANDS' in
+    // 'operations.ts'); this is what each asks when it names none.
+    revisions: OPS_COMMANDS[OPS_TABS.revisions].command,
+    dependencies: OPS_COMMANDS[OPS_TABS.dependencies].command,
+    usedby: OPS_COMMANDS[OPS_TABS.usedby].command,
+    impact: OPS_COMMANDS[OPS_TABS.impact].command,
 };
 
 /** What the Simulation tab asks when it names a simulation: run it, 'pc qual test --simulation -f <name>'. */
@@ -198,9 +201,8 @@ interface FetchTabRequest extends RenderRequest {
     section?: Record<string, [number, number]>;
     /** On the Draft tab, for a sketch: the one view its drawing is laid out with. */
     singleView?: string;
-    /** On the Revisions tab: which of its questions this is ('REVISIONS_COMMANDS'), and of which revision. */
-    query?: string;
-    revision?: string;
+    /** On an Operations tab: which of the daemon's 'ops.*' questions this is, and what it is asked with. */
+    ops?: OpsRequest;
 }
 
 /** A file a render tab is showing, kept until the next one replaces it. */
@@ -518,11 +520,16 @@ export class PartcadViewer implements vscode.Disposable {
             void this.panel?.webview.postMessage({ type: 'tabData', tab, token, ...payload });
         };
 
+        const operations = Object.prototype.hasOwnProperty.call(OPS_TABS, tab);
+        // Only a question: a change is asked with 'opsWrite', which nothing cancels.
+        const asked = operations && message.ops ? OPS_COMMANDS[message.ops.method] : undefined;
         const command =
             tab === 'simulation' && message.scenario
                 ? SIMULATION_RUN
-                : tab === 'revisions'
-                  ? REVISIONS_COMMANDS[message.query ?? 'list']
+                : operations && message.ops
+                  ? asked && !asked.writes
+                      ? asked.command
+                      : undefined
                   : TAB_COMMANDS[tab];
         if (command === undefined) {
             post({ error: `There is nothing to fill the '${tab}' tab with.` });
@@ -537,10 +544,10 @@ export class PartcadViewer implements vscode.Disposable {
         // Replacing whatever this tab asked for last, unless this is a run: see
         // 'inFlight'.
         const run = analysis || command === SIMULATION_RUN;
-        // The Revisions tab's questions are four, and a newer one of each kind
+        // An Operations tab asks several questions, and a newer one of each kind
         // replaces only an older one of the same kind: comparing another
         // revision does not take back the list it was chosen from.
-        const key = tab === 'revisions' ? `${tab}:${message.query ?? 'list'}` : tab;
+        const key = operations ? `${tab}:${message.ops?.method ?? OPS_TABS[tab]}` : tab;
         const request = this.inFlight.begin(run ? undefined : key);
         try {
             // The commands are registered by the backend, so an absent one means
@@ -621,11 +628,10 @@ export class PartcadViewer implements vscode.Disposable {
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
-            if (tab === 'revisions' || tab === 'usedby') {
-                // A package's own, or the package of the object on screen; and,
-                // asked of a revision, which one.
-                args.kind = target.kind ?? 'part';
-                args.revision = message.revision;
+            if (operations) {
+                // About the object on screen, or its package, or the package at
+                // a state: see 'opsArgs'.
+                Object.assign(args, opsArgs(target, message.ops ?? { method: OPS_TABS[tab] }));
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
@@ -868,6 +874,80 @@ export class PartcadViewer implements vscode.Disposable {
         } catch (error: any) {
             traceError(`Digital Thread: failed to change a requirement: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
+        }
+    }
+
+    /**
+     * A change asked for on an Operations tab: stage, make a revision, declare,
+     * remove or update a dependency. Never cancelled - not by another show, not
+     * by the tab asking again - since it is somebody's change; and said in a
+     * notification while it runs, since a revision runs lint and the tests
+     * first and an update fetches what it moves the pins to.
+     *
+     * A new revision is signed here, with this machine's git identity in the
+     * package's repository (see 'operations.ts'). A revision the daemon would
+     * not make on these terms is an answer about the revision, not a failure of
+     * the extension: the tab is told which reason ('refusal'), so that it can
+     * ask the user to agree, and nothing else says it.
+     */
+    private async opsWrite(
+        token: number,
+        tab: string,
+        ops: OpsRequest | undefined,
+        made: { package?: string; name?: string; kind?: string } | undefined,
+        directory: string | null | undefined,
+    ): Promise<void> {
+        const post = (payload: { data?: unknown; error?: string; refusal?: unknown }) =>
+            void this.panel?.webview.postMessage({ type: 'opsWritten', token, ...payload });
+        const target = this.lastShow;
+        if (!target?.package || !target.name) {
+            post({ error: 'PartCAD did not say which package this object belongs to.' });
+            return;
+        }
+        // Asked on the object the tab was drawn for, which may no longer be the
+        // one shown: another show can come between the click and this message.
+        if (
+            made === undefined ||
+            made.package !== target.package ||
+            made.name !== target.name ||
+            (made.kind ?? '') !== (target.kind ?? '')
+        ) {
+            post({ error: 'Another object was shown before this change reached PartCAD: nothing was changed.' });
+            return;
+        }
+        const asked = ops ? OPS_COMMANDS[ops.method] : undefined;
+        if (ops === undefined || asked === undefined || !asked.writes) {
+            post({ error: `The '${tab}' tab asked for a change PartCAD does not make: ${ops?.method ?? 'none'}.` });
+            return;
+        }
+        try {
+            if (!(await vscode.commands.getCommands(true)).includes(asked.command)) {
+                throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
+            }
+            const args: Record<string, unknown> = { ...opsArgs(target, ops) };
+            let author: { name?: string; email?: string } | undefined;
+            if (ops.method === 'ops.rev.new') {
+                author = await gitIdentity(directory, vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+                if (!author.name || !author.email) {
+                    throw new Error(NO_IDENTITY);
+                }
+                args.author = author;
+            }
+            const data = await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: `PartCAD: ${opsDoing(ops.method, target.kind === 'package' ? target.package : target.name)}…`,
+                },
+                () => Promise.resolve(vscode.commands.executeCommand(asked.command, args)),
+            );
+            // The identity it was made as, which only this side knows: the tab says it.
+            post({ data: author && data && typeof data === 'object' ? { ...data, author } : data });
+        } catch (error: any) {
+            const refusal = refusalOf(error);
+            if (refusal === undefined) {
+                traceError(`Digital Thread: ${ops.method} failed: ${error?.message ?? error}`);
+            }
+            post({ error: `${error?.message ?? error}`, refusal });
         }
     }
 
@@ -1311,6 +1391,8 @@ export class PartcadViewer implements vscode.Disposable {
                     settings?: unknown;
                     edit?: unknown;
                     target?: { package?: string; name?: string; kind?: string };
+                    directory?: string | null;
+                    text?: string;
                 } & Partial<ViewerStateReply>,
             ) => {
                 if (message.type === 'state') {
@@ -1366,10 +1448,26 @@ export class PartcadViewer implements vscode.Disposable {
                 } else if (message.type === 'showObject') {
                     void this.showObject(message.package, message.name, message.kind);
                 } else if (message.type === 'openPackage') {
-                    // The Revisions tab's Uses: the package, in the Package
+                    // A package an Operations tab names: in the Package
                     // Explorer (see 'PartcadExplorer.openPackage').
                     if (message.package) {
                         void vscode.commands.executeCommand('partcad.openInExplorer', message.package);
+                    }
+                } else if (message.type === 'opsWrite') {
+                    void this.opsWrite(
+                        message.token ?? 0,
+                        message.tab ?? '',
+                        message.ops,
+                        message.target,
+                        message.directory,
+                    );
+                } else if (message.type === 'copyText') {
+                    // The Revisions tab's advice, for an agent: a webview's own
+                    // clipboard is not to be relied on, the editor's is.
+                    if (typeof message.text === 'string') {
+                        void vscode.env.clipboard
+                            .writeText(message.text)
+                            .then(() => vscode.window.setStatusBarMessage('PartCAD: copied for your agent', 3000));
                     }
                 } else if (message.type === 'showSection') {
                     void this.showSection(message.token ?? 0, message.section, {
@@ -1630,7 +1728,9 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="operations-tabs" class="tabs sub-tabs" hidden></div>
 						<div class="panes">
 						<div id="pane-revisions" class="pane" hidden></div>
+						<div id="pane-dependencies" class="pane" hidden></div>
 						<div id="pane-usedby" class="pane" hidden></div>
+						<div id="pane-impact" class="pane" hidden></div>
 						</div>
 						</div>
 					</div>

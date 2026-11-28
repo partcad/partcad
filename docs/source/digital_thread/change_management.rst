@@ -43,9 +43,9 @@ against with ``revision:`` (see :ref:`pinning-dependencies`):
       track: main
       revision: 5e2161123918f9c796c44e190f5a2e8d5ee7292e
 
-``pc add dep`` and ``pc init`` write it that way, and loading a package never moves it. (``pc init`` pins only
+``pc ops deps add`` and ``pc init`` write it that way, and loading a package never moves it. (``pc init`` pins only
 when it can ask the repository where the branch is: offline, or when the repository cannot be reached, it leaves
-``revision:`` out and warns, and ``pc update`` writes it later.) ``pc update`` moves it when you ask: it moves
+``revision:`` out and warns, and ``pc ops deps update --all`` writes it later.) ``pc ops deps update --all`` moves it when you ask: it moves
 every ``revision:`` to the tip of its ``track:`` and leaves the change in ``partcad.yaml`` for you to review and
 commit. So:
 
@@ -53,7 +53,7 @@ commit. So:
 * what changed between two builds is in the history of your own repository, as a diff of ``revision:`` lines;
 * taking a dependency's new commits is a change you make, in a commit of its own, and can revert.
 
-Run ``pc update`` as a change of its own and review what moved, the way a dependency bot's pull request is
+Run ``pc ops deps update --all`` as a change of its own and review what moved, the way a dependency bot's pull request is
 reviewed -- on a schedule, if you want one. Do not use ``forceUpdate`` (``--force-update``) to keep up to date:
 it follows ``track:`` past the pin without writing anything down, which is right for trying out what a
 dependency is about to release and wrong for anything you will need to reproduce.
@@ -106,7 +106,7 @@ Give every package repository two long-lived branches:
     git fetch origin
     git push origin <tested commit of devel>:refs/heads/main   # refused unless it is a fast-forward
 
-So ``main`` is always a commit that ``devel`` has had, and a consumer's ``pc update`` takes a release, never
+So ``main`` is always a commit that ``devel`` has had, and a consumer's ``pc ops deps update --all`` takes a release, never
 work in progress. Make ``devel`` the default branch and protect ``main`` so that nothing merges to it.
 
 PartCAD and the public index are both run this way. To try your packages against what the index is about to
@@ -118,7 +118,7 @@ A tracked branch is a promise
 =============================
 
 Once another package tracks a branch of yours, every commit you push to it reaches that package at its next
-``pc update``. The branch therefore has to keep working for everybody it worked for when they started tracking
+``pc ops deps update --all``. The branch therefore has to keep working for everybody it worked for when they started tracking
 it:
 
 * with every PartCAD release it supported then -- a commit to it must not raise ``partcad:``;
@@ -147,7 +147,7 @@ port, so that what is mated to it moves; requiring a newer PartCAD.
    commits other packages pinned have to stay fetchable, for as long as anyone may check out a commit that names
    them.
 #. **Move each consumer deliberately**, in a change of its own: switch its ``track:`` to the new branch, run
-   ``pc update``, and fix what the new branch broke, in the same commit.
+   ``pc ops deps update --all``, and fix what the new branch broke, in the same commit.
 #. **Release in order.** A package may require a PartCAD only once that PartCAD is released, and a consumer may
    move to a package only once the package's new branch is ready. When a change spans several of your
    packages, release the one depended on first, then the ones that depend on it.
@@ -184,9 +184,9 @@ Run that repository as the public index is run:
 * **Every package in it declares** ``partcad:``.
 * **Changes merge to its** ``devel``, **and its** ``main`` **moves only by fast-forward** from ``devel``, once
   ``devel`` has been tested with the products that use it.
-* **Pins move in reviewed changes.** ``pc update`` in a checkout of the index moves every tracked dependency to
+* **Pins move in reviewed changes.** ``pc ops deps update --all`` in a checkout of the index moves every tracked dependency to
   the tip of its branch at once; the diff is the list of packages that changed, to review before it is merged.
 * **A package's breaking change switches its** ``track:`` **to a new branch**, in a change to the index that
   also fixes every package of the library that used what broke.
 
-Products ``pc update`` to take a release of the library, and every product can be on a different one.
+Products ``pc ops deps update --all`` to take a release of the library, and every product can be on a different one.

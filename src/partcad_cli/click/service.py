@@ -46,6 +46,19 @@ _INVALID_CONFIG = -32001
 _USAGE_ERROR = -32002
 
 
+class Refusal(click.UsageError):
+    """A usage error the daemon answered with data: what a command can ask the user about, and ask again.
+
+    Still a 'click.UsageError', so a command that does not look at it exits as
+    for any other refusal; 'pc ops rev new' reads 'data["code"]' to say what it
+    needs agreed to.
+    """
+
+    def __init__(self, message: str, data):
+        super().__init__(message)
+        self.data = data
+
+
 def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_context: bool = False):
     """Execute ``method`` on the daemon, wrapped in a client-side telemetry span.
 
@@ -96,6 +109,8 @@ def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_
             raise click.ClickException("Invalid configuration file")
         if code == _USAGE_ERROR:
             # Match commands that raised click.UsageError (exit code 2).
+            if getattr(e, "data", None):
+                raise Refusal(str(e), e.data)
             raise click.UsageError(str(e))
         raise click.ClickException(str(e))
     finally:

@@ -127,7 +127,6 @@ IN_PROCESS_DAEMON_CALLS = {
 # client from the start.
 NOT_YET_MIGRATED = {
     "add/sketch.py": "not migrated yet; still builds the sketch through an in-process context",
-    "add/dep.py": "not migrated yet; still edits the package config through an in-process context",
     "supply/caps.py": "supply/* is not migrated yet; still drives providers in-process",
     "supply/find.py": "supply/* is not migrated yet; still drives providers in-process",
     "supply/order.py": "supply/* is not migrated yet; still drives providers in-process",
