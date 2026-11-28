@@ -215,7 +215,12 @@ def _digest(path: str, repository=None) -> typing.Optional[str]:
         if os.path.islink(path):
             return hashlib.sha256(b"link:" + os.fsencode(os.readlink(path))).hexdigest()
         if repository is not None:
-            return str(repository.repo.hashfile(path))
+            # Its path in the working tree, with '/', is what git's filters are
+            # looked up by: given a Windows path, libgit2 does not take it for
+            # one of the working tree's and applies none.
+            workdir = os.path.realpath(repository.repo.workdir)
+            within = os.path.relpath(os.path.realpath(path), workdir).replace(os.sep, "/")
+            return str(repository.repo.hashfile(path, as_path=within))
         return str(pygit2.hashfile(path))
     except (OSError, ValueError, pygit2.GitError):
         return None
