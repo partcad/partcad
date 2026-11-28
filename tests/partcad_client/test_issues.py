@@ -120,6 +120,9 @@ def test_the_users_paths_addresses_and_secrets_are_scrubbed():
         ("Authorization: Bearer abc.def", "Authorization: Bearer <redacted>"),
         ('{"password": "hunter2", "api_key": \'k1\'}', '{"password": "<redacted>", "api_key": \'<redacted>\'}'),
         ("curl -H 'authorization: token abc'", "curl -H 'authorization: token <redacted>'"),
+        ('PASSWORD="a b c" pc render box', 'PASSWORD="<redacted>" pc render box'),
+        ('password="a\\"b c" next', 'password="<redacted>" next'),
+        ('secret: "never closed', 'secret: "<redacted>"'),
     ],
 )
 def test_a_credential_is_scrubbed_however_it_is_written(text, scrubbed):

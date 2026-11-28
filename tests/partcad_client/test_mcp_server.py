@@ -1364,6 +1364,9 @@ def test_known_issues_is_the_search_and_a_refusal_is_a_result(tmp_path, monkeypa
     def unavailable(*args):
         raise mcp_server.issues.Unavailable("PartCAD is offline")
 
+    call(server, "known_issues", {"error": "KeyError: 'w'"})
+    assert asked[-1] == (mcp_server.issues.signature("KeyError: 'w'"), "KeyError: 'w'", str(tmp_path))
+
     monkeypatch.setattr(mcp_server.issues, "search", unavailable)
     result = call(server, "known_issues", {"error": "x"})
     assert result.is_error and body(result)["error"] == "PartCAD is offline"

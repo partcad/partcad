@@ -136,7 +136,8 @@ _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _SECRET = re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})\b")
 _ASSIGNED = re.compile(
     r"(?i)\b(authorization|bearer|token|password|passwd|secret|api[_-]?key)"
-    r"([\"']?\s*[:=]\s*|\s+)((?:bearer|basic|token)\s+)?([\"']?)[^\s\"',]+"
+    r"([\"']?\s*[:=]\s*|\s+)((?:bearer|basic|token)\s+)?"
+    r"(?:\"(?:[^\"\\\n]|\\.)*\"?|'(?:[^'\\\n]|\\.)*'?|[^\s\"',]+)"
 )
 
 
@@ -152,13 +153,19 @@ def _aliases(workspace: Optional[str]) -> list:
     return [(r"[\\/]".join(re.escape(part) for part in re.split(r"[\\/]", path)), alias) for path, alias in pairs]
 
 
+def _redacted(found) -> str:
+    value = found.group(0)[len(found.group(1) + found.group(2) + (found.group(3) or "")) :]
+    quote = value[0] if value[0] in "\"'" else ""
+    return found.group(1) + found.group(2) + (found.group(3) or "") + quote + "<redacted>" + quote
+
+
 def scrub(text: Optional[str], workspace: Optional[str] = None) -> str:
     """'text' without the user's paths, addresses and credentials."""
     text = text or ""
     for pattern, alias in _aliases(workspace):
         text = re.sub(pattern + r"(?=[\\/\s'\":,)]|$)", lambda _: alias, text)
     text = _SECRET.sub("<redacted>", text)
-    text = _ASSIGNED.sub(lambda m: m.group(1) + m.group(2) + (m.group(3) or "") + m.group(4) + "<redacted>", text)
+    text = _ASSIGNED.sub(_redacted, text)
     return _EMAIL.sub("<email>", text)
 
 

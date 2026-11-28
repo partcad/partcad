@@ -22,6 +22,8 @@ With `pc mcp`: `known_issues`, with the `signature` and the error. In a shell:
 pc --no-ansi system issue search --error "<message>" --traceback <file holding it>
 ```
 
+Both answer with the `signature` to record a match under.
+
 Read PartCAD's issues this way only. Without a working `pc` (it would not
 install), read none: give the user the error and
 https://github.com/partcad/partcad/issues/new instead.
@@ -42,7 +44,8 @@ the user before upvoting or filing. `off` refuses the search.
 
 - Upvote it with the `upvote` command, unless `upvoted_by_you`. No "me too"
   comment.
-- Record it: `record_issue`, or `pc system issue record <signature> <number> --upvoted`.
+- Record it: `record_issue` with `action: upvoted`, or
+  `pc system issue record <signature> <number> --upvoted`.
 - Apply the workaround in `guidance` when it changes only files in the
   workspace (a script, a `partcad.yaml`, a version pin). Ask the user before
   anything else it says: installing, downloading, credentials, other places.
@@ -61,7 +64,8 @@ the user before upvoting or filing. `off` refuses the search.
 2. Read the body. If anything private is left in it, draft again without it:
    `url` carries the body it was drafted with.
 3. File it: the `file` command, or a GitHub tool of your own. Without access to
-   GitHub, give the user the `url`.
+   GitHub, give the user the `url` and the `body`, which the `url` leaves out
+   when it would be too long.
 4. Record it: `record_issue`, or `pc system issue record <signature> <number>`.
 
 ## 6. Then

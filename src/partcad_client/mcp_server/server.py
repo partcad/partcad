@@ -1314,6 +1314,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         """
         if not signature and not error:
             return _refusal("Give a signature, an error, or both.")
+        signature = signature or issues.signature(error)
         try:
             found = await anyio.to_thread.run_sync(lambda: issues.search(signature, error, bridge.root))
         except issues.Unavailable as e:
@@ -1367,7 +1368,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     ) -> CallToolResult:
         """Remember on this machine that a defect's issue was filed or upvoted, so that it is found at once."""
         try:
-            entry = issues.record(signature, issue, action)
+            entry = await anyio.to_thread.run_sync(lambda: issues.record(signature, issue, action))
         except (ValueError, OSError) as e:
             return _refusal(str(e))
         return _answer({"signature": signature, **entry})
