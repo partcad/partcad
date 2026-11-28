@@ -575,13 +575,23 @@ def test_a_conflicted_index_is_said_and_is_not_an_empty_package(workspace, ctx):
         changes.changes(ctx, "//lib", "HEAD", package_versions.STAGED)
 
 
-def test_a_file_is_read_a_piece_at_a_time(tmp_path):
-    import hashlib
-
+def test_a_file_is_what_git_would_store_of_it(tmp_path):
     data = b"x" * (3 << 20)
     (tmp_path / "big").write_bytes(data)
 
-    assert changes._digest(str(tmp_path / "big")) == hashlib.sha256(data).hexdigest()
+    assert changes._digest(str(tmp_path / "big")) == str(pygit2.hash(data))
+
+
+def test_a_file_checked_out_with_crlf_line_ends_is_no_change_from_the_revision(workspace, ctx):
+    # What Windows does with 'core.autocrlf': the revision holds LF, the file on disk CRLF.
+    root, _ = workspace
+    pygit2.Repository(str(root)).config["core.autocrlf"] = "true"
+    (root / "lib" / "bolt.py").write_bytes(b"x = 1\r\n")
+    (root / "lib" / "nut.py").write_bytes(b"y = 1\r\n")
+
+    assert changes.changes(ctx, "//lib", "HEAD", None)["objects"] == []
+    (root / "lib" / "bolt.py").write_bytes(b"x = 2\r\n")
+    assert [row["name"] for row in changes.changes(ctx, "//lib", "HEAD", None)["objects"]] == ["bolt"]
 
 
 def test_a_symbolic_link_is_what_it_says(tmp_path):

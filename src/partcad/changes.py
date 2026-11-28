@@ -196,23 +196,28 @@ def object_files(project, kind: str, name: str) -> list:
     return found
 
 
-def _digest(path: str) -> typing.Optional[str]:
-    """What a file holds, as a digest: read a piece at a time, and a symbolic link by what it says.
+def _digest(path: str, repository=None) -> typing.Optional[str]:
+    """What a file holds, as git would store it: the id of its blob; a symbolic link by what it says.
+
+    A file of a working tree is read through its repository's filters --
+    'core.autocrlf', '.gitattributes' -- as 'git add' would read it, so that
+    a file checked out with CRLF line ends on Windows is the blob a revision
+    holds and no change from it. A file written out of a revision, or in no
+    repository, is that blob as it is. Read a piece at a time by libgit2.
 
     A link is what git keeps of it -- its target, as text -- and not what it
     points at, which may be outside the package and change without any
     revision of it changing.
     """
-    digest = hashlib.sha256()
+    import pygit2
+
     try:
         if os.path.islink(path):
-            digest.update(b"link:" + os.fsencode(os.readlink(path)))
-            return digest.hexdigest()
-        with open(path, "rb") as f:
-            for piece in iter(lambda: f.read(1 << 20), b""):
-                digest.update(piece)
-        return digest.hexdigest()
-    except OSError:
+            return hashlib.sha256(b"link:" + os.fsencode(os.readlink(path))).hexdigest()
+        if repository is not None:
+            return str(repository.repo.hashfile(path))
+        return str(pygit2.hashfile(path))
+    except (OSError, ValueError, pygit2.GitError):
         return None
 
 
@@ -233,8 +238,10 @@ def object_state(project, kind: str, name: str) -> typing.Optional[dict]:
         geometric = serialize.yaml_text(name, {key: value for key, value in declared.items() if key not in skipped})
     else:
         geometric = text
+    repository = package_versions.repository_of(project.config_dir)
     files = {
-        rel: _digest(os.path.join(project.config_dir, *rel.split("/"))) for rel in object_files(project, kind, name)
+        rel: _digest(os.path.join(project.config_dir, *rel.split("/")), repository)
+        for rel in object_files(project, kind, name)
     }
     return {"declaration": text, "geometric": geometric, "files": files}
 
@@ -307,7 +314,7 @@ def package_files(project) -> typing.Optional[dict]:
             if len(found) > _FILES_LIMIT:
                 return None
     for rel in found:
-        found[rel] = _digest(os.path.join(top, *rel.split("/")))
+        found[rel] = _digest(os.path.join(top, *rel.split("/")), repository)
     return found
 
 
