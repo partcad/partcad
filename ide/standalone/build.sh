@@ -493,6 +493,13 @@ if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
   # whitespace delimiters together, which silently shifts every field after an
   # empty one -- and `url` and `path` are empty for most entries.
   while IFS=$'\x1f' read -r identifier source url path required version; do
+    # Python on Windows ends each line it prints with "\r\n", and Git Bash's
+    # `read` leaves the "\r" on the last field. That field was `required` once,
+    # so a required extension that failed only warned on Windows; then it became
+    # `version`, every unversioned gallery id was asked for as `<id>@`, and the
+    # Windows IDE was built without any of them, with nothing but a warning to
+    # say so. Git Bash's `$(...)` strips the "\r"; its `read` does not.
+    version="${version%$'\r'}"
     case "${source}" in
     # A version held in extensions.json is asked for by name: the editor's own
     # `<id>@<version>`, resolved against the gallery like any other.
@@ -770,7 +777,27 @@ else
 fi
 
 rm -rf "${OUTPUT_DIR:?}/${APP_NAME}"
-mv "${APP_ROOT}" "${OUTPUT_DIR}/${APP_NAME}"
+# Windows will not rename a directory while anything holds a file inside it
+# open, and for a few seconds after the extensions are installed and copied in,
+# something does: this `mv` failed with "Permission denied" on seven of twelve
+# Windows builds that reached it within four seconds of the last install, and on
+# none of those that reached it after six or more. A failed rename moves nothing,
+# so it is safe to try again; what is running out of the directory is shown each
+# time, so that the next failure names what held it.
+attempt=1
+until mv "${APP_ROOT}" "${OUTPUT_DIR}/${APP_NAME}"; do
+  [ "${OS_NAME}" = "windows" ] || fail "could not move ${APP_ROOT} to ${OUTPUT_DIR}/${APP_NAME}"
+  warn "could not move ${APP_ROOT} (attempt ${attempt}); running out of it:"
+  # The `$` in there are PowerShell's, and the path reaches it through the
+  # environment rather than spliced into the source, like the `python -c` above.
+  # shellcheck disable=SC2016
+  APP_ROOT_WINDOWS="$(cygpath -w "${APP_ROOT}")" powershell.exe -NoProfile -Command '
+    Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:APP_ROOT_WINDOWS, [StringComparison]::OrdinalIgnoreCase) } |
+      Format-Table -AutoSize Id, ProcessName, StartTime, Path | Out-String -Width 400' >&2 || true
+  [ "${attempt}" -lt 6 ] || fail "could not move ${APP_ROOT} to ${OUTPUT_DIR}/${APP_NAME}; see above"
+  sleep $((attempt * 2))
+  attempt=$((attempt + 1))
+done
 APP_ROOT="${OUTPUT_DIR}/${APP_NAME}"
 if [ "${OS_NAME}" = "macos" ]; then
   RESOURCES_DIR="${APP_ROOT}/Contents/Resources"
